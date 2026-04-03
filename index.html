@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>古代兵种作战模拟 v2</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <h1>⚔️ 古代兵种作战模拟 v2</h1>
+    
+    <div id="main-layout">
+        <div id="left-panel">
+            <div id="game-container"></div>
+            
+            <div id="stats">
+                <span style="color: #ff6b6b;">🔴 红方: <span id="red-count">0</span></span>
+                <span style="color: #4ecdc4;">🔵 蓝方: <span id="blue-count">0</span></span>
+                <span style="color: #aaaaaa;">⚔️ 击杀: <span id="kills">0</span></span>
+            </div>
+            
+            <div id="controls">
+                <button id="btn-pause">⏸️ 暂停</button>
+                <button id="btn-slow">🐌 0.5x</button>
+                <button id="btn-normal">▶️ 1x</button>
+                <button id="btn-fast">🚀 2x</button>
+                <button id="btn-restart">🔄 重新开始</button>
+            </div>
+        </div>
+        
+        <div id="right-panel">
+            <div id="config-panel">
+                <div class="team-config red">
+                    <h3>🔴 红方配置</h3>
+                    <div class="unit-row"><span class="unit-icon">■</span> 步兵 <input type="number" id="red-infantry" value="0" min="0" max="30"></div>
+                    <div class="unit-row"><span class="unit-icon">▬</span> 长枪 <input type="number" id="red-pikeman" value="0" min="0" max="20"></div>
+                    <div class="unit-row"><span class="unit-icon">●</span> 弓箭 <input type="number" id="red-archer" value="0" min="0" max="20"></div>
+                    <div class="unit-row"><span class="unit-icon">▲</span> 骑兵 <input type="number" id="red-cavalry" value="0" min="0" max="15"></div>
+                    <div class="formation-row">
+                        <label>阵型:</label>
+                        <select id="red-formation">
+                            <option value="custom">自定义</option>
+                            <option value="square">方阵</option>
+                            <option value="wedge">锋矢阵</option>
+                            <option value="mixed">混合阵</option>
+                            <option value="line">长蛇阵</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="divider"></div>
+                <div class="team-config blue">
+                    <h3>🔵 蓝方配置</h3>
+                    <div class="unit-row"><span class="unit-icon">■</span> 步兵 <input type="number" id="blue-infantry" value="0" min="0" max="30"></div>
+                    <div class="unit-row"><span class="unit-icon">▬</span> 长枪 <input type="number" id="blue-pikeman" value="0" min="0" max="20"></div>
+                    <div class="unit-row"><span class="unit-icon">●</span> 弓箭 <input type="number" id="blue-archer" value="0" min="0" max="20"></div>
+                    <div class="unit-row"><span class="unit-icon">▲</span> 骑兵 <input type="number" id="blue-cavalry" value="0" min="0" max="15"></div>
+                    <div class="formation-row">
+                        <label>阵型:</label>
+                        <select id="blue-formation">
+                            <option value="custom">自定义</option>
+                            <option value="square">方阵</option>
+                            <option value="wedge">锋矢阵</option>
+                            <option value="mixed">混合阵</option>
+                            <option value="line">长蛇阵</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="danger" id="btn-reset">🔄 重置兵种</button>
+            <button id="btn-deploy">📠 布阵</button>
+            <button class="primary" id="btn-start" disabled>🚀 开始战斗</button>
+            
+            <div id="legend">
+                <div class="unit-type"><span>■</span> 步兵(平衡)</div>
+                <div class="unit-type"><span>▬</span> 长枪兵(克骑)</div>
+                <div class="unit-type"><span>●</span> 弓箭手(远程)</div>
+                <div class="unit-type"><span>▲</span> 骑兵(冲锋)</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 游戏脚本 -->
+    <script>
+        // 全局常量定义（确保在其他脚本之前定义）
+        const GRID_W = 100;
+        const GRID_H = 75;
+        const CELL_SIZE = 16;
+        const WIDTH = GRID_W * CELL_SIZE;
+        const HEIGHT = GRID_H * CELL_SIZE;
+    </script>
+    <script src="js/units.js"></script>
+    <script src="js/game.js"></script>
+    <script src="js/ui.js"></script>
+    <script>
+        // 初始化 Phaser 游戏
+        const config = {
+            type: Phaser.AUTO,
+            width: WIDTH,
+            height: HEIGHT,
+            parent: 'game-container',
+            backgroundColor: '#2d2d44',
+            scene: BattleScene
+        };
+        
+        const game = new Phaser.Game(config);
+        
+        // 初始化 UI
+        initUI(game);
+    </script>
+</body>
+</html>

@@ -1,0 +1,180 @@
+body {
+    margin: 0;
+    padding: 10px;
+    background: #1a1a2e;
+    font-family: 'Microsoft YaHei', sans-serif;
+    color: white;
+    min-height: 100vh;
+}
+
+h1 { 
+    margin: 0 0 10px 0; 
+    font-size: 22px; 
+    text-align: center; 
+}
+
+#main-layout {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+#left-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#game-container {
+    border: 2px solid #444;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+#stats {
+    margin-top: 10px;
+    display: flex;
+    gap: 40px;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+#controls {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+#right-panel {
+    background: #2d2d44;
+    padding: 15px;
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    min-width: 220px;
+}
+
+#config-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.team-config h3 { 
+    margin: 0 0 10px 0; 
+    text-align: center; 
+}
+
+.team-config.red h3 { 
+    color: #ff6b6b; 
+}
+
+.team-config.blue h3 { 
+    color: #4ecdc4; 
+}
+
+.unit-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 5px 0;
+}
+
+.formation-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 5px 0;
+    padding-top: 8px;
+    border-top: 1px solid #444;
+}
+
+.formation-row label {
+    font-size: 12px;
+    color: #aaa;
+}
+
+.formation-row select {
+    flex: 1;
+    padding: 5px 8px;
+    border: none;
+    border-radius: 4px;
+    background: #1a1a2e;
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.formation-row select:hover {
+    background: #252540;
+}
+
+.unit-icon { 
+    font-size: 20px; 
+}
+
+input[type="number"] {
+    width: 50px;
+    padding: 5px;
+    border: none;
+    border-radius: 4px;
+    background: #1a1a2e;
+    color: white;
+    text-align: center;
+}
+
+button {
+    padding: 8px 16px;
+    font-size: 14px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    background: #4a4a6a;
+    color: white;
+    transition: all 0.2s;
+}
+
+button:hover { 
+    background: #6a6a8a; 
+}
+
+button.primary { 
+    background: #5a5a8a; 
+    font-weight: bold; 
+}
+
+button.primary:hover { 
+    background: #7a7aaa; 
+}
+
+button.danger { 
+    background: #8a4a4a; 
+}
+
+button.danger:hover { 
+    background: #aa6a6a; 
+}
+
+#legend {
+    margin-top: 10px;
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.unit-type { 
+    display: flex; 
+    align-items: center; 
+    gap: 5px; 
+}
+
+.divider {
+    height: 1px;
+    background: #444;
+    margin: 5px 0;
+}
