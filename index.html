@@ -82,6 +82,9 @@
             width: window.innerWidth,
             height: window.innerHeight,
             backgroundColor: '#20415e',
+            pixelArt: true,          // 像素风：NEAREST 硬边采样，放大不糊
+            roundPixels: true,       // 像素对齐整数格，避免抖动
+            antialias: false,
             scene: IsoBattleScene,
             scale: {
                 mode: Phaser.Scale.RESIZE,

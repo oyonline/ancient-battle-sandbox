@@ -19,7 +19,7 @@ const UNIT_TYPES = {
     cavalry: {
         name: '重骑士', icon: '🐴', cost: 12, maxCount: 15,
         hp: 160, atk: 30, def: 15, speed: 3.2, atkSpeed: 1500, range: 1.1,
-        chargeSpeed: 4.8, charge: true, scale: 1.15, tip: '冲锋双倍伤害，专抓弓箭手'
+        chargeSpeed: 4.8, charge: true, scale: 1.35, tip: '冲锋双倍伤害，专抓弓箭手'
     }
 };
 

@@ -11,6 +11,24 @@ function gridToScreen(gx, gy) {
     return { x: (gx - gy) * TW / 2 + OX, y: (gx + gy) * TH / 2 + OY };
 }
 
+// 平滑值噪声：大尺度地形色带（肥沃绿 ↔ 干草黄）用
+function makeNoise(seed) {
+    const hash2 = (x, y) => {
+        let h = (x * 374761393 + y * 668265263) ^ seed;
+        h = (h ^ (h >> 13)) * 1274126177;
+        return ((h ^ (h >> 16)) >>> 0) / 4294967295;
+    };
+    return (x, y) => {
+        const xi = Math.floor(x), yi = Math.floor(y);
+        const xf = x - xi, yf = y - yi;
+        const sm = t => t * t * (3 - 2 * t);
+        const a = hash2(xi, yi), b = hash2(xi + 1, yi);
+        const c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
+        const u = sm(xf), v = sm(yf);
+        return a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v;
+    };
+}
+
 class IsoBattleScene extends Phaser.Scene {
     constructor() {
         super({ key: 'IsoBattleScene' });
@@ -35,6 +53,8 @@ class IsoBattleScene extends Phaser.Scene {
         this.createOceanBackdrop();   // 全屏海面：填满菱形外的屏幕四角
         this.drawGround();
         this.placeDecorations();
+        this.createCloudShadows();    // 云影缓慢飘过战场
+        this.scheduleBirds();         // 偶有飞鸟掠过
         this.spawnZoneGfx = this.add.graphics();
         this.drawSpawnZones();
 
@@ -95,6 +115,7 @@ class IsoBattleScene extends Phaser.Scene {
     // 帝国风地形：杂色草地 + 立体倒角 + 水域环绕 + 海岸黄边 + 暗角
     drawGround() {
         const g = this.add.graphics().setDepth(0);
+        this.terNoise = this.terNoise || makeNoise(7);
         const isWater = (gx, gy) => gx === 0 || gy === 0 || gx === GRID_W - 1 || gy === GRID_H - 1;
         const hash = (a, b) => {
             let h = (a * 374761393 + b * 668265263) ^ 0x5bf03635;
@@ -128,9 +149,20 @@ class IsoBattleScene extends Phaser.Scene {
                     continue;
                 }
 
-                // 草地：帝国风偏橄榄绿 + 明度噪点
-                const lf = 0.88 + r1 * 0.2;                       // 整块明度
-                const base = [Math.round(92 * lf), Math.round(142 * lf), Math.round(64 * lf)];
+                // 草地：AOE2 式大尺度干湿色带（肥沃绿↔干草黄）+ 泥地块 + 明度噪点
+                const n1 = this.terNoise(gx * 0.16, gy * 0.16);           // 宏观：整片草地深浅
+                const n2 = this.terNoise(gx * 0.42 + 37, gy * 0.42 + 91); // 细节：散布泥地
+                const dryMix = n1 * 0.62;
+                let cr = 98 + (140 - 98) * dryMix;
+                let cg = 150 + (144 - 150) * dryMix;
+                let cb = 62 + (80 - 62) * dryMix;
+                const dirt = n2 > 0.72 ? (n2 - 0.72) / 0.28 : 0;
+                if (dirt > 0) {
+                    const k = dirt * 0.85;
+                    cr += (152 - cr) * k; cg += (124 - cg) * k; cb += (84 - cb) * k;
+                }
+                const lf = 0.9 + r1 * 0.16;                         // 整块明度
+                const base = [Math.round(cr * lf), Math.round(cg * lf), Math.round(cb * lf)];
                 const col = Phaser.Display.Color.GetColor(base[0], base[1], base[2]);
                 g.fillStyle(col, 1);
                 g.fillPoints(dia(x, y, 1.0), true);
@@ -220,9 +252,78 @@ class IsoBattleScene extends Phaser.Scene {
         deco.forEach(([key, gx, gy]) => {
             const { x, y } = gridToScreen(gx, gy);
             const spr = this.add.image(x, y, 'props/' + key).setOrigin(0.5, 0.92);
-            spr.setScale(key === 'tower' ? 1.05 : 0.9);
+            spr.setScale(key === 'tower' ? 0.48 : 0.5);   // 新像素素材原生更大，按显示高度折算
             spr.setDepth((gx + gy) * 100 + 10);
+            // 树随风轻摆
+            if (key.indexOf('tree') === 0) {
+                this.tweens.add({
+                    targets: spr, angle: { from: -1.3, to: 1.3 },
+                    duration: 2600 + Math.random() * 2000,
+                    yoyo: true, repeat: -1, ease: 'Sine.InOut',
+                    delay: Math.random() * 1600
+                });
+            }
         });
+    }
+
+    // ---------------- 氛围层：云影 + 飞鸟 ----------------
+    createCloudShadows() {
+        for (let i = 0; i < 3; i++) {
+            const cloud = this.add.graphics().setDepth(6);
+            // 多层半透明椭圆叠出软边大阴影
+            for (let k = 0; k < 7; k++) {
+                cloud.fillStyle(0x08120a, 0.045);
+                cloud.fillEllipse(
+                    (Math.random() - 0.5) * 340, (Math.random() - 0.5) * 150,
+                    190 + Math.random() * 160, 90 + Math.random() * 70);
+            }
+            cloud.setPosition(Math.random() * VIEW_W, OY + 120 + Math.random() * 320);
+            this.driftCloud(cloud, Math.random() * 30000);
+        }
+    }
+
+    // 自调度飘移：从左场外飘到右场外，循环往复
+    driftCloud(cloud, delay = 0) {
+        this.tweens.add({
+            targets: cloud, x: VIEW_W + 520,
+            duration: 48000 + Math.random() * 26000, delay,
+            onComplete: () => {
+                cloud.x = -520;
+                cloud.y = OY + 120 + Math.random() * 320;
+                this.driftCloud(cloud);
+            }
+        });
+    }
+
+    scheduleBirds() {
+        this.spawnBirds();
+        this.time.addEvent({ delay: 9000 + Math.random() * 4000, loop: true, callback: () => this.spawnBirds() });
+    }
+
+    spawnBirds() {
+        const n = 3 + Math.floor(Math.random() * 3);
+        const fromLeft = Math.random() > 0.5;
+        const y0 = 70 + Math.random() * 200;
+        for (let i = 0; i < n; i++) {
+            const bird = this.add.graphics().setDepth(150000);
+            bird.lineStyle(2, 0x1c1c1c, 0.7);
+            bird.lineBetween(-6, 1, 0, -3);
+            bird.lineBetween(0, -3, 6, 1);
+            bird.setPosition(fromLeft ? -80 - i * 30 : VIEW_W + 80 + i * 30, y0 + i * 9);
+            // 振翅（离场时随 killTweensOf 一并清理）
+            this.tweens.add({
+                targets: bird, scaleY: { from: 1, to: 0.5 },
+                duration: 170 + i * 25, yoyo: true, repeat: -1, ease: 'Sine.InOut'
+            });
+            this.tweens.add({
+                targets: bird, x: fromLeft ? VIEW_W + 140 : -140,
+                duration: 13000 + Math.random() * 3000,
+                onComplete: () => {
+                    this.tweens.killTweensOf(bird);
+                    bird.destroy();
+                }
+            });
+        }
     }
 
     drawSpawnZones() {
@@ -310,17 +411,21 @@ class IsoBattleScene extends Phaser.Scene {
         const { x, y } = gridToScreen(gx, gy);
         const depth = (gx + gy) * 100;
 
-        // 真实投影：脚下半透明暗椭圆 + 细队伍色圈
+        // 真实投影：双层软边暗椭圆 + 细队伍色圈（骑兵马身长，阴影同步放大）
+        const rs = type === 'cavalry' ? 1.45 : 1;
         const ring = this.add.graphics();
-        ring.fillStyle(0x10160a, 0.32);
-        ring.fillEllipse(0, 1, 26, 12);
+        ring.fillStyle(0x0c1206, 0.34);
+        ring.fillEllipse(0, 2, 30 * rs, 13 * rs);
+        ring.fillStyle(0x0c1206, 0.32);
+        ring.fillEllipse(0, 0, 20 * rs, 9 * rs);
         ring.lineStyle(2.5, team === 'red' ? 0xff3b30 : 0x2f7bff, 0.9);
-        ring.strokeEllipse(0, 1, 17, 8.5);
+        ring.strokeEllipse(0, 1, 17 * rs, 8.5 * rs);
         ring.setPosition(x, y);
         ring.setDepth(depth + 48);
 
         const spr = this.add.image(x, y, key).setOrigin(0.5, 1);
-        spr.setScale(typeData.scale * 1.25);
+        spr.setScale(typeData.scale * 0.55);   // 像素素材高 156px（原 56px），折算显示 ~86px
+        spr.setFlipX(team === 'blue');         // 素材默认朝右：蓝方在右侧，初始应面向左
         spr.setDepth(depth + 50);
 
         const hpBar = this.add.graphics().setVisible(false);
@@ -334,7 +439,13 @@ class IsoBattleScene extends Phaser.Scene {
             state: 'charge', stateTime: 0, reformX: null, target: null,
             moving: false, dead: false, flashUntil: 0,
             bobPhase: Math.random() * Math.PI * 2,
-            lastSX: x, scene: this
+            lastSX: x, lastSY: y, scene: this,
+            stride: Math.random() * 24,                // 步态相位（错开各单位迈步节奏）
+            faceDir: team === 'red' ? 1 : -1,           // 当前朝向：1=右 / -1=左
+            faceAcc: 0,                                  // 朝向判定的累计位移
+            lunge: { x: 0, y: 0, angle: 0 },            // 攻击冲拳/受击位移（tween 驱动，渲染帧叠加）
+            // 行军入场：从己方一侧滑进阵地
+            slideOff: (team === 'red' ? -1 : 1) * (80 + Math.random() * 70)
         };
         this.units.push(unit);
         return unit;
@@ -466,6 +577,16 @@ class IsoBattleScene extends Phaser.Scene {
     // ---------------- 箭矢 ----------------
     fireArrow(from, target) {
         const gfx = this.add.graphics();
+        // 开弓后坐：向后一顶再回位
+        const sF = gridToScreen(from.gx, from.gy);
+        const sT0 = gridToScreen(target.gx, target.gy);
+        const aAng = Math.atan2((sT0.y - sF.y) * 2, sT0.x - sF.x);
+        this.tweens.add({
+            targets: from.lunge,
+            x: -Math.cos(aAng) * 4, y: -Math.sin(aAng) * 2.5,
+            duration: 50, ease: 'Quad.Out',
+            onComplete: () => this.tweens.add({ targets: from.lunge, x: 0, y: 0, duration: 150, ease: 'Sine.InOut' })
+        });
         const d = dist(from, target);
         const flightT = clamp(d / 12, 0.3, 0.75);
         // 预判提前量：瞄目标飞行期间的预估位置
@@ -511,7 +632,7 @@ class IsoBattleScene extends Phaser.Scene {
                 });
                 if (hit) {
                     applyDamage(hit, Math.max(1, a.dmg - hit.typeData.def), null);
-                    this.impactPuff(s.x, s.y, 0xffe08a);
+                    this.sparkBurst(s.x, s.y - 8, 0xffd98a, false);
                 } else {
                     this.impactPuff(s.x, s.y, 0xcfcfcf);
                 }
@@ -523,24 +644,86 @@ class IsoBattleScene extends Phaser.Scene {
 
     // ---------------- 特效 ----------------
     meleeImpact(attacker, target) {
-        // 攻击者前顶动画
-        const a = Math.atan2(target.gy - attacker.gy, target.gx - attacker.gx);
-        attacker.spr.x += Math.cos(a) * 5;
-        this.time.delayedCall(90, () => { if (!attacker.dead) this.syncOne(attacker, this.time.now, true); });
+        // 屏幕空间攻击方向（y 加权贴合地面斜向）
+        const sA = gridToScreen(attacker.gx, attacker.gy);
         const s = gridToScreen(target.gx, target.gy);
-        this.impactPuff(s.x, s.y - 12, 0xffffff);
+        const ang = Math.atan2((s.y - sA.y) * 2, s.x - sA.x);
+
+        // 攻击冲拳：快速前顶 → 回弹（挂在 lunge 对象上，渲染每帧叠加）
+        const L = attacker.lunge, reach = attacker.type === 'cavalry' ? 13 : 9;
+        this.tweens.add({
+            targets: L,
+            x: Math.cos(ang) * reach, y: Math.sin(ang) * reach * 0.55,
+            angle: (attacker.faceDir || 1) * 8,
+            duration: 70, ease: 'Quad.Out',
+            onComplete: () => this.tweens.add({
+                targets: L, x: 0, y: 0, angle: 0, duration: 180, ease: 'Sine.InOut'
+            })
+        });
+
+        // 受击后退：被顶开再弹回
+        this.tweens.add({
+            targets: target.lunge,
+            x: Math.cos(ang) * 5, y: Math.sin(ang) * 3,
+            duration: 60, ease: 'Quad.Out',
+            onComplete: () => this.tweens.add({ targets: target.lunge, x: 0, y: 0, duration: 200, ease: 'Back.Out' })
+        });
+
+        // 斩击弧光
+        this.slashArc(s.x, s.y - 16, ang);
+
+        if (attacker.type === 'cavalry') {
+            // 重骑冲撞：屏幕震动 + 地面冲击波 + 大火花
+            this.cameras.main.shake(140, 0.004);
+            const wave = this.add.graphics();
+            wave.lineStyle(3, 0xfff3c0, 0.85);
+            wave.strokeEllipse(0, 0, 30, 15);
+            wave.setPosition(s.x, s.y);
+            this.groundFX.add(wave);
+            this.tweens.add({
+                targets: wave, alpha: 0, scaleX: 2.6, scaleY: 2.2,
+                duration: 380, onComplete: () => wave.destroy()
+            });
+            this.sparkBurst(s.x, s.y - 14, 0xfff0b3, true);
+        } else {
+            this.sparkBurst(s.x, s.y - 14, 0xfff0b3, false);
+        }
         if (Snd) Snd.play('hit');
     }
 
+    // 斩击弧光：一道白色弧线闪过斩击位置
+    slashArc(x, y, ang) {
+        const g = this.add.graphics();
+        g.lineStyle(3.5, 0xffffff, 0.95);
+        g.beginPath();
+        g.arc(0, 0, 15, -1.0, 1.0);
+        g.strokePath();
+        g.setPosition(x, y);
+        g.setRotation(ang + (Math.random() - 0.5) * 0.9);
+        this.airFX.add(g);
+        this.tweens.add({
+            targets: g, alpha: 0, scaleX: 1.55, scaleY: 1.25,
+            duration: 150, ease: 'Quad.Out', onComplete: () => g.destroy()
+        });
+    }
+
     chargeDust(unit) {
-        if (Math.random() < 0.4) {
+        // 节流：每单位每 70ms 最多一团，大量骑兵同屏也不掉帧
+        if (this.time.now - (unit.lastDust || 0) < 70) return;
+        unit.lastDust = this.time.now;
+        if (Math.random() < 0.65) {
             const s = gridToScreen(unit.gx, unit.gy);
             const dust = this.add.graphics();
-            dust.fillStyle(0xd8cbb4, 0.55);
-            dust.fillCircle(0, 0, 2 + Math.random() * 3);
-            dust.setPosition(s.x + (Math.random() - 0.5) * 14, s.y - 2);
+            for (let i = 0; i < 2; i++) {
+                dust.fillStyle(0xcbb79a, 0.5);
+                dust.fillCircle((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 4, 2.5 + Math.random() * 3.5);
+            }
+            dust.setPosition(s.x + (Math.random() - 0.5) * 16, s.y - 2);
             this.groundFX.add(dust);
-            this.tweens.add({ targets: dust, alpha: 0, y: dust.y - 6, duration: 450, onComplete: () => dust.destroy() });
+            this.tweens.add({
+                targets: dust, alpha: 0, scaleX: 1.9, scaleY: 1.4, y: dust.y - 8,
+                duration: 520, onComplete: () => dust.destroy()
+            });
         }
     }
 
@@ -556,9 +739,43 @@ class IsoBattleScene extends Phaser.Scene {
         });
     }
 
+    // 金属碰撞火花：放射短线 + 中心亮点
+    sparkBurst(x, y, color = 0xffe9a0, big = false) {
+        const g = this.add.graphics();
+        const n = big ? 6 : 4;
+        for (let i = 0; i < n; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const len = (big ? 10 : 6) + Math.random() * (big ? 10 : 6);
+            g.lineStyle(2, color, 0.95);
+            g.lineBetween(
+                Math.cos(a) * 3, Math.sin(a) * 3 * 0.6,
+                Math.cos(a) * (3 + len), Math.sin(a) * (3 + len) * 0.6);
+        }
+        g.fillStyle(0xffffff, 0.9);
+        g.fillCircle(0, 0, big ? 4 : 2.5);
+        g.setPosition(x, y);
+        this.airFX.add(g);
+        this.tweens.add({
+            targets: g, alpha: 0, scale: big ? 1.8 : 1.3,
+            duration: big ? 320 : 220, onComplete: () => g.destroy()
+        });
+    }
+
     killUnit(unit) {
         // 亲子友好：变灰倒下 + 烟雾"消失"，无血腥
         const s = gridToScreen(unit.gx, unit.gy);
+
+        // 倒地扬尘（地面扩散尘圈）
+        const gdust = this.add.graphics();
+        gdust.fillStyle(0xc9b28c, 0.5);
+        gdust.fillEllipse(0, 0, 18, 9);
+        gdust.setPosition(s.x, s.y);
+        this.groundFX.add(gdust);
+        this.tweens.add({
+            targets: gdust, alpha: 0, scaleX: 2.2, scaleY: 1.6,
+            duration: 500, onComplete: () => gdust.destroy()
+        });
+
         const poof = this.add.graphics();
         for (let i = 0; i < 4; i++) {
             poof.fillStyle(0xe0e0e0, 0.8);
@@ -586,31 +803,68 @@ class IsoBattleScene extends Phaser.Scene {
     syncOne(unit, time, force = false) {
         if (unit.dead) return;
         const { x, y } = gridToScreen(unit.gx, unit.gy);
-        const bob = unit.moving ? Math.abs(Math.sin(time * 0.012 + unit.bobPhase)) * 2.5 : 0;
-        if (!force) unit.spr.setPosition(x, y - bob);
-        else unit.spr.setPosition(x, y);
+
+        // 步态相位：按屏幕位移累积，走得越快迈步越快
+        const prevX = unit.lastSX === undefined ? x : unit.lastSX;
+        const prevY = unit.lastSY === undefined ? y : unit.lastSY;
+        const sdx = x - prevX, sdy = y - prevY;
+        if (unit.moving) unit.stride += Math.hypot(sdx, sdy);
+
+        // 行军入场偏移：逐帧衰减产生滑入动画
+        let ox = 0;
+        if (unit.slideOff) {
+            ox = unit.slideOff;
+            unit.slideOff *= 0.9;
+            if (Math.abs(unit.slideOff) < 1) unit.slideOff = 0;
+        }
+
+        // 步态动画：骑兵双蹄节奏颠簸奔跑 / 步兵迈步起伏摆动 / 待机呼吸
+        let bob = 0, tilt = 0;
+        if (unit.moving) {
+            if (unit.type === 'cavalry') {
+                const ph = unit.stride * 0.17 + unit.bobPhase;
+                bob = Math.abs(Math.sin(ph)) * 3.4 + Math.abs(Math.sin(ph * 2)) * 1.1;
+                tilt = Math.sin(ph) * 3.2 * unit.faceDir;
+                this.chargeDust(unit);            // 奔跑扬尘（内部已节流）
+            } else {
+                const ph = unit.stride * 0.3 + unit.bobPhase;
+                bob = Math.abs(Math.sin(ph)) * 2.6;
+                tilt = Math.sin(ph) * 2.0 * unit.faceDir;
+            }
+        } else {
+            bob = Math.sin(time * 0.0035 + unit.bobPhase) * 0.9;
+        }
+        if (force) bob = 0;
+
+        // 攻击冲拳/受击位移叠加（lunge 由 tween 驱动）
+        const L = unit.lunge;
+        unit.spr.setPosition(x + ox + L.x, y - bob + L.y);
+        unit.spr.setAngle(tilt + L.angle);
 
         const depth = (unit.gx + unit.gy) * 100 + 50;
         unit.spr.setDepth(depth);
-        unit.ring.setPosition(x, y).setDepth(depth - 2);
+        unit.ring.setPosition(x + ox * 0.55, y).setDepth(depth - 2);
 
-        // 朝向：屏幕横向移动方向决定翻转
-        if (x < unit.lastSX - 0.15) unit.spr.setFlipX(true);
-        else if (x > unit.lastSX + 0.15) unit.spr.setFlipX(false);
-        unit.lastSX = x;
+        // 朝向：累计位移过阈值才翻转（避免受击/挤开抖动导致来回闪脸）
+        unit.faceAcc += sdx;
+        if (unit.faceAcc > 2)       { unit.spr.setFlipX(false); unit.faceDir = 1;  unit.faceAcc = 0; }
+        else if (unit.faceAcc < -2) { unit.spr.setFlipX(true);  unit.faceDir = -1; unit.faceAcc = 0; }
+        else if (Math.abs(unit.faceAcc) > 60) unit.faceAcc = 0;
+        unit.lastSX = x; unit.lastSY = y;
 
         // 受击闪白
         if (this.time.now < unit.flashUntil) unit.spr.setTintFill(0xffffff);
         else unit.spr.clearTint();
 
-        // 血条
+        // 血条（位置随单位实际显示高度上移，骑兵才不会卡在马背上）
         if (unit.hp < unit.maxHp) {
             unit.hpBar.setVisible(true).clear();
             const w = 28, ratio = clamp(unit.hp / unit.maxHp, 0, 1);
+            const hy = -(unit.spr.displayHeight * 0.82 + 6);
             unit.hpBar.fillStyle(0x000000, 0.55);
-            unit.hpBar.fillRect(-w / 2 - 1, -70, w + 2, 6);
+            unit.hpBar.fillRect(-w / 2 - 1, hy, w + 2, 6);
             unit.hpBar.fillStyle(unit.team === 'red' ? 0xff4444 : 0x3d7be8, 1);
-            unit.hpBar.fillRect(-w / 2, -69, w * ratio, 4);
+            unit.hpBar.fillRect(-w / 2, hy + 1, w * ratio, 4);
             unit.hpBar.setPosition(x, y).setDepth(depth + 4);
         }
     }

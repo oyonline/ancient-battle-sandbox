@@ -60,6 +60,45 @@ def chroma_key(img, bg, tol=90):
                 px[x, y] = (r, g, b, int(a * (d - tol) / (tol * 0.4)))
     return img
 
+def chroma_key_flood(img, bg, tol=60):
+    """洪泛抠背景：只移除与图像边缘连通的背景色。
+    全局色距抠图会把主体内部的近白高光（盔甲反光）也挖空，洪泛不会。"""
+    img = img.convert("RGBA")
+    w, h = img.size
+    px = img.load()
+    br, bgc, bb = bg
+
+    def is_bg(x, y):
+        r, g, b = px[x, y][:3]
+        return ((r - br) ** 2 + (g - bgc) ** 2 + (b - bb) ** 2) ** 0.5 < tol
+
+    seen = [[False] * w for _ in range(h)]
+    q = deque()
+    for x in range(w):
+        for y in (0, h - 1):
+            if not seen[y][x] and is_bg(x, y):
+                seen[y][x] = True; q.append((x, y))
+    for y in range(h):
+        for x in (0, w - 1):
+            if not seen[y][x] and is_bg(x, y):
+                seen[y][x] = True; q.append((x, y))
+    while q:
+        x, y = q.popleft()
+        px[x, y] = (0, 0, 0, 0)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < w and 0 <= ny < h and not seen[ny][nx] and is_bg(nx, ny):
+                seen[ny][nx] = True
+                q.append((nx, ny))
+    return img
+
+def quantize_keep_alpha(img, colors=32):
+    """限定调色板（像素风收色），保留 alpha 通道"""
+    alpha = img.split()[3]
+    q = img.convert("RGB").quantize(colors=colors, method=Image.MEDIANCUT).convert("RGB")
+    q.putalpha(alpha)
+    return q
+
 def largest_blob_ratio(img):
     """最大连通域占不透明像素比例（判断是否单一主体）"""
     px = img.load()
@@ -114,14 +153,22 @@ def add_outline(img, radius=2, color=(40, 30, 20, 210)):
     canvas.alpha_composite(img)
     return canvas
 
-def process_one(src_path, dest_path, utype):
+def process_one(src_path, dest_path, utype, pixel=False, target_h=220):
     img = Image.open(src_path).convert("RGBA")
     if img.width < 128 or img.height < 128:
         return False, f"尺寸过小 ({img.width}x{img.height})，至少 128px"
 
+    if pixel and max(img.size) > 640:
+        # 预缩小降低洪泛成本；后续还要收色+NEAREST，LANCZOS 的柔边会被抹平
+        k = 640 / max(img.size)
+        img = img.resize((int(img.width * k), int(img.height * k)), Image.LANCZOS)
+
     bg = corner_bg_color(img)
-    cut = chroma_key(img, bg)
-    cut = cut.filter(ImageFilter.MinFilter(3))      # 边缘收缩1px去杂边
+    if pixel:
+        cut = chroma_key_flood(img, bg)
+    else:
+        cut = chroma_key(img, bg)
+        cut = cut.filter(ImageFilter.MinFilter(3))      # 边缘收缩1px去杂边
 
     blob = largest_blob_ratio(cut)
     if blob < 0.72:
@@ -143,16 +190,21 @@ def process_one(src_path, dest_path, utype):
     if not (0.18 <= cover <= 0.80):
         return False, f"覆盖率 {cover*100:.0f}% 异常（可能半透明/构图破碎）"
 
-    # 尺寸归一：高度统一到 ~220px（游戏内再按兵种 scale 放缩）
-    target_h = 220
+    # 尺寸归一（像素风：先收色调色板，再 NEAREST 硬缩放保像素颗粒）
+    if pixel:
+        trimmed = quantize_keep_alpha(trimmed)
     scale = target_h / bh
-    trimmed = trimmed.resize((max(1, int(bw * scale)), target_h), Image.LANCZOS)
+    resample = Image.NEAREST if pixel else Image.LANCZOS
+    trimmed = trimmed.resize((max(1, int(bw * scale)), target_h), resample)
 
-    # 加描边（先留 pad）
+    # 加描边（先留 pad；像素风用 1px 深色硬描边）
     pad = 3
     canvas = Image.new("RGBA", (trimmed.width + pad * 2, trimmed.height + pad * 2), (0, 0, 0, 0))
     canvas.paste(trimmed, (pad, pad))
-    final = add_outline(canvas)
+    if pixel:
+        final = add_outline(canvas, radius=1, color=(26, 22, 18, 255))
+    else:
+        final = add_outline(canvas)
     final.save(dest_path)
     return True, f"OK {final.width}x{final.height}（原 {bw}x{bh}, 长宽比 {aspect:.2f}, 覆盖 {cover*100:.0f}%）"
 
@@ -161,6 +213,8 @@ def main():
     ap.add_argument("--src", default=os.path.join(GAME_ROOT, "tools/ai_raw"))
     ap.add_argument("--dest", default=os.path.join(GAME_ROOT, "assets/units"))
     ap.add_argument("--no-manifest", action="store_true")
+    ap.add_argument("--pixel", action="store_true", help="像素风模式：洪泛抠图+收色+NEAREST 缩放+1px 硬描边")
+    ap.add_argument("--target-h", type=int, default=220, help="归一化目标高度（像素）")
     args = ap.parse_args()
 
     os.makedirs(args.dest, exist_ok=True)
@@ -174,7 +228,8 @@ def main():
                 print(f"⚠️  缺少 {name}，跳过")
                 ok_all = False
                 continue
-            ok, msg = process_one(src, os.path.join(args.dest, name), utype)
+            ok, msg = process_one(src, os.path.join(args.dest, name), utype,
+                                  pixel=args.pixel, target_h=args.target_h)
             print(("✅" if ok else "❌") + f" {name}: {msg}")
             results[name] = ok
             if not ok:
@@ -188,8 +243,8 @@ def main():
         mp = os.path.join(GAME_ROOT, "assets/manifest.json")
         m = json.load(open(mp))
         for key in m["units"]:
-            img = Image.open(os.path.join(GAME_ROOT, "assets", m[key]["file"]))
-            m[key]["w"], m[key]["h"] = img.width, img.height
+            img = Image.open(os.path.join(GAME_ROOT, "assets", m["units"][key]["file"]))
+            m["units"][key]["w"], m["units"][key]["h"] = img.width, img.height
         json.dump(m, open(mp, "w"), ensure_ascii=False, indent=2)
         with open(os.path.join(GAME_ROOT, "assets/manifest.js"), "w") as f:
             f.write("// 素材清单（由处理脚本生成）\nconst MANIFEST = ")
