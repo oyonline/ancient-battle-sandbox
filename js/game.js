@@ -411,8 +411,12 @@ class IsoBattleScene extends Phaser.Scene {
         const { x, y } = gridToScreen(gx, gy);
         const depth = (gx + gy) * 100;
 
+        // 体型系数（调试中）：骑兵 58px，步兵系（剑士/长枪/弓箭）35px
+        const sizeK = type === 'cavalry' ? 0.275 : 0.225;
+        const fx = sizeK / 0.55;   // 特效幅度基准：1 = 原体型
+
         // 真实投影：双层软边暗椭圆 + 细队伍色圈（骑兵马身长，阴影同步放大）
-        const rs = type === 'cavalry' ? 1.45 : 1;
+        const rs = (type === 'cavalry' ? 1.45 : 1) * fx;
         const ring = this.add.graphics();
         ring.fillStyle(0x0c1206, 0.34);
         ring.fillEllipse(0, 2, 30 * rs, 13 * rs);
@@ -424,7 +428,7 @@ class IsoBattleScene extends Phaser.Scene {
         ring.setDepth(depth + 48);
 
         const spr = this.add.image(x, y, key).setOrigin(0.5, 1);
-        spr.setScale(typeData.scale * 0.55);   // 像素素材高 156px（原 56px），折算显示 ~86px
+        spr.setScale(typeData.scale * sizeK);
         spr.setFlipX(team === 'blue');         // 素材默认朝右：蓝方在右侧，初始应面向左
         spr.setDepth(depth + 50);
 
@@ -441,6 +445,7 @@ class IsoBattleScene extends Phaser.Scene {
             bobPhase: Math.random() * Math.PI * 2,
             lastSX: x, lastSY: y, scene: this,
             stride: Math.random() * 24,                // 步态相位（错开各单位迈步节奏）
+            sizeK: fx,                                  // 特效幅度系数（1 = 原体型）
             faceDir: team === 'red' ? 1 : -1,           // 当前朝向：1=右 / -1=左
             faceAcc: 0,                                  // 朝向判定的累计位移
             lunge: { x: 0, y: 0, angle: 0 },            // 攻击冲拳/受击位移（tween 驱动，渲染帧叠加）
@@ -581,9 +586,10 @@ class IsoBattleScene extends Phaser.Scene {
         const sF = gridToScreen(from.gx, from.gy);
         const sT0 = gridToScreen(target.gx, target.gy);
         const aAng = Math.atan2((sT0.y - sF.y) * 2, sT0.x - sF.x);
+        const rk = from.sizeK || 1;
         this.tweens.add({
             targets: from.lunge,
-            x: -Math.cos(aAng) * 4, y: -Math.sin(aAng) * 2.5,
+            x: -Math.cos(aAng) * 4 * rk, y: -Math.sin(aAng) * 2.5 * rk,
             duration: 50, ease: 'Quad.Out',
             onComplete: () => this.tweens.add({ targets: from.lunge, x: 0, y: 0, duration: 150, ease: 'Sine.InOut' })
         });
@@ -649,8 +655,8 @@ class IsoBattleScene extends Phaser.Scene {
         const s = gridToScreen(target.gx, target.gy);
         const ang = Math.atan2((s.y - sA.y) * 2, s.x - sA.x);
 
-        // 攻击冲拳：快速前顶 → 回弹（挂在 lunge 对象上，渲染每帧叠加）
-        const L = attacker.lunge, reach = attacker.type === 'cavalry' ? 13 : 9;
+        // 攻击冲拳：快速前顶 → 回弹（挂在 lunge 对象上，渲染每帧叠加，幅度随体型）
+        const L = attacker.lunge, reach = (attacker.type === 'cavalry' ? 13 : 9) * (attacker.sizeK || 1);
         this.tweens.add({
             targets: L,
             x: Math.cos(ang) * reach, y: Math.sin(ang) * reach * 0.55,
@@ -662,15 +668,16 @@ class IsoBattleScene extends Phaser.Scene {
         });
 
         // 受击后退：被顶开再弹回
+        const kb = target.sizeK || 1;
         this.tweens.add({
             targets: target.lunge,
-            x: Math.cos(ang) * 5, y: Math.sin(ang) * 3,
+            x: Math.cos(ang) * 5 * kb, y: Math.sin(ang) * 3 * kb,
             duration: 60, ease: 'Quad.Out',
             onComplete: () => this.tweens.add({ targets: target.lunge, x: 0, y: 0, duration: 200, ease: 'Back.Out' })
         });
 
         // 斩击弧光
-        this.slashArc(s.x, s.y - 16, ang);
+        this.slashArc(s.x, s.y - 14 * kb, ang, kb);
 
         if (attacker.type === 'cavalry') {
             // 重骑冲撞：屏幕震动 + 地面冲击波 + 大火花
@@ -691,12 +698,13 @@ class IsoBattleScene extends Phaser.Scene {
         if (Snd) Snd.play('hit');
     }
 
-    // 斩击弧光：一道白色弧线闪过斩击位置
-    slashArc(x, y, ang) {
+    // 斩击弧光：一道白色弧线闪过斩击位置（尺寸随目标体型）
+    slashArc(x, y, ang, k = 1) {
         const g = this.add.graphics();
-        g.lineStyle(3.5, 0xffffff, 0.95);
+        const kk = Math.max(0.45, k);
+        g.lineStyle(3.5 * kk, 0xffffff, 0.95);
         g.beginPath();
-        g.arc(0, 0, 15, -1.0, 1.0);
+        g.arc(0, 0, 15 * kk, -1.0, 1.0);
         g.strokePath();
         g.setPosition(x, y);
         g.setRotation(ang + (Math.random() - 0.5) * 0.9);
@@ -714,9 +722,10 @@ class IsoBattleScene extends Phaser.Scene {
         if (Math.random() < 0.65) {
             const s = gridToScreen(unit.gx, unit.gy);
             const dust = this.add.graphics();
+            const ds = Math.max(0.45, unit.sizeK || 1);   // 尘团大小随体型
             for (let i = 0; i < 2; i++) {
                 dust.fillStyle(0xcbb79a, 0.5);
-                dust.fillCircle((Math.random() - 0.5) * 10, (Math.random() - 0.5) * 4, 2.5 + Math.random() * 3.5);
+                dust.fillCircle((Math.random() - 0.5) * 10 * ds, (Math.random() - 0.5) * 4 * ds, (2.5 + Math.random() * 3.5) * ds);
             }
             dust.setPosition(s.x + (Math.random() - 0.5) * 16, s.y - 2);
             this.groundFX.add(dust);
@@ -818,21 +827,22 @@ class IsoBattleScene extends Phaser.Scene {
             if (Math.abs(unit.slideOff) < 1) unit.slideOff = 0;
         }
 
-        // 步态动画：骑兵双蹄节奏颠簸奔跑 / 步兵迈步起伏摆动 / 待机呼吸
+        // 步态动画：骑兵双蹄节奏颠簸奔跑 / 步兵迈步起伏摆动 / 待机呼吸（幅度随体型缩放）
         let bob = 0, tilt = 0;
+        const sz = unit.sizeK || 1;
         if (unit.moving) {
             if (unit.type === 'cavalry') {
                 const ph = unit.stride * 0.17 + unit.bobPhase;
-                bob = Math.abs(Math.sin(ph)) * 3.4 + Math.abs(Math.sin(ph * 2)) * 1.1;
+                bob = (Math.abs(Math.sin(ph)) * 3.4 + Math.abs(Math.sin(ph * 2)) * 1.1) * sz;
                 tilt = Math.sin(ph) * 3.2 * unit.faceDir;
                 this.chargeDust(unit);            // 奔跑扬尘（内部已节流）
             } else {
                 const ph = unit.stride * 0.3 + unit.bobPhase;
-                bob = Math.abs(Math.sin(ph)) * 2.6;
+                bob = Math.abs(Math.sin(ph)) * 2.6 * sz;
                 tilt = Math.sin(ph) * 2.0 * unit.faceDir;
             }
         } else {
-            bob = Math.sin(time * 0.0035 + unit.bobPhase) * 0.9;
+            bob = Math.sin(time * 0.0035 + unit.bobPhase) * 0.9 * sz;
         }
         if (force) bob = 0;
 
@@ -859,7 +869,7 @@ class IsoBattleScene extends Phaser.Scene {
         // 血条（位置随单位实际显示高度上移，骑兵才不会卡在马背上）
         if (unit.hp < unit.maxHp) {
             unit.hpBar.setVisible(true).clear();
-            const w = 28, ratio = clamp(unit.hp / unit.maxHp, 0, 1);
+            const w = Math.max(12, 28 * (unit.sizeK || 1)), ratio = clamp(unit.hp / unit.maxHp, 0, 1);
             const hy = -(unit.spr.displayHeight * 0.82 + 6);
             unit.hpBar.fillStyle(0x000000, 0.55);
             unit.hpBar.fillRect(-w / 2 - 1, hy, w + 2, 6);
