@@ -1,0 +1,73 @@
+{
+  "units": {
+    "blue_infantry": {
+      "file": "units/blue_infantry.png",
+      "w": 46,
+      "h": 56
+    },
+    "red_infantry": {
+      "file": "units/red_infantry.png",
+      "w": 46,
+      "h": 56
+    },
+    "blue_pikeman": {
+      "file": "units/blue_pikeman.png",
+      "w": 39,
+      "h": 54
+    },
+    "red_pikeman": {
+      "file": "units/red_pikeman.png",
+      "w": 39,
+      "h": 54
+    },
+    "blue_archer": {
+      "file": "units/blue_archer.png",
+      "w": 42,
+      "h": 56
+    },
+    "red_archer": {
+      "file": "units/red_archer.png",
+      "w": 42,
+      "h": 56
+    },
+    "blue_cavalry": {
+      "file": "units/blue_cavalry.png",
+      "w": 47,
+      "h": 58
+    },
+    "red_cavalry": {
+      "file": "units/red_cavalry.png",
+      "w": 47,
+      "h": 58
+    }
+  },
+  "props": {
+    "tree_big": {
+      "file": "props/tree_big.png",
+      "w": 58,
+      "h": 96
+    },
+    "tree_small": {
+      "file": "props/tree_small.png",
+      "w": 43,
+      "h": 93
+    },
+    "rock": {
+      "file": "props/rock.png",
+      "w": 82,
+      "h": 76
+    },
+    "tower": {
+      "file": "props/tower.png",
+      "w": 94,
+      "h": 90
+    }
+  },
+  "grass": {
+    "base": [
+      39,
+      174,
+      96
+    ]
+  }
+}

@@ -2,114 +2,94 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>古代兵种作战模拟 v2</title>
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.70.0/dist/phaser.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>帝国亲子沙盒 · 配兵对战</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <h1>⚔️ 古代兵种作战模拟 v2</h1>
-    
-    <div id="main-layout">
-        <div id="left-panel">
-            <div id="game-container"></div>
-            
-            <div id="stats">
-                <span style="color: #ff6b6b;">🔴 红方: <span id="red-count">0</span></span>
-                <span style="color: #4ecdc4;">🔵 蓝方: <span id="blue-count">0</span></span>
-                <span style="color: #aaaaaa;">⚔️ 击杀: <span id="kills">0</span></span>
-            </div>
-            
-            <div id="controls">
-                <button id="btn-pause">⏸️ 暂停</button>
-                <button id="btn-slow">🐌 0.5x</button>
-                <button id="btn-normal">▶️ 1x</button>
-                <button id="btn-fast">🚀 2x</button>
-                <button id="btn-restart">🔄 重新开始</button>
-            </div>
+    <!-- 战场：铺满整个视口 -->
+    <div id="game-container"></div>
+
+    <!-- 顶部悬浮状态条 -->
+    <header id="topbar">
+        <h1>🏰 帝国亲子沙盒</h1>
+        <span id="phase-hint">配兵阶段：用金币组建你的军队</span>
+        <div class="counts">
+            <span class="red-c">🔴 <span id="red-count">0</span></span>
+            <span class="blue-c">🔵 <span id="blue-count">0</span></span>
         </div>
-        
-        <div id="right-panel">
-            <div id="config-panel">
-                <div class="team-config red">
-                    <h3>🔴 红方配置</h3>
-                    <div class="unit-row"><span class="unit-icon">■</span> 步兵 <input type="number" id="red-infantry" value="0" min="0" max="30"></div>
-                    <div class="unit-row"><span class="unit-icon">▬</span> 长枪 <input type="number" id="red-pikeman" value="0" min="0" max="20"></div>
-                    <div class="unit-row"><span class="unit-icon">●</span> 弓箭 <input type="number" id="red-archer" value="0" min="0" max="20"></div>
-                    <div class="unit-row"><span class="unit-icon">▲</span> 骑兵 <input type="number" id="red-cavalry" value="0" min="0" max="15"></div>
-                    <div class="formation-row">
-                        <label>阵型:</label>
-                        <select id="red-formation">
-                            <option value="custom">自定义</option>
-                            <option value="square">方阵</option>
-                            <option value="wedge">锋矢阵</option>
-                            <option value="mixed">混合阵</option>
-                            <option value="line">长蛇阵</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="divider"></div>
-                <div class="team-config blue">
-                    <h3>🔵 蓝方配置</h3>
-                    <div class="unit-row"><span class="unit-icon">■</span> 步兵 <input type="number" id="blue-infantry" value="0" min="0" max="30"></div>
-                    <div class="unit-row"><span class="unit-icon">▬</span> 长枪 <input type="number" id="blue-pikeman" value="0" min="0" max="20"></div>
-                    <div class="unit-row"><span class="unit-icon">●</span> 弓箭 <input type="number" id="blue-archer" value="0" min="0" max="20"></div>
-                    <div class="unit-row"><span class="unit-icon">▲</span> 骑兵 <input type="number" id="blue-cavalry" value="0" min="0" max="15"></div>
-                    <div class="formation-row">
-                        <label>阵型:</label>
-                        <select id="blue-formation">
-                            <option value="custom">自定义</option>
-                            <option value="square">方阵</option>
-                            <option value="wedge">锋矢阵</option>
-                            <option value="mixed">混合阵</option>
-                            <option value="line">长蛇阵</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            
-            <button class="danger" id="btn-reset">🔄 重置兵种</button>
-            <button id="btn-deploy">📠 布阵</button>
-            <button class="primary" id="btn-start" disabled>🚀 开始战斗</button>
-            
-            <div id="legend">
-                <div class="unit-type"><span>■</span> 步兵(平衡)</div>
-                <div class="unit-type"><span>▬</span> 长枪兵(克骑)</div>
-                <div class="unit-type"><span>●</span> 弓箭手(远程)</div>
-                <div class="unit-type"><span>▲</span> 骑兵(冲锋)</div>
-            </div>
-        </div>
+        <button id="btn-mute" title="声音开关">🔊</button>
+        <button id="btn-panel" title="显示/隐藏配兵面板">📜 面板</button>
+    </header>
+
+    <!-- 底部悬浮控制条 -->
+    <div id="controlbar">
+        <button class="ctl-btn" id="btn-pause">⏸️ 暂停</button>
+        <button class="speed-btn" data-speed="0.5">🐌 0.5x</button>
+        <button class="speed-btn active" data-speed="1">▶️ 1x</button>
+        <button class="speed-btn" data-speed="2">🚀 2x</button>
+        <button class="ctl-btn" id="btn-restart">🔄 重新开始</button>
     </div>
 
-    <!-- 游戏脚本 -->
-    <script>
-        // 全局常量定义（确保在其他脚本之前定义）
-        const GRID_W = 100;
-        const GRID_H = 75;
-        const CELL_SIZE = 16;
-        const WIDTH = GRID_W * CELL_SIZE;
-        const HEIGHT = GRID_H * CELL_SIZE;
-    </script>
+    <!-- 右侧浮层抽屉：配兵 / 战斗 / 结果 -->
+    <aside id="side">
+        <!-- 配兵面板 -->
+        <div class="panel" id="buy-panel">
+            <div class="team-title" id="buy-team-title">🔴 红方队长，请配兵！</div>
+            <div id="unit-list"></div>
+            <div id="formation-row"></div>
+            <div id="budget-row">
+                <div id="budget-text">🪙 剩余金币：100</div>
+                <div id="budget-bar"><div id="budget-bar-fill" style="width:100%"></div></div>
+            </div>
+            <button class="big-btn" id="btn-lock">🔒 配好了，锁定阵容！</button>
+            <div class="hint-small">克制关系：🐴骑士克🏹弓箭 · 🔱长枪克🐴骑士 · 🏹弓箭克近战</div>
+        </div>
+
+        <!-- 战斗面板 -->
+        <div class="panel" id="battle-panel">
+            <div class="team-title">⚔️ 大战一触即发</div>
+            <div class="hint-small" style="font-size:14px">
+                红蓝两军已经就位！<br><br>
+                看看谁的兵种搭配更聪明：<br>
+                🐴 骑士冲锋会打出双倍伤害<br>
+                🔱 长枪兵站着不动就是马的噩梦<br>
+                🏹 弓箭手输出高但很脆，要有人保护
+            </div>
+            <button class="big-btn" id="btn-start">🚀 开战！</button>
+        </div>
+
+        <!-- 结果面板 -->
+        <div class="panel" id="result-panel">
+            <div class="result-title" id="result-title">🎉 胜利！</div>
+            <div id="result-detail"></div>
+            <button class="big-btn" id="btn-again">🔁 再来一局！</button>
+        </div>
+    </aside>
+
+    <!-- 轮流配兵遮罩（防偷看） -->
+    <div class="overlay" id="overlay"></div>
+
+    <script src="assets/manifest.js"></script>
+    <script src="js/phaser.min.js"></script>
     <script src="js/units.js"></script>
     <script src="js/game.js"></script>
     <script src="js/ui.js"></script>
     <script>
-        // 初始化 Phaser 游戏
-        const config = {
+        const game = new Phaser.Game({
             type: Phaser.AUTO,
-            width: WIDTH,
-            height: HEIGHT,
             parent: 'game-container',
-            backgroundColor: '#2d2d44',
-            scene: BattleScene
-        };
-        
-        const game = new Phaser.Game(config);
-        
-        // 初始化 UI
-        initUI(game);
+            width: window.innerWidth,
+            height: window.innerHeight,
+            backgroundColor: '#20415e',
+            scene: IsoBattleScene,
+            scale: {
+                mode: Phaser.Scale.RESIZE,
+                width: '100%',
+                height: '100%'
+            }
+        });
+        window.addEventListener('load', () => UI.init());
     </script>
 </body>
 </html>
-
-<!-- 测试提交 Fri Apr  3 09:44:55 AM CST 2026 -->

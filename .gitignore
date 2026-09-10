@@ -1,0 +1,15 @@
+# 系统杂物
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# 工具产物
+.trae-html-share-packages/
+
+# 备忘
+*.log
+
+# Python
+__pycache__/
+*.pyc
