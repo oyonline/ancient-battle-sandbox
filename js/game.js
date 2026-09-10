@@ -44,6 +44,8 @@ class IsoBattleScene extends Phaser.Scene {
     create() {
         this.units = [];
         this.arrows = [];
+        this.bloods = [];
+        this.groundBloods = 0;
         this.battleStarted = false;
         this.battleOver = false;
         this.paused = false;
@@ -478,6 +480,8 @@ class IsoBattleScene extends Phaser.Scene {
         this.units = [];
         this.arrows.forEach(a => a.gfx && a.gfx.destroy());
         this.arrows = [];
+        this.bloods.forEach(b => b.g && b.g.destroy());
+        this.bloods = [];
         if (this.winnerText) { this.winnerText.destroy(); this.winnerText = null; }
         this.battleOver = false;
         this.battleStarted = false;
@@ -485,8 +489,9 @@ class IsoBattleScene extends Phaser.Scene {
 
     // ---------------- 战斗主循环 ----------------
     update(time, delta) {
-        if (!this.battleStarted || this.paused || this.battleOver) { this.syncRender(time); return; }
         const dt = Math.min(delta, 50) / 1000 * this.gameSpeed;
+        this.updateBloods(dt);
+        if (!this.battleStarted || this.paused || this.battleOver) { this.syncRender(time); return; }
         const now = this.time.now;
 
         // 帧首：先用上一帧位移估计速度，再刷新快照（供箭矢预判）
@@ -638,7 +643,7 @@ class IsoBattleScene extends Phaser.Scene {
                 });
                 if (hit) {
                     applyDamage(hit, Math.max(1, a.dmg - hit.typeData.def), null);
-                    this.sparkBurst(s.x, s.y - 8, 0xffd98a, false);
+                    this.bloodBurst(s.x, s.y - 8, 4, 75, hit.sizeK || 1);
                 } else {
                     this.impactPuff(s.x, s.y, 0xcfcfcf);
                 }
@@ -680,7 +685,7 @@ class IsoBattleScene extends Phaser.Scene {
         this.slashArc(s.x, s.y - 14 * kb, ang, kb);
 
         if (attacker.type === 'cavalry') {
-            // 重骑冲撞：屏幕震动 + 地面冲击波 + 大火花
+            // 重骑冲撞：屏幕震动 + 地面冲击波 + 大量喷血
             this.cameras.main.shake(140, 0.004);
             const wave = this.add.graphics();
             wave.lineStyle(3, 0xfff3c0, 0.85);
@@ -691,9 +696,9 @@ class IsoBattleScene extends Phaser.Scene {
                 targets: wave, alpha: 0, scaleX: 2.6, scaleY: 2.2,
                 duration: 380, onComplete: () => wave.destroy()
             });
-            this.sparkBurst(s.x, s.y - 14, 0xfff0b3, true);
+            this.bloodBurst(s.x, s.y - 14 * kb, 11, 135, kb);
         } else {
-            this.sparkBurst(s.x, s.y - 14, 0xfff0b3, false);
+            this.bloodBurst(s.x, s.y - 14 * kb, 6, 95, kb);
         }
         if (Snd) Snd.play('hit');
     }
@@ -712,6 +717,72 @@ class IsoBattleScene extends Phaser.Scene {
         this.tweens.add({
             targets: g, alpha: 0, scaleX: 1.55, scaleY: 1.25,
             duration: 150, ease: 'Quad.Out', onComplete: () => g.destroy()
+        });
+    }
+
+    // ---------------- 血粒子：喷溅 → 抛物线 → 落地留血渍 ----------------
+    bloodBurst(x, y, n = 6, power = 95, k = 1) {
+        const kk = Math.max(0.5, k);
+        const parts = [];
+        for (let i = 0; i < n; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const sp = power * (0.45 + Math.random() * 0.75) * kk;
+            parts.push({
+                x: 0, y: 0,
+                vx: Math.cos(a) * sp,
+                vy: -Math.abs(Math.sin(a)) * sp * 0.85 - 26 * kk,
+                s: (1.6 + Math.random() * 2.2) * kk,        // 像素方块边长
+                floor: (3 + Math.random() * 9) * kk,         // 相对喷点的落地深度
+                landed: false, rest: 0
+            });
+        }
+        const g = this.add.graphics();
+        g.setPosition(x, y);
+        this.airFX.add(g);
+        this.bloods.push({ g, parts, t: 0 });
+    }
+
+    updateBloods(dt) {
+        if (!this.bloods) return;
+        for (let i = this.bloods.length - 1; i >= 0; i--) {
+            const b = this.bloods[i];
+            b.t += dt;
+            b.g.clear();
+            let flying = 0;
+            for (const p of b.parts) {
+                if (p.landed) { p.rest += dt; continue; }
+                p.vy += 540 * dt;                 // 重力
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+                if (p.y >= p.floor) {              // 落地 → 地面血渍
+                    this.addGroundBlood(b.g.x + p.x, b.g.y + p.floor, p.s);
+                    p.landed = true;
+                    continue;
+                }
+                b.g.fillStyle(Math.random() < 0.25 ? 0xe23b2e : 0xb31818, 1);
+                b.g.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s);
+                flying++;
+            }
+            // 全部落地且停留片刻后销毁
+            if (flying === 0 && b.t > 0.15 && b.parts.every(p => p.rest > 0.05)) {
+                b.g.destroy();
+                this.bloods.splice(i, 1);
+            }
+        }
+    }
+
+    // 地面血渍：短命小红块，控制总量防爆屏
+    addGroundBlood(x, y, s) {
+        if (this.groundBloods > 90) return;
+        this.groundBloods++;
+        const st = this.add.graphics();
+        st.fillStyle(0x7d1212, 0.8);
+        st.fillRect(-s / 2, -s * 0.3, s, s * 0.55);
+        st.setPosition(x, y);
+        this.groundFX.add(st);
+        this.tweens.add({
+            targets: st, alpha: 0, duration: 1600, delay: 500,
+            onComplete: () => { st.destroy(); this.groundBloods--; }
         });
     }
 
@@ -794,6 +865,12 @@ class IsoBattleScene extends Phaser.Scene {
         this.airFX.add(poof);
         this.tweens.add({ targets: poof, alpha: 0, y: poof.y - 14, duration: 600, onComplete: () => poof.destroy() });
 
+        // 倒地喷血 + 原地留下血渍
+        const dk = Math.max(0.6, unit.sizeK || 1);
+        this.bloodBurst(s.x, s.y - 12 * dk, 9, 105, dk);
+        this.addGroundBlood(s.x, s.y, 6 * dk);
+        this.addGroundBlood(s.x + (Math.random() - 0.5) * 12 * dk, s.y + (Math.random() - 0.5) * 4, 4 * dk);
+
         unit.ring.destroy();
         unit.hpBar.destroy();
         this.tweens.add({
@@ -862,8 +939,8 @@ class IsoBattleScene extends Phaser.Scene {
         else if (Math.abs(unit.faceAcc) > 60) unit.faceAcc = 0;
         unit.lastSX = x; unit.lastSY = y;
 
-        // 受击闪白
-        if (this.time.now < unit.flashUntil) unit.spr.setTintFill(0xffffff);
+        // 受击反馈：轻染红（乘法染色保留像素图案，不再全白填充闪白）
+        if (this.time.now < unit.flashUntil) unit.spr.setTint(0xff7d6e);
         else unit.spr.clearTint();
 
         // 血条（位置随单位实际显示高度上移，骑兵才不会卡在马背上）

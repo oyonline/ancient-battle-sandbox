@@ -225,7 +225,7 @@ function applyDamage(target, dmg, from) {
         dmg = Math.max(2, Math.floor(dmg * UNIT_TYPES.pikeman.antiCav - target.typeData.def * 0.5));
     }
     target.hp -= dmg;
-    target.flashUntil = (target.scene ? target.scene.time.now : 0) + 90;
+    target.flashUntil = (target.scene ? target.scene.time.now : 0) + 130;
     if (target.hp <= 0 && !target.dead) {
         target.dead = true;
         if (target.scene) target.scene.killUnit(target);
