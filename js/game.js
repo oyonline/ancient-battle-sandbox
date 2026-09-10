@@ -625,12 +625,12 @@ class IsoBattleScene extends Phaser.Scene {
             const arcH = Math.sin(p * Math.PI) * 46;
 
             a.gfx.clear();
-            a.gfx.lineStyle(2.5, 0x5b4632, 1);
+            a.gfx.lineStyle(1.5, 0x5b4632, 1);
             const ang = Math.atan2(a.ty - a.sy, a.tx - a.sx);
-            const dx = Math.cos(ang) * 9, dy = Math.sin(ang) * 9 * 0.5 - 3;
+            const dx = Math.cos(ang) * 7.5, dy = Math.sin(ang) * 7.5 * 0.5 - 3;
             a.gfx.lineBetween(s.x - dx, s.y - dy - arcH, s.x + dx, s.y + dy - arcH);
             a.gfx.fillStyle(0xd9d9d9, 1);
-            a.gfx.fillCircle(s.x + dx, s.y + dy - arcH, 2);
+            a.gfx.fillCircle(s.x + dx, s.y + dy - arcH, 1.4);
 
             if (p >= 1) {
                 // 落点找最近的敌人判定命中
