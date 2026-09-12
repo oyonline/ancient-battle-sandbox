@@ -32,8 +32,8 @@ const FORMATIONS = {
     line:    { name: '长蛇阵', rows: ['infantry', 'pikeman', 'cavalry', 'archer'] }
 };
 
-// 初始预算
-const BUDGET = 100;
+// 初始预算：提高战场兵力密度，均衡预设约 26 人/方
+const BUDGET = 160;
 
 // ==================== 生成一支军队的网格站位 ====================
 // team: 'red'(左,朝右) / 'blue'(右,朝左)

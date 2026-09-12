@@ -34,11 +34,11 @@ const Snd = {
     }
 };
 
-// ==================== 一键预设配兵（预算 100） ====================
+// ==================== 一键预设配兵（预算 160） ====================
 const PRESETS = {
-    balance: { name: '均衡军团', config: { infantry: 10, pikeman: 2, archer: 3, cavalry: 1 } },
-    ranged:  { name: '远程火力', config: { infantry: 2, pikeman: 4, archer: 8, cavalry: 0 } },
-    rush:    { name: '铁骑洪流', config: { infantry: 3, pikeman: 0, archer: 0, cavalry: 7 } }
+    balance: { name: '均衡军团', config: { infantry: 16, pikeman: 4, archer: 5, cavalry: 1 } },
+    ranged:  { name: '远程火力', config: { infantry: 4, pikeman: 6, archer: 13, cavalry: 0 } },
+    rush:    { name: '铁骑洪流', config: { infantry: 7, pikeman: 0, archer: 0, cavalry: 10 } }
 };
 
 // ==================== UI 控制器（底部抽屉 + 三步流程） ====================

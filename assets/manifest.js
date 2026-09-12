@@ -1,44 +1,44 @@
-// 素材清单（由处理脚本生成；anims 段由 gen_animations.py 维护）
+// 素材清单（由 build_generated_sprites.py 生成）
 const MANIFEST = {
   "units": {
     "blue_infantry": {
       "file": "units/blue_infantry.png",
-      "w": 109,
+      "w": 158,
       "h": 156
     },
     "red_infantry": {
       "file": "units/red_infantry.png",
-      "w": 85,
+      "w": 158,
       "h": 156
     },
     "blue_pikeman": {
       "file": "units/blue_pikeman.png",
-      "w": 97,
+      "w": 173,
       "h": 156
     },
     "red_pikeman": {
       "file": "units/red_pikeman.png",
-      "w": 107,
+      "w": 173,
       "h": 156
     },
     "blue_archer": {
       "file": "units/blue_archer.png",
-      "w": 75,
+      "w": 158,
       "h": 156
     },
     "red_archer": {
       "file": "units/red_archer.png",
-      "w": 78,
+      "w": 158,
       "h": 156
     },
     "blue_cavalry": {
       "file": "units/blue_cavalry.png",
-      "w": 158,
+      "w": 157,
       "h": 156
     },
     "red_cavalry": {
       "file": "units/red_cavalry.png",
-      "w": 180,
+      "w": 157,
       "h": 156
     }
   },
@@ -72,100 +72,30 @@ const MANIFEST = {
     ]
   },
   "anims": {
-    "blue_archer": {
-      "walk": {
-        "file": "anim/blue_archer_walk.png",
-        "fw": 99,
-        "fh": 156,
-        "frames": 4
-      },
-      "attack": {
-        "file": "anim/blue_archer_attack.png",
-        "fw": 99,
-        "fh": 156,
-        "frames": 3
-      }
-    },
-    "blue_cavalry": {
-      "walk": {
-        "file": "anim/blue_cavalry_walk.png",
-        "fw": 182,
-        "fh": 156,
-        "frames": 4
-      },
-      "attack": {
-        "file": "anim/blue_cavalry_attack.png",
-        "fw": 182,
-        "fh": 156,
-        "frames": 3
-      }
-    },
-    "blue_infantry": {
-      "walk": {
-        "file": "anim/blue_infantry_walk.png",
-        "fw": 133,
-        "fh": 156,
-        "frames": 4
-      },
-      "attack": {
-        "file": "anim/blue_infantry_attack.png",
-        "fw": 133,
-        "fh": 156,
-        "frames": 4
-      }
-    },
-    "blue_pikeman": {
-      "walk": {
-        "file": "anim/blue_pikeman_walk.png",
-        "fw": 121,
-        "fh": 156,
-        "frames": 4
-      },
-      "attack": {
-        "file": "anim/blue_pikeman_attack.png",
-        "fw": 121,
-        "fh": 156,
-        "frames": 4
-      }
-    },
-    "red_archer": {
-      "walk": {
-        "file": "anim/red_archer_walk.png",
-        "fw": 102,
-        "fh": 156,
-        "frames": 4
-      },
-      "attack": {
-        "file": "anim/red_archer_attack.png",
-        "fw": 102,
-        "fh": 156,
-        "frames": 3
-      }
-    },
-    "red_cavalry": {
-      "walk": {
-        "file": "anim/red_cavalry_walk.png",
-        "fw": 204,
-        "fh": 156,
-        "frames": 4
-      },
-      "attack": {
-        "file": "anim/red_cavalry_attack.png",
-        "fw": 204,
-        "fh": 156,
-        "frames": 3
-      }
-    },
     "red_infantry": {
       "walk": {
         "file": "anim/red_infantry_walk.png",
-        "fw": 109,
+        "fw": 179,
         "fh": 156,
         "frames": 4
       },
       "attack": {
         "file": "anim/red_infantry_attack.png",
-        "fw": 109,
+        "fw": 173,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "blue_infantry": {
+      "walk": {
+        "file": "anim/blue_infantry_walk.png",
+        "fw": 179,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_infantry_attack.png",
+        "fw": 173,
         "fh": 156,
         "frames": 4
       }
@@ -173,13 +103,83 @@ const MANIFEST = {
     "red_pikeman": {
       "walk": {
         "file": "anim/red_pikeman_walk.png",
-        "fw": 131,
+        "fw": 176,
         "fh": 156,
         "frames": 4
       },
       "attack": {
         "file": "anim/red_pikeman_attack.png",
-        "fw": 131,
+        "fw": 168,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "blue_pikeman": {
+      "walk": {
+        "file": "anim/blue_pikeman_walk.png",
+        "fw": 176,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_pikeman_attack.png",
+        "fw": 168,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "red_archer": {
+      "walk": {
+        "file": "anim/red_archer_walk.png",
+        "fw": 173,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_archer_attack.png",
+        "fw": 171,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "blue_archer": {
+      "walk": {
+        "file": "anim/blue_archer_walk.png",
+        "fw": 173,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_archer_attack.png",
+        "fw": 171,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "red_cavalry": {
+      "walk": {
+        "file": "anim/red_cavalry_walk.png",
+        "fw": 166,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_cavalry_attack.png",
+        "fw": 172,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "blue_cavalry": {
+      "walk": {
+        "file": "anim/blue_cavalry_walk.png",
+        "fw": 166,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_cavalry_attack.png",
+        "fw": 172,
         "fh": 156,
         "frames": 4
       }

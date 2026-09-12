@@ -440,8 +440,8 @@ class IsoBattleScene extends Phaser.Scene {
         const { x, y } = gridToScreen(gx, gy);
         const depth = (gx + gy) * 100;
 
-        // 体型系数（调试中）：骑兵 58px，步兵系（剑士/长枪/弓箭）35px
-        const sizeK = type === 'cavalry' ? 0.275 : 0.225;
+        // 人物清晰优先：步兵约 47px，骑兵约 58px；仍保持在单格可读范围内
+        const sizeK = type === 'cavalry' ? 0.37 : 0.30;
         const fx = sizeK / 0.55;   // 特效幅度基准：1 = 原体型
 
         // 真实投影：双层软边暗椭圆 + 细队伍色圈（骑兵马身长，阴影同步放大）
@@ -722,8 +722,12 @@ class IsoBattleScene extends Phaser.Scene {
         this.sparkBurst(s.x + Math.cos(ang) * 6, s.y - 16 * kb, 0xffe9a0, attacker.type === 'cavalry');
 
         if (attacker.type === 'cavalry') {
-            // 重骑冲撞：屏幕震动 + 地面冲击波 + 大量喷血
-            this.cameras.main.shake(140, 0.004);
+            // 重骑冲撞只做轻微、限频的镜头反馈，避免多骑兵连续命中时叠加眩晕
+            const now = this.time.now;
+            if (!this.lastImpactShake || now - this.lastImpactShake > 350) {
+                this.cameras.main.shake(70, 0.0015);
+                this.lastImpactShake = now;
+            }
             const wave = this.add.graphics();
             wave.lineStyle(3, 0xfff3c0, 0.85);
             wave.strokeEllipse(0, 0, 30, 15);
