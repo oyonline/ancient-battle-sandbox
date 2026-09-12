@@ -39,6 +39,32 @@ class IsoBattleScene extends Phaser.Scene {
             this.load.image(u.file.replace('.png', ''), 'assets/' + u.file));
         Object.values(MANIFEST.props).forEach(p =>
             this.load.image(p.file.replace('.png', ''), 'assets/' + p.file));
+        // 动画帧条（walk/attack spritesheet）
+        Object.values(MANIFEST.anims || {}).forEach(clips => {
+            Object.values(clips).forEach(c => {
+                this.load.spritesheet(
+                    'assets/units/' + c.file.replace('.png', ''),
+                    'assets/units/' + c.file,
+                    { frameWidth: c.fw, frameHeight: c.fh });
+            });
+        });
+    }
+
+    // 注册各单位动画剪辑（重复开局幂等）
+    buildUnitAnims() {
+        Object.entries(MANIFEST.anims || {}).forEach(([unit, clips]) => {
+            const isCav = unit.endsWith('cavalry');
+            Object.entries(clips).forEach(([clip, c]) => {
+                const key = 'assets/units/' + c.file.replace('.png', '');
+                if (this.anims.exists(key)) return;
+                this.anims.create({
+                    key,
+                    frames: this.anims.generateFrameNumbers(key, { start: 0, end: c.frames - 1 }),
+                    frameRate: clip === 'attack' ? 15 : (isCav ? 13 : 9),
+                    repeat: clip === 'attack' ? 0 : -1
+                });
+            });
+        });
     }
 
     create() {
@@ -64,6 +90,7 @@ class IsoBattleScene extends Phaser.Scene {
         this.unitLayer = this.add.container(0, 0).setDepth(1000);
         this.airFX = this.add.container(0, 0).setDepth(100000);
 
+        this.buildUnitAnims();
         this.setupCamera();
 
         if (typeof UI !== 'undefined' && UI.onSceneReady) UI.onSceneReady(this);
@@ -429,7 +456,7 @@ class IsoBattleScene extends Phaser.Scene {
         ring.setPosition(x, y);
         ring.setDepth(depth + 48);
 
-        const spr = this.add.image(x, y, key).setOrigin(0.5, 1);
+        const spr = this.add.sprite(x, y, key).setOrigin(0.5, 1);
         spr.setScale(typeData.scale * sizeK);
         spr.setFlipX(team === 'blue');         // 素材默认朝右：蓝方在右侧，初始应面向左
         spr.setDepth(depth + 50);
@@ -446,11 +473,12 @@ class IsoBattleScene extends Phaser.Scene {
             moving: false, dead: false, flashUntil: 0,
             bobPhase: Math.random() * Math.PI * 2,
             lastSX: x, lastSY: y, scene: this,
-            stride: Math.random() * 24,                // 步态相位（错开各单位迈步节奏）
             sizeK: fx,                                  // 特效幅度系数（1 = 原体型）
             faceDir: team === 'red' ? 1 : -1,           // 当前朝向：1=右 / -1=左
             faceAcc: 0,                                  // 朝向判定的累计位移
-            lunge: { x: 0, y: 0, angle: 0 },            // 攻击冲拳/受击位移（tween 驱动，渲染帧叠加）
+            animState: 'idle',                           // 当前动画：idle/walk/attack
+            animLock: 0,                                 // 攻击动画锁（期间不被行走覆盖）
+            lunge: { x: 0, y: 0, angle: 0 },            // 受击位移（tween 驱动，渲染帧叠加）
             // 行军入场：从己方一侧滑进阵地
             slideOff: (team === 'red' ? -1 : 1) * (80 + Math.random() * 70)
         };
@@ -520,6 +548,13 @@ class IsoBattleScene extends Phaser.Scene {
         this.checkWin();
     }
 
+    // 播放攻击动画：期间锁定行走动画，伤害在挥砍帧上结算（见 updateNormalUnit）
+    playAttackAnim(unit) {
+        unit.animState = 'attack';
+        unit.animLock = this.time.now + 320;
+        unit.spr.play('assets/units/anim/' + unit.team + '_' + unit.type + '_attack', true);
+    }
+
     updateNormalUnit(unit, enemies, now, dt) {
         let nearest = null, minD = Infinity;
         enemies.forEach(e => { const d = dist(unit, e); if (d < minD) { minD = d; nearest = e; } });
@@ -544,16 +579,29 @@ class IsoBattleScene extends Phaser.Scene {
             }
             if (shootTarget && now - unit.lastAttack > unit.typeData.atkSpeed) {
                 unit.lastAttack = now;
-                this.fireArrow(unit, shootTarget);
+                this.playAttackAnim(unit);
+                const victim = shootTarget;
+                // 拉弓 → 松弦放箭（与动画同步）
+                this.time.delayedCall(110, () => {
+                    if (unit.dead || victim.dead || this.battleOver) return;
+                    this.fireArrow(unit, victim);
+                });
             }
         } else {
             if (minD > range) {
                 moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
             } else if (now - unit.lastAttack > unit.typeData.atkSpeed) {
                 unit.lastAttack = now;
-                const dmg = Math.max(1, unit.typeData.atk - nearest.typeData.def);
-                applyDamage(nearest, dmg, unit);
-                this.meleeImpact(unit, nearest);
+                this.playAttackAnim(unit);
+                const victim = nearest;
+                // 蓄力 → 劈砍帧上结算伤害（目标脱离则挥空）
+                this.time.delayedCall(95, () => {
+                    if (unit.dead || victim.dead || this.battleOver) return;
+                    if (dist(unit, victim) > range + 0.7) return;
+                    const dmg = Math.max(1, unit.typeData.atk - victim.typeData.def);
+                    applyDamage(victim, dmg, unit);
+                    this.meleeImpact(unit, victim);
+                });
             }
         }
     }
@@ -587,17 +635,6 @@ class IsoBattleScene extends Phaser.Scene {
     // ---------------- 箭矢 ----------------
     fireArrow(from, target) {
         const gfx = this.add.graphics();
-        // 开弓后坐：向后一顶再回位
-        const sF = gridToScreen(from.gx, from.gy);
-        const sT0 = gridToScreen(target.gx, target.gy);
-        const aAng = Math.atan2((sT0.y - sF.y) * 2, sT0.x - sF.x);
-        const rk = from.sizeK || 1;
-        this.tweens.add({
-            targets: from.lunge,
-            x: -Math.cos(aAng) * 4 * rk, y: -Math.sin(aAng) * 2.5 * rk,
-            duration: 50, ease: 'Quad.Out',
-            onComplete: () => this.tweens.add({ targets: from.lunge, x: 0, y: 0, duration: 150, ease: 'Sine.InOut' })
-        });
         const d = dist(from, target);
         const flightT = clamp(d / 12, 0.3, 0.75);
         // 预判提前量：瞄目标飞行期间的预估位置
@@ -660,15 +697,14 @@ class IsoBattleScene extends Phaser.Scene {
         const s = gridToScreen(target.gx, target.gy);
         const ang = Math.atan2((s.y - sA.y) * 2, s.x - sA.x);
 
-        // 攻击冲拳：快速前顶 → 回弹（挂在 lunge 对象上，渲染每帧叠加，幅度随体型）
-        const L = attacker.lunge, reach = (attacker.type === 'cavalry' ? 13 : 9) * (attacker.sizeK || 1);
+        // 攻击冲拳：动画已带挥砍，这里只补一小段冲击位移
+        const L = attacker.lunge, reach = (attacker.type === 'cavalry' ? 10 : 6) * (attacker.sizeK || 1);
         this.tweens.add({
             targets: L,
             x: Math.cos(ang) * reach, y: Math.sin(ang) * reach * 0.55,
-            angle: (attacker.faceDir || 1) * 8,
             duration: 70, ease: 'Quad.Out',
             onComplete: () => this.tweens.add({
-                targets: L, x: 0, y: 0, angle: 0, duration: 180, ease: 'Sine.InOut'
+                targets: L, x: 0, y: 0, duration: 180, ease: 'Sine.InOut'
             })
         });
 
@@ -681,8 +717,9 @@ class IsoBattleScene extends Phaser.Scene {
             onComplete: () => this.tweens.add({ targets: target.lunge, x: 0, y: 0, duration: 200, ease: 'Back.Out' })
         });
 
-        // 斩击弧光
+        // 斩击弧光 + 兵刃碰撞火花
         this.slashArc(s.x, s.y - 14 * kb, ang, kb);
+        this.sparkBurst(s.x + Math.cos(ang) * 6, s.y - 16 * kb, 0xffe9a0, attacker.type === 'cavalry');
 
         if (attacker.type === 'cavalry') {
             // 重骑冲撞：屏幕震动 + 地面冲击波 + 大量喷血
@@ -873,6 +910,7 @@ class IsoBattleScene extends Phaser.Scene {
 
         unit.ring.destroy();
         unit.hpBar.destroy();
+        unit.spr.anims.stop();
         this.tweens.add({
             targets: unit.spr, alpha: 0, angle: (Math.random() > 0.5 ? 1 : -1) * 75,
             y: unit.spr.y + 4, duration: 450, onComplete: () => unit.spr.destroy()
@@ -886,15 +924,13 @@ class IsoBattleScene extends Phaser.Scene {
         this.units.forEach(u => { if (!u.dead) this.syncOne(u, time); });
     }
 
-    syncOne(unit, time, force = false) {
+    syncOne(unit, time) {
         if (unit.dead) return;
         const { x, y } = gridToScreen(unit.gx, unit.gy);
 
-        // 步态相位：按屏幕位移累积，走得越快迈步越快
         const prevX = unit.lastSX === undefined ? x : unit.lastSX;
         const prevY = unit.lastSY === undefined ? y : unit.lastSY;
         const sdx = x - prevX, sdy = y - prevY;
-        if (unit.moving) unit.stride += Math.hypot(sdx, sdy);
 
         // 行军入场偏移：逐帧衰减产生滑入动画
         let ox = 0;
@@ -904,29 +940,30 @@ class IsoBattleScene extends Phaser.Scene {
             if (Math.abs(unit.slideOff) < 1) unit.slideOff = 0;
         }
 
-        // 步态动画：骑兵双蹄节奏颠簸奔跑 / 步兵迈步起伏摆动 / 待机呼吸（幅度随体型缩放）
-        let bob = 0, tilt = 0;
-        const sz = unit.sizeK || 1;
-        if (unit.moving) {
-            if (unit.type === 'cavalry') {
-                const ph = unit.stride * 0.17 + unit.bobPhase;
-                bob = (Math.abs(Math.sin(ph)) * 3.4 + Math.abs(Math.sin(ph * 2)) * 1.1) * sz;
-                tilt = Math.sin(ph) * 3.2 * unit.faceDir;
-                this.chargeDust(unit);            // 奔跑扬尘（内部已节流）
-            } else {
-                const ph = unit.stride * 0.3 + unit.bobPhase;
-                bob = Math.abs(Math.sin(ph)) * 2.6 * sz;
-                tilt = Math.sin(ph) * 2.0 * unit.faceDir;
+        // ---- 动画状态机：攻击锁定 > 行走 > 待机 ----
+        if (unit.animState === 'attack' && time > unit.animLock) unit.animState = null;
+        if (unit.animState !== 'attack') {
+            const want = unit.moving ? 'walk' : 'idle';
+            if (want !== unit.animState) {
+                unit.animState = want;
+                if (want === 'walk') {
+                    unit.spr.play('assets/units/anim/' + unit.team + '_' + unit.type + '_walk', true);
+                } else {
+                    unit.spr.anims.stop();
+                    unit.spr.setFrame(0);          // 并腿站姿
+                }
             }
-        } else {
-            bob = Math.sin(time * 0.0035 + unit.bobPhase) * 0.9 * sz;
         }
-        if (force) bob = 0;
+        if (unit.moving && unit.type === 'cavalry') this.chargeDust(unit);   // 奔跑扬尘（内部已节流）
 
-        // 攻击冲拳/受击位移叠加（lunge 由 tween 驱动）
+        // 待机呼吸（行走/攻击的起伏已烘进动画帧）
+        const sz = unit.sizeK || 1;
+        const bob = unit.animState === 'idle' ? Math.sin(time * 0.0035 + unit.bobPhase) * 0.9 * sz : 0;
+
+        // 受击位移叠加（lunge 由 tween 驱动）
         const L = unit.lunge;
         unit.spr.setPosition(x + ox + L.x, y - bob + L.y);
-        unit.spr.setAngle(tilt + L.angle);
+        unit.spr.setAngle(L.angle);
 
         const depth = (unit.gx + unit.gy) * 100 + 50;
         unit.spr.setDepth(depth);
@@ -994,6 +1031,8 @@ class IsoBattleScene extends Phaser.Scene {
         if (Snd) Snd.play('win');
     }
 
-    setSpeed(s) { this.gameSpeed = s; }
-    togglePause() { this.paused = !this.paused; }
+    setSpeed(s) { this.gameSpeed = s; this.syncAnimTimeScale(); }
+    togglePause() { this.paused = !this.paused; this.syncAnimTimeScale(); }
+    // 动画时轴跟随暂停/倍速（否则 2x 时动作与伤害错拍）
+    syncAnimTimeScale() { this.anims.globalTimeScale = this.paused ? 0 : this.gameSpeed; }
 }

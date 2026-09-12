@@ -1,4 +1,4 @@
-// 素材清单（由处理脚本生成）
+// 素材清单（由处理脚本生成；anims 段由 gen_animations.py 维护）
 const MANIFEST = {
   "units": {
     "blue_infantry": {
@@ -70,5 +70,119 @@ const MANIFEST = {
       174,
       96
     ]
+  },
+  "anims": {
+    "blue_archer": {
+      "walk": {
+        "file": "anim/blue_archer_walk.png",
+        "fw": 99,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_archer_attack.png",
+        "fw": 99,
+        "fh": 156,
+        "frames": 3
+      }
+    },
+    "blue_cavalry": {
+      "walk": {
+        "file": "anim/blue_cavalry_walk.png",
+        "fw": 182,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_cavalry_attack.png",
+        "fw": 182,
+        "fh": 156,
+        "frames": 3
+      }
+    },
+    "blue_infantry": {
+      "walk": {
+        "file": "anim/blue_infantry_walk.png",
+        "fw": 133,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_infantry_attack.png",
+        "fw": 133,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "blue_pikeman": {
+      "walk": {
+        "file": "anim/blue_pikeman_walk.png",
+        "fw": 121,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_pikeman_attack.png",
+        "fw": 121,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "red_archer": {
+      "walk": {
+        "file": "anim/red_archer_walk.png",
+        "fw": 102,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_archer_attack.png",
+        "fw": 102,
+        "fh": 156,
+        "frames": 3
+      }
+    },
+    "red_cavalry": {
+      "walk": {
+        "file": "anim/red_cavalry_walk.png",
+        "fw": 204,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_cavalry_attack.png",
+        "fw": 204,
+        "fh": 156,
+        "frames": 3
+      }
+    },
+    "red_infantry": {
+      "walk": {
+        "file": "anim/red_infantry_walk.png",
+        "fw": 109,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_infantry_attack.png",
+        "fw": 109,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "red_pikeman": {
+      "walk": {
+        "file": "anim/red_pikeman_walk.png",
+        "fw": 131,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_pikeman_attack.png",
+        "fw": 131,
+        "fh": 156,
+        "frames": 4
+      }
+    }
   }
 };
