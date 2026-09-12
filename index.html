@@ -13,7 +13,7 @@
     <!-- 顶部悬浮状态条 -->
     <header id="topbar">
         <h1>🏰 帝国亲子沙盒</h1>
-        <span id="phase-hint">配兵阶段：用金币组建你的军队</span>
+        <span id="phase-hint">第 1 步：红方队长配兵</span>
         <div class="counts">
             <span class="red-c">🔴 <span id="red-count">0</span></span>
             <span class="blue-c">🔵 <span id="blue-count">0</span></span>
@@ -22,7 +22,7 @@
         <button id="btn-panel" title="显示/隐藏配兵面板">📜 面板</button>
     </header>
 
-    <!-- 底部悬浮控制条 -->
+    <!-- 底部悬浮控制条（战斗中） -->
     <div id="controlbar">
         <button class="ctl-btn" id="btn-pause">⏸️ 暂停</button>
         <button class="speed-btn" data-speed="0.5">🐌 0.5x</button>
@@ -31,39 +31,64 @@
         <button class="ctl-btn" id="btn-restart">🔄 重新开始</button>
     </div>
 
-    <!-- 右侧浮层抽屉：配兵 / 战斗 / 结果 -->
-    <aside id="side">
-        <!-- 配兵面板 -->
-        <div class="panel" id="buy-panel">
-            <div class="team-title" id="buy-team-title">🔴 红方队长，请配兵！</div>
-            <div id="unit-list"></div>
-            <div id="formation-row"></div>
-            <div id="budget-row">
-                <div id="budget-text">🪙 剩余金币：100</div>
-                <div id="budget-bar"><div id="budget-bar-fill" style="width:100%"></div></div>
+    <!-- 底部抽屉：配兵 / 就绪 / 结果 -->
+    <aside id="sheet" class="open">
+        <div class="sheet-inner">
+            <div class="sheet-head">
+                <div class="steps" id="steps">
+                    <div class="step on" data-step="1"><i>1</i><span>红方配兵</span></div>
+                    <div class="step" data-step="2"><i>2</i><span>蓝方配兵</span></div>
+                    <div class="step" data-step="3"><i>3</i><span>开战</span></div>
+                </div>
+                <button id="btn-fold" title="收起/展开面板">▾</button>
             </div>
-            <button class="big-btn" id="btn-lock">🔒 配好了，锁定阵容！</button>
-            <div class="hint-small">克制关系：🐴骑士克🏹弓箭 · 🔱长枪克🐴骑士 · 🏹弓箭克近战</div>
-        </div>
 
-        <!-- 战斗面板 -->
-        <div class="panel" id="battle-panel">
-            <div class="team-title">⚔️ 大战一触即发</div>
-            <div class="hint-small" style="font-size:14px">
-                红蓝两军已经就位！<br><br>
-                看看谁的兵种搭配更聪明：<br>
-                🐴 骑士冲锋会打出双倍伤害<br>
-                🔱 长枪兵站着不动就是马的噩梦<br>
-                🏹 弓箭手输出高但很脆，要有人保护
+            <div class="sheet-body">
+                <!-- 第1/2步：配兵 -->
+                <section id="sec-buy" class="sec on">
+                    <div class="team-banner" id="team-banner">🔴 红方队长，组建你的军队！</div>
+
+                    <div class="budget-hud">
+                        <div class="bh-coin"><span>🪙</span><b id="budget-left">100</b></div>
+                        <div class="bh-mid">
+                            <div class="bh-bar"><i id="budget-fill"></i></div>
+                            <div class="bh-meta"><span id="troop-total">兵力 0</span><span>预算 100 金币</span></div>
+                        </div>
+                    </div>
+
+                    <div class="preset-row">
+                        <button class="preset-btn" data-preset="balance">⚖️ 均衡军团</button>
+                        <button class="preset-btn" data-preset="ranged">🏹 远程火力</button>
+                        <button class="preset-btn" data-preset="rush">🐴 铁骑洪流</button>
+                        <button class="preset-btn ghost" id="btn-clear">🧹 清空</button>
+                    </div>
+
+                    <div id="unit-cards" class="cards"></div>
+
+                    <div class="f-row">
+                        <span class="f-label">阵型</span>
+                        <div id="formation-row"></div>
+                    </div>
+
+                    <button class="big-btn red" id="btn-lock">🔒 配好了，换蓝方队长！</button>
+                    <div class="hint-small">提示：可以按住 ＋ 连续加兵</div>
+                </section>
+
+                <!-- 第3步前：双方就绪 -->
+                <section id="sec-ready" class="sec">
+                    <div class="team-banner both">⚔️ 两军就位，大战一触即发！</div>
+                    <div id="army-summary"></div>
+                    <div class="hint-small">克制关系：🐴骑士克🏹弓箭手 · 🔱长枪克🐴骑士 · 🏹弓箭手克近战</div>
+                    <button class="big-btn" id="btn-start">🚀 开战！</button>
+                </section>
+
+                <!-- 结果 -->
+                <section id="sec-result" class="sec">
+                    <div class="result-title" id="result-title">🎉 胜利！</div>
+                    <div id="result-detail"></div>
+                    <button class="big-btn" id="btn-again">🔁 再来一局！</button>
+                </section>
             </div>
-            <button class="big-btn" id="btn-start">🚀 开战！</button>
-        </div>
-
-        <!-- 结果面板 -->
-        <div class="panel" id="result-panel">
-            <div class="result-title" id="result-title">🎉 胜利！</div>
-            <div id="result-detail"></div>
-            <button class="big-btn" id="btn-again">🔁 再来一局！</button>
         </div>
     </aside>
 
