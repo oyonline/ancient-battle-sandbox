@@ -11,6 +11,33 @@ function gridToScreen(gx, gy) {
     return { x: (gx - gy) * TW / 2 + OX, y: (gx + gy) * TH / 2 + OY };
 }
 
+// ==================== 接地基准表（素材源图像素，源图高 156） ====================
+// AI 出图的底部留白每张都不一样（10~34px），若直接以贴图底边当脚底，
+// 角色就会悬在影子上面 → 飘。这里把每个兵种的脚底位置量出来，统一压到地面线。
+// pad = 贴图底边 → 最低脚底的留白。注意骑兵是奔姿、四条腿只有一条落地，
+//       所以取“最低的实质内容行”，不能取最宽的一行（那会落在另外三条抬起的腿上，差 16px）。
+// dx  = 脚掌落地处相对图心的横向偏移（骑兵马头前伸，脚掌明显偏左，影心要跟着走）；
+// w/h = 脚掌投影尺寸（等距视角固定 2:1）。跑 tools/measure_foot.py 可重新量。
+const FOOT = {
+    infantry: { pad: 18, dx:   2, w: 72, h: 35 },
+    pikeman:  { pad: 34, dx:  -7, w: 63, h: 31 },
+    archer:   { pad: 11, dx:  -6, w: 67, h: 33 },
+    cavalry:  { pad: 10, dx: -15, w: 74, h: 36 }
+};
+
+// ==================== 逐帧对齐补正（素材源图像素，[dx, dy]，站姿为 0） ====================
+// 同一套动画的 4 帧，角色在画布里的站位互相差最多 30px（骑兵 16px），直接播就会左右抖。
+// 每帧的补正值 = 与站姿做投影相关求出的最佳位移；兵种为准，红蓝通用。
+// 攻击帧只给横向：挥砍会让重心大幅上下移动，纵向相关不可靠（帧间重合度仅 0.6~0.8），
+// 而攻击是一次性动作，纵向的小跳不易察觉。跑 tools/measure_foot.py 可重新量。
+const ANIM_ALIGN = {
+    infantry: { walk: [[1, 0], [-10, 4], [-9, 3], [-30, 4]], attack: [[5, 0], [10, 0], [-8, 0], [-14, 0]] },
+    pikeman:  { walk: [[0, -1], [-1, -2], [-3, -3], [-7, -3]], attack: [[1, 0], [1, 0], [5, 0], [-8, 0]] },
+    archer:   { walk: [[0, -3], [-13, 9], [-14, 0], [-19, 0]], attack: [[7, 0], [-11, 0], [-20, 0], [12, 0]] },
+    cavalry:  { walk: [[0, 0], [-6, -1], [-16, -8], [-8, -2]], attack: [[-1, 0], [-3, 0], [-2, 0], [-10, 0]] }
+};
+const ANIM_ALIGN_K = 1;   // 对齐补正强度：1 = 全量纠正抖动，0 = 关闭（保留原始位移）
+
 // 平滑值噪声：大尺度地形色带（肥沃绿 ↔ 干草黄）用
 function makeNoise(seed) {
     const hash2 = (x, y) => {
@@ -443,21 +470,28 @@ class IsoBattleScene extends Phaser.Scene {
         // 人物清晰优先：步兵约 47px，骑兵约 58px；仍保持在单格可读范围内
         const sizeK = type === 'cavalry' ? 0.37 : 0.30;
         const fx = sizeK / 0.55;   // 特效幅度基准：1 = 原体型
+        const sc = typeData.scale * sizeK;      // 贴图最终显示缩放
 
-        // 真实投影：双层软边暗椭圆 + 细队伍色圈（骑兵马身长，阴影同步放大）
-        const rs = (type === 'cavalry' ? 1.45 : 1) * fx;
+        // 接地基准：把角色“踩”到地面线上，阴影圆心与脚底重合
+        // pad = 素材底边到脚底的像素距离（AI 出图底部留白 10~34px 不等，不补偿就会悬浮）
+        // dx  = 脚底相对贴图中心的横向偏移；w/h = 脚掌投影（等距 2:1）
+        const F = FOOT[type];
+        const footDy = F.pad * sc;              // 贴图底边 → 脚底 的显示距离
+        const footDx = F.dx * sc;
+
+        // 真实投影：双层软边暗椭圆 + 细队伍色圈（圆心落在脚底，而非贴图底边）
         const ring = this.add.graphics();
-        ring.fillStyle(0x0c1206, 0.34);
-        ring.fillEllipse(0, 2, 30 * rs, 13 * rs);
-        ring.fillStyle(0x0c1206, 0.32);
-        ring.fillEllipse(0, 0, 20 * rs, 9 * rs);
-        ring.lineStyle(2.5, team === 'red' ? 0xff3b30 : 0x2f7bff, 0.9);
-        ring.strokeEllipse(0, 1, 17 * rs, 8.5 * rs);
+        ring.fillStyle(0x0c1206, 0.30);
+        ring.fillEllipse(footDx, 0, F.w * sc, F.h * sc);
+        ring.fillStyle(0x0c1206, 0.26);
+        ring.fillEllipse(footDx, 0, F.w * sc * 0.62, F.h * sc * 0.62);
+        ring.lineStyle(2.2, team === 'red' ? 0xff3b30 : 0x2f7bff, 0.85);
+        ring.strokeEllipse(footDx, 0, F.w * sc * 0.78, F.h * sc * 0.78);
         ring.setPosition(x, y);
         ring.setDepth(depth + 48);
 
-        const spr = this.add.sprite(x, y, key).setOrigin(0.5, 1);
-        spr.setScale(typeData.scale * sizeK);
+        const spr = this.add.sprite(x, y + footDy, key).setOrigin(0.5, 1);
+        spr.setScale(sc);
         spr.setFlipX(team === 'blue');         // 素材默认朝右：蓝方在右侧，初始应面向左
         spr.setDepth(depth + 50);
 
@@ -474,6 +508,8 @@ class IsoBattleScene extends Phaser.Scene {
             bobPhase: Math.random() * Math.PI * 2,
             lastSX: x, lastSY: y, scene: this,
             sizeK: fx,                                  // 特效幅度系数（1 = 原体型）
+            baseScale: sc,                              // 贴图显示缩放（待机呼吸在其上做微缩放）
+            footDy,                                     // 贴图底边 → 脚底 的下压距离（对齐地面线）
             faceDir: team === 'red' ? 1 : -1,           // 当前朝向：1=右 / -1=左
             faceAcc: 0,                                  // 朝向判定的累计位移
             animState: 'idle',                           // 当前动画：idle/walk/attack
@@ -960,25 +996,40 @@ class IsoBattleScene extends Phaser.Scene {
         }
         if (unit.moving && unit.type === 'cavalry') this.chargeDust(unit);   // 奔跑扬尘（内部已节流）
 
-        // 待机呼吸（行走/攻击的起伏已烘进动画帧）
-        const sz = unit.sizeK || 1;
-        const bob = unit.animState === 'idle' ? Math.sin(time * 0.0035 + unit.bobPhase) * 0.9 * sz : 0;
-
-        // 受击位移叠加（lunge 由 tween 驱动）
-        const L = unit.lunge;
-        unit.spr.setPosition(x + ox + L.x, y - bob + L.y);
-        unit.spr.setAngle(L.angle);
-
-        const depth = (unit.gx + unit.gy) * 100 + 50;
-        unit.spr.setDepth(depth);
-        unit.ring.setPosition(x + ox * 0.55, y).setDepth(depth - 2);
-
-        // 朝向：累计位移过阈值才翻转（避免受击/挤开抖动导致来回闪脸）
+        // ---- 朝向：累计位移过阈值才翻转（避免受击/挤开抖动导致来回闪脸）----
+        // 放在应用位置之前，好让逐帧补正和影子镜像都用上本帧的朝向
         unit.faceAcc += sdx;
         if (unit.faceAcc > 2)       { unit.spr.setFlipX(false); unit.faceDir = 1;  unit.faceAcc = 0; }
         else if (unit.faceAcc < -2) { unit.spr.setFlipX(true);  unit.faceDir = -1; unit.faceAcc = 0; }
         else if (Math.abs(unit.faceAcc) > 60) unit.faceAcc = 0;
         unit.lastSX = x; unit.lastSY = y;
+
+        // 待机呼吸：以脚底为支点做极轻微缩放（不再整体上下平移，脚不离地）
+        const breath = unit.animState === 'idle' ? Math.sin(time * 0.0035 + unit.bobPhase) : 0;
+        const bs = unit.baseScale || 1;
+        unit.spr.setScale(bs, bs * (1 + breath * 0.012));
+
+        // ---- 逐帧对齐补正：抵消同一套动画里各帧站位不一致造成的左右抖 ----
+        const alignRow = ANIM_ALIGN[unit.type] &&
+                         ANIM_ALIGN[unit.type][unit.animState === 'attack' ? 'attack' : 'walk'];
+        let ajx = 0, ajy = 0;
+        if (alignRow) {
+            const cf = unit.spr.anims.currentFrame;
+            const a = alignRow[cf ? Math.min(cf.index - 1, alignRow.length - 1) : 0] || [0, 0];
+            ajx = a[0] * bs * unit.faceDir * ANIM_ALIGN_K;      // 横向补正随朝向镜像
+            ajy = a[1] * bs * ANIM_ALIGN_K;
+        }
+
+        // 受击位移叠加（lunge 由 tween 驱动）；y 再补 footDy，让脚底落在阴影圆心上
+        const L = unit.lunge;
+        unit.spr.setPosition(x + ox + L.x + ajx, y + unit.footDy + L.y + ajy);
+        unit.spr.setAngle(L.angle);
+
+        const depth = (unit.gx + unit.gy) * 100 + 50;
+        unit.spr.setDepth(depth);
+        // 影子：钉在地面（不随帧抖），横向偏移随朝向镜像 ——
+        // 否则贴图一翻转，影子就偏到另一头（骑兵看着就是“影子全挤在前蹄下”）
+        unit.ring.setPosition(x + ox * 0.55, y).setScale(unit.faceDir, 1).setDepth(depth - 2);
 
         // 受击反馈：轻染红（乘法染色保留像素图案，不再全白填充闪白）
         if (this.time.now < unit.flashUntil) unit.spr.setTint(0xff7d6e);
@@ -993,7 +1044,7 @@ class IsoBattleScene extends Phaser.Scene {
             unit.hpBar.fillRect(-w / 2 - 1, hy, w + 2, 6);
             unit.hpBar.fillStyle(unit.team === 'red' ? 0xff4444 : 0x3d7be8, 1);
             unit.hpBar.fillRect(-w / 2, hy + 1, w * ratio, 4);
-            unit.hpBar.setPosition(x, y).setDepth(depth + 4);
+            unit.hpBar.setPosition(x, y + unit.footDy).setDepth(depth + 4);
         }
     }
 
