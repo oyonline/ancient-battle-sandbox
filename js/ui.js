@@ -1,6 +1,6 @@
 // ==================== 音效（WebAudio 合成，无外部文件） ====================
 const Snd = {
-    ctx: null, muted: false,
+    ctx: null, muted: false, _last: {},
     ensure() {
         if (!this.ctx) {
             try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
@@ -21,6 +21,13 @@ const Snd = {
         o.start(t); o.stop(t + dur);
     },
     play(name) {
+        // 千人混战时同名音效可能每秒上百次：按类型限频，保护音频线程
+        const minGap = { hit: 70, die: 90, arrow: 90, buy: 80 }[name];
+        if (minGap) {
+            const now = performance.now();
+            if (now - (this._last[name] || 0) < minGap) return;
+            this._last[name] = now;
+        }
         switch (name) {
             case 'buy':   this.tone(660, 0.07, 'triangle', 0.1); break;
             case 'tick':  this.tone(520, 0.09, 'square', 0.08); break;
@@ -34,11 +41,12 @@ const Snd = {
     }
 };
 
-// ==================== 一键预设配兵（预算 160） ====================
+// ==================== 一键预设配兵（预算 4000） ====================
 const PRESETS = {
-    balance: { name: '均衡军团', config: { infantry: 16, pikeman: 4, archer: 5, cavalry: 1 } },
-    ranged:  { name: '远程火力', config: { infantry: 4, pikeman: 6, archer: 13, cavalry: 0 } },
-    rush:    { name: '铁骑洪流', config: { infantry: 7, pikeman: 0, archer: 0, cavalry: 10 } }
+    balance: { name: '均衡军团', config: { infantry: 150, pikeman: 30, archer: 40, cavalry: 30 } },
+    ranged:  { name: '远程火力', config: { infantry: 60, pikeman: 60, archer: 150, cavalry: 0 } },
+    rush:    { name: '铁骑洪流', config: { infantry: 80, pikeman: 0, archer: 0, cavalry: 120 } },
+    thousand:{ name: '千人军团', config: { infantry: 300, pikeman: 60, archer: 80, cavalry: 60 } }
 };
 
 // ==================== UI 控制器（底部抽屉 + 三步流程） ====================
@@ -50,9 +58,25 @@ const UI = {
 
     init() {
         this.bindControls();
+        // 演示直通：?auto=千人军团预设名 → 跳过配兵直接开战（快速观战/压测用）
+        const auto = new URLSearchParams(location.search).get('auto');
+        if (auto && PRESETS[auto]) { this.autoplay(auto); return; }
         this.buildBuy('red');
         this.showOverlay('red');
         this.setStep(1);
+    },
+
+    autoplay(preset) {
+        if (!this.scene) { setTimeout(() => this.autoplay(preset), 100); return; }
+        this.phase = 'battle';
+        this.configs.red = { ...PRESETS[preset].config };
+        this.configs.blue = { ...PRESETS[preset].config };
+        this.setStep(3);
+        document.getElementById('phase-hint').textContent = '自动演示：' + PRESETS[preset].name;
+        this.openSheet(false);
+        this.scene.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue);
+        this.updateCounts();
+        this.scene.startCountdown(() => {});
     },
 
     onSceneReady(scene) { this.scene = scene; },
@@ -142,14 +166,20 @@ const UI = {
         this.updateBudget(team);
     },
 
-    // 按下立即执行一次，长按 380ms 后进入每 90ms 连发
+    // 按下立即执行一次，长按进入连发；按得越久步进越大（配 500 人大军不用点到天亮）
     bindHold(el, fn) {
-        let timer = null, rep = null;
-        const stop = () => { clearTimeout(timer); clearInterval(rep); timer = rep = null; };
+        let timer = null, rep = null, held = 0;
+        const stop = () => { clearTimeout(timer); clearInterval(rep); timer = rep = null; held = 0; };
         el.addEventListener('pointerdown', e => {
             e.preventDefault();
             fn();
-            timer = setTimeout(() => { rep = setInterval(fn, 90); }, 380);
+            timer = setTimeout(() => {
+                rep = setInterval(() => {
+                    held++;
+                    const step = held < 10 ? 1 : held < 30 ? 8 : 25;
+                    for (let i = 0; i < step; i++) fn();
+                }, 60);
+            }, 380);
         });
         ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.addEventListener(ev, stop));
     },
@@ -293,10 +323,9 @@ const UI = {
 
     updateCounts() {
         if (!this.scene) return;
-        const r = this.scene.units.filter(u => u.team === 'red' && !u.dead).length;
-        const b = this.scene.units.filter(u => u.team === 'blue' && !u.dead).length;
-        document.getElementById('red-count').textContent = r;
-        document.getElementById('blue-count').textContent = b;
+        // 场景每帧在空间哈希重建时聚合存活数，这里直接读，不再 O(n) 扫两遍
+        document.getElementById('red-count').textContent = this.scene.redAlive || 0;
+        document.getElementById('blue-count').textContent = this.scene.blueAlive || 0;
     },
 
     resetAll() {
