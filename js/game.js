@@ -126,6 +126,7 @@ class IsoBattleScene extends Phaser.Scene {
         this.units = [];
         this.arrows = [];
         this.bloods = [];
+        this.bloodQueue = [];
         this.battleStarted = false;
         this.battleOver = false;
         this.paused = false;
@@ -635,6 +636,7 @@ class IsoBattleScene extends Phaser.Scene {
         }
         const dt = Math.min(delta, 50) / 1000 * this.gameSpeed;
         this.updateBloods(dt);
+        this.flushBloodQueue();
         // 阵亡计数 DOM 刷新限频（千人大战每帧几十个阵亡，不能每杀都写 DOM）
         if (this._countsDirty && this.time.now - (this._lastCountUI || 0) > 250) {
             this._lastCountUI = this.time.now;
@@ -880,7 +882,7 @@ class IsoBattleScene extends Phaser.Scene {
                 });
                 if (hit) {
                     applyDamage(hit, Math.max(1, a.dmg - hit.typeData.def), null);
-                    this.bloodBurst(s.x, s.y - 8, 4, 75, hit.sizeK || 1);
+                    this.bloodBurst(s.x, s.y - 8, 6, 85, hit.sizeK || 1);
                 } else if (!this.lowFX) {
                     this.impactPuff(s.x, s.y, 0xcfcfcf);
                 }
@@ -926,12 +928,7 @@ class IsoBattleScene extends Phaser.Scene {
 
         if (attacker.type === 'cavalry') {
             const kb = target.sizeK || 1;
-            // 重骑冲撞只做轻微、限频的镜头反馈，避免多骑兵连续命中时叠加眩晕
-            const now = this.time.now;
-            if (!this.lastImpactShake || now - this.lastImpactShake > 350) {
-                this.cameras.main.shake(70, 0.0015);
-                this.lastImpactShake = now;
-            }
+            // 冲击波只做地面局部反馈；不再震镜头——百骑齐战时全屏抖动会持续不断
             if (!this.lowFX && this._fxBudget > 0) {
                 this._fxBudget--;
                 const wave = this.add.graphics();
@@ -944,9 +941,9 @@ class IsoBattleScene extends Phaser.Scene {
                     duration: 380, onComplete: () => wave.destroy()
                 });
             }
-            this.bloodBurst(s.x, s.y - 14 * kb, 11, 135, kb);
+            this.bloodBurst(s.x, s.y - 14 * kb, 14, 150, kb);
         } else {
-            this.bloodBurst(s.x, s.y - 14 * (target.sizeK || 1), 6, 95, target.sizeK || 1);
+            this.bloodBurst(s.x, s.y - 14 * (target.sizeK || 1), 9, 105, target.sizeK || 1);
         }
         if (Snd) Snd.play('hit');
     }
@@ -971,7 +968,7 @@ class IsoBattleScene extends Phaser.Scene {
     // ---------------- 血粒子：喷溅 → 抛物线 → 落地留血渍 ----------------
     // 千人规模下可能同时几十处在溅血：全部合批到一张 bloodGfx 每帧重画
     bloodBurst(x, y, n = 6, power = 95, k = 1) {
-        if (this.bloods.length > 48) return;   // 上限防爆屏
+        if (this.bloods.length > 72) return;   // 上限防爆屏（血渍已走帧内合批，不再怕量）
         const kk = Math.max(0.5, k);
         const parts = [];
         for (let i = 0; i < n; i++) {
@@ -981,7 +978,7 @@ class IsoBattleScene extends Phaser.Scene {
                 x: 0, y: 0,
                 vx: Math.cos(a) * sp,
                 vy: -Math.abs(Math.sin(a)) * sp * 0.85 - 26 * kk,
-                s: (1.6 + Math.random() * 2.2) * kk,        // 像素方块边长
+                s: (2.0 + Math.random() * 2.8) * kk,        // 像素方块边长
                 floor: (3 + Math.random() * 9) * kk,         // 相对喷点的落地深度
                 landed: false, rest: 0
             });
@@ -1018,11 +1015,37 @@ class IsoBattleScene extends Phaser.Scene {
         }
     }
 
-    // 地面血渍：直接盖印进留痕层，永久保留直到重置
+    // 地面血渍：入队，帧内合并成 1 个 Graphics 一次性盖印进留痕层（千人混战下每秒上百处落点也只画一次）
     addGroundBlood(x, y, s) {
+        this.bloodQueue.push(x, y, s);
+    }
+
+    flushBloodQueue() {
+        const q = this.bloodQueue;
+        if (!q.length || !this.scarRT) return;
         const st = this.add.graphics();
-        st.fillStyle(0x7d1212, 0.8);
-        st.fillRect(-s / 2, -s * 0.3, s, s * 0.55);
+        for (let i = 0; i < q.length; i += 3) {
+            const x = q[i], y = q[i + 1], s = q[i + 2];
+            st.fillStyle(0x6e0f0f, 0.85);
+            st.fillRect(x - s / 2, y - s * 0.3, s, s * 0.55);
+            st.fillStyle(0x8c1616, 0.8);
+            st.fillRect(x - s * 0.3, y - s * 0.14, s * 0.55, s * 0.28);
+        }
+        this.scarRT.draw(st);
+        st.destroy();
+        q.length = 0;
+    }
+
+    // 血泊：尸体下的大摊血，多层叠色，立即可见（保证盖在尸体之前）
+    addBloodPool(x, y, s) {
+        if (!this.scarRT) return;
+        const st = this.add.graphics();
+        st.fillStyle(0x5a0c0c, 0.9);
+        st.fillRect(-s * 0.5, -s * 0.3, s, s * 0.62);
+        st.fillStyle(0x7d1212, 0.85);
+        st.fillRect(-s * 0.42, -s * 0.22, s * 0.82, s * 0.46);
+        st.fillStyle(0x931818, 0.8);
+        st.fillRect(-s * 0.28, -s * 0.12, s * 0.5, s * 0.26);
         st.setPosition(x, y);
         this.scarRT.draw(st);
         st.destroy();
@@ -1120,7 +1143,7 @@ class IsoBattleScene extends Phaser.Scene {
             fallDir = Math.random() > 0.5 ? 1 : -1;
         }
 
-        this.bloodBurst(s.x, s.y - 12 * dk, isCav ? 12 : 9, 105, dk);
+        this.bloodBurst(s.x, s.y - 12 * dk, isCav ? 18 : 14, 120, dk);
 
         const spr = unit.spr;
         unit.shadow.destroy();
@@ -1146,8 +1169,10 @@ class IsoBattleScene extends Phaser.Scene {
                         duration: 500, onComplete: () => gdust.destroy()
                     });
                 }
-                this.addGroundBlood(spr.x, spr.y, 6 * dk);
-                this.addGroundBlood(spr.x + (Math.random() - 0.5) * 12 * dk, spr.y + (Math.random() - 0.5) * 4, 4 * dk);
+                this.addBloodPool(spr.x, s.y, 15 * dk);
+                this.addGroundBlood(spr.x + (Math.random() - 0.5) * 22 * dk, s.y + (Math.random() - 0.5) * 8, 9 * dk);
+                this.addGroundBlood(spr.x + (Math.random() - 0.5) * 26 * dk, s.y + (Math.random() - 0.5) * 10, 6 * dk);
+                this.addGroundBlood(spr.x + (Math.random() - 0.5) * 14 * dk, s.y + (Math.random() - 0.5) * 6, 4 * dk);
 
                 if (!this.stampCorpse(unit, spr.x, s.y, fallDir)) {
                     // 无尸体素材时退回压扁盖印
