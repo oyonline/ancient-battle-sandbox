@@ -226,6 +226,6 @@ function applyDamage(target, dmg, from) {
     target.flashUntil = (target.scene ? target.scene.time.now : 0) + 130;
     if (target.hp <= 0 && !target.dead) {
         target.dead = true;
-        if (target.scene) target.scene.killUnit(target);
+        if (target.scene) target.scene.killUnit(target, from);
     }
 }

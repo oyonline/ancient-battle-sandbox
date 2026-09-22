@@ -1,4 +1,4 @@
-// 素材清单（由 build_generated_sprites.py 生成）
+// 素材清单（由处理脚本生成；corpses 段由 build_corpse_sprites.py 维护）
 const MANIFEST = {
   "units": {
     "blue_infantry": {
@@ -183,6 +183,48 @@ const MANIFEST = {
         "fh": 156,
         "frames": 4
       }
+    }
+  },
+  "corpses": {
+    "corpse_red_infantry": {
+      "file": "units/corpse_red_infantry.png",
+      "w": 168,
+      "h": 125
+    },
+    "corpse_blue_infantry": {
+      "file": "units/corpse_blue_infantry.png",
+      "w": 168,
+      "h": 125
+    },
+    "corpse_red_pikeman": {
+      "file": "units/corpse_red_pikeman.png",
+      "w": 168,
+      "h": 113
+    },
+    "corpse_blue_pikeman": {
+      "file": "units/corpse_blue_pikeman.png",
+      "w": 168,
+      "h": 113
+    },
+    "corpse_red_archer": {
+      "file": "units/corpse_red_archer.png",
+      "w": 168,
+      "h": 124
+    },
+    "corpse_blue_archer": {
+      "file": "units/corpse_blue_archer.png",
+      "w": 168,
+      "h": 124
+    },
+    "corpse_red_cavalry": {
+      "file": "units/corpse_red_cavalry.png",
+      "w": 168,
+      "h": 85
+    },
+    "corpse_blue_cavalry": {
+      "file": "units/corpse_blue_cavalry.png",
+      "w": 168,
+      "h": 85
     }
   }
 };

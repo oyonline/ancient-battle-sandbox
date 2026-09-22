@@ -69,6 +69,8 @@ class IsoBattleScene extends Phaser.Scene {
             this.load.image(u.file.replace('.png', ''), 'assets/' + u.file));
         Object.values(MANIFEST.props).forEach(p =>
             this.load.image(p.file.replace('.png', ''), 'assets/' + p.file));
+        Object.values(MANIFEST.corpses || {}).forEach(c =>
+            this.load.image(c.file.replace('.png', ''), 'assets/' + c.file));
         // 动画帧条（walk/attack spritesheet）
         Object.values(MANIFEST.anims || {}).forEach(clips => {
             Object.values(clips).forEach(c => {
@@ -101,7 +103,6 @@ class IsoBattleScene extends Phaser.Scene {
         this.units = [];
         this.arrows = [];
         this.bloods = [];
-        this.groundBloods = 0;
         this.battleStarted = false;
         this.battleOver = false;
         this.paused = false;
@@ -133,6 +134,9 @@ class IsoBattleScene extends Phaser.Scene {
         this.groundFX = this.add.container(0, 0).setDepth(10);
         this.unitLayer = this.add.container(0, 0).setDepth(1000);
         this.airFX = this.add.container(0, 0).setDepth(100000);
+
+        // 战场留痕层：血渍与尸体增量盖印进一张全图纹理，整场只占 1 次绘制
+        this.scarRT = this.add.renderTexture(0, 0, VIEW_W, VIEW_H).setOrigin(0, 0).setDepth(6);
 
         this.buildUnitAnims();
         this.makeShadowTextures();    // 阴影预烘焙成贴图（千人合批，见 syncOne）
@@ -570,10 +574,14 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     clearUnits() {
-        this.units.forEach(u => { u.spr.destroy(); u.shadow.destroy(); });
+        this.units.forEach(u => {
+            this.tweens.killTweensOf(u.spr);   // 死亡倒地 tween 可能在跑，先停掉防止盖印已销毁精灵
+            u.spr.destroy(); u.shadow.destroy();
+        });
         this.units = [];
         this.arrows = [];
         this.bloods = [];
+        if (this.scarRT) this.scarRT.clear();   // 清空尸体与血渍
         if (this.arrowGfx) this.arrowGfx.clear();
         if (this.bloodGfx) this.bloodGfx.clear();
         if (this.hpGfx) this.hpGfx.clear();
@@ -974,19 +982,14 @@ class IsoBattleScene extends Phaser.Scene {
         }
     }
 
-    // 地面血渍：短命小红块，控制总量防爆屏
+    // 地面血渍：直接盖印进留痕层，永久保留直到重置
     addGroundBlood(x, y, s) {
-        if (this.groundBloods > 90) return;
-        this.groundBloods++;
         const st = this.add.graphics();
         st.fillStyle(0x7d1212, 0.8);
         st.fillRect(-s / 2, -s * 0.3, s, s * 0.55);
         st.setPosition(x, y);
-        this.groundFX.add(st);
-        this.tweens.add({
-            targets: st, alpha: 0, duration: 1600, delay: 500,
-            onComplete: () => { st.destroy(); this.groundBloods--; }
-        });
+        this.scarRT.draw(st);
+        st.destroy();
     }
 
     chargeDust(unit) {
@@ -1047,44 +1050,89 @@ class IsoBattleScene extends Phaser.Scene {
         });
     }
 
-    killUnit(unit) {
-        // 亲子友好：变灰倒下 + 烟雾"消失"，无血腥
+    // 盖印真实躺尸贴图进留痕层（帝国时代式死亡素材），成功返回 true
+    stampCorpse(unit, x, groundY, fallDir) {
+        const key = 'units/corpse_' + unit.team + '_' + unit.type;
+        if (!this.textures.exists(key)) return false;
+        const isCav = unit.type === 'cavalry';
+        const sc = unit.typeData.scale * (isCav ? 0.37 : 0.30)   // 与活体显示同公式
+            * (0.94 + Math.random() * 0.12);                    // 大小微抖动，避免千人一面
+        const img = this.add.image(x, groundY, key);
+        img.setScale(sc)
+            .setFlipX(fallDir < 0)
+            .setAngle((Math.random() - 0.5) * 14)
+            .setTint(0xb8b8b8);
+        img.y = groundY - img.displayHeight * 0.42;   // 底缘微沉入地面线，贴地
+        this.scarRT.draw(img);
+        img.destroy();
+        return true;
+    }
+
+    killUnit(unit, from) {
+        // 死亡编排：击杀瞬间喷血变灰 → 顺击退方向倒下（重力加速，骑兵带惯性前冲）
+        // → 落地扬尘溅血，盖印真实躺尸素材进留痕层永久保留
         const s = gridToScreen(unit.gx, unit.gy);
+        const isCav = unit.type === 'cavalry';
+        const dk = Math.max(0.6, unit.sizeK || 1);
 
-        if (!this.lowFX) {
-            // 倒地扬尘（地面扩散尘圈）
-            const gdust = this.add.graphics();
-            gdust.fillStyle(0xc9b28c, 0.5);
-            gdust.fillEllipse(0, 0, 18, 9);
-            gdust.setPosition(s.x, s.y);
-            this.groundFX.add(gdust);
-            this.tweens.add({
-                targets: gdust, alpha: 0, scaleX: 2.2, scaleY: 1.6,
-                duration: 500, onComplete: () => gdust.destroy()
-            });
-
-            const poof = this.add.graphics();
-            for (let i = 0; i < 4; i++) {
-                poof.fillStyle(0xe0e0e0, 0.8);
-                poof.fillCircle((Math.random() - 0.5) * 22, -10 - Math.random() * 16, 5 + Math.random() * 5);
-            }
-            poof.setPosition(s.x, s.y);
-            this.airFX.add(poof);
-            this.tweens.add({ targets: poof, alpha: 0, y: poof.y - 14, duration: 600, onComplete: () => poof.destroy() });
+        // 倒向：被击退方向（攻击者在屏幕哪侧就往哪侧倒），无来源则随机
+        let fallDir;
+        if (from) {
+            const dsx = (unit.gx - unit.gy) - (from.gx - from.gy);
+            fallDir = dsx > 0.05 ? 1 : dsx < -0.05 ? -1 : (Math.random() > 0.5 ? 1 : -1);
+        } else {
+            fallDir = Math.random() > 0.5 ? 1 : -1;
         }
 
-        // 倒地喷血 + 原地留下血渍
-        const dk = Math.max(0.6, unit.sizeK || 1);
-        this.bloodBurst(s.x, s.y - 12 * dk, 9, 105, dk);
-        this.addGroundBlood(s.x, s.y, 6 * dk);
-        this.addGroundBlood(s.x + (Math.random() - 0.5) * 12 * dk, s.y + (Math.random() - 0.5) * 4, 4 * dk);
+        this.bloodBurst(s.x, s.y - 12 * dk, isCav ? 12 : 9, 105, dk);
 
+        const spr = unit.spr;
         unit.shadow.destroy();
-        unit.spr.anims.stop();
-        this.tweens.add({
-            targets: unit.spr, alpha: 0, angle: (Math.random() > 0.5 ? 1 : -1) * 75,
-            y: unit.spr.y + 4, duration: 450, onComplete: () => unit.spr.destroy()
-        });
+        spr.anims.stop();
+        spr.setTint(0x9a9a9a);
+
+        const fall = {
+            targets: spr,
+            angle: fallDir * (isCav ? 86 : 80),
+            y: spr.y + (isCav ? 6 : 3),
+            duration: isCav ? 520 : 380,
+            ease: 'Cubic.easeIn',
+            onComplete: () => {
+                // 落地：尘圈扩散 + 溅血
+                if (!this.lowFX) {
+                    const gdust = this.add.graphics();
+                    gdust.fillStyle(0xc9b28c, 0.5);
+                    gdust.fillEllipse(0, 0, isCav ? 24 : 18, isCav ? 12 : 9);
+                    gdust.setPosition(spr.x, spr.y);
+                    this.groundFX.add(gdust);
+                    this.tweens.add({
+                        targets: gdust, alpha: 0, scaleX: 2.2, scaleY: 1.6,
+                        duration: 500, onComplete: () => gdust.destroy()
+                    });
+                }
+                this.addGroundBlood(spr.x, spr.y, 6 * dk);
+                this.addGroundBlood(spr.x + (Math.random() - 0.5) * 12 * dk, spr.y + (Math.random() - 0.5) * 4, 4 * dk);
+
+                if (!this.stampCorpse(unit, spr.x, s.y, fallDir)) {
+                    // 无尸体素材时退回压扁盖印
+                    this.tweens.add({
+                        targets: spr,
+                        scaleX: spr.scaleX * (isCav ? 0.45 : 0.6),
+                        duration: isCav ? 300 : 220,
+                        ease: 'Bounce.easeOut',
+                        onComplete: () => {
+                            this.scarRT.draw(spr);
+                            spr.destroy();
+                        }
+                    });
+                } else {
+                    spr.destroy();
+                }
+            }
+        };
+        if (isCav) fall.x = spr.x + (unit.faceDir || 1) * (10 + Math.random() * 8);
+        this.tweens.add(fall);
+
         this.deadCount++;
         this._countsDirty = true;
         if (Snd) Snd.play('die');
