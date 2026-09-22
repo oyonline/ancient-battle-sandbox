@@ -1064,6 +1064,10 @@ class IsoBattleScene extends Phaser.Scene {
             braceTime: 0, braceReady: false, braceHold: false, braceSupport: 0, braceDepth: 0,
             braceFacingX: team === 'red' ? 1 : -1, braceFacingY: 0,
             moving: false, dead: false, withdrawn: false, flashUntil: 0, actionEpoch: 0,
+            pressX: 0, pressY: 0,                        // 通行意图方向（推挤传导用，每帧由 moveToward 刷新）
+            strafeX: 0, strafeY: 0, strafeUntil: 0,     // 微走位：绕目标换角度的目的地与截止时间
+            nextShift: 0,                                // 下次走位时刻（出生后按种子错峰，见下方 randSeed 初始化）
+            randSeed: 0,                                 // 单位确定性伪随机种子（走位抖动不破坏重放/镜像一致性）
             bobPhase: Math.random() * Math.PI * 2,
             lastSX: x, lastSY: y, scene: this,
             sizeK: fx,                                  // 特效幅度系数（1 = 原体型）
@@ -1081,6 +1085,8 @@ class IsoBattleScene extends Phaser.Scene {
             // 行军入场：从己方一侧滑进阵地
             slideOff: (team === 'red' ? -1 : 1) * (80 + Math.random() * 70)
         };
+        unit.randSeed = (unit.id * 2654435761 + 12345) >>> 0;
+        unit.nextShift = 800 + unitRand(unit) * 2600;   // 确定性错峰：避免全场同帧集体换位
         this.morale.initUnit(unit);
         this.registerUnit(unit);
         this.units.push(unit);
@@ -1221,6 +1227,7 @@ class IsoBattleScene extends Phaser.Scene {
             const unit = units[i];
             if (unit.dead || unit.withdrawn) continue;
             unit.moving = false;
+            unit.pressX = 0; unit.pressY = 0;
             if (this.resolvingOutcome) continue;
             if (unit.moraleState === 'routing') { this.updateRoutedUnit(unit, dt); continue; }
             if (this.updateFallingBackUnit(unit, now, dt)) continue;
@@ -1390,17 +1397,59 @@ class IsoBattleScene extends Phaser.Scene {
                 }
             }
         } else {
-            if (minD > range) {
-                if (unit.type !== 'pikeman' || !unit.braceHold) moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
-            } else CombatRules.attack(this, unit, nearest, now, range);
+            // 微走位中：绕目标换角度，期间不攻击（找角度的节奏，不站桩）
+            if (unit.strafeUntil > now) {
+                if (Math.hypot(unit.strafeX - unit.gx, unit.strafeY - unit.gy) < 0.12) {
+                    unit.strafeUntil = 0;
+                } else {
+                    moveToward(unit, unit.strafeX, unit.strafeY, unit.typeData.speed * 0.8, dt);
+                }
+            } else if (minD > range) {
+                // 架枪中的长枪兵钉死原地迎击；其余贴"接战环"逼近——不叠目标中心，多人自然围开
+                if (unit.type !== 'pikeman' || !unit.braceHold) {
+                    const rr = Math.max(0.5, range * 0.82);
+                    const ang = Math.atan2(unit.gy - nearest.gy, unit.gx - nearest.gx);
+                    moveToward(unit, nearest.gx + Math.cos(ang) * rr, nearest.gy + Math.sin(ang) * rr, unit.typeData.speed, dt);
+                }
+            } else {
+                const lastAttackBefore = unit.lastAttack;
+                CombatRules.attack(this, unit, nearest, now, range);
+                // 攻击间隙走位：绕目标弧线换攻击角，占了的位就转下一格（抢位围杀）。
+                // 架枪中的长枪兵保持枪阵不挪窝；随机量走单位种子，保住确定性重放。
+                if (unit.lastAttack !== lastAttackBefore && now > unit.nextShift && !(unit.type === 'pikeman' && unit.braceHold)) {
+                    unit.nextShift = now + 1200 + unitRand(unit) * 2200;
+                    const cur = Math.atan2(unit.gy - nearest.gy, unit.gx - nearest.gx);
+                    const nr = Math.max(0.55, range * 0.85);
+                    let pickAng = cur + (unitRand(unit) < 0.5 ? 1 : -1) * (0.7 + unitRand(unit) * 0.7);
+                    for (let t = 0; t < 4; t++) {
+                        const sx = clamp(nearest.gx + Math.cos(pickAng) * nr, 1.2, GRID_W - 1.2);
+                        const sy = clamp(nearest.gy + Math.sin(pickAng) * nr, 1.2, GRID_H - 1.2);
+                        let taken = false;
+                        this.forEachNear(sx, sy, 0.42, o => {
+                            if (o !== unit && o.team === unit.team && !o.dead
+                                && Math.hypot(o.gx - sx, o.gy - sy) < 0.42) taken = true;
+                        });
+                        if (!taken) {
+                            unit.strafeX = sx; unit.strafeY = sy;
+                            unit.strafeUntil = now + 500 + unitRand(unit) * 400;
+                            break;
+                        }
+                        pickAng += (t % 2 === 0 ? 0.9 : -0.9);
+                    }
+                }
+            }
         }
     }
 
-    // 简单碰撞排斥，避免单位重叠（空间哈希：每人只查身边一格内的邻居）
+    // 碰撞排斥 + 推挤传导（空间哈希：每人只查身边一格内的邻居）
+    // 排斥保证不重叠；传导让"有前进意图的一方"把对方顶向自己的方向——
+    // 后排顶前排、局部打赢得势就往前拱，战线才会呼吸进退。
     separate(dt) {
         const units = this._aliveArr;
         const R = CombatRules.maxContactDistance(units);
-        for (const unit of units) { unit.separateX = 0; unit.separateY = 0; }
+        const k = Math.min(0.35, dt * 14);        // 卡顿帧不再一次性大步推移
+        const cap = 0.9 * dt;                     // 推挤传导每帧限幅（帧率无关，多人同挤也不瞬移）
+        for (const unit of units) { unit.separateX = 0; unit.separateY = 0; unit.pshX = 0; unit.pshY = 0; }
         for (let i = 0; i < units.length; i++) {
             const a = units[i];
             if (a.dead) continue;
@@ -1411,22 +1460,29 @@ class IsoBattleScene extends Phaser.Scene {
                 const contact = CombatRules.contactDistance(a, b);
                 if (d2 < contact * contact && d2 > 0.0001) {
                     const d = Math.sqrt(d2);
-                    const push = (contact - d) * Math.min(1, dt * 14);
+                    const push = (contact - d) * k;
                     const aWeight = a.guardReady && a.moraleState !== 'routing' ? 0.25 : 1;
                     const bWeight = b.guardReady && b.moraleState !== 'routing' ? 0.25 : 1;
                     const totalWeight = aWeight + bWeight;
                     const nx = dx / d, ny = dy / d;
                     a.separateX -= nx * push * aWeight / totalWeight; a.separateY -= ny * push * aWeight / totalWeight;
                     b.separateX += nx * push * bWeight / totalWeight; b.separateY += ny * push * bWeight / totalWeight;
+                    // 推挤传导：先入各自缓冲，帧末统一限幅——单个后排顶得轻、多人围顶才顶得动
+                    if (a.pressX || a.pressY) { b.pshX += a.pressX * push * 0.5; b.pshY += a.pressY * push * 0.5; }
+                    if (b.pressX || b.pressY) { a.pshX += b.pressX * push * 0.5; a.pshY += b.pressY * push * 0.5; }
                 }
             });
         }
         for (let i = 0; i < units.length; i++) {
             const u = units[i];
+            // 推挤传导限幅后并入位移（cap 见上）
+            const l = Math.hypot(u.pshX, u.pshY);
+            const px = l > 1e-6 ? u.pshX * (l > cap ? cap / l : 1) : 0;
+            const py = l > 1e-6 ? u.pshY * (l > cap ? cap / l : 1) : 0;
             // 对称累计推开，并消除长时间镜像模拟中的浮点方向偏差。
             const beforeX = u.gx, beforeY = u.gy;
-            u.gx = quantizePosition(clamp(u.gx + u.separateX, 0.6, GRID_W - 0.6), GRID_W);
-            u.gy = quantizePosition(clamp(u.gy + u.separateY, 0.6, GRID_H - 0.6), GRID_H);
+            u.gx = quantizePosition(clamp(u.gx + u.separateX + px, 0.6, GRID_W - 0.6), GRID_W);
+            u.gy = quantizePosition(clamp(u.gy + u.separateY + py, 0.6, GRID_H - 0.6), GRID_H);
             // 保存实际纠偏量（含边界截断），供下一步架枪判定扣除。
             u.separateX = u.gx - beforeX; u.separateY = u.gy - beforeY;
         }

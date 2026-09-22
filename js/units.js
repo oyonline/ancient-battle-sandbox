@@ -343,6 +343,13 @@ function td() { return UNIT_TYPES.cavalry; }
 function dist(a, b) { return Math.hypot(a.gx - b.gx, a.gy - b.gy); }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
+// 单位专属确定性伪随机（LCG）：微走位等行为抖动不再用 Math.random，
+// 固定步长模拟的同阵容重放与红蓝镜像对照保持一致。
+function unitRand(unit) {
+    unit.randSeed = (Math.imul(unit.randSeed, 1664525) + 1013904223) >>> 0;
+    return unit.randSeed / 4294967296;
+}
+
 function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
     const dx = tx - unit.gx, dy = ty - unit.gy;
     const d = Math.hypot(dx, dy);
@@ -362,6 +369,7 @@ function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
         unit.gy += motion.y;
     }
     unit.moving = Math.hypot(motion.x, motion.y) > 0.0001;
+    unit.pressX = dx / d; unit.pressY = dy / d;   // 记录通行意图，供 separate 推挤传导
 }
 
 function knockback(target, from, amount) {
