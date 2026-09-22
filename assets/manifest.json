@@ -210,6 +210,90 @@
         "fh": 156,
         "frames": 4
       }
+    },
+    "red_cavalry_south": {
+      "walk": {
+        "file": "anim/red_cavalry_south_walk.png",
+        "fw": 166,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_cavalry_south_attack.png",
+        "fw": 155,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "blue_cavalry_south": {
+      "walk": {
+        "file": "anim/blue_cavalry_south_walk.png",
+        "fw": 166,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_cavalry_south_attack.png",
+        "fw": 155,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "red_cavalry_northeast": {
+      "walk": {
+        "file": "anim/red_cavalry_northeast_walk.png",
+        "fw": 174,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_cavalry_northeast_attack.png",
+        "fw": 175,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "blue_cavalry_northeast": {
+      "walk": {
+        "file": "anim/blue_cavalry_northeast_walk.png",
+        "fw": 174,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_cavalry_northeast_attack.png",
+        "fw": 175,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "red_cavalry_north": {
+      "walk": {
+        "file": "anim/red_cavalry_north_walk.png",
+        "fw": 170,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_cavalry_north_attack.png",
+        "fw": 169,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "blue_cavalry_north": {
+      "walk": {
+        "file": "anim/blue_cavalry_north_walk.png",
+        "fw": 170,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_cavalry_north_attack.png",
+        "fw": 169,
+        "fh": 156,
+        "frames": 4
+      }
     }
   },
   "corpses": {

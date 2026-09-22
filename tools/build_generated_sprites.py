@@ -23,7 +23,14 @@ TARGET_HEIGHT = 156
 PAD_X = 8
 PAD_Y = 2
 UNIT_TYPES = ("infantry", "pikeman", "archer", "cavalry")
-DIRECTIONAL_SHEETS = {"cavalry_down": "cavalry_down_sheet.png"}
+DIRECTIONAL_SHEETS = {
+    # Keep the legacy ``down`` asset name for compatibility; it is the
+    # southeast-facing source used by the eight-direction renderer.
+    "cavalry_down": "cavalry_down_sheet.png",
+    "cavalry_south": "cavalry_south_sheet.png",
+    "cavalry_northeast": "cavalry_northeast_sheet.png",
+    "cavalry_north": "cavalry_north_sheet.png",
+}
 
 
 def cell_bounds(size: int, index: int, count: int) -> tuple[int, int]:

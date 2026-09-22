@@ -26,8 +26,11 @@ const FOOT = {
     pikeman:  { pad: 34, dx:  -7, w: 63, h: 31 },
     archer:   { pad: 11, dx:  -6, w: 67, h: 33 },
     cavalry: {
-        side: { pad:  4, dx: -10, w: 83, h: 41 },
-        down: { pad: 10, dx: -16, w: 74, h: 36 }
+        east:      { pad:  4, dx: -10, w: 83, h: 41 },
+        southeast: { pad: 10, dx: -16, w: 74, h: 36 },
+        south:     { pad:  5, dx:   0, w: 24, h: 12 },
+        northeast: { pad: 12, dx: -20, w: 62, h: 30 },
+        north:     { pad:  3, dx: -26, w: 24, h: 12 }
     }
 };
 
@@ -41,26 +44,65 @@ const ANIM_ALIGN = {
     pikeman:  { walk: [[0, -1], [-1, -2], [-3, -3], [-7, -3]], attack: [[1, 0], [1, 0], [5, 0], [-8, 0]] },
     archer:   { walk: [[0, -3], [-13, 9], [-14, 0], [-19, 0]], attack: [[7, 0], [-11, 0], [-20, 0], [12, 0]] },
     cavalry: {
-        side: { walk: [[0, -1], [-9, 0], [-6, 0], [-14, 1]], attack: [[1, 0], [-6, 0], [2, 0], [-12, 0]] },
-        down: { walk: [[0, 0], [-6, -1], [-16, -8], [-8, -2]], attack: [[-1, 0], [-3, 0], [-2, 0], [-10, 0]] }
+        east:      { walk: [[0, -1], [-9, 0], [-6, 0], [-14, 1]], attack: [[1, 0], [-6, 0], [2, 0], [-12, 0]] },
+        southeast: { walk: [[0, 0], [-6, -1], [-16, -8], [-8, -2]], attack: [[-1, 0], [-3, 0], [-2, 0], [-10, 0]] },
+        south:     { walk: [[0, 0], [-11, 1], [-5, 0], [-9, 0]], attack: [[16, 0], [2, 0], [-23, 0], [-11, 0]] },
+        northeast: { walk: [[0, 0], [-10, 5], [-13, 5], [-14, -7]], attack: [[-2, 0], [-11, 0], [-6, 0], [-16, 0]] },
+        north:     { walk: [[0, 0], [-17, 1], [-23, -2], [-30, 1]], attack: [[0, 0], [-19, 0], [-21, 0], [-31, 0]] }
     }
 };
 const ANIM_ALIGN_K = 1;   // 对齐补正强度：1 = 全量纠正抖动，0 = 关闭（保留原始位移）
 
+const CAVALRY_HEADINGS = ['east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'north', 'northeast'];
+const CAVALRY_HEADING_INDEX = {
+    east: 0, southeast: 1, south: 2, southwest: 3,
+    west: 4, northwest: 5, north: 6, northeast: 7
+};
+const CAVALRY_PROFILE = {
+    east: 'east', southeast: 'southeast', south: 'south', southwest: 'southeast',
+    west: 'east', northwest: 'northeast', north: 'north', northeast: 'northeast'
+};
+const CAVALRY_PROFILE_SUFFIX = {
+    east: '', southeast: '_down', south: '_south', northeast: '_northeast', north: '_north'
+};
+const CAVALRY_FLIPPED = new Set(['west', 'southwest', 'northwest']);
+const CAVALRY_DIR_STEP = Math.PI / 4;
+const CAVALRY_DIR_HYSTERESIS = Math.PI / 24; // 7.5°；当前方向保持到中心角 ±30°
+const TWO_PI = Math.PI * 2;
+
+function cavalryProfile(heading) {
+    return CAVALRY_PROFILE[heading] || 'east';
+}
+
+function cavalryRenderSign(heading) {
+    return CAVALRY_FLIPPED.has(heading) ? -1 : 1;
+}
+
+function cavalryHeadingFromMotion(dx, dy, current = 'east') {
+    let angle = Math.atan2(dy, dx);
+    if (angle < 0) angle += TWO_PI;
+    const currentIndex = CAVALRY_HEADING_INDEX[current] ?? 0;
+    const currentAngle = currentIndex * CAVALRY_DIR_STEP;
+    let distance = Math.abs(angle - currentAngle);
+    if (distance > Math.PI) distance = TWO_PI - distance;
+    if (distance <= CAVALRY_DIR_STEP / 2 + CAVALRY_DIR_HYSTERESIS) return current;
+    return CAVALRY_HEADINGS[Math.round(angle / CAVALRY_DIR_STEP) & 7];
+}
+
 function unitVisualDirections(type) {
-    return type === 'cavalry' ? ['side', 'down'] : ['side'];
+    return type === 'cavalry' ? ['east', 'southeast', 'south', 'northeast', 'north'] : ['side'];
 }
 
 function footProfile(type, visualDir = 'side') {
-    return type === 'cavalry' ? FOOT.cavalry[visualDir] : FOOT[type];
+    return type === 'cavalry' ? FOOT.cavalry[cavalryProfile(visualDir)] : FOOT[type];
 }
 
 function animAlignProfile(type, visualDir = 'side') {
-    return type === 'cavalry' ? ANIM_ALIGN.cavalry[visualDir] : ANIM_ALIGN[type];
+    return type === 'cavalry' ? ANIM_ALIGN.cavalry[cavalryProfile(visualDir)] : ANIM_ALIGN[type];
 }
 
 function shadowTextureKey(team, type, visualDir = 'side') {
-    const direction = type === 'cavalry' ? `-${visualDir}` : '';
+    const direction = type === 'cavalry' ? `-${cavalryProfile(visualDir)}` : '';
     return `shadow-${team}-${type}${direction}`;
 }
 
@@ -541,7 +583,7 @@ class IsoBattleScene extends Phaser.Scene {
         const sizeK = type === 'cavalry' ? 0.37 : 0.30;
         const fx = sizeK / 0.55;   // 特效幅度基准：1 = 原体型
         const sc = typeData.scale * sizeK;      // 贴图最终显示缩放
-        const visualDir = 'side';
+        const visualDir = type === 'cavalry' ? (team === 'red' ? 'east' : 'west') : 'side';
 
         // 接地基准：把角色“踩”到地面线上，阴影圆心与脚底重合
         // pad = 素材底边到脚底的像素距离（AI 出图底部留白 4~34px 不等，不补偿就会悬浮）
@@ -555,7 +597,7 @@ class IsoBattleScene extends Phaser.Scene {
 
         const spr = this.add.sprite(x, y + footDy, key).setOrigin(0.5, 1);
         spr.setScale(sc);
-        spr.setFlipX(team === 'blue');         // 素材默认朝右：蓝方在右侧，初始应面向左
+        spr.setFlipX(type === 'cavalry' ? CAVALRY_FLIPPED.has(visualDir) : team === 'blue');
         spr.setDepth(depth + 50);
 
         const unit = {
@@ -571,9 +613,10 @@ class IsoBattleScene extends Phaser.Scene {
             sizeK: fx,                                  // 特效幅度系数（1 = 原体型）
             baseScale: sc,                              // 贴图显示缩放（待机呼吸在其上做微缩放）
             footDy,                                     // 贴图底边 → 脚底 的下压距离（对齐地面线）
-            faceDir: team === 'red' ? 1 : -1,           // 当前朝向：1=右 / -1=左
+            faceDir: team === 'red' ? 1 : -1,           // 当前贴图镜像符号：1=原图 / -1=水平镜像
             faceAcc: 0,                                  // 朝向判定的累计位移
-            visualDir,                                  // 骑兵方向帧：side / down
+            dirDX: 0, dirDY: 0,                         // 骑兵方向判定的平滑屏幕位移
+            visualDir,                                  // 骑兵八向 heading；普通兵种固定为 side
             renderedVisualDir: visualDir,
             shadowKey,
             animState: 'idle',                           // 当前动画：idle/walk/attack
@@ -745,16 +788,29 @@ class IsoBattleScene extends Phaser.Scene {
         }
     }
 
-    // 播放攻击动画：期间锁定行走动画，伤害在挥砍帧上结算（见 updateNormalUnit）
-    playAttackAnim(unit) {
+    // 播放攻击动画：骑兵先朝向当前目标，然后在挥砍期间锁定完整朝向。
+    // 伤害在挥砍帧上结算（见 updateNormalUnit）。
+    playAttackAnim(unit, target = null) {
+        if (unit.type === 'cavalry' && target) {
+            const from = gridToScreen(unit.gx, unit.gy);
+            const to = gridToScreen(target.gx, target.gy);
+            const dx = to.x - from.x, dy = to.y - from.y;
+            if (Math.hypot(dx, dy) > 0.01) {
+                unit.visualDir = cavalryHeadingFromMotion(dx, dy, unit.visualDir);
+                unit.faceDir = cavalryRenderSign(unit.visualDir);
+            }
+        }
         unit.animState = 'attack';
         unit.animLock = this.time.now + 320;
         unit.faceAcc = 0;
+        unit.dirDX = 0;
+        unit.dirDY = 0;
         unit.spr.play(this.unitAnimKey(unit, 'attack'), true);
     }
 
     unitAnimKey(unit, clip) {
-        const direction = unit.type === 'cavalry' && unit.visualDir === 'down' ? '_down' : '';
+        const profile = unit.type === 'cavalry' ? cavalryProfile(unit.visualDir) : null;
+        const direction = profile ? CAVALRY_PROFILE_SUFFIX[profile] : '';
         return 'assets/units/anim/' + unit.team + '_' + unit.type + direction + '_' + clip;
     }
 
@@ -783,7 +839,7 @@ class IsoBattleScene extends Phaser.Scene {
                 });
                 if (shootTarget) {
                     unit.lastAttack = now;
-                    this.playAttackAnim(unit);
+                    this.playAttackAnim(unit, shootTarget);
                     const victim = shootTarget;
                     // 拉弓 → 松弦放箭（与动画同步）
                     this.time.delayedCall(110, () => {
@@ -797,7 +853,7 @@ class IsoBattleScene extends Phaser.Scene {
                 moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
             } else if (now - unit.lastAttack > unit.typeData.atkSpeed) {
                 unit.lastAttack = now;
-                this.playAttackAnim(unit);
+                this.playAttackAnim(unit, nearest);
                 const victim = nearest;
                 // 蓄力 → 劈砍帧上结算伤害（目标脱离则挥空）
                 this.time.delayedCall(95, () => {
@@ -1222,19 +1278,21 @@ class IsoBattleScene extends Phaser.Scene {
         // 离屏单位也必须按时释放攻击锁，否则会永久冻结在旧方向。
         if (unit.animState === 'attack' && time > unit.animLock) unit.animState = null;
 
-        // 攻击动画期间冻结方向；否则向屏幕下方行进时切换专用等距帧，左下通过镜像复用。
-        if (unit.type === 'cavalry' && unit.animState !== 'attack' && unit.moving && Math.hypot(sdx, sdy) > 0.08) {
-            const absDx = Math.abs(sdx);
-            let nextVisualDir = unit.visualDir;
-            if (unit.visualDir === 'down') {
-                if (sdy <= 0.08 || sdy < absDx * 0.24) nextVisualDir = 'side';
-            } else if (sdy > 0.12 && sdy > absDx * 0.40) {
-                nextVisualDir = 'down';
+        // 攻击动画期间冻结完整朝向；行走时将屏幕位移平滑后量化为 8 个方向。
+        if (unit.type === 'cavalry' && unit.animState !== 'attack' && unit.moving) {
+            unit.dirDX = unit.dirDX * 0.6 + sdx * 0.4;
+            unit.dirDY = unit.dirDY * 0.6 + sdy * 0.4;
+            if (Math.hypot(unit.dirDX, unit.dirDY) > 0.08) {
+                const nextVisualDir = cavalryHeadingFromMotion(unit.dirDX, unit.dirDY, unit.visualDir);
+                if (nextVisualDir !== unit.visualDir) {
+                    unit.visualDir = nextVisualDir;
+                    unit.faceDir = cavalryRenderSign(nextVisualDir);
+                    unit.animState = null;
+                }
             }
-            if (nextVisualDir !== unit.visualDir) {
-                unit.visualDir = nextVisualDir;
-                unit.animState = null;
-            }
+        } else if (unit.type === 'cavalry' && unit.animState !== 'attack') {
+            unit.dirDX = 0;
+            unit.dirDY = 0;
         }
 
         // 视口剔除：屏幕外只刷新快照，不碰显示对象（千人规模的主力 LOD）
@@ -1250,6 +1308,7 @@ class IsoBattleScene extends Phaser.Scene {
             const F = footProfile(unit.type, unit.visualDir);
             unit.footDy = F.pad * unit.baseScale;
             unit.renderedVisualDir = unit.visualDir;
+            unit.spr.setFlipX(CAVALRY_FLIPPED.has(unit.visualDir));
         }
 
         // 行军入场偏移：逐帧衰减产生滑入动画
@@ -1277,7 +1336,7 @@ class IsoBattleScene extends Phaser.Scene {
 
         // ---- 朝向：累计位移过阈值才翻转（避免受击/挤开抖动导致来回闪脸）----
         // 放在应用位置之前，好让逐帧补正和影子镜像都用上本帧的朝向
-        if (unit.animState !== 'attack') {
+        if (unit.type !== 'cavalry' && unit.animState !== 'attack') {
             unit.faceAcc += sdx;
             if (unit.faceAcc > 2)       { unit.spr.setFlipX(false); unit.faceDir = 1;  unit.faceAcc = 0; }
             else if (unit.faceAcc < -2) { unit.spr.setFlipX(true);  unit.faceDir = -1; unit.faceAcc = 0; }
@@ -1297,7 +1356,8 @@ class IsoBattleScene extends Phaser.Scene {
         if (alignRow) {
             const cf = unit.spr.anims.currentFrame;
             const a = alignRow[cf ? Math.min(cf.index - 1, alignRow.length - 1) : 0] || [0, 0];
-            ajx = a[0] * bs * unit.faceDir * ANIM_ALIGN_K;      // 横向补正随朝向镜像
+            const renderSign = unit.type === 'cavalry' ? cavalryRenderSign(unit.visualDir) : unit.faceDir;
+            ajx = a[0] * bs * renderSign * ANIM_ALIGN_K;      // 横向补正随贴图镜像
             ajy = a[1] * bs * ANIM_ALIGN_K;
         }
 
@@ -1309,7 +1369,8 @@ class IsoBattleScene extends Phaser.Scene {
         const depth = (unit.gx + unit.gy) * 100 + 50;
         unit.spr.setDepth(depth);
         // 影子：贴图镜像随朝向翻转 —— 脚底偏移已烘进贴图，翻转后仍贴在脚掌下
-        unit.shadow.setPosition(x + ox * 0.55, y).setScale(unit.faceDir, 1).setDepth(depth - 2);
+        const shadowSign = unit.type === 'cavalry' ? cavalryRenderSign(unit.visualDir) : unit.faceDir;
+        unit.shadow.setPosition(x + ox * 0.55, y).setScale(shadowSign, 1).setDepth(depth - 2);
 
         // 受击反馈：轻染红（乘法染色保留像素图案，不再全白填充闪白）
         if (this.time.now < unit.flashUntil) unit.spr.setTint(0xff7d6e);

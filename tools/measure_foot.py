@@ -18,8 +18,9 @@
     FOOT       接地基准（pad 脚底留白 / dx 脚掌横向偏移 / w,h 影子尺寸）
     ANIM_ALIGN 逐帧对齐补正 [dx, dy]（源图像素，站姿为 0）
 
-骑兵包含 side/down 两套方向素材；down 没有独立静态图，因此以其 walk 第 1 帧
-作为站姿基准。输出会生成与 js/game.js 相同的嵌套方向结构。
+骑兵包含 east/southeast/south/northeast/north 五套独立素材，另外三个显示方向
+通过水平镜像复用。只有 east 有独立静态图，其余方向以 walk 第 1 帧作为站姿基准。
+输出会生成与 js/game.js 相同的嵌套 profile 结构。
 """
 import json
 import os
@@ -31,12 +32,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UNITS_DIR = os.path.join(ROOT, 'assets', 'units')
 MANIFEST = os.path.join(ROOT, 'assets', 'manifest.json')
 
+CAVALRY_PROFILES = ('east', 'southeast', 'south', 'northeast', 'north')
+
 VARIANTS = (
     ('infantry', 'infantry', 'red_infantry', 'red_infantry.png'),
     ('pikeman', 'pikeman', 'red_pikeman', 'red_pikeman.png'),
     ('archer', 'archer', 'red_archer', 'red_archer.png'),
-    ('cavalry_side', 'cavalry', 'red_cavalry', 'red_cavalry.png'),
-    ('cavalry_down', 'cavalry', 'red_cavalry_down', None),
+    ('cavalry_east', 'cavalry', 'red_cavalry', 'red_cavalry.png'),
+    ('cavalry_southeast', 'cavalry', 'red_cavalry_down', None),
+    ('cavalry_south', 'cavalry', 'red_cavalry_south', None),
+    ('cavalry_northeast', 'cavalry', 'red_cavalry_northeast', None),
+    ('cavalry_north', 'cavalry', 'red_cavalry_north', None),
 )
 
 ALPHA_THR = 40       # 低于该 alpha 视为透明
@@ -176,10 +182,10 @@ def main():
         r = static[unit_type]['row']
         print(f"    {unit_type + ':':10s}{{ pad: {r['pad']:2d}, dx: {r['dx']:3d}, w: {r['w']:2d}, h: {r['h']:2d} }},")
     print('    cavalry: {')
-    for direction in ('side', 'down'):
+    for index, direction in enumerate(CAVALRY_PROFILES):
         r = static[f'cavalry_{direction}']['row']
-        comma = ',' if direction == 'side' else ''
-        print(f"        {direction + ':':6s} {{ pad: {r['pad']:2d}, dx: {r['dx']:3d}, w: {r['w']:2d}, h: {r['h']:2d} }}{comma}")
+        comma = ',' if index < len(CAVALRY_PROFILES) - 1 else ''
+        print(f"        {direction + ':':11s} {{ pad: {r['pad']:2d}, dx: {r['dx']:3d}, w: {r['w']:2d}, h: {r['h']:2d} }}{comma}")
     print('    }')
     print('};')
 
@@ -189,10 +195,10 @@ def main():
         clips = ', '.join(f'{k}: {json.dumps(v)}' for k, v in aligns[unit_type].items())
         print(f"    {unit_type + ':':10s}{{ {clips} }},")
     print('    cavalry: {')
-    for direction in ('side', 'down'):
+    for index, direction in enumerate(CAVALRY_PROFILES):
         clips = ', '.join(f'{k}: {json.dumps(v)}' for k, v in aligns[f'cavalry_{direction}'].items())
-        comma = ',' if direction == 'side' else ''
-        print(f"        {direction + ':':6s} {{ {clips} }}{comma}")
+        comma = ',' if index < len(CAVALRY_PROFILES) - 1 else ''
+        print(f"        {direction + ':':11s} {{ {clips} }}{comma}")
     print('    }')
     print('};')
 

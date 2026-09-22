@@ -127,7 +127,7 @@ class CavalryAI {
                 applyDamage(t, dmg, unit);
                 knockback(t, unit, 0.45);
                 unit.scene.meleeImpact(unit, t);
-                unit.scene.playAttackAnim(unit);
+                unit.scene.playAttackAnim(unit, t);
                 // 长枪兵迎击：冲锋撞上枪阵会挨反击（克制可见化）
                 if (t.type === 'pikeman' && !t.dead) {
                     applyDamage(unit, Math.max(3, Math.floor(t.typeData.atk * 2.5 - td.def * 0.5)), t);
