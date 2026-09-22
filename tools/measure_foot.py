@@ -17,6 +17,9 @@
 输出：
     FOOT       接地基准（pad 脚底留白 / dx 脚掌横向偏移 / w,h 影子尺寸）
     ANIM_ALIGN 逐帧对齐补正 [dx, dy]（源图像素，站姿为 0）
+
+骑兵包含 side/down 两套方向素材；down 没有独立静态图，因此以其 walk 第 1 帧
+作为站姿基准。输出会生成与 js/game.js 相同的嵌套方向结构。
 """
 import json
 import os
@@ -28,7 +31,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UNITS_DIR = os.path.join(ROOT, 'assets', 'units')
 MANIFEST = os.path.join(ROOT, 'assets', 'manifest.json')
 
-TYPES = ['infantry', 'pikeman', 'archer', 'cavalry']
+VARIANTS = (
+    ('infantry', 'infantry', 'red_infantry', 'red_infantry.png'),
+    ('pikeman', 'pikeman', 'red_pikeman', 'red_pikeman.png'),
+    ('archer', 'archer', 'red_archer', 'red_archer.png'),
+    ('cavalry_side', 'cavalry', 'red_cavalry', 'red_cavalry.png'),
+    ('cavalry_down', 'cavalry', 'red_cavalry_down', None),
+)
 
 ALPHA_THR = 40       # 低于该 alpha 视为透明
 MIN_PX = 3           # “实质内容行”至少这么多像素，滤掉零星噪点
@@ -102,14 +111,21 @@ def ground_rows(al):
 
 
 def main():
+    man = json.load(open(MANIFEST))['anims']
     static = {}
-    for t in TYPES:
-        path = os.path.join(UNITS_DIR, f'red_{t}.png')
-        al = mask(path)
+    for variant, unit_type, anim_key, static_file in VARIANTS:
+        if static_file:
+            al = mask(os.path.join(UNITS_DIR, static_file))
+        else:
+            walk = man[anim_key]['walk']
+            al = mask(
+                os.path.join(UNITS_DIR, walk['file']),
+                (walk['fw'], walk['fh'], 0),
+            )
         h, w = al.shape
         low, bot = ground_rows(al)
 
-        band = bot >= (low - FOOT_WIN[t])
+        band = bot >= (low - FOOT_WIN[unit_type])
         xs = np.nonzero(band)[0]
         span = int(xs.max() - xs.min() + 1)
         foot_cx = (xs.min() + xs.max()) / 2
@@ -117,8 +133,8 @@ def main():
         rows = np.nonzero((al > 0).sum(axis=1))[0]
         keep = int((rows.max() - rows.min() + 1) * ALIGN_FRAC)     # 只看下半身
 
-        sw = int(round(span * SPAN_K[t]))
-        static[t] = {
+        sw = int(round(span * SPAN_K[unit_type]))
+        static[variant] = {
             'canvas': to_canvas(al, keep),
             'keep': keep,
             'row': {
@@ -127,20 +143,19 @@ def main():
                 'w': sw, 'h': int(round(sw / ASPECT)),
             },
         }
-        r = static[t]['row']
-        print(f'{t:9s} pad={r["pad"]:3d} dx={r["dx"]:+4d} 脚掌跨度={span:3d}(带{FOOT_WIN[t]}行) '
+        r = static[variant]['row']
+        print(f'{variant:13s} pad={r["pad"]:3d} dx={r["dx"]:+4d} 脚掌跨度={span:3d}(带{FOOT_WIN[unit_type]}行) '
               f'→ w={r["w"]:3d} h={r["h"]:3d}  对齐用下半身={keep}行')
 
-    man = json.load(open(MANIFEST))['anims']
     aligns = {}
     print('\n逐帧对齐补正（正数=向右/向下补；括号内为与站姿的重合度）：')
-    for t in TYPES:
-        entry = man.get(f'red_{t}')
+    for variant, _unit_type, anim_key, _static_file in VARIANTS:
+        entry = man.get(anim_key)
         if not entry:
             continue
-        ref = static[t]['canvas']
-        keep = static[t]['keep']
-        aligns[t] = {}
+        ref = static[variant]['canvas']
+        keep = static[variant]['keep']
+        aligns[variant] = {}
         for kind, d in entry.items():
             per, quality = [], []
             for i in range(d['frames']):
@@ -152,22 +167,33 @@ def main():
                 hit = np.minimum(ref, np.roll(np.roll(cur, dx, axis=1), dy, axis=0)).sum()
                 per.append([dx, dy])
                 quality.append(round(float(hit / ov), 2))
-            aligns[t][kind] = per
-            print(f'  {t:9s}{kind:7s} {per}  {quality}')
+            aligns[variant][kind] = per
+            print(f'  {variant:13s}{kind:7s} {per}  {quality}')
 
     print('\n---- 第 1 张表（贴到 js/game.js 的 FOOT） ----')
     print('const FOOT = {')
-    for i, t in enumerate(TYPES):
-        r = static[t]['row']
-        print(f"    {t + ':':10s}{{ pad: {r['pad']:2d}, dx: {r['dx']:3d}, w: {r['w']:2d}, h: {r['h']:2d} }}"
-              f"{',' if i < len(TYPES) - 1 else ''}")
+    for unit_type in ('infantry', 'pikeman', 'archer'):
+        r = static[unit_type]['row']
+        print(f"    {unit_type + ':':10s}{{ pad: {r['pad']:2d}, dx: {r['dx']:3d}, w: {r['w']:2d}, h: {r['h']:2d} }},")
+    print('    cavalry: {')
+    for direction in ('side', 'down'):
+        r = static[f'cavalry_{direction}']['row']
+        comma = ',' if direction == 'side' else ''
+        print(f"        {direction + ':':6s} {{ pad: {r['pad']:2d}, dx: {r['dx']:3d}, w: {r['w']:2d}, h: {r['h']:2d} }}{comma}")
+    print('    }')
     print('};')
 
     print('\n---- 第 2 张表（贴到 js/game.js 的 ANIM_ALIGN） ----')
     print('const ANIM_ALIGN = {')
-    for i, t in enumerate(TYPES):
-        clips = ', '.join(f'{k}: {json.dumps(v)}' for k, v in aligns[t].items())
-        print(f"    {t + ':':10s}{{ {clips} }}{',' if i < len(TYPES) - 1 else ''}")
+    for unit_type in ('infantry', 'pikeman', 'archer'):
+        clips = ', '.join(f'{k}: {json.dumps(v)}' for k, v in aligns[unit_type].items())
+        print(f"    {unit_type + ':':10s}{{ {clips} }},")
+    print('    cavalry: {')
+    for direction in ('side', 'down'):
+        clips = ', '.join(f'{k}: {json.dumps(v)}' for k, v in aligns[f'cavalry_{direction}'].items())
+        comma = ',' if direction == 'side' else ''
+        print(f"        {direction + ':':6s} {{ {clips} }}{comma}")
+    print('    }')
     print('};')
 
 

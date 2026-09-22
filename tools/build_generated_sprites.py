@@ -23,6 +23,7 @@ TARGET_HEIGHT = 156
 PAD_X = 8
 PAD_Y = 2
 UNIT_TYPES = ("infantry", "pikeman", "archer", "cavalry")
+DIRECTIONAL_SHEETS = {"cavalry_down": "cavalry_down_sheet.png"}
 
 
 def cell_bounds(size: int, index: int, count: int) -> tuple[int, int]:
@@ -102,13 +103,16 @@ def save_static(frame: Image.Image, destination: Path, blue: bool) -> None:
 def build() -> dict[str, dict[str, dict[str, int | str]]]:
     ANIM_DIR.mkdir(parents=True, exist_ok=True)
     animation_manifest: dict[str, dict[str, dict[str, int | str]]] = {}
-    for unit_type in UNIT_TYPES:
-        sheet = Image.open(RAW / f"{unit_type}_sheet.png").convert("RGBA")
+    sources = [(unit_type, f"{unit_type}_sheet.png", True) for unit_type in UNIT_TYPES]
+    sources.extend((name, filename, False) for name, filename in DIRECTIONAL_SHEETS.items())
+    for unit_type, filename, save_unit_static in sources:
+        sheet = Image.open(RAW / filename).convert("RGBA")
         walk, attack = extract_rows(sheet)
         for team in ("red", "blue"):
             blue = team == "blue"
             name = f"{team}_{unit_type}"
-            save_static(walk[0], UNIT_DIR / f"{name}.png", blue)
+            if save_unit_static:
+                save_static(walk[0], UNIT_DIR / f"{name}.png", blue)
             clips: dict[str, dict[str, int | str]] = {}
             for clip_name, frames in (("walk", walk), ("attack", attack)):
                 strip, frame_width = make_strip(frames, blue)
@@ -134,12 +138,14 @@ def update_manifests(anims: dict[str, dict[str, dict[str, int | str]]]) -> None:
     serialized = json.dumps(manifest, ensure_ascii=False, indent=2)
     manifest_path.write_text(serialized + "\n", encoding="utf-8")
     (ROOT / "assets" / "manifest.js").write_text(
-        "// 素材清单（由 build_generated_sprites.py 生成）\n"
+        "// 素材清单（由 build_generated_sprites.py 生成；corpses 段由 build_corpse_sprites.py 维护）\n"
         f"const MANIFEST = {serialized};\n",
         encoding="utf-8",
     )
 
 
 if __name__ == "__main__":
-    update_manifests(build())
-    print("Built four unit types, two teams, and 16 animation strips.")
+    animations = build()
+    update_manifests(animations)
+    strip_count = sum(len(clips) for clips in animations.values())
+    print(f"Built {len(animations)} unit variants and {strip_count} animation strips.")

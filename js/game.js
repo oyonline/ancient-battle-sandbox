@@ -25,7 +25,10 @@ const FOOT = {
     infantry: { pad: 18, dx:   2, w: 72, h: 35 },
     pikeman:  { pad: 34, dx:  -7, w: 63, h: 31 },
     archer:   { pad: 11, dx:  -6, w: 67, h: 33 },
-    cavalry:  { pad: 10, dx: -15, w: 74, h: 36 }
+    cavalry: {
+        side: { pad:  4, dx: -10, w: 83, h: 41 },
+        down: { pad: 10, dx: -16, w: 74, h: 36 }
+    }
 };
 
 // ==================== 逐帧对齐补正（素材源图像素，[dx, dy]，站姿为 0） ====================
@@ -37,9 +40,29 @@ const ANIM_ALIGN = {
     infantry: { walk: [[1, 0], [-10, 4], [-9, 3], [-30, 4]], attack: [[5, 0], [10, 0], [-8, 0], [-14, 0]] },
     pikeman:  { walk: [[0, -1], [-1, -2], [-3, -3], [-7, -3]], attack: [[1, 0], [1, 0], [5, 0], [-8, 0]] },
     archer:   { walk: [[0, -3], [-13, 9], [-14, 0], [-19, 0]], attack: [[7, 0], [-11, 0], [-20, 0], [12, 0]] },
-    cavalry:  { walk: [[0, 0], [-6, -1], [-16, -8], [-8, -2]], attack: [[-1, 0], [-3, 0], [-2, 0], [-10, 0]] }
+    cavalry: {
+        side: { walk: [[0, -1], [-9, 0], [-6, 0], [-14, 1]], attack: [[1, 0], [-6, 0], [2, 0], [-12, 0]] },
+        down: { walk: [[0, 0], [-6, -1], [-16, -8], [-8, -2]], attack: [[-1, 0], [-3, 0], [-2, 0], [-10, 0]] }
+    }
 };
 const ANIM_ALIGN_K = 1;   // 对齐补正强度：1 = 全量纠正抖动，0 = 关闭（保留原始位移）
+
+function unitVisualDirections(type) {
+    return type === 'cavalry' ? ['side', 'down'] : ['side'];
+}
+
+function footProfile(type, visualDir = 'side') {
+    return type === 'cavalry' ? FOOT.cavalry[visualDir] : FOOT[type];
+}
+
+function animAlignProfile(type, visualDir = 'side') {
+    return type === 'cavalry' ? ANIM_ALIGN.cavalry[visualDir] : ANIM_ALIGN[type];
+}
+
+function shadowTextureKey(team, type, visualDir = 'side') {
+    const direction = type === 'cavalry' ? `-${visualDir}` : '';
+    return `shadow-${team}-${type}${direction}`;
+}
 
 // 平滑值噪声：大尺度地形色带（肥沃绿 ↔ 干草黄）用
 function makeNoise(seed) {
@@ -85,7 +108,7 @@ class IsoBattleScene extends Phaser.Scene {
     // 注册各单位动画剪辑（重复开局幂等）
     buildUnitAnims() {
         Object.entries(MANIFEST.anims || {}).forEach(([unit, clips]) => {
-            const isCav = unit.endsWith('cavalry');
+            const isCav = unit.includes('cavalry');
             Object.entries(clips).forEach(([clip, c]) => {
                 const key = 'assets/units/' + c.file.replace('.png', '');
                 if (this.anims.exists(key)) return;
@@ -483,24 +506,26 @@ class IsoBattleScene extends Phaser.Scene {
     makeShadowTextures() {
         for (const team of ['red', 'blue']) {
             for (const type of Object.keys(UNIT_TYPES)) {
-                const key = 'shadow-' + team + '-' + type;
-                if (this.textures.exists(key)) continue;
-                const F = FOOT[type];
-                const sizeK = type === 'cavalry' ? 0.37 : 0.30;
-                const sc = UNIT_TYPES[type].scale * sizeK;
-                const footDx = F.dx * sc;
-                const w = Math.ceil(F.w * sc + Math.abs(footDx) * 2) + 4;
-                const h = Math.ceil(F.h * sc) + 4;
-                const g = this.make.graphics({ add: false });
-                const cx = w / 2, cy = h / 2;
-                g.fillStyle(0x0c1206, 0.30);
-                g.fillEllipse(cx + footDx, cy, F.w * sc, F.h * sc);
-                g.fillStyle(0x0c1206, 0.26);
-                g.fillEllipse(cx + footDx, cy, F.w * sc * 0.62, F.h * sc * 0.62);
-                g.lineStyle(2.2, team === 'red' ? 0xff3b30 : 0x2f7bff, 0.85);
-                g.strokeEllipse(cx + footDx, cy, F.w * sc * 0.78, F.h * sc * 0.78);
-                g.generateTexture(key, w, h);
-                g.destroy();
+                for (const visualDir of unitVisualDirections(type)) {
+                    const key = shadowTextureKey(team, type, visualDir);
+                    if (this.textures.exists(key)) continue;
+                    const F = footProfile(type, visualDir);
+                    const sizeK = type === 'cavalry' ? 0.37 : 0.30;
+                    const sc = UNIT_TYPES[type].scale * sizeK;
+                    const footDx = F.dx * sc;
+                    const w = Math.ceil(F.w * sc + Math.abs(footDx) * 2) + 4;
+                    const h = Math.ceil(F.h * sc) + 4;
+                    const g = this.make.graphics({ add: false });
+                    const cx = w / 2, cy = h / 2;
+                    g.fillStyle(0x0c1206, 0.30);
+                    g.fillEllipse(cx + footDx, cy, F.w * sc, F.h * sc);
+                    g.fillStyle(0x0c1206, 0.26);
+                    g.fillEllipse(cx + footDx, cy, F.w * sc * 0.62, F.h * sc * 0.62);
+                    g.lineStyle(2.2, team === 'red' ? 0xff3b30 : 0x2f7bff, 0.85);
+                    g.strokeEllipse(cx + footDx, cy, F.w * sc * 0.78, F.h * sc * 0.78);
+                    g.generateTexture(key, w, h);
+                    g.destroy();
+                }
             }
         }
     }
@@ -515,14 +540,16 @@ class IsoBattleScene extends Phaser.Scene {
         const sizeK = type === 'cavalry' ? 0.37 : 0.30;
         const fx = sizeK / 0.55;   // 特效幅度基准：1 = 原体型
         const sc = typeData.scale * sizeK;      // 贴图最终显示缩放
+        const visualDir = 'side';
 
         // 接地基准：把角色“踩”到地面线上，阴影圆心与脚底重合
-        // pad = 素材底边到脚底的像素距离（AI 出图底部留白 10~34px 不等，不补偿就会悬浮）
-        const F = FOOT[type];
+        // pad = 素材底边到脚底的像素距离（AI 出图底部留白 4~34px 不等，不补偿就会悬浮）
+        const F = footProfile(type, visualDir);
         const footDy = F.pad * sc;              // 贴图底边 → 脚底 的显示距离
 
         // 烘焙阴影贴图（椭圆脚底偏移已烘进贴图，翻转即镜像，见 syncOne）
-        const shadow = this.add.image(x, y, 'shadow-' + team + '-' + type);
+        const shadowKey = shadowTextureKey(team, type, visualDir);
+        const shadow = this.add.image(x, y, shadowKey);
         shadow.setDepth(depth + 48);
 
         const spr = this.add.sprite(x, y + footDy, key).setOrigin(0.5, 1);
@@ -545,6 +572,9 @@ class IsoBattleScene extends Phaser.Scene {
             footDy,                                     // 贴图底边 → 脚底 的下压距离（对齐地面线）
             faceDir: team === 'red' ? 1 : -1,           // 当前朝向：1=右 / -1=左
             faceAcc: 0,                                  // 朝向判定的累计位移
+            visualDir,                                  // 骑兵方向帧：side / down
+            renderedVisualDir: visualDir,
+            shadowKey,
             animState: 'idle',                           // 当前动画：idle/walk/attack
             animLock: 0,                                 // 攻击动画锁（期间不被行走覆盖）
             lunge: { x: 0, y: 0, angle: 0 },            // 受击位移（tween 驱动，渲染帧叠加）
@@ -717,7 +747,13 @@ class IsoBattleScene extends Phaser.Scene {
     playAttackAnim(unit) {
         unit.animState = 'attack';
         unit.animLock = this.time.now + 320;
-        unit.spr.play('assets/units/anim/' + unit.team + '_' + unit.type + '_attack', true);
+        unit.faceAcc = 0;
+        unit.spr.play(this.unitAnimKey(unit, 'attack'), true);
+    }
+
+    unitAnimKey(unit, clip) {
+        const direction = unit.type === 'cavalry' && unit.visualDir === 'down' ? '_down' : '';
+        return 'assets/units/anim/' + unit.team + '_' + unit.type + direction + '_' + clip;
     }
 
     updateNormalUnit(unit, now, dt) {
@@ -1154,15 +1190,42 @@ class IsoBattleScene extends Phaser.Scene {
         if (unit.dead) return;
         const { x, y } = gridToScreen(unit.gx, unit.gy);
 
+        const prevX = unit.lastSX === undefined ? x : unit.lastSX;
+        const prevY = unit.lastSY === undefined ? y : unit.lastSY;
+        const sdx = x - prevX, sdy = y - prevY;
+
+        // 离屏单位也必须按时释放攻击锁，否则会永久冻结在旧方向。
+        if (unit.animState === 'attack' && time > unit.animLock) unit.animState = null;
+
+        // 攻击动画期间冻结方向；否则向屏幕下方行进时切换专用等距帧，左下通过镜像复用。
+        if (unit.type === 'cavalry' && unit.animState !== 'attack' && unit.moving && Math.hypot(sdx, sdy) > 0.08) {
+            const absDx = Math.abs(sdx);
+            let nextVisualDir = unit.visualDir;
+            if (unit.visualDir === 'down') {
+                if (sdy <= 0.08 || sdy < absDx * 0.24) nextVisualDir = 'side';
+            } else if (sdy > 0.12 && sdy > absDx * 0.40) {
+                nextVisualDir = 'down';
+            }
+            if (nextVisualDir !== unit.visualDir) {
+                unit.visualDir = nextVisualDir;
+                unit.animState = null;
+            }
+        }
+
         // 视口剔除：屏幕外只刷新快照，不碰显示对象（千人规模的主力 LOD）
         if (view && (x < view.x0 || x > view.x1 || y < view.y0 || y > view.y1)) {
             unit.lastSX = x; unit.lastSY = y;
             return;
         }
 
-        const prevX = unit.lastSX === undefined ? x : unit.lastSX;
-        const prevY = unit.lastSY === undefined ? y : unit.lastSY;
-        const sdx = x - prevX, sdy = y - prevY;
+        if (unit.type === 'cavalry' && unit.visualDir !== unit.renderedVisualDir) {
+            const nextShadowKey = shadowTextureKey(unit.team, unit.type, unit.visualDir);
+            unit.shadow.setTexture(nextShadowKey);
+            unit.shadowKey = nextShadowKey;
+            const F = footProfile(unit.type, unit.visualDir);
+            unit.footDy = F.pad * unit.baseScale;
+            unit.renderedVisualDir = unit.visualDir;
+        }
 
         // 行军入场偏移：逐帧衰减产生滑入动画
         let ox = 0;
@@ -1173,16 +1236,15 @@ class IsoBattleScene extends Phaser.Scene {
         }
 
         // ---- 动画状态机：攻击锁定 > 行走 > 待机 ----
-        if (unit.animState === 'attack' && time > unit.animLock) unit.animState = null;
         if (unit.animState !== 'attack') {
             const want = unit.moving ? 'walk' : 'idle';
             if (want !== unit.animState) {
                 unit.animState = want;
                 if (want === 'walk') {
-                    unit.spr.play('assets/units/anim/' + unit.team + '_' + unit.type + '_walk', true);
+                    unit.spr.play(this.unitAnimKey(unit, 'walk'), true);
                 } else {
                     unit.spr.anims.stop();
-                    unit.spr.setFrame(0);          // 并腿站姿
+                    unit.spr.setTexture(this.unitAnimKey(unit, 'walk'), 0); // 当前方向的站姿
                 }
             }
         }
@@ -1190,10 +1252,12 @@ class IsoBattleScene extends Phaser.Scene {
 
         // ---- 朝向：累计位移过阈值才翻转（避免受击/挤开抖动导致来回闪脸）----
         // 放在应用位置之前，好让逐帧补正和影子镜像都用上本帧的朝向
-        unit.faceAcc += sdx;
-        if (unit.faceAcc > 2)       { unit.spr.setFlipX(false); unit.faceDir = 1;  unit.faceAcc = 0; }
-        else if (unit.faceAcc < -2) { unit.spr.setFlipX(true);  unit.faceDir = -1; unit.faceAcc = 0; }
-        else if (Math.abs(unit.faceAcc) > 60) unit.faceAcc = 0;
+        if (unit.animState !== 'attack') {
+            unit.faceAcc += sdx;
+            if (unit.faceAcc > 2)       { unit.spr.setFlipX(false); unit.faceDir = 1;  unit.faceAcc = 0; }
+            else if (unit.faceAcc < -2) { unit.spr.setFlipX(true);  unit.faceDir = -1; unit.faceAcc = 0; }
+            else if (Math.abs(unit.faceAcc) > 60) unit.faceAcc = 0;
+        }
         unit.lastSX = x; unit.lastSY = y;
 
         // 待机呼吸：以脚底为支点做极轻微缩放（不再整体上下平移，脚不离地）
@@ -1202,8 +1266,8 @@ class IsoBattleScene extends Phaser.Scene {
         unit.spr.setScale(bs, bs * (1 + breath * 0.012));
 
         // ---- 逐帧对齐补正：抵消同一套动画里各帧站位不一致造成的左右抖 ----
-        const alignRow = ANIM_ALIGN[unit.type] &&
-                         ANIM_ALIGN[unit.type][unit.animState === 'attack' ? 'attack' : 'walk'];
+        const alignProfile = animAlignProfile(unit.type, unit.visualDir);
+        const alignRow = alignProfile && alignProfile[unit.animState === 'attack' ? 'attack' : 'walk'];
         let ajx = 0, ajy = 0;
         if (alignRow) {
             const cf = unit.spr.anims.currentFrame;

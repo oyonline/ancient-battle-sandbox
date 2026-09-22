@@ -1,4 +1,4 @@
-// 素材清单（由处理脚本生成；corpses 段由 build_corpse_sprites.py 维护）
+// 素材清单（由 build_generated_sprites.py 生成；corpses 段由 build_corpse_sprites.py 维护）
 const MANIFEST = {
   "units": {
     "blue_infantry": {
@@ -33,12 +33,12 @@ const MANIFEST = {
     },
     "blue_cavalry": {
       "file": "units/blue_cavalry.png",
-      "w": 157,
+      "w": 156,
       "h": 156
     },
     "red_cavalry": {
       "file": "units/red_cavalry.png",
-      "w": 157,
+      "w": 156,
       "h": 156
     }
   },
@@ -159,7 +159,7 @@ const MANIFEST = {
     "red_cavalry": {
       "walk": {
         "file": "anim/red_cavalry_walk.png",
-        "fw": 166,
+        "fw": 170,
         "fh": 156,
         "frames": 4
       },
@@ -173,12 +173,40 @@ const MANIFEST = {
     "blue_cavalry": {
       "walk": {
         "file": "anim/blue_cavalry_walk.png",
-        "fw": 166,
+        "fw": 170,
         "fh": 156,
         "frames": 4
       },
       "attack": {
         "file": "anim/blue_cavalry_attack.png",
+        "fw": 172,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "red_cavalry_down": {
+      "walk": {
+        "file": "anim/red_cavalry_down_walk.png",
+        "fw": 166,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_cavalry_down_attack.png",
+        "fw": 172,
+        "fh": 156,
+        "frames": 4
+      }
+    },
+    "blue_cavalry_down": {
+      "walk": {
+        "file": "anim/blue_cavalry_down_walk.png",
+        "fw": 166,
+        "fh": 156,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_cavalry_down_attack.png",
         "fw": 172,
         "fh": 156,
         "frames": 4
