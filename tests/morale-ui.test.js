@@ -19,6 +19,22 @@ function makeUI() {
     return { UI, el: id => document.getElementById(id) };
 }
 
+test('morale flow and short event cue are visible during battle and clear when leaving it', () => {
+    const { UI, el } = makeUI();
+    UI.phase = 'battle';
+    UI.scene = { simulationTime: 2000, moraleCue: { atMs: 1000, text: '红方3名重整士兵结队返场' },
+        getMoraleSummary: () => ({ red: { steady: 8, wavering: 2, routing: 4, average: 61,
+            fallingBack: 2, escaping: 1, recovering: 3, forming: 2, returning: 3, reengaged: 1 } }) };
+    UI.updateMorale();
+    assert.equal(el('morale-cue').hidden, false);
+    assert.match(el('morale-red-flow').textContent, /后撤 2.*逃离 1.*恢复 3.*整队 2.*返场 3.*重整后命中 1人/);
+    UI.scene.simulationTime = 6000;
+    UI.updateMorale();
+    assert.equal(el('morale-cue').hidden, true);
+    UI.phase = 'home'; UI.updateMorale();
+    assert.equal(el('morale-red-flow').textContent, '');
+});
+
 test('battle HUD separates current states from cumulative withdrawal and rally counts', () => {
     const { UI, el } = makeUI();
     UI.phase = 'battle';

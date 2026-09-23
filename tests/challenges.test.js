@@ -57,7 +57,8 @@ const solutions = {
     'hold-the-charge': { pikeman: 45, infantry: 6 },
     'break-the-volley': { cavalry: 40 },
     'mixed-front': { infantry: 33, pikeman: 16, archer: 41, cavalry: 8 },
-    outnumbered: { archer: 100 },
+    // A small infantry screen keeps the archers firing while the enemy closes.
+    outnumbered: { infantry: 24, archer: 85 },
     'commanders-trial': { pikeman: 40, archer: 100, cavalry: 30 }
 };
 

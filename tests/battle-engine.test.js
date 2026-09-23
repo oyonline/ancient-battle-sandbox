@@ -12,11 +12,11 @@ test('war report counts effective damage and attributes each death exactly once'
     const report = scene.getBattleReport();
     assert.deepEqual(snapshot(report.teams.red.byType.infantry), {
         initial: 1, alive: 1, lost: 0, kills: 1, damage: 50,
-        withdrawn: 0, routed: 0, rallied: 0, routing: 0
+        withdrawn: 0, routed: 0, rallied: 0, routing: 0, reengaged: 0, postRallyDamage: 0
     });
     assert.deepEqual(snapshot(report.teams.blue.byType.archer), {
         initial: 1, alive: 0, lost: 1, kills: 0, damage: 0,
-        withdrawn: 0, routed: 0, rallied: 0, routing: 0
+        withdrawn: 0, routed: 0, rallied: 0, routing: 0, reengaged: 0, postRallyDamage: 0
     });
     assert.equal(report.teams.red.damage, 50);
     assert.equal(report.teams.blue.lost, 1);

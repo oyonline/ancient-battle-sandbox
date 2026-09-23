@@ -128,7 +128,10 @@ test('flankers retreat outside the enemy square, then rallied soldiers reinforce
     Object.assign(unit, { gx: group.cx + group.half, gy: group.cy - group.half - 1, moraleState: 'routing' });
     const escape = scene.tactics.rallyPoint(unit);
     assert.equal(escape.gx, unit.gx);
-    assert.ok(escape.gy < group.cy - group.half - 6);
+    assert.ok(escape.gy < group.cy - group.half - 2.35,
+        'the first retreat segment exits the prepared spear reach outside the square');
+    assert.ok(Math.hypot(escape.gx - unit.gx, escape.gy - unit.gy) < 6,
+        'a nearby side exit replaces the compulsory long retreat before finding a real safe reception point');
     Object.assign(unit, { gx: group.rallyCenter.gx, gy: group.rallyCenter.gy, moraleState: 'wavering', everRallied: true });
     const health = unit.hp;
     scene.rebuildSpatial();
