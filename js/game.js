@@ -1066,8 +1066,10 @@ class IsoBattleScene extends Phaser.Scene {
             moving: false, dead: false, withdrawn: false, flashUntil: 0, actionEpoch: 0,
             pressX: 0, pressY: 0,                        // 通行意图方向（推挤传导用，每帧由 moveToward 刷新）
             strafeX: 0, strafeY: 0, strafeUntil: 0,     // 微走位：绕目标换角度的目的地与截止时间
-            nextShift: 0,                                // 下次走位时刻（出生后按种子错峰，见下方 randSeed 初始化）
-            randSeed: 0,                                 // 单位确定性伪随机种子（走位抖动不破坏重放/镜像一致性）
+            // 镜像不变种子（惰性播种，见 units.js unitRand）：换边对照的红蓝配对单位拿到同一随机序列，
+            // 配合走位角度按阵营取反，微走位在换边镜像局里行为严格对称，且重放确定。
+            randSeed: null,
+            nextShift: null,                            // 下次走位时刻（首次命中后按种子错峰惰性初始化）
             bobPhase: Math.random() * Math.PI * 2,
             lastSX: x, lastSY: y, scene: this,
             sizeK: fx,                                  // 特效幅度系数（1 = 原体型）
@@ -1085,8 +1087,6 @@ class IsoBattleScene extends Phaser.Scene {
             // 行军入场：从己方一侧滑进阵地
             slideOff: (team === 'red' ? -1 : 1) * (80 + Math.random() * 70)
         };
-        unit.randSeed = (unit.id * 2654435761 + 12345) >>> 0;
-        unit.nextShift = 800 + unitRand(unit) * 2600;   // 确定性错峰：避免全场同帧集体换位
         this.morale.initUnit(unit);
         this.registerUnit(unit);
         this.units.push(unit);
@@ -1405,8 +1405,13 @@ class IsoBattleScene extends Phaser.Scene {
                     moveToward(unit, unit.strafeX, unit.strafeY, unit.typeData.speed * 0.8, dt);
                 }
             } else if (minD > range) {
-                // 架枪中的长枪兵钉死原地迎击；其余贴"接战环"逼近——不叠目标中心，多人自然围开
-                if (unit.type !== 'pikeman' || !unit.braceHold) {
+                // 架枪中的长枪兵钉死原地迎击；其余贴"接战环"逼近——不叠目标中心，多人自然围开。
+                // 守阵哨位是面墙不是点目标：贴正面硬攻不绕位——绕位会把整面墙拆成一个个被围死的哨位。
+                if (unit.type === 'pikeman' && unit.braceHold) {
+                    // 钉死原地，迎击
+                } else if (nearest.tacticalRole === 'guard') {
+                    moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
+                } else {
                     const rr = Math.max(0.5, range * 0.82);
                     const ang = Math.atan2(unit.gy - nearest.gy, unit.gx - nearest.gx);
                     moveToward(unit, nearest.gx + Math.cos(ang) * rr, nearest.gy + Math.sin(ang) * rr, unit.typeData.speed, dt);
@@ -1416,25 +1421,30 @@ class IsoBattleScene extends Phaser.Scene {
                 CombatRules.attack(this, unit, nearest, now, range);
                 // 攻击间隙走位：绕目标弧线换攻击角，占了的位就转下一格（抢位围杀）。
                 // 架枪中的长枪兵保持枪阵不挪窝；随机量走单位种子，保住确定性重放。
-                if (unit.lastAttack !== lastAttackBefore && now > unit.nextShift && !(unit.type === 'pikeman' && unit.braceHold)) {
-                    unit.nextShift = now + 1200 + unitRand(unit) * 2200;
-                    const cur = Math.atan2(unit.gy - nearest.gy, unit.gx - nearest.gx);
-                    const nr = Math.max(0.55, range * 0.85);
-                    let pickAng = cur + (unitRand(unit) < 0.5 ? 1 : -1) * (0.7 + unitRand(unit) * 0.7);
-                    for (let t = 0; t < 4; t++) {
-                        const sx = clamp(nearest.gx + Math.cos(pickAng) * nr, 1.2, GRID_W - 1.2);
-                        const sy = clamp(nearest.gy + Math.sin(pickAng) * nr, 1.2, GRID_H - 1.2);
-                        let taken = false;
-                        this.forEachNear(sx, sy, 0.42, o => {
-                            if (o !== unit && o.team === unit.team && !o.dead
-                                && Math.hypot(o.gx - sx, o.gy - sy) < 0.42) taken = true;
-                        });
-                        if (!taken) {
-                            unit.strafeX = sx; unit.strafeY = sy;
-                            unit.strafeUntil = now + 500 + unitRand(unit) * 400;
-                            break;
+                // 守阵哨位是钉死的墙，绕哨位抢位没有意义，还会把守军姿态搅散——不对其走位。
+                if (unit.lastAttack !== lastAttackBefore) {
+                    if (unit.nextShift == null) unit.nextShift = now + 800 + unitRand(unit) * 2600;   // 首次命中后错峰
+                    if (now > unit.nextShift && !(unit.type === 'pikeman' && unit.braceHold) && nearest.tacticalRole !== 'guard') {
+                        unit.nextShift = now + 1200 + unitRand(unit) * 2200;
+                        const mir = unit.team === 'red' ? 1 : -1;   // 蓝方角度取反：与红方配对单位行为严格镜像
+                        const cur = Math.atan2(unit.gy - nearest.gy, unit.gx - nearest.gx);
+                        const nr = Math.max(0.55, range * 0.85);
+                        let pickAng = cur + mir * (unitRand(unit) < 0.5 ? 1 : -1) * (0.7 + unitRand(unit) * 0.7);
+                        for (let t = 0; t < 4; t++) {
+                            const sx = clamp(nearest.gx + Math.cos(pickAng) * nr, 1.2, GRID_W - 1.2);
+                            const sy = clamp(nearest.gy + Math.sin(pickAng) * nr, 1.2, GRID_H - 1.2);
+                            let taken = false;
+                            this.forEachNear(sx, sy, 0.42, o => {
+                                if (o !== unit && o.team === unit.team && !o.dead
+                                    && Math.hypot(o.gx - sx, o.gy - sy) < 0.42) taken = true;
+                            });
+                            if (!taken) {
+                                unit.strafeX = sx; unit.strafeY = sy;
+                                unit.strafeUntil = now + 500 + unitRand(unit) * 400;
+                                break;
+                            }
+                            pickAng += mir * (t % 2 === 0 ? 0.9 : -0.9);
                         }
-                        pickAng += (t % 2 === 0 ? 0.9 : -0.9);
                     }
                 }
             }
@@ -1449,7 +1459,12 @@ class IsoBattleScene extends Phaser.Scene {
         const R = CombatRules.maxContactDistance(units);
         const k = Math.min(0.35, dt * 14);        // 卡顿帧不再一次性大步推移
         const cap = 0.9 * dt;                     // 推挤传导每帧限幅（帧率无关，多人同挤也不瞬移）
-        for (const unit of units) { unit.separateX = 0; unit.separateY = 0; unit.pshX = 0; unit.pshY = 0; }
+        for (const unit of units) { unit.separateX = 0; unit.separateY = 0; unit.pshX = 0; unit.pshY = 0; unit.touchGuard = false; }
+        // 守阵锚域：墙前 1.6 格内是刚体地带——人流压力到此为止，架好的墙顶不穿、缝里也灌不进人。
+        for (const guard of units) {
+            if (guard.tacticalRole !== 'guard') continue;
+            this.forEachNear(guard.gx, guard.gy, 1.6, o => { o.touchGuard = true; });
+        }
         for (let i = 0; i < units.length; i++) {
             const a = units[i];
             if (a.dead) continue;
@@ -1467,16 +1482,19 @@ class IsoBattleScene extends Phaser.Scene {
                     const nx = dx / d, ny = dy / d;
                     a.separateX -= nx * push * aWeight / totalWeight; a.separateY -= ny * push * aWeight / totalWeight;
                     b.separateX += nx * push * bWeight / totalWeight; b.separateY += ny * push * bWeight / totalWeight;
-                    // 推挤传导：先入各自缓冲，帧末统一限幅——单个后排顶得轻、多人围顶才顶得动
-                    if (a.pressX || a.pressY) { b.pshX += a.pressX * push * 0.5; b.pshY += a.pressY * push * 0.5; }
-                    if (b.pressX || b.pressY) { a.pshX += b.pressX * push * 0.5; a.pshY += b.pressY * push * 0.5; }
+                    // 推挤传导是"动量放大器"：只对敌对接触对生效——
+                    // 有前进意图的一方把挡路的敌人顶向自己前进的方向，接触线才会呼吸进退。
+                    // 同队之间不传导（后排顶前排靠挡路规则自然收力，行军队列不压缩、贴墙人柱不挤入）；
+                    // 被挡停的单位（moving=false）和守阵/锚域内单位都不受力，架好的墙顶不穿。
+                    if ((a.pressX || a.pressY) && a.team !== b.team && b.tacticalRole !== 'guard' && b.moving) { b.pshX += a.pressX * push * 0.5; b.pshY += a.pressY * push * 0.5; }
+                    if ((b.pressX || b.pressY) && b.team !== a.team && a.tacticalRole !== 'guard' && a.moving) { a.pshX += b.pressX * push * 0.5; a.pshY += b.pressY * push * 0.5; }
                 }
             });
         }
         for (let i = 0; i < units.length; i++) {
             const u = units[i];
-            // 推挤传导限幅后并入位移（cap 见上）
-            const l = Math.hypot(u.pshX, u.pshY);
+            // 推挤传导限幅后并入位移（cap 见上）；贴墙者被锚定，不吃传导位移
+            const l = u.touchGuard ? 0 : Math.hypot(u.pshX, u.pshY);
             const px = l > 1e-6 ? u.pshX * (l > cap ? cap / l : 1) : 0;
             const py = l > 1e-6 ? u.pshY * (l > cap ? cap / l : 1) : 0;
             // 对称累计推开，并消除长时间镜像模拟中的浮点方向偏差。

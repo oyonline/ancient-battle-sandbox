@@ -64,8 +64,10 @@ class MoraleSystem {
         x /= length; y /= length;
         const fx = unit.moraleFacingX, fy = unit.moraleFacingY;
         let angle = Math.atan2(fx * y - fy * x, fx * x + fy * y);
-        // 完全反向时也保持换边镜像，不依赖数组先后或随机数。
-        if (Math.abs(Math.abs(angle) - Math.PI) < 1e-9) angle = Math.PI * (fx >= 0 ? 1 : -1);
+        // 完全反向时旋转方向二选一：红方取 +π、蓝方取 -π。
+        // 镜像局中红蓝互为镜像，两侧选择严格互反；不能按 facing.x 判号——
+        // 贴墙单位 facing.x 会精确为 ±0，而 ±0 比较不可区分，会两边同号破坏镜像。
+        if (Math.abs(Math.abs(angle) - Math.PI) < 1e-9) angle = Math.PI * (unit.team === 'red' ? 1 : -1);
         angle = Math.max(-Math.PI * dt / 2, Math.min(Math.PI * dt / 2, angle));
         unit.moraleFacingX = fx * Math.cos(angle) - fy * Math.sin(angle);
         unit.moraleFacingY = fx * Math.sin(angle) + fy * Math.cos(angle);

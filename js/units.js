@@ -345,7 +345,15 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 // 单位专属确定性伪随机（LCG）：微走位等行为抖动不再用 Math.random，
 // 固定步长模拟的同阵容重放与红蓝镜像对照保持一致。
+// 种子惰性按"当前位置"播种：镜像局中换边配对单位取 min(gx,70-gx) 量化必然同种子，
+// 且不受部署指令造成的出生站位差异影响（同一逻辑单位换指令序列不变）。
 function unitRand(unit) {
+    if (unit.randSeed == null) {
+        const mxq = Math.round(Math.min(unit.gx, GRID_W - unit.gx) * 256);
+        const myq = Math.round(unit.gy * 256);
+        let tc = 0; for (let i = 0; i < unit.type.length; i++) tc = (tc * 31 + unit.type.charCodeAt(i)) | 0;
+        unit.randSeed = ((mxq * 73856093) ^ (myq * 19349663) ^ tc) >>> 0;
+    }
     unit.randSeed = (Math.imul(unit.randSeed, 1664525) + 1013904223) >>> 0;
     return unit.randSeed / 4294967296;
 }
