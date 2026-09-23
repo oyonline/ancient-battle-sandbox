@@ -10,7 +10,7 @@ function runBattle(red, blue, redFormation = 'custom', blueFormation = 'custom',
     const maxSteps = (options.seconds ?? 240) * 60;
     for (let step = 0; step < maxSteps && !scene.battleOver; step++) scene.advanceBattle(1000 / 60);
     const report = scene.getBattleReport();
-    const remainingValue = team => scene.units.filter(unit => !unit.dead && unit.team === team)
+    const remainingValue = team => scene.units.filter(unit => !unit.dead && !unit.withdrawn && unit.team === team)
         .reduce((sum, unit) => sum + unit.typeData.cost * unit.hp / unit.maxHp, 0);
     return {
         winner: scene.winner || 'timeout',

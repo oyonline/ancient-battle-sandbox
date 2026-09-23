@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>帝国亲子沙盒 · 统帅试炼</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E🏰%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="css/style.css?v=20260923-2">
+    <link rel="stylesheet" href="css/style.css?v=20260923-morale2">
 </head>
 <body>
     <!-- 战场：铺满整个视口 -->
@@ -15,7 +15,7 @@
     <header id="topbar">
         <h1>🏰 帝国亲子沙盒</h1>
         <span id="phase-hint">观察敌阵，找到你的解法</span>
-        <div class="counts">
+        <div class="counts" title="在场兵力，包含正在溃逃的士兵">
             <span class="red-c">🔴 <span id="red-count">0</span></span>
             <span class="blue-c">🔵 <span id="blue-count">0</span></span>
         </div>
@@ -27,6 +27,18 @@
 
     <!-- 底部悬浮控制条（战斗中） -->
     <div id="controlbar" hidden>
+        <div id="morale-hud" class="morale-hud" aria-label="两军士气，以下状态均为人数" aria-live="off" hidden>
+            <div class="morale-team red">
+                <div class="morale-heading"><b>红方士气</b><span>均值 <strong id="morale-red-average">—</strong></span></div>
+                <div class="morale-counts"><span>稳定 <b id="morale-red-steady">0</b></span><span class="morale-wavering">动摇 <b id="morale-red-wavering">0</b></span><span class="morale-routing">溃逃 <b id="morale-red-routing">0</b></span><small>人</small></div>
+                <div class="morale-reason" id="morale-red-reason">阵线稳定</div>
+            </div>
+            <div class="morale-team blue">
+                <div class="morale-heading"><b>蓝方士气</b><span>均值 <strong id="morale-blue-average">—</strong></span></div>
+                <div class="morale-counts"><span>稳定 <b id="morale-blue-steady">0</b></span><span class="morale-wavering">动摇 <b id="morale-blue-wavering">0</b></span><span class="morale-routing">溃逃 <b id="morale-blue-routing">0</b></span><small>人</small></div>
+                <div class="morale-reason" id="morale-blue-reason">阵线稳定</div>
+            </div>
+        </div>
         <button class="ctl-btn" id="btn-pause">⏸️ 暂停</button>
         <button class="speed-btn" data-speed="0.5">🐌 0.5x</button>
         <button class="speed-btn active" data-speed="1">▶️ 1x</button>
@@ -57,6 +69,7 @@
                         </div>
                         <span class="campaign-progress" id="campaign-progress">0 / 5 已通过</span>
                     </div>
+                    <p class="morale-guide">侧翼受袭、附近友军接连阵亡，会让阵线动摇。<span class="morale-wavering">黄标：动摇</span> · <span class="morale-routing">橙标：溃逃</span>；退到安全友军身旁，有机会重整。</p>
                     <div id="challenge-list" class="challenge-grid"></div>
                     <button id="btn-sandbox" class="sandbox-entry">
                         <span><b>⚔️ 自由对战</b><small>两位队长轮流配兵 · 每方 4000 金币 · 千人沙盒</small></span>
@@ -101,6 +114,7 @@
                     <div class="team-banner both">⚔️ 两军就位，大战一触即发！</div>
                     <div id="army-summary"></div>
                     <div class="hint-small">🔱长枪拦截骑兵 · 🐴骑兵助跑突击弓手 · ⚔️剑士抗线，🏹弓手远射</div>
+                    <div class="morale-guide"><b>稳住军心，也能赢下战斗。</b> 侧后方冲锋和集中伤亡会打击附近士气；留些稳定友军接应，溃兵脱离危险后可以重整。<span class="morale-wavering">黄标动摇，仍能作战</span> · <span class="morale-routing">橙标溃逃，停止攻击</span>。</div>
                     <button class="big-btn" id="btn-start">🚀 开战！</button>
                     <div class="action-row" id="ready-edit-actions">
                         <button class="secondary-btn" id="btn-ready-red">调整红方</button>
@@ -115,6 +129,7 @@
                     <div id="result-detail"></div>
                     <div id="result-metrics" class="result-metrics"></div>
                     <div id="report-tables" class="report-tables"></div>
+                    <p class="report-note">在场含当前溃逃；撤离者生还但已退出战场。曾溃逃、重整各按人数记录，同一士兵可能两项都有。</p>
                     <details class="battle-events"><summary>战场纪事 <span>按战斗时间记录</span></summary><ol id="battle-events"></ol></details>
                     <div class="result-actions">
                         <button class="big-btn" id="btn-edit-red">✎ 调整阵容再战</button>
@@ -134,10 +149,11 @@
 
     <script src="assets/manifest.js?v=20260923-death2"></script>
     <script src="js/phaser.min.js"></script>
-    <script src="js/units.js?v=20260923-charge2"></script>
-    <script src="js/challenges.js?v=20260923-3"></script>
-    <script src="js/game.js?v=20260923-blood1"></script>
-    <script src="js/ui.js?v=20260923-1"></script>
+    <script src="js/units.js?v=20260923-morale2"></script>
+    <script src="js/morale.js?v=20260923-morale2"></script>
+    <script src="js/challenges.js?v=20260923-morale2"></script>
+    <script src="js/game.js?v=20260923-morale2"></script>
+    <script src="js/ui.js?v=20260923-morale2"></script>
     <script>
         const game = new Phaser.Game({
             type: Phaser.AUTO,

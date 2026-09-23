@@ -88,6 +88,11 @@ function generateArmyPositions(team, config, formationKey) {
 
 // 架枪读本步快照：移动或转向会重置准备，成阵并站稳半秒后才有正面抗冲锋。
 function updatePikeBrace(unit, dt) {
+    if (unit.moraleState === 'routing' || unit.withdrawn) {
+        unit.braceTime = 0; unit.braceReady = false; unit.braceHold = false;
+        unit.braceSupport = 0; unit.braceDepth = 0;
+        return;
+    }
     const vx = unit.velX || 0, vy = unit.velY || 0, speed = Math.hypot(vx, vy);
     if (unit.moving && speed > 0.15) {
         const fx = vx / speed, fy = vy / speed;
@@ -96,7 +101,7 @@ function updatePikeBrace(unit, dt) {
     }
     let support = 0, depth = 0, incoming = false, nearestEnemy = null, nearestDistance = Infinity;
     unit.scene.forEachNear(unit.gx, unit.gy, 6, other => {
-        if (other === unit || other.dead) return;
+        if (other === unit || other.dead || other.withdrawn || other.moraleState === 'routing') return;
         const dx = other.gx - unit.gx, dy = other.gy - unit.gy, distance = Math.hypot(dx, dy);
         if (other.team === unit.team && other.type === 'pikeman' && distance <= 2.6) {
             support++;
@@ -121,6 +126,7 @@ function updatePikeBrace(unit, dt) {
 }
 
 function isPreparedPike(guard, cavalry, dx, dy) {
+    if (guard.withdrawn || guard.moraleState === 'routing') return false;
     if (guard.type !== 'pikeman' || !guard.braceReady || guard.braceSupport < 2) return false;
     const distance = dist(guard, cavalry);
     if (distance < 0.001) return false;
@@ -163,7 +169,7 @@ class CavalryAI {
     pickTarget(unit) {
         let best = null, bestD = Infinity;
         unit.scene.forEachNear(unit.gx, unit.gy, 12, enemy => {
-            if (enemy.team === unit.team || enemy.dead || enemy.type !== 'archer') return;
+            if (enemy.team === unit.team || enemy.dead || enemy.withdrawn || enemy.type !== 'archer') return;
             const d = dist(unit, enemy);
             if (d <= 12 && (d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && enemy.id < best.id))) {
                 bestD = d; best = enemy;
@@ -179,7 +185,7 @@ class CavalryAI {
         const step = Math.min(distance, speed * dt), nx = dx / distance, ny = dy / distance;
         let contact = null, bestD = Infinity;
         unit.scene.forEachNear(unit.gx, unit.gy, UNIT_TYPES.pikeman.range + step, enemy => {
-            if (enemy.team === unit.team || enemy.dead || unit.pierceHits?.has(enemy.id)) return;
+            if (enemy.team === unit.team || enemy.dead || enemy.withdrawn || unit.pierceHits?.has(enemy.id)) return;
             const braced = isPreparedPike(enemy, unit, nx, ny);
             const reach = braced ? UNIT_TYPES.pikeman.range : 0.65;
             const ex = enemy.gx - unit.gx, ey = enemy.gy - unit.gy;
@@ -198,6 +204,7 @@ class CavalryAI {
     impact(unit, target, braced, now, first) {
         if (!first && unit.pierceHits.size >= 4) return;
         if (first) {
+            unit.scene.morale?.queueCharge(unit, target, braced);
             unit.lastAttack = now;
             unit.chargeImpactId = target.id;
             unit.chargeMomentum = 1;
@@ -231,7 +238,7 @@ class CavalryAI {
             unit.chargeDistance += clamp(forward, 0, UNIT_TYPES.cavalry.chargeSpeed * dt);
             unit.chargeLastX = null;
         }
-        if (!unit.target || unit.target.dead || (now - unit.lastRetarget >= 500 && dist(unit, unit.target) > 2)) {
+        if (!unit.target || unit.target.dead || unit.target.withdrawn || (now - unit.lastRetarget >= 500 && dist(unit, unit.target) > 2)) {
             unit.target = this.pickTarget(unit);
             unit.lastRetarget = now;
         }
@@ -296,7 +303,7 @@ class CavalryAI {
         if (unit.stateTime >= 3) {
             let nearby = 0, spears = false;
             unit.scene.forEachNear(unit.gx, unit.gy, 2.2, other => {
-                if (other.team === unit.team || other.dead || dist(unit, other) > 2.2) return;
+                if (other.team === unit.team || other.dead || other.withdrawn || other.moraleState === 'routing' || dist(unit, other) > 2.2) return;
                 nearby++; spears ||= other.type === 'pikeman';
             });
             if (nearby <= 2 && !spears) {
@@ -336,7 +343,10 @@ function moveToward(unit, tx, ty, speed, dt) {
     const dx = tx - unit.gx, dy = ty - unit.gy;
     const d = Math.hypot(dx, dy);
     if (d < 0.001) return;
-    const step = Math.min(d, speed * dt);
+    // 动摇时只放缓向前推进；战术后退与溃逃不受这项限制。
+    const advancing = dx * (unit.moraleFacingX || 0) + dy * (unit.moraleFacingY || 0) > 0;
+    const caution = unit.moraleState === 'wavering' && advancing ? 0.85 : 1;
+    const step = Math.min(d, speed * caution * dt);
     if (unit.scene && unit.scene.planningStep) {
         unit.moveX = (dx / d) * step;
         unit.moveY = (dy / d) * step;
@@ -365,7 +375,7 @@ function calculateAttackDamage(from, target, { multiplier = 1, rawAttack = from.
 }
 
 function resolveAttack(target, from, options) {
-    if (target.dead || target.hp <= 0) return 0;
+    if (target.dead || target.withdrawn || target.hp <= 0) return 0;
     const damage = calculateAttackDamage(from, target, options);
     const scene = target.scene;
     if (scene && scene.collectingImpacts) {
@@ -376,16 +386,20 @@ function resolveAttack(target, from, options) {
 }
 
 function applyDamage(target, dmg, from) {
-    if (target.dead || target.hp <= 0 || !Number.isFinite(dmg) || dmg <= 0) return 0;
+    if (target.dead || target.withdrawn || target.hp <= 0 || !Number.isFinite(dmg) || dmg <= 0) return 0;
     const scene = target.scene;
     if (scene && (target.battleId !== scene.battleId || (from && from.battleId !== scene.battleId))) return 0;
     const effectiveDamage = Math.min(target.hp, dmg);
     target.hp = Math.max(0, target.hp - dmg);
     target.flashUntil = (scene ? scene.simulationTime : 0) + 130;
-    if (scene) scene.recordDamage(target, effectiveDamage, from);
+    if (scene) {
+        scene.recordDamage(target, effectiveDamage, from);
+        scene.morale?.queueDamage(target, effectiveDamage);
+    }
     if (target.hp <= 0 && !target.dead) {
         target.dead = true;
         if (scene) {
+            scene.morale?.queueDeath(target);
             scene.recordDeath(target, from);
             scene.killUnit(target, from);
         }

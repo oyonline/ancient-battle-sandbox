@@ -86,7 +86,8 @@ button:active { transform: scale(0.94); }
 #controlbar {
     position: fixed;
     left: 50%; transform: translateX(-50%);
-    bottom: 12px; z-index: 20;
+    bottom: 58px; z-index: 20;
+    width: min(560px, calc(100% - 16px));
     display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
     padding: 7px 10px;
     background: rgba(30, 19, 8, 0.78);
@@ -107,6 +108,23 @@ button:active { transform: scale(0.94); }
     background: linear-gradient(180deg, #f4d97a 0%, #d4a83c 100%);
     box-shadow: 0 3px 0 #4a3818, inset 0 0 8px rgba(255, 255, 255, 0.5);
 }
+
+.morale-hud { flex: 0 0 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding-bottom: 6px; border-bottom: 1px solid #755a31; font: 11px/1.5 "PingFang SC", sans-serif; }
+.morale-team { min-width: 0; }
+.morale-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; color: #beab87; }
+.morale-heading > b { font-size: 12px; }
+.morale-team.red .morale-heading > b { color: #ffac9d; }
+.morale-team.blue .morale-heading > b { color: #a8cfff; }
+.morale-heading strong, .morale-counts b { font-variant-numeric: tabular-nums; }
+.morale-counts { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 8px; color: #d9d7b9; padding-top: 3px; }
+.morale-counts > span { white-space: nowrap; }
+.morale-counts b { font-size: 13px; }
+.morale-counts small { color: #bfa982; font-size: 10px; }
+.morale-wavering { color: #ffce62; }
+.morale-routing { color: #ff864f; }
+.morale-reason { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #bba888; font-size: 10px; margin-top: 2px; }
+.morale-guide { margin: 0; padding: 9px 12px; border-left: 2px solid #a98a49; background: rgba(25, 18, 11, 0.3); color: #cbb893; font: 12px/1.8 "PingFang SC", sans-serif; }
+.morale-guide b { color: #ead4a3; font-weight: 600; }
 
 /* ==================== 底部抽屉面板 ==================== */
 #sheet {
@@ -485,13 +503,16 @@ summary { cursor: pointer; }
 .report-team.blue .report-team-title { background: #253a46; }
 .report-team-title b { font-size: 14px; }
 .report-team-title span { font-size: 10px; color: #d5c09a; }
-.report-team table { width: 100%; border-collapse: collapse; font: 12px/1.6 "PingFang SC", sans-serif; }
+.report-team table { width: 100%; table-layout: fixed; border-collapse: collapse; font: 12px/1.6 "PingFang SC", sans-serif; }
 .report-team th, .report-team td { padding: 8px 4px; text-align: center; border-bottom: 1px solid #483827; }
-.report-team th:first-child { text-align: left; padding-left: 10px; }
+.report-team th:first-child { text-align: left; padding-left: 10px; width: 28%; }
 .report-team thead th { color: #b9a581; font-size: 10px; font-weight: 500; }
 .report-team tbody th { font-weight: 500; color: #e8d1a1; }
 .report-team tr:last-child td, .report-team tr:last-child th { border-bottom: 0; }
 .report-team td:last-child { color: #eccc80; font-weight: 700; }
+.report-morale { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 9px 10px; border-top: 1px solid #675031; color: #c3af8b; font: 11px/1.6 "PingFang SC", sans-serif; }
+.report-morale b { color: #e4cd9a; }
+.report-note { margin: -5px 0 0; color: #b9a581; font: 11px/1.7 "PingFang SC", sans-serif; }
 .battle-events { border: 1px solid #78613c; border-radius: 8px; padding: 11px 14px; font-size: 13px; background: #34291d; }
 .battle-events summary span { margin-left: 8px; font-size: 10px; color: #b6a17b; }
 .battle-events ol { margin: 12px 0 0; padding-left: 20px; color: #d8c39d; font: 12px/1.9 "PingFang SC", sans-serif; }
@@ -521,6 +542,9 @@ summary { cursor: pointer; }
     .sandbox-entry > span:last-child { display: none; }
     .overlay-card { width: calc(100% - 24px); padding: 26px 18px; }
     .overlay-title { font-size: 23px; }
-    #controlbar { width: max-content; max-width: calc(100% - 16px); gap: 5px; bottom: 58px; }
+    #controlbar { gap: 5px; padding: 6px; }
+    .morale-hud { gap: 10px; }
+    .morale-counts { gap: 2px 5px; font-size: 10px; }
+    .morale-counts b { font-size: 12px; }
     .ctl-btn, .speed-btn { font-size: 12px; padding: 6px 8px; }
 }

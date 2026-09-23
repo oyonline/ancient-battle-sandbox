@@ -556,7 +556,16 @@ class IsoBattleScene extends Phaser.Scene {
         this.battleEvents = [];
         this.battleMilestones = new Set();
         this.dyingUnits = new Set();
-        const emptyStats = () => ({ initial: 0, alive: 0, lost: 0, kills: 0, damage: 0 });
+        this.morale = new MoraleSystem(this);
+        this.collapseSince = { red: null, blue: null };
+        this.moraleLastReason = { red: '', blue: '' };
+        this.endReason = null;
+        this.resolvingOutcome = false;
+        this._rallyAnchors = [];
+        this._rallyRefresh = -Infinity;
+        this._lastMoraleUI = 0;
+        const emptyStats = () => ({ initial: 0, alive: 0, lost: 0, kills: 0, damage: 0,
+            withdrawn: 0, routed: 0, rallied: 0 });
         this.battleStats = {};
         for (const team of ['red', 'blue']) {
             this.battleStats[team] = {
@@ -612,13 +621,141 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     getBattleReport() {
+        const teams = JSON.parse(JSON.stringify(this.battleStats));
+        for (const team of ['red', 'blue']) {
+            teams[team].routing = 0;
+            for (const stats of Object.values(teams[team].byType)) stats.routing = 0;
+        }
+        for (const unit of this.units) {
+            if (unit.dead || unit.withdrawn || unit.moraleState !== 'routing') continue;
+            teams[unit.team].routing++;
+            teams[unit.team].byType[unit.type].routing++;
+        }
         return {
             red: this.battleStats.red.alive,
             blue: this.battleStats.blue.alive,
             durationMs: Math.round(this.simulationTime),
-            teams: JSON.parse(JSON.stringify(this.battleStats)),
+            teams,
+            morale: this.getMoraleSummary(),
+            endReason: this.endReason,
             events: this.battleEvents.map(event => ({ ...event }))
         };
+    }
+
+    getMoraleSummary() {
+        const result = {};
+        for (const team of ['red', 'blue']) {
+            const stats = this.battleStats[team];
+            result[team] = { steady: 0, wavering: 0, routing: 0, withdrawn: stats.withdrawn,
+                rallied: stats.rallied, average: 0, lastReason: this.moraleLastReason[team] };
+        }
+        for (const unit of this.units) {
+            if (unit.dead || unit.withdrawn) continue;
+            const stats = result[unit.team];
+            stats[unit.moraleState || 'steady']++;
+            stats.average += unit.morale ?? 100;
+        }
+        for (const stats of Object.values(result)) {
+            const count = stats.steady + stats.wavering + stats.routing;
+            stats.average = count ? Math.round(stats.average / count) : 0;
+        }
+        return result;
+    }
+
+    onMoraleStateChange(unit, previousState, reason) {
+        const side = unit.team === 'red' ? '红方' : '蓝方';
+        const state = unit.moraleState;
+        const stats = this.battleStats[unit.team];
+        if (state === 'routing') {
+            unit.actionEpoch = (unit.actionEpoch || 0) + 1;
+            unit.braceReady = false; unit.braceHold = false; unit.braceTime = 0;
+            this.cavalryAI?.enterMelee(unit);
+            unit.target = null;
+            unit.animState = null; unit.animLock = 0;
+            this.tweens.killTweensOf(unit.lunge);
+            unit.lunge.x = 0; unit.lunge.y = 0;
+            if (!unit.everRouted) {
+                unit.everRouted = true;
+                stats.routed++; stats.byType[unit.type].routed++;
+            }
+        } else if (previousState === 'routing') {
+            if (!unit.everRallied) {
+                unit.everRallied = true;
+                stats.rallied++; stats.byType[unit.type].rallied++;
+            }
+            if (unit.type === 'cavalry') this.cavalryAI?.beginCharge(unit);
+        }
+        const label = state === 'routing' ? '开始溃逃' : previousState === 'routing' ? '完成重整'
+            : state === 'wavering' ? '出现动摇' : '稳住阵脚';
+        const text = `${side}${unit.typeData.name}${label}：${reason}`;
+        this.moraleLastReason[unit.team] = `${label} · ${reason}`;
+        this.addBattleEvent(`morale-${unit.team}-${previousState === 'routing' ? 'rally' : state}`, text, unit.team);
+        this._countsDirty = true;
+    }
+
+    updateRoutedUnit(unit, dt) {
+        // 在安全友军身边停下等待重整，不能边逃边自动回满士气。
+        if (unit.moraleSheltered) return;
+        const now = this.simulationTime;
+        if (now - this._rallyRefresh >= 500) {
+            this._rallyRefresh = now;
+            this._rallyAnchors = this.units.filter(other => {
+                if (other.dead || other.withdrawn || other.moraleState !== 'steady') return false;
+                let support = 0, threatened = false;
+                this.forEachNear(other.gx, other.gy, 6, neighbor => {
+                    if (neighbor.dead || neighbor.withdrawn || neighbor.moraleState === 'routing') return;
+                    const distance = dist(other, neighbor);
+                    if (neighbor.team !== other.team && distance <= 6) threatened = true;
+                    if (neighbor.team === other.team && neighbor.moraleState === 'steady' && distance <= 5) support++;
+                });
+                // 接应点可包含锚点自己：三名预备队足以接应，不能误要求第四人。
+                return !threatened && support >= 3;
+            });
+        }
+        if (!unit.rallyTarget || unit.rallyTarget.dead || unit.rallyTarget.withdrawn ||
+            unit.rallyTarget.moraleState !== 'steady' || now >= (unit.nextRallySearch || 0)) {
+            unit.nextRallySearch = now + 500;
+            unit.rallyTarget = null;
+            let best = 18 * 18;
+            for (const other of this._rallyAnchors) {
+                if (other.team !== unit.team || other.dead || other.withdrawn || other.moraleState !== 'steady') continue;
+                const distance = (other.gx - unit.gx) ** 2 + (other.gy - unit.gy) ** 2;
+                if (distance < best - 1e-9 || (unit.rallyTarget && Math.abs(distance - best) <= 1e-9 && other.id < unit.rallyTarget.id)) {
+                    best = distance; unit.rallyTarget = other;
+                }
+            }
+        }
+        const anchor = unit.rallyTarget;
+        let dx = (anchor ? anchor.gx : unit.team === 'red' ? 0 : GRID_W) - unit.gx;
+        let dy = anchor ? anchor.gy - unit.gy : 0;
+        const length = Math.hypot(dx, dy) || 1;
+        dx /= length; dy /= length;
+        // 邻近敌人使逃跑方向偏离危险处，仍保留回撤方向，防止原地左右振荡。
+        this.forEachNear(unit.gx, unit.gy, 4, enemy => {
+            if (enemy.team === unit.team || enemy.dead || enemy.withdrawn || enemy.moraleState === 'routing') return;
+            const ex = unit.gx - enemy.gx, ey = unit.gy - enemy.gy, d = Math.hypot(ex, ey);
+            if (d <= 0.001 || d > 4) return;
+            const weight = (4 - d) / 4;
+            dx += ex / d * weight; dy += ey / d * weight;
+        });
+        const direction = Math.hypot(dx, dy);
+        if (direction < 0.001) { dx = unit.team === 'red' ? -1 : 1; dy = 0; }
+        const normalize = Math.hypot(dx, dy);
+        moveToward(unit, unit.gx + dx / normalize * 3, unit.gy + dy / normalize * 3, unit.typeData.speed, dt);
+    }
+
+    withdrawUnit(unit) {
+        if (unit.dead || unit.withdrawn || unit.battleId !== this.battleId) return;
+        unit.withdrawn = true;
+        unit.actionEpoch = (unit.actionEpoch || 0) + 1;
+        const team = this.battleStats[unit.team];
+        for (const stats of [team, team.byType[unit.type]]) { stats.alive--; stats.withdrawn++; }
+        if (unit.team === 'red') this.redAlive = team.alive;
+        else this.blueAlive = team.alive;
+        this.tweens.killTweensOf(unit.spr); this.tweens.killTweensOf(unit.lunge);
+        unit.spr.destroy(); unit.shadow.destroy();
+        this._countsDirty = true;
+        this.addBattleEvent(`withdraw-${unit.team}`, `${unit.team === 'red' ? '红方' : '蓝方'}溃兵开始撤离战场`, unit.team);
     }
 
     scheduleBattleAction(delayMs, callback) {
@@ -763,7 +900,7 @@ class IsoBattleScene extends Phaser.Scene {
             chargeMomentum: 0, chargeImpactId: null,
             braceTime: 0, braceReady: false, braceHold: false, braceSupport: 0, braceDepth: 0,
             braceFacingX: team === 'red' ? 1 : -1, braceFacingY: 0,
-            moving: false, dead: false, flashUntil: 0,
+            moving: false, dead: false, withdrawn: false, flashUntil: 0, actionEpoch: 0,
             bobPhase: Math.random() * Math.PI * 2,
             lastSX: x, lastSY: y, scene: this,
             sizeK: fx,                                  // 特效幅度系数（1 = 原体型）
@@ -781,6 +918,7 @@ class IsoBattleScene extends Phaser.Scene {
             // 行军入场：从己方一侧滑进阵地
             slideOff: (team === 'red' ? -1 : 1) * (80 + Math.random() * 70)
         };
+        this.morale.initUnit(unit);
         this.registerUnit(unit);
         this.units.push(unit);
         return unit;
@@ -820,7 +958,7 @@ class IsoBattleScene extends Phaser.Scene {
             this.tweens.killTweensOf(u.spr);
             this.tweens.killTweensOf(u.lunge);
             u.deathVisual = null;
-            u.spr.destroy(); u.shadow.destroy();
+            if (!u.withdrawn) { u.spr.destroy(); u.shadow.destroy(); }
         });
         this.units = [];
         this.arrows = [];
@@ -909,14 +1047,17 @@ class IsoBattleScene extends Phaser.Scene {
             unit.pushX = 0; unit.pushY = 0;
         }
         for (const unit of units) if (unit.type === 'pikeman') updatePikeBrace(unit, dt);
+        this.morale.beginStep(dt);
         this.collectingImpacts = true;
         this.planningStep = true;
-        this.flushBattleActions();
+        if (!this.resolvingOutcome) this.flushBattleActions();
 
         for (let i = 0; i < units.length; i++) {
             const unit = units[i];
-            if (unit.dead) continue;
+            if (unit.dead || unit.withdrawn) continue;
             unit.moving = false;
+            if (this.resolvingOutcome) continue;
+            if (unit.moraleState === 'routing') { this.updateRoutedUnit(unit, dt); continue; }
             if (unit.type === 'cavalry') {
                 if (this.cavalryAI.update(unit, now, dt)) continue;
             }
@@ -933,12 +1074,20 @@ class IsoBattleScene extends Phaser.Scene {
         this.updateArrows(dt, now);
         this.flushBraceCandidates();
         this.flushBattleImpacts();
+        this.morale.update(dt);
+        for (const unit of units) {
+            if (!unit.dead && !unit.withdrawn && unit.moraleState === 'routing' &&
+                (unit.gx <= 0.61 || unit.gx >= GRID_W - 0.61 || unit.gy <= 0.61 || unit.gy >= GRID_H - 0.61)) this.withdrawUnit(unit);
+        }
+        if (this.simulationTime - (this._lastMoraleUI || 0) >= 250) {
+            this._lastMoraleUI = this.simulationTime; this._countsDirty = true;
+        }
         this.checkWin();
 
         // 阵亡单位周期压实，数组不无限膨胀
         this._compactTick = (this._compactTick || 0) + 1;
-        if (this._compactTick % 240 === 0 && this.deadCount > 0) {
-            this.units = this.units.filter(u => !u.dead);
+        if (this._compactTick % 240 === 0) {
+            this.units = this.units.filter(u => !u.dead && !u.withdrawn);
         }
     }
 
@@ -952,7 +1101,7 @@ class IsoBattleScene extends Phaser.Scene {
         const units = this.units;
         for (let i = 0; i < units.length; i++) {
             const u = units[i];
-            if (u.dead) continue;
+            if (u.dead || u.withdrawn) continue;
             alive.push(u);
             const k = ((u.gx / SP_CELL) | 0) * 512 + ((u.gy / SP_CELL) | 0);
             let bucket = this.sgrid.get(k);
@@ -988,7 +1137,7 @@ class IsoBattleScene extends Phaser.Scene {
         const maxR = GRID_W + GRID_H;
         while (true) {
             this.forEachNear(unit.gx, unit.gy, r, e => {
-                if (e.team === unit.team || e.dead) return;
+                if (e.team === unit.team || e.dead || e.withdrawn) return;
                 const dx = e.gx - unit.gx, dy = e.gy - unit.gy;
                 const d2 = dx * dx + dy * dy;
                 if (d2 < bestD2 - 1e-9 || (Math.abs(d2 - bestD2) <= 1e-9 && e.id < best.id)) { bestD2 = d2; best = e; }
@@ -1026,6 +1175,7 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     updateNormalUnit(unit, now, dt) {
+        if (unit.dead || unit.withdrawn || unit.moraleState === 'routing') return;
         const nearest = this.nearestEnemy(unit);
         if (!nearest) return;
         const range = unit.typeData.range;
@@ -1043,7 +1193,7 @@ class IsoBattleScene extends Phaser.Scene {
             if (now - unit.lastAttack > unit.typeData.atkSpeed) {
                 let shootTarget = null, bestScore = Infinity;
                 this.forEachNear(unit.gx, unit.gy, range, e => {
-                    if (e.team === unit.team || e.dead) return;
+                    if (e.team === unit.team || e.dead || e.withdrawn) return;
                     if (dist(unit, e) > range) return;
                     const score = e.hp * 1000 + e.id;
                     if (score < bestScore) { bestScore = score; shootTarget = e; }
@@ -1052,9 +1202,11 @@ class IsoBattleScene extends Phaser.Scene {
                     unit.lastAttack = now;
                     this.playAttackAnim(unit, shootTarget);
                     const victim = shootTarget;
+                    const actionEpoch = unit.actionEpoch;
                     // 拉弓 → 松弦放箭（与动画同步）
                     this.scheduleBattleAction(110, () => {
-                        if (unit.dead || victim.dead || this.battleOver) return;
+                        if (unit.dead || unit.withdrawn || unit.moraleState === 'routing' || unit.actionEpoch !== actionEpoch ||
+                            victim.dead || victim.withdrawn || this.battleOver) return;
                         this.fireArrow(unit, victim);
                     });
                 }
@@ -1066,9 +1218,11 @@ class IsoBattleScene extends Phaser.Scene {
                 unit.lastAttack = now;
                 this.playAttackAnim(unit, nearest);
                 const victim = nearest;
+                const actionEpoch = unit.actionEpoch;
                 // 蓄力 → 劈砍帧上结算伤害（目标脱离则挥空）
                 this.scheduleBattleAction(95, () => {
-                    if (unit.dead || victim.dead || this.battleOver) return;
+                    if (unit.dead || unit.withdrawn || unit.moraleState === 'routing' || unit.actionEpoch !== actionEpoch ||
+                        victim.dead || victim.withdrawn || this.battleOver) return;
                     if (dist(unit, victim) > range + 0.7) return;
                     resolveAttack(victim, unit);
                     this.meleeImpact(unit, victim);
@@ -1145,7 +1299,7 @@ class IsoBattleScene extends Phaser.Scene {
                 // 落点找最近的敌人判定命中（空间哈希只查落点周围）
                 let hit = null, hd = 0.75;
                 this.forEachNear(a.tx, a.ty, hd, u => {
-                    if (u.team === a.team || u.dead) return;
+                    if (u.team === a.team || u.dead || u.withdrawn) return;
                     const d = Math.hypot(u.gx - a.tx, u.gy - a.ty);
                     if (d < hd - 1e-9 || (hit && Math.abs(d - hd) <= 1e-9 && u.id < hit.id)) { hd = d; hit = u; }
                 });
@@ -1494,13 +1648,13 @@ class IsoBattleScene extends Phaser.Scene {
         const units = this.units;
         for (let i = 0; i < units.length; i++) {
             const u = units[i];
-            if (u.dead) continue;
+            if (u.dead || u.withdrawn) continue;
             this.syncOne(u, time, view);
         }
     }
 
     syncOne(unit, time, view) {
-        if (unit.dead) return;
+        if (unit.dead || unit.withdrawn) return;
         const { x, y } = gridToScreen(unit.gx, unit.gy);
 
         const prevX = unit.lastSX === undefined ? x : unit.lastSX;
@@ -1619,18 +1773,57 @@ class IsoBattleScene extends Phaser.Scene {
             this.hpGfx.fillStyle(unit.team === 'red' ? 0xff4444 : 0x3d7be8, 1);
             this.hpGfx.fillRect(px - w / 2, py + hy + 1, w * ratio, 4);
         }
+        // 士气标识也合批绘制：黄色短条为动摇，橙色双斜线为溃逃。
+        if (unit.moraleState === 'wavering' || unit.moraleState === 'routing') {
+            const routing = unit.moraleState === 'routing';
+            const width = Math.max(12, 28 * (unit.sizeK || 1));
+            const my = y + unit.footDy - unit.spr.displayHeight * 0.82 - 13;
+            this.hpGfx.fillStyle(0x201b15, 0.9);
+            this.hpGfx.fillRect(x - width / 2 - 1, my - 1, width + 2, 5);
+            this.hpGfx.fillStyle(routing ? 0xff864f : 0xffce62, 1);
+            this.hpGfx.fillRect(x - width / 2, my, width * Math.max(0.08, unit.morale / 100), 3);
+            if (routing) {
+                this.hpGfx.lineStyle(2, 0xff864f, 1);
+                this.hpGfx.lineBetween(x - 3, my - 7, x - 6, my - 3);
+                this.hpGfx.lineBetween(x + 3, my - 7, x, my - 3);
+            }
+        }
     }
 
     // ---------------- 胜负 ----------------
     checkWin() {
         if (this.battleOver) return;
         const red = this.redAlive, blue = this.blueAlive;
-        if (red > 0 && blue > 0) return;
+        const ready = { red: 0, blue: 0 };
+        for (const unit of this.units) {
+            if (!unit.dead && !unit.withdrawn && unit.moraleState !== 'routing') ready[unit.team]++;
+        }
+        const defeated = {};
+        for (const team of ['red', 'blue']) {
+            const alive = team === 'red' ? red : blue;
+            if (alive > 0 && !ready[team]) {
+                if (this.collapseSince[team] == null) this.collapseSince[team] = this.simulationTime;
+            } else this.collapseSince[team] = null;
+            defeated[team] = !alive || (this.collapseSince[team] != null &&
+                this.simulationTime - this.collapseSince[team] >= 5000 - 1e-7);
+        }
+        if (!defeated.red && !defeated.blue) return;
         // 已发出的箭继续落地：最后一名射手阵亡后仍可能双方同归于尽。
-        if (this.arrows.length > 0) return;
+        if (this.arrows.length > 0) {
+            // 只等待已经离弦的箭；停止生成新攻击，避免密集箭雨无限延后溃败结算。
+            this.resolvingOutcome = true;
+            this.battleQueue = [];
+            return;
+        }
         this.battleOver = true;
         this.battleQueue = [];
-        const winner = red > 0 ? 'red' : blue > 0 ? 'blue' : 'draw';
+        const winner = defeated.red && defeated.blue ? 'draw' : defeated.red ? 'blue' : 'red';
+        this.endReason = winner === 'draw' ? 'draw' :
+            (defeated.red && red > 0) || (defeated.blue && blue > 0) ? 'rout' : 'elimination';
+        if (this.endReason === 'rout') {
+            const loser = winner === 'red' ? 'blue' : 'red';
+            this.addBattleEvent(`collapse-${loser}`, `${loser === 'red' ? '红方' : '蓝方'}全军持续溃散，失去战斗意愿`, loser);
+        }
         this.showVictory(winner);
         UI.onBattleEnd(winner, this.getBattleReport());
     }

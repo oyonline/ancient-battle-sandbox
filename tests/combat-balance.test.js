@@ -57,7 +57,7 @@ function protectionBattle(frontType, mirror) {
     assert.ok(scene.battleOver, 'the protection comparison must finish, not time out');
     const report = scene.getBattleReport();
     return { winner: scene.winner, team, firstHit, alive: report.teams[team].alive,
-        archers: report.teams[team].byType.archer.alive };
+        archerDamage: report.teams[team].byType.archer.damage };
 }
 
 test('spears in front delay cavalry reaching archers and improve the same armyâ€™s outcome', () => {
@@ -68,11 +68,12 @@ test('spears in front delay cavalry reaching archers and improve the same armyâ€
         assert.equal(protectedArmy.winner, protectedArmy.team);
         assert.notEqual(exposedArmy.winner, exposedArmy.team);
         assert.ok(protectedArmy.firstHit >= exposedArmy.firstHit + 2000, 'a real screen buys time to shoot');
-        assert.ok(protectedArmy.archers > exposedArmy.archers, 'protection improves survival without being an absolute wall');
+        assert.ok(protectedArmy.archerDamage > exposedArmy.archerDamage,
+            'the screen buys real ranged output even if later morale collapse exposes the archers');
         assert.ok(protectedArmy.alive > exposedArmy.alive);
         results.push({ protectedArmy, exposedArmy });
     }
-    for (const field of ['firstHit', 'alive', 'archers']) {
+    for (const field of ['firstHit', 'alive', 'archerDamage']) {
         assert.equal(results[0].protectedArmy[field], results[1].protectedArmy[field]);
         assert.equal(results[0].exposedArmy[field], results[1].exposedArmy[field]);
     }

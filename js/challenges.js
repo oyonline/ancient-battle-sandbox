@@ -5,7 +5,7 @@ const CHALLENGES = [
         icon: '🔱', unit: 'cavalry', difficulty: '入门', budget: 300,
         enemy: { cavalry: 25 }, enemyFormation: 'wedge',
         description: '二十五名重骑士迎面而来。双方预算相同，该怎样迎击？',
-        hint: '枪兵需要正面站稳、相互支撑才能挡住冲锋。试一支有纵深的枪阵，零散长枪可拦不住铁骑。'
+        hint: '枪兵需要正面站稳、相互支撑。试试少量剑士顶在前面，减少枪阵连续受冲击；伤亡过快也会动摇军心。'
     },
     {
         id: 'break-the-volley', title: '穿过箭雨', subtitle: '第二课 · 接近远程',

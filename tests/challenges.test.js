@@ -54,7 +54,7 @@ test('challenge identities and fixed enemy armies are valid', () => {
 // These are example solutions, not prescribed player answers. All use the actual
 // deployment, spawnUnit, spatial search, cavalry AI, damage, arrows, and fixed steps.
 const solutions = {
-    'hold-the-charge': { pikeman: 50 },
+    'hold-the-charge': { pikeman: 45, infantry: 6 },
     'break-the-volley': { cavalry: 40 },
     'mixed-front': { infantry: 33, pikeman: 16, archer: 41, cavalry: 8 },
     outnumbered: { archer: 100 },
@@ -72,8 +72,13 @@ for (const challenge of CHALLENGES) {
         const report = scene.getBattleReport();
         assert.equal(scene.winner, 'red', `${challenge.id} must finish with a player victory within five simulated minutes`);
         assert.ok(report.red > 0);
-        assert.equal(report.blue, 0);
-        assert.equal(report.teams.blue.lost, report.teams.blue.initial);
+        assert.equal(report.morale.blue.steady + report.morale.blue.wavering, 0,
+            'the defeated army has no soldiers still willing to fight');
+        for (const team of Object.values(report.teams)) {
+            assert.equal(team.initial, team.alive + team.lost + team.withdrawn,
+                'each deployed soldier is still on the field, dead, or withdrawn');
+        }
+        assert.ok(['rout', 'elimination'].includes(report.endReason));
         if (challenge.id === 'outnumbered') {
             assert.ok(report.teams.red.initial < report.teams.blue.initial, 'example genuinely uses fewer soldiers');
         }

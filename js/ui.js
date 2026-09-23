@@ -111,6 +111,7 @@ const UI = {
     syncControls() {
         const fighting = this.phase === 'battle';
         document.getElementById('controlbar').hidden = !fighting;
+        this.updateMorale();
         document.getElementById('btn-pause').disabled = !fighting || this.countdown;
         document.getElementById('btn-pause').textContent = this.scene?.paused ? '▶ 继续' : '⏸ 暂停';
         document.getElementById('btn-lock').disabled = !this.scene;
@@ -429,6 +430,15 @@ const UI = {
         return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
     },
 
+    renderTeamReport(team, data) {
+        const name = team === 'red' ? '红方' : '蓝方';
+        const rows = Object.entries(data.byType).filter(([, s]) => s.initial > 0).map(([key, s]) => `
+            <tr><th scope="row">${UNIT_TYPES[key].icon} ${UNIT_TYPES[key].name}</th><td>${s.initial}</td><td>${s.alive}</td><td>${s.lost}</td><td>${s.withdrawn ?? 0}</td><td>${s.kills}</td></tr>`).join('');
+        return `<div class="report-team ${team}"><div class="report-team-title"><b>${team === 'red' ? '🔴' : '🔵'} ${name}</b><span>有效伤害 ${Math.round(data.damage).toLocaleString()}</span></div>
+            <table><caption class="sr-only">${name}各兵种战报，在场包含当前溃逃人数</caption><thead><tr><th scope="col">兵种</th><th scope="col">出战</th><th scope="col">在场</th><th scope="col">阵亡</th><th scope="col">撤离</th><th scope="col">击杀</th></tr></thead><tbody>${rows}</tbody></table>
+            <div class="report-morale"><span>曾溃逃 <b>${data.routed ?? 0}</b> 人</span><span>重整 <b>${data.rallied ?? 0}</b> 人</span><span>当前溃逃 <b>${data.routing ?? 0}</b> 人</span></div></div>`;
+    },
+
     onBattleEnd(winner, report) {
         if (this.phase !== 'battle') return;
         this.countdown = false;
@@ -442,20 +452,19 @@ const UI = {
         title.className = 'result-title ' + winner;
         title.textContent = winner === 'draw' ? '势均力敌 · 平局' : this.challenge ? (wonChallenge ? '挑战成功！' : '再试一种解法') : (winner === 'red' ? '🔴 红方胜利！' : '🔵 蓝方胜利！');
         document.getElementById('phase-hint').textContent = '读一读战报，准备下一次出击';
-        document.getElementById('result-detail').textContent = '存活兵力：红方 ' + report.red + ' 人 · 蓝方 ' + report.blue + ' 人';
+        const endReason = report.endReason === 'rout' && winner !== 'draw'
+            ? (winner === 'red' ? '蓝方' : '红方') + '军心瓦解，失去继续作战能力。 '
+            : winner === 'draw' && report.red + report.blue > 0 && report.morale &&
+                report.morale.red.steady + report.morale.red.wavering + report.morale.blue.steady + report.morale.blue.wavering === 0
+                ? '双方均已失去继续作战能力。 ' : '';
+        document.getElementById('result-detail').textContent = endReason + '在场兵力：红方 ' + report.red + ' 人 · 蓝方 ' + report.blue + ' 人';
         const leaders = Object.entries(report.teams.red.byType).filter(([, s]) => s.initial > 0).sort((a, b) => b[1].kills - a[1].kills);
         const leader = leaders[0];
         document.getElementById('result-metrics').innerHTML = `
             <div><small>战斗用时</small><b>${this.formatTime(report.durationMs)}</b></div>
-            <div><small>红方存活 / 出战</small><b>${report.red} <em>/ ${report.teams.red.initial}</em></b></div>
+            <div><small>红方在场 / 出战</small><b>${report.red} <em>/ ${report.teams.red.initial}</em></b></div>
             <div><small>红方击杀最多</small><b>${leader && leader[1].kills > 0 ? UNIT_TYPES[leader[0]].name : '暂无击杀'}</b></div>`;
-        document.getElementById('report-tables').innerHTML = ['red', 'blue'].map(team => {
-            const data = report.teams[team];
-            const rows = Object.entries(data.byType).filter(([, s]) => s.initial > 0).map(([key, s]) => `
-                <tr><th scope="row">${UNIT_TYPES[key].icon} ${UNIT_TYPES[key].name}</th><td>${s.initial}</td><td>${s.alive}</td><td>${s.lost}</td><td>${s.kills}</td></tr>`).join('');
-            return `<div class="report-team ${team}"><div class="report-team-title"><b>${team === 'red' ? '🔴 红方' : '🔵 蓝方'}</b><span>有效伤害 ${Math.round(data.damage).toLocaleString()}</span></div>
-                <table><caption class="sr-only">${team === 'red' ? '红方' : '蓝方'}各兵种战报</caption><thead><tr><th scope="col">兵种</th><th scope="col">出战</th><th scope="col">存活</th><th scope="col">损失</th><th scope="col">击杀</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-        }).join('');
+        document.getElementById('report-tables').innerHTML = ['red', 'blue'].map(team => this.renderTeamReport(team, report.teams[team])).join('');
         const events = document.getElementById('battle-events');
         events.replaceChildren();
         for (const event of report.events) {
@@ -478,6 +487,25 @@ const UI = {
     updateCounts() {
         document.getElementById('red-count').textContent = this.scene?.redAlive || 0;
         document.getElementById('blue-count').textContent = this.scene?.blueAlive || 0;
+        this.updateMorale();
+    },
+
+    updateMorale() {
+        const summary = this.phase === 'battle' ? this.scene?.getMoraleSummary?.() : null;
+        document.getElementById('morale-hud').hidden = !summary;
+        for (const team of ['red', 'blue']) {
+            const data = summary?.[team];
+            const present = (data?.steady || 0) + (data?.wavering || 0) + (data?.routing || 0);
+            for (const state of ['steady', 'wavering', 'routing']) {
+                document.getElementById(`morale-${team}-${state}`).textContent = data?.[state] ?? 0;
+            }
+            const average = present && Number.isFinite(data?.average) ? Math.round(data.average) : '—';
+            document.getElementById(`morale-${team}-average`).textContent = average;
+            const reason = data?.lastReason || (present ? '阵线稳定' : '暂无在场士兵');
+            const reasonEl = document.getElementById(`morale-${team}-reason`);
+            reasonEl.textContent = reason;
+            reasonEl.title = reason;
+        }
     },
 
     bindControls() {

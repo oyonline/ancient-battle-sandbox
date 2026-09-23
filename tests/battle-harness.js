@@ -7,7 +7,7 @@ const context = vm.createContext({
     Snd: null,
     UI: { onBattleEnd() {} }
 });
-for (const name of ['units.js', 'game.js']) {
+for (const name of ['units.js', 'morale.js', 'game.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', name), 'utf8'), context);
 }
 vm.runInContext('this.engine = { IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack };', context);
@@ -28,7 +28,7 @@ function displayObject() {
         setAngle(angle) { this.angle = angle; return this; }, setAlpha(alpha) { this.alpha = alpha; return this; },
         setTint() { return this; }, clearTint() { return this; }, anims: { stop() {} },
         destroy() { this.destroyed = true; },
-        clear() {}, lineStyle() {}, lineBetween() {}, fillStyle() {}, fillCircle() {}
+        clear() {}, lineStyle() {}, lineBetween() {}, fillStyle() {}, fillCircle() {}, fillRect() {}
     };
 }
 
