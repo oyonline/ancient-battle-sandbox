@@ -147,7 +147,10 @@ class MoraleSystem {
         const record = this.records.get(snap.unit);
         record.pressure = pressure;
         record.pressureReason = reason;
-        record.sheltered = !threatened && support >= 3;
+        // 死斗仍会溃散；失去接应点的残兵可在脱离敌军后自行重整，避免永远逃在边界。
+        const aloneInDeathmatch = this.scene.battleOptions?.deathmatch === true && snap.state === 'routing' &&
+            !this.scene.tactics?.rallyPoint(snap.unit);
+        record.sheltered = !threatened && (support >= 3 || aloneInDeathmatch);
     }
 
     queueDamage(unit, amount) {
@@ -252,11 +255,13 @@ class MoraleSystem {
             unit.moraleSheltered = record.sheltered && ownDamage === 0;
             record.safeTime = unit.moraleSheltered ? record.safeTime + elapsed : 0;
             const recoveredSeconds = Math.max(0, record.safeTime - 3) - Math.max(0, record.safeTime - elapsed - 3);
-            const recovery = realLoss + contagion > 0 ? 0 : 3 * recoveredSeconds;
+            const reserveSupport = unit.moraleSheltered && this.scene.tactics?.reserveSupport(unit);
+            const recovery = realLoss + contagion > 0 ? 0 : (reserveSupport ? 6 : 3) * recoveredSeconds;
             const value = Math.max(0, Math.min(100, unit.morale - realLoss - contagion + recovery));
             let state = snap.state;
             if (state === 'routing') {
-                if (value >= 45 && unit.moraleSheltered && record.safeTime >= 3) {
+                const rallyThreshold = this.scene.battleOptions?.deathmatch ? 60 : 45;
+                if (value >= rallyThreshold && unit.moraleSheltered && record.safeTime >= 3) {
                     state = value >= 50 ? 'steady' : 'wavering';
                     record.lowTime = 0; record.spread = false;
                     reason = '友军接应，重新集结';

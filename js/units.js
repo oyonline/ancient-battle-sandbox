@@ -93,7 +93,11 @@ function updatePikeBrace(unit, dt) {
         unit.braceSupport = 0; unit.braceDepth = 0;
         return;
     }
-    const vx = unit.velX || 0, vy = unit.velY || 0, speed = Math.hypot(vx, vy);
+    // 身体分离是消除重叠的几何纠偏，不是主动行军或战斗击退。
+    // 只扣除上一步的实际纠偏；moveToward / knockback 的位移仍会打断架枪。
+    const vx = (unit.velX || 0) - (unit.separateX || 0) / dt;
+    const vy = (unit.velY || 0) - (unit.separateY || 0) / dt;
+    const speed = Math.hypot(vx, vy);
     if (unit.moving && speed > 0.15) {
         const fx = vx / speed, fy = vy / speed;
         if (fx * unit.braceFacingX + fy * unit.braceFacingY < 0.95) unit.braceTime = 0;
@@ -270,7 +274,7 @@ class CavalryAI {
             return true;
         }
         unit.chargeLastX = unit.gx; unit.chargeLastY = unit.gy;
-        moveToward(unit, target.gx, target.gy, data.chargeSpeed, dt);
+        moveToward(unit, target.gx, target.gy, data.chargeSpeed, dt, 'charge');
         unit.scene.chargeDust(unit);
         return true;
     }
@@ -287,7 +291,7 @@ class CavalryAI {
         if (contact) this.impact(unit, contact.enemy, contact.braced, now, false);
         if (unit.state === 'melee') return true;
         if (unit.chargeMomentum <= 0) { this.enterMelee(unit); return true; }
-        moveToward(unit, unit.pierceX, unit.pierceY, speed, dt);
+        moveToward(unit, unit.pierceX, unit.pierceY, speed, dt, 'charge');
         unit.scene.chargeDust(unit);
         return true;
     }
@@ -339,22 +343,25 @@ function td() { return UNIT_TYPES.cavalry; }
 function dist(a, b) { return Math.hypot(a.gx - b.gx, a.gy - b.gy); }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-function moveToward(unit, tx, ty, speed, dt) {
+function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
     const dx = tx - unit.gx, dy = ty - unit.gy;
     const d = Math.hypot(dx, dy);
     if (d < 0.001) return;
     // 动摇时只放缓向前推进；战术后退与溃逃不受这项限制。
     const advancing = dx * (unit.moraleFacingX || 0) + dy * (unit.moraleFacingY || 0) > 0;
     const caution = unit.moraleState === 'wavering' && advancing ? 0.85 : 1;
+    if (movement === 'walk') speed = CombatRules.walkingSpeed(unit, speed);
     const step = Math.min(d, speed * caution * dt);
+    const intended = { x: dx / d * step, y: dy / d * step };
+    const motion = movement === 'walk' ? CombatRules.constrainWalk(unit, intended.x, intended.y) : intended;
     if (unit.scene && unit.scene.planningStep) {
-        unit.moveX = (dx / d) * step;
-        unit.moveY = (dy / d) * step;
+        unit.moveX = motion.x;
+        unit.moveY = motion.y;
     } else {
-        unit.gx += (dx / d) * step;
-        unit.gy += (dy / d) * step;
+        unit.gx += motion.x;
+        unit.gy += motion.y;
     }
-    unit.moving = true;
+    unit.moving = Math.hypot(motion.x, motion.y) > 0.0001;
 }
 
 function knockback(target, from, amount) {
@@ -374,10 +381,13 @@ function calculateAttackDamage(from, target, { multiplier = 1, rawAttack = from.
     return Math.max(1, Math.floor(rawAttack * multiplier * counter - target.typeData.def));
 }
 
-function resolveAttack(target, from, options) {
+function resolveAttack(target, from, options = {}) {
     if (target.dead || target.withdrawn || target.hp <= 0) return 0;
-    const damage = calculateAttackDamage(from, target, options);
     const scene = target.scene;
+    const formationMultiplier = scene?.tactics?.incomingMultiplier(from, target) ?? 1;
+    const damage = calculateAttackDamage(from, target, {
+        ...options, multiplier: (options.multiplier ?? 1) * formationMultiplier
+    });
     if (scene && scene.collectingImpacts) {
         scene.battleImpacts.push({ target, damage, from });
         return damage;

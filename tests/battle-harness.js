@@ -7,7 +7,7 @@ const context = vm.createContext({
     Snd: null,
     UI: { onBattleEnd() {} }
 });
-for (const name of ['units.js', 'morale.js', 'game.js']) {
+for (const name of ['units.js', 'combat.js', 'morale.js', 'tactics.js', 'game.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', name), 'utf8'), context);
 }
 vm.runInContext('this.engine = { IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack };', context);

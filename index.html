@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>帝国亲子沙盒 · 统帅试炼</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E🏰%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="css/style.css?v=20260923-morale2">
+    <link rel="stylesheet" href="css/style.css?v=20260923-reserve1">
 </head>
 <body>
     <!-- 战场：铺满整个视口 -->
@@ -27,6 +27,17 @@
 
     <!-- 底部悬浮控制条（战斗中） -->
     <div id="controlbar" hidden>
+        <div id="deathmatch-hud-rule" class="deathmatch-rule" hidden>死斗：溃兵可重整，直到一方全灭</div>
+        <div id="tactics-hud" class="tactics-hud" aria-label="两军战术与可战兵力" aria-live="off" hidden>
+            <div class="tactics-team red" id="tactics-red">
+                <div class="tactics-heading"><b id="tactics-red-label">红方战术</b><span id="tactics-red-stage"></span></div>
+                <div class="tactics-strength" id="tactics-red-strength"></div>
+            </div>
+            <div class="tactics-team blue" id="tactics-blue">
+                <div class="tactics-heading"><b id="tactics-blue-label">蓝方战术</b><span id="tactics-blue-stage"></span></div>
+                <div class="tactics-strength" id="tactics-blue-strength"></div>
+            </div>
+        </div>
         <div id="morale-hud" class="morale-hud" aria-label="两军士气，以下状态均为人数" aria-live="off" hidden>
             <div class="morale-team red">
                 <div class="morale-heading"><b>红方士气</b><span>均值 <strong id="morale-red-average">—</strong></span></div>
@@ -69,6 +80,14 @@
                         </div>
                         <span class="campaign-progress" id="campaign-progress">0 / 5 已通过</span>
                     </div>
+                    <div class="tactics-entry">
+                        <div class="tactics-entry-copy"><div class="eyebrow">战阵演练 · 新玩法</div><h3>再添五十预备，能否破阵？</h3><p>100 剑士发起进攻，50 剑士在后方接应、分批增援。收拢溃兵，重整后再次出击；也可切回 100 对 100 比较。</p></div>
+                        <div class="tactics-entry-actions">
+                            <button class="secondary-btn reserve-entry" data-tactics-entry="reserve"><b>⚑ 150 剑士 · 预备队死斗</b><small>100 进攻 + 50 预备，对阵 100 长枪兵；直到一方全灭</small></button>
+                            <button class="secondary-btn" data-tactics-entry="assault"><b>⚔ 正面强攻</b><small>100 对 100 · 集中推进，试探完整枪阵</small></button>
+                            <button class="secondary-btn" data-tactics-entry="flank"><b>↪ 单翼迂回</b><small>100 对 100 · 50 人牵制，50 人沿外缘绕行</small></button>
+                        </div>
+                    </div>
                     <p class="morale-guide">侧翼受袭、附近友军接连阵亡，会让阵线动摇。<span class="morale-wavering">黄标：动摇</span> · <span class="morale-routing">橙标：溃逃</span>；退到安全友军身旁，有机会重整。</p>
                     <div id="challenge-list" class="challenge-grid"></div>
                     <button id="btn-sandbox" class="sandbox-entry">
@@ -104,6 +123,10 @@
                         <span class="f-label">阵型</span>
                         <div id="formation-row"></div>
                     </div>
+                    <div id="order-options" class="order-options">
+                        <div class="f-row"><span class="f-label">战术</span><div id="order-row"></div></div>
+                        <p id="order-description" class="order-description"></p>
+                    </div>
 
                     <button class="big-btn red" id="btn-lock">🔒 配好了，换蓝方队长！</button>
                     <div id="buy-message" class="hint-small" role="status" aria-live="polite">按住 ＋ 连续加兵 · 挑战中预设会按预算缩减</div>
@@ -113,8 +136,14 @@
                 <section id="sec-ready" class="sec">
                     <div class="team-banner both">⚔️ 两军就位，大战一触即发！</div>
                     <div id="army-summary"></div>
+                    <div id="deathmatch-ready-rule" class="deathmatch-rule" hidden>死斗：溃兵可重整，直到一方全灭</div>
+                    <div id="tactics-ready-guide" class="tactics-ready-guide" hidden>
+                        <b id="tactics-ready-title">观察：正面能否守住，迂回队何时到位？</b>
+                        <p id="tactics-ready-copy">四面枪阵的侧后也有防御。绕行可以分散守军，但要付出时间；剑士不一定能攻破完整方阵。</p>
+                        <div class="action-row"><button class="secondary-btn" data-tactics-entry="reserve">重置 · 150 剑士预备队死斗</button><button class="secondary-btn" data-tactics-entry="assault">100 对 100 · 正面强攻</button><button class="secondary-btn" data-tactics-entry="flank">100 对 100 · 单翼迂回</button></div>
+                    </div>
                     <div class="hint-small">🔱长枪拦截骑兵 · 🐴骑兵助跑突击弓手 · ⚔️剑士抗线，🏹弓手远射</div>
-                    <div class="morale-guide"><b>稳住军心，也能赢下战斗。</b> 侧后方冲锋和集中伤亡会打击附近士气；留些稳定友军接应，溃兵脱离危险后可以重整。<span class="morale-wavering">黄标动摇，仍能作战</span> · <span class="morale-routing">橙标溃逃，停止攻击</span>。</div>
+                    <div class="morale-guide"><b id="ready-morale-title">稳住军心，也能赢下战斗。</b> 侧后方冲锋和集中伤亡会打击附近士气；留些稳定友军接应，溃兵脱离危险后可以重整。<span class="morale-wavering">黄标动摇，仍能作战</span> · <span class="morale-routing">橙标溃逃，停止攻击</span>。</div>
                     <button class="big-btn" id="btn-start">🚀 开战！</button>
                     <div class="action-row" id="ready-edit-actions">
                         <button class="secondary-btn" id="btn-ready-red">调整红方</button>
@@ -136,6 +165,8 @@
                         <button class="secondary-btn" id="btn-rematch">↻ 原阵再战</button>
                         <button class="secondary-btn" id="btn-edit-blue">调整蓝方</button>
                         <button class="secondary-btn" id="btn-swap">⇄ 交换双方再战</button>
+                        <button class="secondary-btn" id="btn-switch-tactics" hidden>换一种战术</button>
+                        <button class="secondary-btn" id="btn-reserve-tactics" data-tactics-entry="reserve" hidden>加 50 预备队 · 150 剑士死斗</button>
                         <button class="secondary-btn" id="btn-next" hidden>下一场挑战 →</button>
                     </div>
                     <button class="text-btn" id="btn-again">返回战役选择</button>
@@ -149,11 +180,13 @@
 
     <script src="assets/manifest.js?v=20260923-death2"></script>
     <script src="js/phaser.min.js"></script>
-    <script src="js/units.js?v=20260923-morale2"></script>
-    <script src="js/morale.js?v=20260923-morale2"></script>
-    <script src="js/challenges.js?v=20260923-morale2"></script>
-    <script src="js/game.js?v=20260923-morale2"></script>
-    <script src="js/ui.js?v=20260923-morale2"></script>
+    <script src="js/units.js?v=20260923-reserve1"></script>
+    <script src="js/combat.js?v=20260923-reserve1"></script>
+    <script src="js/morale.js?v=20260923-reserve1"></script>
+    <script src="js/tactics.js?v=20260923-reserve1"></script>
+    <script src="js/challenges.js?v=20260923-tactics1"></script>
+    <script src="js/game.js?v=20260923-reserve1"></script>
+    <script src="js/ui.js?v=20260923-reserve1"></script>
     <script>
         const game = new Phaser.Game({
             type: Phaser.AUTO,

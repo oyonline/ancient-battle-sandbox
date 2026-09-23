@@ -527,6 +527,17 @@ class IsoBattleScene extends Phaser.Scene {
         this.baseZoom = Math.max(w / mw, h / mh) * 1.06;
         // 平移边界 = 地图菱形外扩一圈，缩多大都不会把地图拖出视野
         cam.setBounds(-320, -40, VIEW_W + 640, VIEW_H + 200);
+        if (this.tactics && this.units.length) {
+            const points = this.units.flatMap(unit => [gridToScreen(unit.gx, unit.gy),
+                ...(unit.route || []).map(point => gridToScreen(point.gx, point.gy))]);
+            const minX = Math.min(...points.map(p => p.x)) - 100, maxX = Math.max(...points.map(p => p.x)) + 100;
+            const minY = Math.min(...points.map(p => p.y)) - 110, maxY = Math.max(...points.map(p => p.y)) + 100;
+            this.baseZoom = Math.min((w - 40) / (maxX - minX), Math.max(220, h - 230) / (maxY - minY));
+            this.applyZoom();
+            cam.centerOn((minX + maxX) / 2, (minY + maxY) / 2 + 45 / cam.zoom);
+            if (this.ocean) this.redrawOcean();
+            return;
+        }
         this.applyZoom();
         cam.centerOn(this.mapCenter.x, this.mapCenter.y);
         if (this.ocean) this.redrawOcean();
@@ -545,6 +556,9 @@ class IsoBattleScene extends Phaser.Scene {
 
     // ---------------- 部署与开战 ----------------
     resetBattleData() {
+        this.tactics = null;
+        this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 } };
+        if (this.tacticsGfx) this.tacticsGfx.clear();
         this.battleId = (this.battleId || 0) + 1;
         this.simulationTime = 0;
         this.simulationAccumulator = 0;
@@ -637,6 +651,8 @@ class IsoBattleScene extends Phaser.Scene {
             durationMs: Math.round(this.simulationTime),
             teams,
             morale: this.getMoraleSummary(),
+            deathmatch: this.battleOptions.deathmatch,
+            tactics: this.getTacticsSummary(),
             endReason: this.endReason,
             events: this.battleEvents.map(event => ({ ...event }))
         };
@@ -725,7 +741,7 @@ class IsoBattleScene extends Phaser.Scene {
                 }
             }
         }
-        const anchor = unit.rallyTarget;
+        const anchor = this.tactics?.rallyPoint(unit) || unit.rallyTarget;
         let dx = (anchor ? anchor.gx : unit.team === 'red' ? 0 : GRID_W) - unit.gx;
         let dy = anchor ? anchor.gy - unit.gy : 0;
         const length = Math.hypot(dx, dy) || 1;
@@ -745,6 +761,7 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     withdrawUnit(unit) {
+        if (this.battleOptions.deathmatch) return;
         if (unit.dead || unit.withdrawn || unit.battleId !== this.battleId) return;
         unit.withdrawn = true;
         unit.actionEpoch = (unit.actionEpoch || 0) + 1;
@@ -815,7 +832,7 @@ class IsoBattleScene extends Phaser.Scene {
         this.countdownTexts = [];
     }
 
-    deployUnits(redConfig, blueConfig, redFormation, blueFormation) {
+    deployUnits(redConfig, blueConfig, redFormation, blueFormation, orders = {}, options = {}) {
         this.clearUnits();
         this.drawSpawnZones();
         const armies = [
@@ -825,12 +842,78 @@ class IsoBattleScene extends Phaser.Scene {
         armies.forEach(([team, cfg, formation]) => {
             generateArmyPositions(team, cfg, formation).forEach(p => this.spawnUnit(team, p.type, p.gx, p.gy));
         });
+        this.battleOptions.deathmatch = options.deathmatch === true;
+        for (const [team] of armies) {
+            const count = this.units.filter(unit => unit.team === team && unit.type === 'infantry').length;
+            const requested = options.reserves?.[team];
+            this.battleOptions.reserves[team] = Number.isFinite(requested)
+                ? clamp(Math.floor(requested), 0, Math.max(0, count - 1)) : 0;
+        }
+        const effectiveOrders = {};
+        for (const [team, config] of armies) {
+            const order = orders[team];
+            effectiveOrders[team] = order === 'hold' && config.pikeman > 0 ? order :
+                ['assault', 'flank'].includes(order) && config.infantry > 0 ? order : 'advance';
+        }
+        if (Object.values(effectiveOrders).some(order => order !== 'advance') ||
+            Object.values(this.battleOptions.reserves).some(count => count > 0)) {
+            this.tactics = new TacticsSystem(this, effectiveOrders);
+        }
         this.redAlive = this.units.filter(u => u.team === 'red').length;
         this.blueAlive = this.units.filter(u => u.team === 'blue').length;
         this.deadCount = 0;
         this._view = null;      // 重新部署后先全量同步渲染
         this.battleStarted = false;
         this.battleOver = false;
+        this.userZoom = 1;
+        if (this.cameras.main.setZoom) this.fitCamera();
+    }
+
+    getTacticsSummary() { return this.tactics ? this.tactics.summary() : null; }
+
+    drawTactics() {
+        if (!this.tactics) return;
+        if (!this.tacticsGfx) this.tacticsGfx = this.add.graphics().setDepth(12000);
+        const g = this.tacticsGfx;
+        g.clear();
+        for (const formation of Object.values(this.tactics.formations)) {
+            const h = formation.half + 0.42;
+            const corners = [[-h, -h], [h, -h], [h, h], [-h, h]].map(([x, y]) => gridToScreen(formation.cx + x, formation.cy + y));
+            g.lineStyle(2, formation.team === 'blue' ? 0x6abaff : 0xff8b77, 0.45);
+            corners.forEach((p, i) => g.lineBetween(p.x, p.y, corners[(i + 1) % 4].x, corners[(i + 1) % 4].y));
+            for (const guard of formation.members) {
+                if (!this.tactics.active(guard) || guard.formationSlot.rank > 1) continue;
+                const a = gridToScreen(guard.gx, guard.gy);
+                const b = gridToScreen(guard.gx + guard.guardFacingX * 1.15, guard.gy + guard.guardFacingY * 1.15);
+                g.lineStyle(2, guard.guardReady ? 0x9de3ef : 0xe2b65b, guard.guardReady ? 0.7 : 0.35);
+                g.lineBetween(a.x, a.y - 7, b.x, b.y - 7);
+            }
+        }
+        for (const group of Object.values(this.tactics.groups)) {
+            // 青绿色脚圈标出仍在后方接应的预备队；投入前线后取消待命标记。
+            for (const unit of group.reserve || []) {
+                if (!this.tactics.active(unit) || unit.tacticalRole !== 'reserve' || unit.reserveCommitted) continue;
+                const p = gridToScreen(unit.gx, unit.gy);
+                g.lineStyle(1.8, 0x72e0ad, 0.85);
+                g.strokeEllipse(p.x, p.y, 23, 12);
+            }
+            const wing = group.flank.filter(unit => this.tactics.active(unit));
+            if (!wing.length) continue;
+            const leader = wing[Math.floor(wing.length / 2)];
+            if (!group.launched) {
+                const points = [{ gx: leader.gx, gy: leader.gy }, ...leader.route.slice(leader.routeIndex)].map(p => gridToScreen(p.gx, p.gy));
+                g.lineStyle(3, 0xf6cc68, 0.65);
+                points.forEach((p, i) => {
+                    if (i) g.lineBetween(points[i - 1].x, points[i - 1].y, p.x, p.y);
+                    if (i === points.length - 1) g.strokeCircle(p.x, p.y, 5);
+                });
+            }
+            for (const unit of wing) {
+                const p = gridToScreen(unit.gx, unit.gy);
+                g.lineStyle(1.5, 0xf6cc68, 0.7);
+                g.strokeEllipse(p.x, p.y, 21, 10);
+            }
+        }
     }
 
     // 阴影预烘焙：每个（阵营×兵种）的软椭圆+队伍圈烘成一张小贴图，
@@ -1034,6 +1117,7 @@ class IsoBattleScene extends Phaser.Scene {
         // 所有人先读取同一份位置和生命状态；先选行动，再统一移动、结算命中。
         this.rebuildSpatial();
         const units = this._aliveArr;
+        this.bodyContactDistance = CombatRules.maxContactDistance(units);
 
         // 帧首：先用上一帧位移估计速度，再刷新快照（供箭矢预判）
         for (let i = 0; i < units.length; i++) {
@@ -1046,7 +1130,8 @@ class IsoBattleScene extends Phaser.Scene {
             unit.moveX = 0; unit.moveY = 0;
             unit.pushX = 0; unit.pushY = 0;
         }
-        for (const unit of units) if (unit.type === 'pikeman') updatePikeBrace(unit, dt);
+        for (const unit of units) if (unit.type === 'pikeman' && unit.tacticalRole !== 'guard') updatePikeBrace(unit, dt);
+        if (this.tactics) this.tactics.beginStep(dt);
         this.morale.beginStep(dt);
         this.collectingImpacts = true;
         this.planningStep = true;
@@ -1061,6 +1146,7 @@ class IsoBattleScene extends Phaser.Scene {
             if (unit.type === 'cavalry') {
                 if (this.cavalryAI.update(unit, now, dt)) continue;
             }
+            if (this.tactics && this.tactics.updateUnit(unit, now, dt)) continue;
             this.updateNormalUnit(unit, now, dt);
         }
         this.planningStep = false;
@@ -1076,7 +1162,7 @@ class IsoBattleScene extends Phaser.Scene {
         this.flushBattleImpacts();
         this.morale.update(dt);
         for (const unit of units) {
-            if (!unit.dead && !unit.withdrawn && unit.moraleState === 'routing' &&
+            if (!this.battleOptions.deathmatch && !unit.dead && !unit.withdrawn && unit.moraleState === 'routing' &&
                 (unit.gx <= 0.61 || unit.gx >= GRID_W - 0.61 || unit.gy <= 0.61 || unit.gy >= GRID_H - 0.61)) this.withdrawUnit(unit);
         }
         if (this.simulationTime - (this._lastMoraleUI || 0) >= 250) {
@@ -1214,27 +1300,14 @@ class IsoBattleScene extends Phaser.Scene {
         } else {
             if (minD > range) {
                 if (unit.type !== 'pikeman' || !unit.braceHold) moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
-            } else if (now - unit.lastAttack > unit.typeData.atkSpeed) {
-                unit.lastAttack = now;
-                this.playAttackAnim(unit, nearest);
-                const victim = nearest;
-                const actionEpoch = unit.actionEpoch;
-                // 蓄力 → 劈砍帧上结算伤害（目标脱离则挥空）
-                this.scheduleBattleAction(95, () => {
-                    if (unit.dead || unit.withdrawn || unit.moraleState === 'routing' || unit.actionEpoch !== actionEpoch ||
-                        victim.dead || victim.withdrawn || this.battleOver) return;
-                    if (dist(unit, victim) > range + 0.7) return;
-                    resolveAttack(victim, unit);
-                    this.meleeImpact(unit, victim);
-                });
-            }
+            } else CombatRules.attack(this, unit, nearest, now, range);
         }
     }
 
     // 简单碰撞排斥，避免单位重叠（空间哈希：每人只查身边一格内的邻居）
     separate(dt) {
-        const R = 0.52, R2 = R * R;
         const units = this._aliveArr;
+        const R = CombatRules.maxContactDistance(units);
         for (const unit of units) { unit.separateX = 0; unit.separateY = 0; }
         for (let i = 0; i < units.length; i++) {
             const a = units[i];
@@ -1243,20 +1316,27 @@ class IsoBattleScene extends Phaser.Scene {
                 if (b.dead || b.id <= a.id) return;          // 每对只处理一次
                 const dx = b.gx - a.gx, dy = b.gy - a.gy;
                 const d2 = dx * dx + dy * dy;
-                if (d2 < R2 && d2 > 0.0001) {
+                const contact = CombatRules.contactDistance(a, b);
+                if (d2 < contact * contact && d2 > 0.0001) {
                     const d = Math.sqrt(d2);
-                    const push = (R - d) * 0.5 * Math.min(1, dt * 14);
+                    const push = (contact - d) * Math.min(1, dt * 14);
+                    const aWeight = a.guardReady && a.moraleState !== 'routing' ? 0.25 : 1;
+                    const bWeight = b.guardReady && b.moraleState !== 'routing' ? 0.25 : 1;
+                    const totalWeight = aWeight + bWeight;
                     const nx = dx / d, ny = dy / d;
-                    a.separateX -= nx * push; a.separateY -= ny * push;
-                    b.separateX += nx * push; b.separateY += ny * push;
+                    a.separateX -= nx * push * aWeight / totalWeight; a.separateY -= ny * push * aWeight / totalWeight;
+                    b.separateX += nx * push * bWeight / totalWeight; b.separateY += ny * push * bWeight / totalWeight;
                 }
             });
         }
         for (let i = 0; i < units.length; i++) {
             const u = units[i];
             // 对称累计推开，并消除长时间镜像模拟中的浮点方向偏差。
+            const beforeX = u.gx, beforeY = u.gy;
             u.gx = quantizePosition(clamp(u.gx + u.separateX, 0.6, GRID_W - 0.6), GRID_W);
             u.gy = quantizePosition(clamp(u.gy + u.separateY, 0.6, GRID_H - 0.6), GRID_H);
+            // 保存实际纠偏量（含边界截断），供下一步架枪判定扣除。
+            u.separateX = u.gx - beforeX; u.separateY = u.gy - beforeY;
         }
     }
 
@@ -1643,6 +1723,7 @@ class IsoBattleScene extends Phaser.Scene {
 
     // ---------------- 渲染同步 ----------------
     syncRender(time) {
+        this.drawTactics();
         this.hpGfx.clear();
         const view = this._view;   // 战斗中每帧更新；部署阶段为空 = 全量同步
         const units = this.units;
@@ -1801,13 +1882,16 @@ class IsoBattleScene extends Phaser.Scene {
         const defeated = {};
         for (const team of ['red', 'blue']) {
             const alive = team === 'red' ? red : blue;
-            if (alive > 0 && !ready[team]) {
+            if (!this.battleOptions.deathmatch && alive > 0 && !ready[team]) {
                 if (this.collapseSince[team] == null) this.collapseSince[team] = this.simulationTime;
             } else this.collapseSince[team] = null;
             defeated[team] = !alive || (this.collapseSince[team] != null &&
                 this.simulationTime - this.collapseSince[team] >= 5000 - 1e-7);
         }
-        if (!defeated.red && !defeated.blue) return;
+        const standingOff = !defeated.red && !defeated.blue && this.tactics?.isStalemate();
+        if (standingOff && this.battleOptions.deathmatch) this.tactics.breakStalemate();
+        const stalemate = standingOff && !this.battleOptions.deathmatch;
+        if (!defeated.red && !defeated.blue && !stalemate) return;
         // 已发出的箭继续落地：最后一名射手阵亡后仍可能双方同归于尽。
         if (this.arrows.length > 0) {
             // 只等待已经离弦的箭；停止生成新攻击，避免密集箭雨无限延后溃败结算。
@@ -1817,13 +1901,14 @@ class IsoBattleScene extends Phaser.Scene {
         }
         this.battleOver = true;
         this.battleQueue = [];
-        const winner = defeated.red && defeated.blue ? 'draw' : defeated.red ? 'blue' : 'red';
-        this.endReason = winner === 'draw' ? 'draw' :
+        const winner = stalemate || (defeated.red && defeated.blue) ? 'draw' : defeated.red ? 'blue' : 'red';
+        this.endReason = stalemate ? 'stalemate' : winner === 'draw' ? 'draw' :
             (defeated.red && red > 0) || (defeated.blue && blue > 0) ? 'rout' : 'elimination';
         if (this.endReason === 'rout') {
             const loser = winner === 'red' ? 'blue' : 'red';
             this.addBattleEvent(`collapse-${loser}`, `${loser === 'red' ? '红方' : '蓝方'}全军持续溃散，失去战斗意愿`, loser);
         }
+        if (stalemate) this.addBattleEvent('tactic-stalemate', '双方持续固守，未再接战，本局相持结束', null);
         this.showVictory(winner);
         UI.onBattleEnd(winner, this.getBattleReport());
     }

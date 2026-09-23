@@ -126,6 +126,16 @@ button:active { transform: scale(0.94); }
 .morale-guide { margin: 0; padding: 9px 12px; border-left: 2px solid #a98a49; background: rgba(25, 18, 11, 0.3); color: #cbb893; font: 12px/1.8 "PingFang SC", sans-serif; }
 .morale-guide b { color: #ead4a3; font-weight: 600; }
 
+.tactics-hud { flex: 0 0 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding-bottom: 6px; border-bottom: 1px solid #755a31; font: 11px/1.5 "PingFang SC", sans-serif; }
+.tactics-team { min-width: 0; }
+.tactics-heading { display: flex; flex-wrap: wrap; gap: 2px 8px; }
+.tactics-heading b { font-size: 12px; color: #ffac9d; }
+.tactics-team.blue .tactics-heading b { color: #a8cfff; }
+.tactics-heading > span { color: #e8cf8a; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 100%; }
+.tactics-strength { color: #c9b998; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.deathmatch-rule { flex: 0 0 100%; color: #f1cc80; font: 12px/1.6 "PingFang SC", sans-serif; }
+.reserve-note { display: block; color: #e7c67e; margin-top: 5px; font: 12px/1.6 "PingFang SC", sans-serif; }
+
 /* ==================== 底部抽屉面板 ==================== */
 #sheet {
     position: fixed;
@@ -334,6 +344,9 @@ button:active { transform: scale(0.94); }
 .f-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .f-label { font-size: 14px; color: #c9b787; flex: none; }
 #formation-row { display: flex; flex-wrap: wrap; gap: 7px; flex: 1; }
+#order-row { display: flex; flex-wrap: wrap; gap: 7px; flex: 1; }
+.order-options { padding: 10px 12px; border: 1px solid #80663d; border-radius: 10px; background: rgba(24, 17, 10, 0.3); }
+.order-description { margin: 7px 0 0; color: #cbb893; font: 12px/1.7 "PingFang SC", sans-serif; }
 .chip {
     font-size: 13.5px; padding: 7px 14px;
     background: rgba(0, 0, 0, 0.3);
@@ -450,6 +463,20 @@ button:active { transform: scale(0.94); }
 .lobby-intro h2 { margin: 6px 0 8px; font-size: clamp(23px, 3vw, 32px); letter-spacing: 2px; color: #f6e3b2; }
 .lobby-intro p { margin: 0; color: #beac86; font: 13px/1.7 "PingFang SC", sans-serif; }
 .campaign-progress { flex: none; font-size: 12px; padding: 9px 12px; border: 1px solid #856a3a; border-radius: 6px; color: #e5ca8b; background: #251c12; }
+.tactics-entry { padding: 16px 18px; border: 1px solid #bb9652; border-radius: 10px; background: radial-gradient(ellipse at 90% 0%, rgba(173, 130, 49, 0.15), transparent 70%), linear-gradient(115deg, #534023, #2b2419); }
+.tactics-entry h3 { margin: 5px 0 7px; color: #f2d897; font-size: 22px; letter-spacing: 1px; }
+.tactics-entry p { margin: 0; color: #c9b998; font: 12px/1.8 "PingFang SC", sans-serif; }
+.tactics-entry-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.tactics-entry-actions .secondary-btn { text-align: left; background: rgba(126, 93, 41, 0.3); border-color: #9d7c3f; }
+.tactics-entry-actions .secondary-btn:hover { background: #6a502a; }
+.tactics-entry-actions .reserve-entry { grid-column: 1 / -1; border-color: #d3b064; background: rgba(154, 106, 39, 0.4); }
+.tactics-entry-actions b { display: block; font-size: 15px; }
+.tactics-entry-actions small { display: block; color: #c5b08a; font: 11px/1.6 "PingFang SC", sans-serif; margin-top: 4px; }
+.tactics-ready-guide { padding: 12px 14px; border: 1px solid #8e723e; border-radius: 10px; background: rgba(29, 23, 14, 0.45); color: #dfc78e; font: 12px/1.7 "PingFang SC", sans-serif; }
+.tactics-ready-guide > b { font-size: 13px; }
+.tactics-ready-guide p { margin: 6px 0 10px; color: #c5b18c; }
+.tactics-ready-guide .secondary-btn { font-size: 12px; padding: 8px 10px; }
+.tactics-ready-guide .secondary-btn.active { border-color: #d9b969; background: #72552b; color: #ffedbf; }
 .challenge-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .challenge-card { position: relative; display: flex; align-items: center; text-align: left; gap: 12px; padding: 17px 14px; color: var(--parchment); background: linear-gradient(115deg, #55432b, #3d3020); border: 1px solid #846638; border-radius: 10px; overflow: hidden; min-height: 146px; }
 .challenge-card:hover { border-color: #d9b969; background: linear-gradient(115deg, #685035, #463623); }
@@ -529,6 +556,14 @@ summary { cursor: pointer; }
     .lobby-intro { align-items: flex-start; padding-top: 4px; gap: 8px; }
     .lobby-intro h2 { font-size: 22px; letter-spacing: 0; }
     .campaign-progress { font-size: 10px; padding: 6px; white-space: nowrap; }
+    .tactics-entry { padding: 12px; }
+    .tactics-entry h3 { font-size: 19px; letter-spacing: 0; }
+    .tactics-entry-actions { gap: 7px; }
+    .tactics-entry-actions .secondary-btn { padding: 10px; }
+    .tactics-entry-actions b { font-size: 14px; }
+    .tactics-hud { gap: 10px; font-size: 10px; }
+    .tactics-heading b { font-size: 11px; }
+    #order-row .chip { padding: 7px 10px; font-size: 12px; }
     .challenge-grid { grid-template-columns: 1fr; }
     .challenge-card, .challenge-card:last-child { min-height: 126px; padding: 12px; }
     .challenge-unit { width: 56px; height: 80px; }

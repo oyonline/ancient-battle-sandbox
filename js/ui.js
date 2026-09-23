@@ -49,6 +49,13 @@ const PRESETS = {
     thousand:{ name: '千人军团', config: { infantry: 300, pikeman: 60, archer: 80, cavalry: 60 } }
 };
 
+const UI_TACTIC_OPTIONS = {
+    advance: { name: '标准推进', description: '所有兵种按原有方式接近敌人并交战。' },
+    assault: { name: '正面强攻', requires: 'infantry', description: '剑士集中向敌阵正面推进，争夺突破口；其他兵种照常作战。' },
+    flank: { name: '单翼迂回', requires: 'infantry', description: '剑士约一半在正面牵制，一半沿敌阵外缘寻找侧后方的接敌机会；其他兵种照常作战。' },
+    hold: { name: '枪阵守位', requires: 'pikeman', description: '长枪兵重新布成四面防御的方阵，守位、支援并补位；其他兵种沿用所选阵型、照常作战。' }
+};
+
 // ==================== 战役、配兵与战报 ====================
 const UI = {
     scene: null,
@@ -57,31 +64,49 @@ const UI = {
     challenge: null,
     configs: { red: {}, blue: {} },
     formations: { red: 'custom', blue: 'custom' },
+    orders: { red: 'advance', blue: 'advance' },
+    battleOptions: { deathmatch: false, reserves: { red: 0, blue: 0 } },
     editing: false,
     countdown: false,
+    pendingDeploy: false,
+    pendingAutoplay: false,
     progress: {},
     holdStops: [],
 
     init() {
         this.loadProgress();
         this.bindControls();
-        const auto = new URLSearchParams(location.search).get('auto');
+        const params = new URLSearchParams(location.search);
+        const tactics = params.get('tactics');
+        if (['assault', 'flank', 'reserve'].includes(tactics)) { this.startTactics(tactics); return; }
+        const auto = params.get('auto');
         if (auto && PRESETS[auto]) { this.autoplay(auto); return; }
         this.showHome();
     },
 
     onSceneReady(scene) {
         this.scene = scene;
+        if (this.pendingDeploy) {
+            const autoplay = this.pendingAutoplay;
+            this.pendingDeploy = this.pendingAutoplay = false;
+            this.deployArmies();
+            if (autoplay) this.startBattle();
+            return;
+        }
         this.syncControls();
     },
 
     autoplay(preset) {
-        if (!this.scene) { setTimeout(() => this.autoplay(preset), 100); return; }
+        this.clearBattle();
         this.mode = 'sandbox';
         this.challenge = null;
         this.configs = { red: { ...PRESETS[preset].config }, blue: { ...PRESETS[preset].config } };
+        this.formations = { red: 'custom', blue: 'custom' };
+        this.orders = { red: 'advance', blue: 'advance' };
+        this.resetBattleOptions();
         this.deployArmies();
-        this.startBattle();
+        if (this.scene) this.startBattle();
+        else this.pendingAutoplay = true;
     },
 
     loadProgress() {
@@ -111,7 +136,9 @@ const UI = {
     syncControls() {
         const fighting = this.phase === 'battle';
         document.getElementById('controlbar').hidden = !fighting;
+        document.getElementById('deathmatch-hud-rule').hidden = !fighting || !this.battleOptions.deathmatch;
         this.updateMorale();
+        this.updateTactics();
         document.getElementById('btn-pause').disabled = !fighting || this.countdown;
         document.getElementById('btn-pause').textContent = this.scene?.paused ? '▶ 继续' : '⏸ 暂停';
         document.getElementById('btn-lock').disabled = !this.scene;
@@ -127,7 +154,7 @@ const UI = {
         const challenge = this.mode === 'challenge';
         document.getElementById('steps').hidden = n === 0;
         document.getElementById('sheet-label').hidden = n !== 0;
-        document.getElementById('sheet-label').textContent = this.phase === 'result' ? '⚑ 战后复盘' : '⚑ 统帅试炼';
+        document.getElementById('sheet-label').textContent = this.phase === 'result' ? '⚑ 战后复盘' : this.mode === 'tactics' ? '⚑ 战阵演练' : '⚑ 统帅试炼';
         document.querySelectorAll('#steps .step').forEach(el => {
             const k = Number(el.dataset.step);
             el.hidden = challenge && k === 2;
@@ -136,7 +163,7 @@ const UI = {
             el.querySelector('span').textContent = k === 1 ? (challenge ? '我的军队' : '红方配兵') : k === 2 ? '蓝方配兵' : '准备开战';
             el.querySelector('i').textContent = challenge && k === 3 ? '2' : String(k);
         });
-        const hint = n === 0 ? '观察敌阵，找到你的解法' : n === 3 ? '两军就位，准备开战' : challenge ? this.challenge.title + ' · 为红方配兵' : (n === 1 ? '红方' : '蓝方') + '队长正在配兵';
+        const hint = n === 0 ? '观察敌阵，找到你的解法' : n === 3 ? (this.mode === 'tactics' ? '战阵演练 · 观察枪阵与迂回路线' : '两军就位，准备开战') : challenge ? this.challenge.title + ' · 为红方配兵' : (n === 1 ? '红方' : '蓝方') + '队长正在配兵';
         document.getElementById('phase-hint').textContent = hint;
     },
 
@@ -156,13 +183,23 @@ const UI = {
     clearBattle() {
         this.stopHolds();
         this.countdown = false;
+        this.pendingDeploy = this.pendingAutoplay = false;
         if (this.scene) this.scene.clearUnits();
         document.getElementById('overlay').className = 'overlay';
         this.updateCounts();
     },
 
+    resetBattleOptions() {
+        this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 } };
+    },
+
     showHome() {
         this.clearBattle();
+        this.mode = 'sandbox';
+        this.challenge = null;
+        this.editing = false;
+        this.orders = { red: 'advance', blue: 'advance' };
+        this.resetBattleOptions();
         this.setPhase('home');
         this.setStep(0);
         this.renderChallenges();
@@ -194,6 +231,8 @@ const UI = {
         this.editing = false;
         this.configs = { red: {}, blue: { ...challenge.enemy } };
         this.formations = { red: 'custom', blue: challenge.enemyFormation };
+        this.orders = { red: 'advance', blue: 'advance' };
+        this.resetBattleOptions();
         this.buildBuy('red');
         this.setStep(1);
         this.showSection('buy');
@@ -207,10 +246,30 @@ const UI = {
         this.editing = false;
         this.configs = { red: {}, blue: {} };
         this.formations = { red: 'custom', blue: 'custom' };
+        this.orders = { red: 'advance', blue: 'advance' };
+        this.resetBattleOptions();
         this.buildBuy('red');
         this.setStep(1);
         this.showSection('buy');
         this.showOverlay('red');
+    },
+
+    startTactics(order = 'flank') {
+        if (!['assault', 'flank', 'reserve'].includes(order)) return;
+        this.clearBattle();
+        this.mode = 'tactics';
+        this.challenge = null;
+        this.editing = false;
+        const reserve = order === 'reserve';
+        this.configs = { red: { infantry: reserve ? 150 : 100 }, blue: { pikeman: 100 } };
+        this.formations = { red: 'custom', blue: 'square' };
+        this.orders = { red: reserve ? 'flank' : order, blue: 'hold' };
+        this.battleOptions = { deathmatch: reserve, reserves: { red: reserve ? 50 : 0, blue: 0 } };
+        this.deployArmies();
+    },
+
+    alternateTactics() {
+        return Object.values(this.orders).includes('flank') ? 'assault' : 'flank';
     },
 
     budget(team) { return this.mode === 'challenge' && team === 'red' ? this.challenge.budget : BUDGET; },
@@ -270,8 +329,46 @@ const UI = {
             };
             row.appendChild(button);
         }
+        this.renderOrders(team);
         Object.keys(UNIT_TYPES).forEach(k => this.renderNum(team, k));
         this.updateBudget(team);
+    },
+
+    renderOrders(team) {
+        document.getElementById('order-options').hidden = this.mode === 'challenge';
+        const row = document.getElementById('order-row');
+        row.replaceChildren();
+        for (const [key, order] of Object.entries(UI_TACTIC_OPTIONS)) {
+            const button = document.createElement('button');
+            button.className = 'chip' + (this.orders[team] === key ? ' active' : '');
+            button.textContent = order.name;
+            button.setAttribute('aria-pressed', String(this.orders[team] === key));
+            button.onclick = () => {
+                if (this.phase !== 'buy-' + team) return;
+                this.orders[team] = key;
+                row.querySelectorAll('.chip').forEach(chip => {
+                    chip.classList.toggle('active', chip === button);
+                    chip.setAttribute('aria-pressed', String(chip === button));
+                });
+                this.updateOrderDescription(team);
+                Snd.play('buy');
+            };
+            row.appendChild(button);
+        }
+        this.updateOrderDescription(team);
+    },
+
+    orderAvailability(team) {
+        const selected = this.orders[team];
+        const required = UI_TACTIC_OPTIONS[selected].requires;
+        const missing = required && !(this.configs[team][required] > 0) ? UNIT_TYPES[required].name : null;
+        return { effective: missing ? 'advance' : selected, missing };
+    },
+
+    updateOrderDescription(team) {
+        const order = UI_TACTIC_OPTIONS[this.orders[team]];
+        const { missing } = this.orderAvailability(team);
+        document.getElementById('order-description').textContent = (missing ? `本队暂无${missing}，开战时改用标准推进。` : '') + order.description;
     },
 
     stopHolds() {
@@ -342,6 +439,7 @@ const UI = {
         document.getElementById('budget-fill').style.width = Math.max(0, left / budget * 100) + '%';
         document.getElementById('budget-total').textContent = '预算 ' + budget + ' 金币';
         document.getElementById('troop-total').textContent = '兵力 ' + this.troops(team);
+        this.updateOrderDescription(team);
     },
 
     flashBudget() {
@@ -381,14 +479,41 @@ const UI = {
     },
 
     deployArmies() {
-        if (!this.scene || !this.troops('red') || !this.troops('blue')) return;
+        if (!this.troops('red') || !this.troops('blue')) return;
         this.countdown = false;
-        this.scene.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue);
+        this.pendingDeploy = !this.scene;
+        const deathmatch = this.battleOptions.deathmatch;
+        const reserves = Object.fromEntries(['red', 'blue'].map(team => [team,
+            Math.min(this.battleOptions.reserves[team] || 0, Math.max(0, (this.configs[team].infantry || 0) - 1))]));
+        this.battleOptions = { deathmatch: this.battleOptions.deathmatch, reserves };
+        this.scene?.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue,
+            { ...this.orders }, { ...this.battleOptions, reserves: { ...reserves } });
         this.setPhase('ready');
         this.setStep(3);
-        document.getElementById('army-summary').innerHTML = ['red', 'blue'].map(team => `
+        document.getElementById('army-summary').innerHTML = ['red', 'blue'].map(team => {
+            const { effective, missing } = this.orderAvailability(team);
+            const fallback = missing ? `<small>未启用${UI_TACTIC_OPTIONS[this.orders[team]].name}：本队暂无${missing}</small>` : '';
+            const reserveNote = reserves[team] || (deathmatch && this.configs[team].infantry)
+                ? `<small class="reserve-note">剑士 ${this.configs[team].infantry - reserves[team]} 进攻 + ${reserves[team]} 预备${reserves[team] ? ' · 接应溃兵，分批投入' : ''}</small>` : '';
+            return `
             <div class="sum ${team}"><b>${team === 'red' ? '🔴 红方' : '🔵 蓝方'}</b> ${this.armyText(this.configs[team])}
-            <span class="sum-f">${FORMATIONS[this.formations[team]].name}</span></div>`).join('');
+            <span class="sum-f">${FORMATIONS[this.formations[team]].name} · ${UI_TACTIC_OPTIONS[effective].name}</span>${reserveNote}${fallback}</div>`;
+        }).join('');
+        document.getElementById('tactics-ready-guide').hidden = this.mode !== 'tactics';
+        document.getElementById('tactics-ready-title').textContent = deathmatch
+            ? '预备队接应 · 收拢溃兵后继续进攻' : '观察：正面能否守住，迂回队何时到位？';
+        document.getElementById('tactics-ready-copy').textContent = deathmatch
+            ? '预备队在后方接应、分批增援；溃兵脱离危险后重整，再次出击。阵亡不会复活，重整不会恢复生命。'
+            : '四面枪阵的侧后也有防御。绕行队会沿外缘寻找接敌机会，分散守军；剑士不一定能攻破完整方阵。';
+        document.getElementById('deathmatch-ready-rule').hidden = !deathmatch;
+        document.getElementById('ready-morale-title').textContent = deathmatch
+            ? '溃逃不会直接判负，稳住后还能继续打。' : '稳住军心，也能赢下战斗。';
+        document.querySelectorAll('#tactics-ready-guide [data-tactics-entry]').forEach(button => {
+            const selected = deathmatch ? button.dataset.tacticsEntry === 'reserve'
+                : Object.values(this.orders).includes(button.dataset.tacticsEntry);
+            button.classList.toggle('active', selected);
+            button.setAttribute('aria-pressed', String(selected));
+        });
         document.getElementById('btn-ready-red').textContent = this.mode === 'challenge' ? '调整我的阵容' : '调整红方';
         document.getElementById('btn-ready-blue').hidden = this.mode === 'challenge';
         this.updateCounts();
@@ -399,7 +524,9 @@ const UI = {
         if (this.phase !== 'ready' || !this.scene) return;
         this.countdown = true;
         this.setPhase('battle');
-        document.getElementById('phase-hint').textContent = (this.challenge ? this.challenge.title + ' · ' : '') + '拖动画面查看战况';
+        document.getElementById('phase-hint').textContent = this.battleOptions.deathmatch
+            ? '死斗 · 溃兵可重整，直到一方全灭'
+            : (this.challenge ? this.challenge.title + ' · ' : this.mode === 'tactics' ? '战阵演练 · ' : '') + '拖动画面查看战况';
         this.openSheet(false);
         this.scene.startCountdown(() => { this.countdown = false; this.syncControls(); });
     },
@@ -420,6 +547,9 @@ const UI = {
         if (swap) {
             [this.configs.red, this.configs.blue] = [this.configs.blue, this.configs.red];
             [this.formations.red, this.formations.blue] = [this.formations.blue, this.formations.red];
+            [this.orders.red, this.orders.blue] = [this.orders.blue, this.orders.red];
+            [this.battleOptions.reserves.red, this.battleOptions.reserves.blue] =
+                [this.battleOptions.reserves.blue, this.battleOptions.reserves.red];
         }
         this.deployArmies();
         this.startBattle();
@@ -447,12 +577,15 @@ const UI = {
         this.updateCounts();
         const wonChallenge = this.mode === 'challenge' && winner === 'red';
         if (wonChallenge) this.saveWin();
-        document.getElementById('result-eyebrow').textContent = this.challenge ? this.challenge.title + ' · 本局战报' : '自由对战 · 本局战报';
+        document.getElementById('result-eyebrow').textContent = this.challenge ? this.challenge.title + ' · 本局战报'
+            : (report.deathmatch ? '预备队死斗' : this.mode === 'tactics' ? '战阵演练' : '自由对战') + ' · 本局战报';
         const title = document.getElementById('result-title');
         title.className = 'result-title ' + winner;
         title.textContent = winner === 'draw' ? '势均力敌 · 平局' : this.challenge ? (wonChallenge ? '挑战成功！' : '再试一种解法') : (winner === 'red' ? '🔴 红方胜利！' : '🔵 蓝方胜利！');
         document.getElementById('phase-hint').textContent = '读一读战报，准备下一次出击';
-        const endReason = report.endReason === 'rout' && winner !== 'draw'
+        const endReason = report.deathmatch && winner !== 'draw'
+            ? (winner === 'red' ? '蓝方' : '红方') + '已全灭，死斗结束。 '
+            : report.endReason === 'stalemate' ? '双方持续固守、无人推进，本局相持结束。试着让一方改为进攻。 ' : report.endReason === 'rout' && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '军心瓦解，失去继续作战能力。 '
             : winner === 'draw' && report.red + report.blue > 0 && report.morale &&
                 report.morale.red.steady + report.morale.red.wavering + report.morale.blue.steady + report.morale.blue.wavering === 0
@@ -477,6 +610,11 @@ const UI = {
         document.getElementById('btn-edit-red').textContent = this.challenge ? '✎ 调整阵容再挑战' : '✎ 调整红方再战';
         document.getElementById('btn-edit-blue').hidden = !!this.challenge;
         document.getElementById('btn-swap').hidden = !!this.challenge;
+        const switchTactics = document.getElementById('btn-switch-tactics');
+        switchTactics.hidden = this.mode !== 'tactics';
+        document.getElementById('btn-reserve-tactics').hidden = this.mode !== 'tactics' || report.deathmatch;
+        switchTactics.textContent = (report.deathmatch ? '切回 100 对 100 · ' : '换用') + UI_TACTIC_OPTIONS[this.alternateTactics()].name
+            + (report.deathmatch ? '（普通胜负）' : '（100 对 100）');
         const next = document.getElementById('btn-next');
         const index = CHALLENGES.indexOf(this.challenge);
         next.hidden = !wonChallenge || index >= CHALLENGES.length - 1;
@@ -488,6 +626,29 @@ const UI = {
         document.getElementById('red-count').textContent = this.scene?.redAlive || 0;
         document.getElementById('blue-count').textContent = this.scene?.blueAlive || 0;
         this.updateMorale();
+        this.updateTactics();
+    },
+
+    updateTactics() {
+        const summary = this.phase === 'battle' ? this.scene?.getTacticsSummary?.() : null;
+        document.getElementById('tactics-hud').hidden = !summary;
+        for (const team of ['red', 'blue']) {
+            const data = summary?.[team];
+            document.getElementById('tactics-' + team).hidden = !data;
+            if (!data) continue;
+            document.getElementById(`tactics-${team}-label`).textContent = (team === 'red' ? '红方 · ' : '蓝方 · ') + data.label;
+            const stage = document.getElementById(`tactics-${team}-stage`);
+            stage.textContent = data.stage;
+            stage.title = data.stage;
+            let strength = data.order === 'hold'
+                ? `守位就绪 ${data.ready} / ${data.slots} · 曾失守 ${data.breaches} 位`
+                : data.order === 'flank' ? `正面 ${data.main} 人 · 迂回 ${data.flank} 人可战` : `主队 ${data.main} 人可战`;
+            if (this.battleOptions.reserves[team]) {
+                strength += ` · 预备待命 ${data.reserve ?? 0} · 已投入 ${data.committed ?? 0}`;
+                strength += ` · 撤回重整 ${data.regrouping ?? 0} · 已重整 ${data.rallied ?? 0}`;
+            }
+            document.getElementById(`tactics-${team}-strength`).textContent = strength;
+        }
     },
 
     updateMorale() {
@@ -511,6 +672,10 @@ const UI = {
     bindControls() {
         document.getElementById('btn-home').onclick = () => this.showHome();
         document.getElementById('btn-sandbox').onclick = () => this.resetAll();
+        document.querySelectorAll('[data-tactics-entry]').forEach(button => {
+            button.onclick = () => { this.startTactics(button.dataset.tacticsEntry); Snd.play('tick'); };
+        });
+        document.getElementById('btn-switch-tactics').onclick = () => this.startTactics(this.alternateTactics());
         document.getElementById('btn-lock').onclick = () => this.lockTeam();
         document.getElementById('btn-start').onclick = () => this.startBattle();
         document.getElementById('btn-again').onclick = () => this.showHome();
