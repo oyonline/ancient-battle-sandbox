@@ -9,7 +9,7 @@ const UNIT_TYPES = {
     pikeman: {
         name: '长枪兵', icon: '🔱', cost: 6, maxCount: 150,
         hp: 80, atk: 18, def: 8, speed: 1.6, atkSpeed: 2400, range: 1.35,
-        antiCav: 2.5, scale: 1.0, tip: '专克骑兵！枪阵是马的噩梦'
+        antiCav: 2.5, scale: 1.0, tip: '站稳架枪、正面成阵才能抵挡骑兵冲锋'
     },
     archer: {
         name: '弓箭手', icon: '🏹', cost: 8, maxCount: 200,
@@ -19,7 +19,7 @@ const UNIT_TYPES = {
     cavalry: {
         name: '重骑士', icon: '🐴', cost: 12, maxCount: 150,
         hp: 160, atk: 30, def: 15, speed: 4.0, atkSpeed: 1500, range: 1.1,
-        chargeSpeed: 6.0, charge: true, scale: 1.35, tip: '冲锋双倍伤害，专抓弓箭手'
+        chargeSpeed: 6.0, charge: true, scale: 1.35, tip: '助跑3格后双倍冲锋，擅长追击弓手'
     }
 };
 
@@ -86,112 +86,242 @@ function generateArmyPositions(team, config, formationKey) {
     return positions;
 }
 
+// 架枪读本步快照：移动或转向会重置准备，成阵并站稳半秒后才有正面抗冲锋。
+function updatePikeBrace(unit, dt) {
+    const vx = unit.velX || 0, vy = unit.velY || 0, speed = Math.hypot(vx, vy);
+    if (unit.moving && speed > 0.15) {
+        const fx = vx / speed, fy = vy / speed;
+        if (fx * unit.braceFacingX + fy * unit.braceFacingY < 0.95) unit.braceTime = 0;
+        unit.braceFacingX = fx; unit.braceFacingY = fy;
+    }
+    let support = 0, depth = 0, incoming = false, nearestEnemy = null, nearestDistance = Infinity;
+    unit.scene.forEachNear(unit.gx, unit.gy, 6, other => {
+        if (other === unit || other.dead) return;
+        const dx = other.gx - unit.gx, dy = other.gy - unit.gy, distance = Math.hypot(dx, dy);
+        if (other.team === unit.team && other.type === 'pikeman' && distance <= 2.6) {
+            support++;
+            if (dx * unit.braceFacingX + dy * unit.braceFacingY < -0.25) depth++;
+        } else if (other.team !== unit.team && distance <= 6) {
+            if (distance < nearestDistance - 1e-9 ||
+                (Math.abs(distance - nearestDistance) <= 1e-9 && other.id < nearestEnemy.id)) {
+                nearestEnemy = other; nearestDistance = distance;
+            }
+            if (other.type === 'cavalry' && (other.state === 'charge' || other.state === 'pierce') &&
+                distance > 0.001 && (dx * unit.braceFacingX + dy * unit.braceFacingY) / distance >= 0.5) incoming = true;
+        }
+    });
+    unit.braceSupport = support;
+    unit.braceDepth = depth;
+    // 在统一快照阶段判断：前方已停住的敌人需要补位，不能被它身后的来骑锁住。
+    const nearestIsCharging = nearestEnemy?.type === 'cavalry' &&
+        (nearestEnemy.state === 'charge' || nearestEnemy.state === 'pierce');
+    unit.braceHold = support >= 2 && incoming && nearestIsCharging;
+    unit.braceTime = support >= 2 && !unit.moving && speed <= 0.15 ? Math.min(0.5, unit.braceTime + dt) : 0;
+    unit.braceReady = unit.braceTime >= 0.5 - 1e-9;
+}
+
+function isPreparedPike(guard, cavalry, dx, dy) {
+    if (guard.type !== 'pikeman' || !guard.braceReady || guard.braceSupport < 2) return false;
+    const distance = dist(guard, cavalry);
+    if (distance < 0.001) return false;
+    const front = ((cavalry.gx - guard.gx) * guard.braceFacingX + (cavalry.gy - guard.gy) * guard.braceFacingY) / distance;
+    return front >= 0.6 && -(dx * guard.braceFacingX + dy * guard.braceFacingY) >= 0.5;
+}
+
 // ==================== 骑兵 AI（简化状态机，索敌走场景空间哈希） ====================
 class CavalryAI {
-    // 返回 true 表示已处理本帧
     update(unit, now, dt) {
         switch (unit.state) {
-            case 'charge':   return this.charge(unit, now, dt);
-            case 'pierce':   return this.pierce(unit, now, dt);
-            case 'reform':   return this.reform(unit, now, dt);
-            case 'melee':    return false; // 交还给通用近战逻辑
-            default:         unit.state = 'charge'; return true;
+            case 'charge': return this.charge(unit, now, dt);
+            case 'pierce': return this.pierce(unit, now, dt);
+            case 'reform': return this.reform(unit, now, dt);
+            case 'melee': return this.melee(unit, now, dt);
+            default: this.beginCharge(unit); return true;
         }
+    }
+
+    beginCharge(unit) {
+        unit.state = 'charge';
+        unit.stateTime = 0;
+        unit.chargeDistance = 0;
+        unit.chargeLastX = null;
+        unit.chargeMomentum = 0;
+        unit.chargeImpactId = null;
+        unit.pierceHits = null;
+        unit.target = null;
+        unit.lastRetarget = -Infinity;
+    }
+
+    enterMelee(unit) {
+        unit.state = 'melee';
+        unit.stateTime = 0;
+        unit.chargeDistance = 0;
+        unit.chargeLastX = null;
+        unit.chargeMomentum = 0;
     }
 
     pickTarget(unit) {
-        const scene = unit.scene;
-        // 优先切弓箭手（12格内），否则最近敌人
         let best = null, bestD = Infinity;
-        scene.forEachNear(unit.gx, unit.gy, 12, e => {
-            if (e.team === unit.team || e.dead || e.type !== 'archer') return;
-            const d = dist(unit, e);
-            if (d < bestD) { bestD = d; best = e; }
+        unit.scene.forEachNear(unit.gx, unit.gy, 12, enemy => {
+            if (enemy.team === unit.team || enemy.dead || enemy.type !== 'archer') return;
+            const d = dist(unit, enemy);
+            if (d <= 12 && (d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && enemy.id < best.id))) {
+                bestD = d; best = enemy;
+            }
         });
-        if (best) return best;
-        return scene.nearestEnemy(unit);
+        return best || unit.scene.nearestEnemy(unit);
+    }
+
+    // 只对实际行进线上的身体或准备好的正面枪尖产生局部阻力。
+    pathContact(unit, tx, ty, speed, dt) {
+        const dx = tx - unit.gx, dy = ty - unit.gy, distance = Math.hypot(dx, dy);
+        if (distance < 0.001) return null;
+        const step = Math.min(distance, speed * dt), nx = dx / distance, ny = dy / distance;
+        let contact = null, bestD = Infinity;
+        unit.scene.forEachNear(unit.gx, unit.gy, UNIT_TYPES.pikeman.range + step, enemy => {
+            if (enemy.team === unit.team || enemy.dead || unit.pierceHits?.has(enemy.id)) return;
+            const braced = isPreparedPike(enemy, unit, nx, ny);
+            const reach = braced ? UNIT_TYPES.pikeman.range : 0.65;
+            const ex = enemy.gx - unit.gx, ey = enemy.gy - unit.gy;
+            const along = ex * nx + ey * ny;
+            if (along < -0.01) return;
+            const t = clamp(along, 0, step);
+            if (Math.hypot(ex - nx * t, ey - ny * t) > reach) return;
+            const d = Math.hypot(ex, ey);
+            if (d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && enemy.id < contact.enemy.id)) {
+                contact = { enemy, braced }; bestD = d;
+            }
+        });
+        return contact;
+    }
+
+    impact(unit, target, braced, now, first) {
+        if (!first && unit.pierceHits.size >= 4) return;
+        if (first) {
+            unit.lastAttack = now;
+            unit.chargeImpactId = target.id;
+            unit.chargeMomentum = 1;
+            unit.pierceHits = new Set();
+            unit.pierceX = clamp(target.gx + unit.chargeDX * 4, 1.5, GRID_W - 1.5);
+            unit.pierceY = clamp(target.gy + unit.chargeDY * 4, 1.5, GRID_H - 1.5);
+            unit.state = 'pierce'; unit.stateTime = 0;
+            unit.chargeDistance = 0; unit.chargeLastX = null;
+        }
+        if (unit.pierceHits.has(target.id)) return;
+        unit.pierceHits.add(target.id);
+        // 首撞与迎击都入同一批伤害，不能因为受到阻力而吞掉骑兵的首撞。
+        resolveAttack(target, unit, { multiplier: first ? 2 : 0.5 });
+        knockback(target, unit, braced ? 0.14 : first ? 0.8 : 0.4);
+        unit.scene.meleeImpact(unit, target);
+        if (first) unit.scene.playAttackAnim(unit, target);
+        if (braced && now - target.lastBrace >= 1000) {
+            if (unit.scene.collectingImpacts) unit.scene.queueBrace(target, unit);
+            else unit.scene.resolveBrace(target, unit);
+        }
+        const resistance = braced ? Math.min(1, 0.72 + 0.14 * Math.min(2, target.braceDepth))
+            : target.type === 'archer' ? 0.16 : target.type === 'cavalry' ? 0.4 : 0.26;
+        unit.chargeMomentum = Math.max(0, unit.chargeMomentum - resistance);
+        if (unit.chargeMomentum <= 1e-9 || unit.pierceHits.size >= 4) this.enterMelee(unit);
     }
 
     charge(unit, now, dt) {
-        if (!unit.target || unit.target.dead || unit.target.hp <= 0) unit.target = this.pickTarget(unit);
+        if (unit.chargeLastX != null) {
+            // 只累计上一步实际前进的距离，排斥、受阻和原地等待不能攒出冲锋。
+            const forward = (unit.gx - unit.chargeLastX) * unit.chargeDX + (unit.gy - unit.chargeLastY) * unit.chargeDY;
+            unit.chargeDistance += clamp(forward, 0, UNIT_TYPES.cavalry.chargeSpeed * dt);
+            unit.chargeLastX = null;
+        }
+        if (!unit.target || unit.target.dead || (now - unit.lastRetarget >= 500 && dist(unit, unit.target) > 2)) {
+            unit.target = this.pickTarget(unit);
+            unit.lastRetarget = now;
+        }
         if (!unit.target) return true;
-        const t = unit.target;
-        const d = dist(unit, t);
-        const td = UNIT_TYPES.cavalry;
-
-        if (d <= td.range + 0.25) {
-            // 撞击：双倍伤害 + 击退
-            if (now - unit.lastAttack > td.atkSpeed) {
-                unit.lastAttack = now;
-                let dmg = Math.max(2, td.atk * 2 - t.typeData.def);
-                applyDamage(t, dmg, unit);
-                knockback(t, unit, 0.45);
-                unit.scene.meleeImpact(unit, t);
-                unit.scene.playAttackAnim(unit, t);
-                // 长枪兵迎击：冲锋撞上枪阵会挨反击（克制可见化）
-                if (t.type === 'pikeman' && !t.dead) {
-                    applyDamage(unit, Math.max(3, Math.floor(t.typeData.atk * 2.5 - td.def * 0.5)), t);
-                }
-                // 凿穿：目标后方5.5格
-                const a = Math.atan2(t.gy - unit.gy, t.gx - unit.gx);
-                unit.pierceX = clamp(t.gx + Math.cos(a) * 5.5, 1.5, GRID_W - 1.5);
-                unit.pierceY = clamp(t.gy + Math.sin(a) * 5.5, 1.5, GRID_H - 1.5);
-                unit.state = 'pierce';
-                unit.stateTime = 0;
-                unit.lastContact = 0;
+        const target = unit.target, data = UNIT_TYPES.cavalry;
+        const distance = dist(unit, target);
+        const dx = distance > 0.001 ? (target.gx - unit.gx) / distance : 0;
+        const dy = distance > 0.001 ? (target.gy - unit.gy) / distance : 0;
+        // 即使新目标就在身边，也必须先检查助跑方向，不能原地掉头继承冲锋。
+        if (distance <= 0.001 || (unit.chargeDX != null && dx * unit.chargeDX + dy * unit.chargeDY < 0.8)) unit.chargeDistance = 0;
+        unit.chargeDX = dx; unit.chargeDY = dy;
+        unit.chargeMomentum = clamp(unit.chargeDistance / 3, 0, 1);
+        const contact = this.pathContact(unit, target.gx, target.gy, data.chargeSpeed, dt);
+        if (contact) {
+            // 接触挡路身体就结束助跑，不能顶着前排继续追弓并攒出双倍冲锋。
+            if (unit.chargeDistance < 3 || now - unit.lastAttack < data.atkSpeed) {
+                this.enterMelee(unit);
+                return false;
             }
+            this.impact(unit, contact.enemy, contact.braced, now, true);
             return true;
         }
-        moveToward(unit, t.gx, t.gy, td.chargeSpeed, dt);
+        if (distance <= data.range + 0.25) {
+            if (unit.chargeDistance < 3 || now - unit.lastAttack < data.atkSpeed) {
+                this.enterMelee(unit);
+                return false;
+            }
+            this.impact(unit, target, isPreparedPike(target, unit, dx, dy), now, true);
+            return true;
+        }
+        unit.chargeLastX = unit.gx; unit.chargeLastY = unit.gy;
+        moveToward(unit, target.gx, target.gy, data.chargeSpeed, dt);
         unit.scene.chargeDust(unit);
         return true;
     }
 
     pierce(unit, now, dt) {
         unit.stateTime += dt;
-        const d = Math.hypot(unit.pierceX - unit.gx, unit.pierceY - unit.gy);
-        if (d < 0.5 || unit.stateTime > 2.5) {
-            unit.state = 'reform'; unit.stateTime = 0;
+        if (Math.hypot(unit.pierceX - unit.gx, unit.pierceY - unit.gy) < 0.5 || unit.stateTime > 1.5) {
+            unit.state = 'reform'; unit.stateTime = 0; unit.reformX = null;
             return true;
         }
-        moveToward(unit, unit.pierceX, unit.pierceY, td().chargeSpeed * 0.85, dt);
-
-        // 冲撞沿途伤害（每0.3秒，只查身边一格半内的敌人）
-        if (now - unit.lastContact > 300) {
-            unit.lastContact = now;
-            unit.scene.forEachNear(unit.gx, unit.gy, 0.75, e => {
-                if (unit.dead || e.team === unit.team || e.dead || dist(unit, e) >= 0.75) return;
-                applyDamage(e, Math.max(1, Math.floor(td().atk * 0.5 - e.typeData.def)), unit);
-                // 枪阵刺伤：硬闯长枪阵，马自己也要掉血
-                if (e.type === 'pikeman' && !unit.dead) applyDamage(unit, 6, e);
-            });
-        }
-        // 被围困 → 转近战
-        let around = 0;
-        unit.scene.forEachNear(unit.gx, unit.gy, 1.15, e => {
-            if (e.team !== unit.team && !e.dead && dist(unit, e) < 1.15) around++;
-        });
-        if (around >= 3 && unit.stateTime > 0.8) unit.state = 'melee';
+        unit.chargeMomentum = Math.max(0, unit.chargeMomentum - dt * 0.12);
+        const speed = UNIT_TYPES.cavalry.chargeSpeed * 0.85 * (0.5 + unit.chargeMomentum * 0.5);
+        const contact = this.pathContact(unit, unit.pierceX, unit.pierceY, speed, dt);
+        if (contact) this.impact(unit, contact.enemy, contact.braced, now, false);
+        if (unit.state === 'melee') return true;
+        if (unit.chargeMomentum <= 0) { this.enterMelee(unit); return true; }
+        moveToward(unit, unit.pierceX, unit.pierceY, speed, dt);
         unit.scene.chargeDust(unit);
         return true;
     }
 
-    reform(unit, now, dt) {
+    melee(unit, now, dt) {
         unit.stateTime += dt;
-        if (!unit.reformX || unit.stateTime === 0) {
-            // 远离敌方重心4.5格（重心由场景每帧聚合，O(1) 拿到）
-            const c = unit.scene.centroid[unit.team === 'red' ? 'blue' : 'red'];
-            const a = Math.atan2(unit.gy - c.y, unit.gx - c.x);
-            unit.reformX = clamp(unit.gx + Math.cos(a) * 4.5, 1.6, GRID_W - 1.6);
-            unit.reformY = clamp(unit.gy + Math.sin(a) * 4.5, 1.5, GRID_H - 1.5);
-        }
-        const d = Math.hypot(unit.reformX - unit.gx, unit.reformY - unit.gy);
-        if (d < 0.6 || unit.stateTime > 1.8) {
-            unit.state = 'charge';
-            unit.stateTime = 0;
-            unit.reformX = null;
+        const enemy = unit.scene.nearestEnemy(unit);
+        if (!enemy) return true;
+        if (dist(unit, enemy) > 3 && unit.stateTime >= 2) {
+            this.beginCharge(unit);
             return true;
         }
+        if (unit.stateTime >= 3) {
+            let nearby = 0, spears = false;
+            unit.scene.forEachNear(unit.gx, unit.gy, 2.2, other => {
+                if (other.team === unit.team || other.dead || dist(unit, other) > 2.2) return;
+                nearby++; spears ||= other.type === 'pikeman';
+            });
+            if (nearby <= 2 && !spears) {
+                unit.state = 'reform'; unit.stateTime = 0; unit.reformX = null;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    reform(unit, now, dt) {
+        unit.stateTime += dt;
+        if (unit.reformX == null) {
+            const center = unit.scene.centroid[unit.team === 'red' ? 'blue' : 'red'];
+            const angle = Math.atan2(unit.gy - center.y, unit.gx - center.x);
+            unit.reformX = clamp(unit.gx + Math.cos(angle) * 4.5, 1.6, GRID_W - 1.6);
+            unit.reformY = clamp(unit.gy + Math.sin(angle) * 4.5, 1.5, GRID_H - 1.5);
+        }
+        const enemy = unit.scene.nearestEnemy(unit);
+        if (!enemy) return true;
+        if (dist(unit, enemy) >= 3 && unit.stateTime >= 0.8) {
+            this.beginCharge(unit);
+            return true;
+        }
+        if (unit.stateTime > 2.2) { this.enterMelee(unit); return false; }
         moveToward(unit, unit.reformX, unit.reformY, 2.6, dt);
         return true;
     }
@@ -206,25 +336,49 @@ function moveToward(unit, tx, ty, speed, dt) {
     const dx = tx - unit.gx, dy = ty - unit.gy;
     const d = Math.hypot(dx, dy);
     if (d < 0.001) return;
-    unit.gx += (dx / d) * speed * dt;
-    unit.gy += (dy / d) * speed * dt;
+    const step = Math.min(d, speed * dt);
+    if (unit.scene && unit.scene.planningStep) {
+        unit.moveX = (dx / d) * step;
+        unit.moveY = (dy / d) * step;
+    } else {
+        unit.gx += (dx / d) * step;
+        unit.gy += (dy / d) * step;
+    }
     unit.moving = true;
 }
 
 function knockback(target, from, amount) {
     const a = Math.atan2(target.gy - from.gy, target.gx - from.gx);
+    if (target.scene && target.scene.planningStep) {
+        target.pushX += Math.cos(a) * amount;
+        target.pushY += Math.sin(a) * amount;
+        return;
+    }
     target.gx = clamp(target.gx + Math.cos(a) * amount, 1.45, GRID_W - 1.45);
     target.gy = clamp(target.gy + Math.sin(a) * amount, 1.45, GRID_H - 1.45);
+}
+
+// 所有攻击都先由原始攻击力结算一次倍率、一次护甲；applyDamage 只接收最终伤害。
+function calculateAttackDamage(from, target, { multiplier = 1, rawAttack = from.typeData.atk } = {}) {
+    const counter = from.type === 'pikeman' && target.type === 'cavalry' ? UNIT_TYPES.pikeman.antiCav : 1;
+    return Math.max(1, Math.floor(rawAttack * multiplier * counter - target.typeData.def));
+}
+
+function resolveAttack(target, from, options) {
+    if (target.dead || target.hp <= 0) return 0;
+    const damage = calculateAttackDamage(from, target, options);
+    const scene = target.scene;
+    if (scene && scene.collectingImpacts) {
+        scene.battleImpacts.push({ target, damage, from });
+        return damage;
+    }
+    return applyDamage(target, damage, from);
 }
 
 function applyDamage(target, dmg, from) {
     if (target.dead || target.hp <= 0 || !Number.isFinite(dmg) || dmg <= 0) return 0;
     const scene = target.scene;
     if (scene && (target.battleId !== scene.battleId || (from && from.battleId !== scene.battleId))) return 0;
-    // 长枪兵对骑兵加成（亲子版强化：克制要看得见）
-    if (from && from.type === 'pikeman' && target.type === 'cavalry') {
-        dmg = Math.max(2, Math.floor(dmg * UNIT_TYPES.pikeman.antiCav - target.typeData.def * 0.5));
-    }
     const effectiveDamage = Math.min(target.hp, dmg);
     target.hp = Math.max(0, target.hp - dmg);
     target.flashUntil = (scene ? scene.simulationTime : 0) + 130;

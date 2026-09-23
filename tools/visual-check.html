@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <base href="../">
+    <title>冲锋与倒地 · 画面验收</title>
+    <style>
+        *{box-sizing:border-box} body{margin:0;background:#1c3f5c;color:#f4e4b3;font:14px system-ui}
+        header{position:fixed;z-index:2;inset:0 0 auto;background:#241e15;padding:12px 18px;border-bottom:1px solid #99752f}
+        nav{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0} button,select,a{font:inherit;color:inherit;background:#433421;border:1px solid #a58b54;border-radius:5px;padding:7px 10px;text-decoration:none;cursor:pointer}
+        #status{display:inline-block;min-width:280px} #game-container{position:fixed;inset:116px 0 0} #performance-hud{float:right}
+        #errors{color:#ff9d91;white-space:pre-wrap}
+    </style>
+</head>
+<body>
+<header><b>冲锋与倒地 · 画面验收</b><span id="performance-hud"></span>
+    <nav>
+        <button id="samples">重置倒地样板</button><button id="die">播放倒地</button><button id="step">倒地推进 100ms</button>
+        <button id="swords">冲击剑士薄阵</button><button id="pikes">正面长枪阵</button>
+        <button id="large">千人混战</button><button id="pause">暂停</button>
+        <select id="speed" aria-label="播放速度"><option value="0.25">0.25 倍慢放</option><option value="1" selected>正常速度</option><option value="2">2 倍速度</option></select>
+        <a href="index.html">返回游戏</a>
+    </nav>
+    <span id="status" role="status">加载素材中…</span><span id="death-state"></span><span id="errors" role="alert"></span>
+</header>
+<div id="game-container"></div>
+<script src="assets/manifest.js?v=20260923-death2"></script>
+<script src="js/phaser.min.js"></script>
+<script src="js/units.js?v=20260923-charge2"></script>
+<script src="js/game.js?v=20260923-charge-death2"></script>
+<script>
+const Snd = null;
+const status = document.getElementById('status');
+window.addEventListener('error', event => { document.getElementById('errors').textContent = event.message; });
+let scene;
+const UI = { updateCounts() {}, onBattleEnd(winner, report) {
+    status.textContent = `${winner === 'draw' ? '平局' : winner === 'red' ? '红方胜' : '蓝方胜'} · 红 ${report.red} / 蓝 ${report.blue} · ${(report.durationMs/1000).toFixed(1)} 秒`;
+}};
+class VisualCheckScene extends IsoBattleScene {
+    create() {
+        super.create(); scene = this;
+        this.showVictory = () => {};
+        showSamples();
+    }
+    update(time, delta) {
+        super.update(time, delta);
+        const dying = [...this.dyingUnits];
+        const frames = dying.slice(0,4).map(unit => `${unit.typeData.name} ${unit.deathVisual?.frame + 1}/6`).join(' · ');
+        document.getElementById('death-state').textContent = dying.length ? ` | 倒地 ${dying.length} 人：${frames}` : '';
+    }
+}
+function reset(zoom = 1.4) {
+    scene.clearUnits(); scene.spawnZoneGfx.clear();
+    scene.cameras.main.setZoom(zoom).centerOn(VIEW_W / 2, OY + 35 * TH);
+    scene.setSpeed(Number(document.getElementById('speed').value));
+    document.getElementById('pause').textContent = '暂停';
+}
+function showSamples() {
+    reset(1.5);
+    for (const [row, team] of ['red','blue'].entries()) {
+        Object.keys(UNIT_TYPES).forEach((type, col) => {
+            const x = (col - 1.5) * 175, y = row * 160 - 35;
+            const unit = scene.spawnUnit(team, type, 35 + x / TW + y / TH, 35 - x / TW + y / TH);
+            unit.slideOff = 0;
+        });
+    }
+    scene.rebuildSpatial();
+    status.textContent = '红蓝四兵种 · 播放倒地后可暂停、慢放，滚轮放大查看';
+}
+function collision(type) {
+    reset(1.4);
+    for (let row=0;row<2;row++) for (let col=0;col<4;col++) {
+        const unit = scene.spawnUnit('red','cavalry',26-row*0.8,33+(col-1.5)*1.35);
+        unit.slideOff=0;
+    }
+    const depth = type === 'pikeman' ? 3 : 2;
+    for (let row=0;row<depth;row++) for (let col=0;col<6;col++) {
+        const unit = scene.spawnUnit('blue',type,39+row*0.8,33+(col-2.5)*1.35);
+        unit.slideOff=0;
+    }
+    scene.battleStarted = true;
+    status.textContent = type === 'pikeman' ? '8 骑兵冲击 18 长枪 · 观察正面架枪与双方首撞损伤' : '8 骑兵冲击 12 剑士 · 观察首撞击退与有限穿透';
+}
+document.getElementById('samples').onclick = () => scene && showSamples();
+document.getElementById('die').onclick = () => {
+    if (!scene) return;
+    scene.units.filter(unit => !unit.dead).forEach(unit => applyDamage(unit, unit.hp, null));
+    status.textContent = '倒地播放中 · 最后一帧直接留在原落点';
+};
+document.getElementById('step').onclick = () => {
+    if (!scene) return;
+    const speed = scene.gameSpeed;
+    scene.paused = false; scene.gameSpeed = 1;
+    for (let i=0;i<2;i++) scene.updateDeathVisuals(50);
+    scene.gameSpeed = speed; scene.paused = true; scene.syncAnimTimeScale();
+    document.getElementById('pause').textContent = '继续';
+};
+document.getElementById('swords').onclick = () => scene && collision('infantry');
+document.getElementById('pikes').onclick = () => scene && collision('pikeman');
+document.getElementById('large').onclick = () => {
+    if (!scene) return; reset(.7);
+    const army = { infantry:180,pikeman:80,archer:180,cavalry:60 };
+    scene.deployUnits(army,army,'mixed','mixed');
+    scene.setSpeed(Number(document.getElementById('speed').value));
+    scene.battleStarted=true; status.textContent='千人混战 · 镜像阵容与大量阵亡压力测试';
+};
+document.getElementById('pause').onclick = event => {
+    if (!scene) return; scene.togglePause(); event.target.textContent=scene.paused?'继续':'暂停';
+};
+document.getElementById('speed').onchange = event => scene && scene.setSpeed(Number(event.target.value));
+const game = new Phaser.Game({type:Phaser.AUTO,parent:'game-container',backgroundColor:'#1c3f5c',
+    pixelArt:true,roundPixels:true,antialias:false,scene:VisualCheckScene,
+    scale:{mode:Phaser.Scale.RESIZE,width:'100%',height:'100%'}});
+</script>
+</body>
+</html>

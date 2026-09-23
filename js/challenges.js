@@ -3,9 +3,9 @@ const CHALLENGES = [
     {
         id: 'hold-the-charge', title: '挡住铁骑', subtitle: '第一课 · 找到克制',
         icon: '🔱', unit: 'cavalry', difficulty: '入门', budget: 300,
-        enemy: { cavalry: 10 }, enemyFormation: 'wedge',
-        description: '十名重骑士迎面而来。有限的金币，该交给谁？',
-        hint: '长枪兵擅长迎击骑兵。试着观察第一次冲锋后的双方损失。'
+        enemy: { cavalry: 25 }, enemyFormation: 'wedge',
+        description: '二十五名重骑士迎面而来。双方预算相同，该怎样迎击？',
+        hint: '枪兵需要正面站稳、相互支撑才能挡住冲锋。试一支有纵深的枪阵，零散长枪可拦不住铁骑。'
     },
     {
         id: 'break-the-volley', title: '穿过箭雨', subtitle: '第二课 · 接近远程',

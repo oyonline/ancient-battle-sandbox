@@ -11,6 +11,12 @@ const VIEW_H = OY + (GRID_W + GRID_H) * TH / 2 + 60;
 const SP_CELL = 3;
 const SIMULATION_STEP_MS = 1000 / 60;
 
+function quantizePosition(value, extent) {
+    const center = extent / 2, offset = value - center;
+    // 以地图中心为原点，正负半格都向外舍入；1e-10格容差吸收浮点半格噪声。
+    return center + Math.sign(offset) * Math.floor(Math.abs(offset) * 1e6 + 0.5001) / 1e6;
+}
+
 function gridToScreen(gx, gy) {
     return { x: (gx - gy) * TW / 2 + OX, y: (gx + gy) * TH / 2 + OY };
 }
@@ -137,6 +143,9 @@ class IsoBattleScene extends Phaser.Scene {
             this.load.image(p.file.replace('.png', ''), 'assets/' + p.file));
         Object.values(MANIFEST.corpses || {}).forEach(c =>
             this.load.image(c.file.replace('.png', ''), 'assets/' + c.file));
+        Object.values(MANIFEST.deaths || {}).forEach(c =>
+            this.load.spritesheet(c.file.replace('.png', ''), 'assets/' + c.file,
+                { frameWidth: c.fw, frameHeight: c.fh }));
         // 动画帧条（walk/attack spritesheet）
         Object.values(MANIFEST.anims || {}).forEach(clips => {
             Object.values(clips).forEach(c => {
@@ -163,6 +172,16 @@ class IsoBattleScene extends Phaser.Scene {
                 });
             });
         });
+        // 死亡阴影只保留接触暗部，不把活体的红蓝队伍圈盖进尸体层。
+        if (!this.textures.exists('death-contact-shadow')) {
+            const g = this.make.graphics({ add: false });
+            g.fillStyle(0x0c1206, 0.18);
+            g.fillEllipse(48, 24, 96, 48);
+            g.fillStyle(0x0c1206, 0.22);
+            g.fillEllipse(48, 24, 70, 32);
+            g.generateTexture('death-contact-shadow', 96, 48);
+            g.destroy();
+        }
     }
 
     create() {
@@ -221,11 +240,8 @@ class IsoBattleScene extends Phaser.Scene {
 
         this.setupCamera();
 
-        // FPS 观测（千人压测）：右上角常驻，绿≥55 / 黄≥30 / 红<30
-        this.fpsText = this.add.text(this.cameras.main.width - 10, 10, '', {
-            fontSize: '12px', color: '#9cf5a0', stroke: '#000000', strokeThickness: 3,
-            fontFamily: 'Menlo, Consolas, monospace'
-        }).setOrigin(1, 0).setScrollFactor(0).setDepth(300000);
+        // FPS 放在顶栏下方的 DOM 层，不受战场镜头的缩放和平移影响。
+        this.fpsHud = document.getElementById('performance-hud');
         this._fpsN = 0; this._fpsT = 0;
 
         if (typeof UI !== 'undefined' && UI.onSceneReady) UI.onSceneReady(this);
@@ -250,9 +266,6 @@ class IsoBattleScene extends Phaser.Scene {
         g.clear();
         g.fillStyle(0x1c3f5c, 1);
         g.fillRect(-w, -h, w * 3, h * 3);
-        // 中心区域稍亮（岛屿附近的浅海感）
-        g.fillStyle(0x265a80, 0.5);
-        g.fillRect(-w * 0.1, -h * 0.1, w * 1.2, h * 1.2);
 
         // 波纹：水平短划错位排布
         gw.clear();
@@ -536,6 +549,10 @@ class IsoBattleScene extends Phaser.Scene {
         this.simulationTime = 0;
         this.simulationAccumulator = 0;
         this.battleQueue = [];
+        this.battleImpacts = [];
+        this.braceCandidates = new Map();
+        this.collectingImpacts = false;
+        this.planningStep = false;
         this.battleEvents = [];
         this.battleMilestones = new Set();
         this.dyingUnits = new Set();
@@ -618,6 +635,37 @@ class IsoBattleScene extends Phaser.Scene {
         for (const action of ready) {
             if (action.battleId === this.battleId) action.callback();
         }
+    }
+
+    flushBattleImpacts() {
+        this.collectingImpacts = false;
+        const impacts = this.battleImpacts;
+        this.battleImpacts = [];
+        // 同一步已成立的命中全部生效，攻击者在此批中阵亡也不会抹掉其攻击。
+        for (const { target, damage, from } of impacts) applyDamage(target, damage, from);
+    }
+
+    queueBrace(guard, cavalry) {
+        const distance = Math.hypot(guard.gx - cavalry.gx, guard.gy - cavalry.gy);
+        const current = this.braceCandidates.get(guard);
+        if (!current || distance < current.distance - 1e-9 ||
+            (Math.abs(distance - current.distance) <= 1e-9 && cavalry.id < current.cavalry.id)) {
+            this.braceCandidates.set(guard, { cavalry, distance });
+        }
+    }
+
+    resolveBrace(guard, cavalry) {
+        // 迎击倍率与反骑倍率各一次；在整批伤害之前登记，同刻将阵亡的枪兵仍能迎击。
+        resolveAttack(cavalry, guard, { multiplier: 1.5 });
+        guard.lastBrace = this.simulationTime;
+        this.playAttackAnim(guard, cavalry);
+        this.meleeImpact(guard, cavalry);
+        this.addBattleEvent(`brace-${guard.team}`, `${guard.team === 'red' ? '红方' : '蓝方'}正面枪阵迎击骑兵冲锋`, guard.team);
+    }
+
+    flushBraceCandidates() {
+        for (const [guard, { cavalry }] of this.braceCandidates) this.resolveBrace(guard, cavalry);
+        this.braceCandidates.clear();
     }
 
     cancelCountdown() {
@@ -711,6 +759,10 @@ class IsoBattleScene extends Phaser.Scene {
             spr, shadow,
             lastAttack: -typeData.atkSpeed, lastContact: 0,
             state: 'charge', stateTime: 0, reformX: null, target: null,
+            chargeDistance: 0, chargeLastX: null, lastRetarget: -Infinity, lastBrace: -Infinity,
+            chargeMomentum: 0, chargeImpactId: null,
+            braceTime: 0, braceReady: false, braceHold: false, braceSupport: 0, braceDepth: 0,
+            braceFacingX: team === 'red' ? 1 : -1, braceFacingY: 0,
             moving: false, dead: false, flashUntil: 0,
             bobPhase: Math.random() * Math.PI * 2,
             lastSX: x, lastSY: y, scene: this,
@@ -765,8 +817,9 @@ class IsoBattleScene extends Phaser.Scene {
         // 模拟数组可能已压实，仍在倒地动画中的单位必须一起清理。
         const visualUnits = new Set([...this.units, ...(this.dyingUnits || [])]);
         visualUnits.forEach(u => {
-            this.tweens.killTweensOf(u.spr);   // 死亡倒地 tween 可能在跑，先停掉防止盖印已销毁精灵
+            this.tweens.killTweensOf(u.spr);
             this.tweens.killTweensOf(u.lunge);
+            u.deathVisual = null;
             u.spr.destroy(); u.shadow.destroy();
         });
         this.units = [];
@@ -797,11 +850,14 @@ class IsoBattleScene extends Phaser.Scene {
         this._fpsN++;
         if (time - this._fpsT >= 500) {
             const fps = Math.round(this._fpsN * 1000 / (time - this._fpsT));
-            this.fpsText.setText(fps + ' FPS · 存活 ' + (this.redAlive + this.blueAlive));
-            this.fpsText.setColor(fps >= 55 ? '#9cf5a0' : fps >= 30 ? '#ffd24a' : '#ff6b6b');
+            if (this.fpsHud) {
+                this.fpsHud.textContent = fps + ' FPS · 存活 ' + (this.redAlive + this.blueAlive);
+                this.fpsHud.style.color = fps >= 55 ? '#9cf5a0' : fps >= 30 ? '#ffd24a' : '#ff6b6b';
+            }
             this._fpsN = 0; this._fpsT = time;
         }
         const dt = Math.min(delta, 50) / 1000 * this.gameSpeed;
+        this.updateDeathVisuals(delta); // 暂停冻结；结局后仍让已开始的倒地完整落地。
         this.updateBloods(dt);
         this.flushBloodQueue();
         // 阵亡计数 DOM 刷新限频（千人大战每帧几十个阵亡，不能每杀都写 DOM）
@@ -836,9 +892,8 @@ class IsoBattleScene extends Phaser.Scene {
 
     stepBattle(dt) {
         const now = this.simulationTime;
-        this.flushBattleActions();
-
-        // 空间哈希：每个模拟步重建（O(n)），索敌/碰撞全部走桶查询
+        this.braceCandidates.clear();
+        // 所有人先读取同一份位置和生命状态；先选行动，再统一移动、结算命中。
         this.rebuildSpatial();
         const units = this._aliveArr;
 
@@ -850,19 +905,34 @@ class IsoBattleScene extends Phaser.Scene {
                 unit.velY = (unit.gy - unit.pgy) / dt;
             }
             unit.pgx = unit.gx; unit.pgy = unit.gy;
+            unit.moveX = 0; unit.moveY = 0;
+            unit.pushX = 0; unit.pushY = 0;
         }
+        for (const unit of units) if (unit.type === 'pikeman') updatePikeBrace(unit, dt);
+        this.collectingImpacts = true;
+        this.planningStep = true;
+        this.flushBattleActions();
 
         for (let i = 0; i < units.length; i++) {
             const unit = units[i];
             if (unit.dead) continue;
             unit.moving = false;
-            if (unit.type === 'cavalry' && unit.state !== 'melee') {
+            if (unit.type === 'cavalry') {
                 if (this.cavalryAI.update(unit, now, dt)) continue;
             }
             this.updateNormalUnit(unit, now, dt);
         }
+        this.planningStep = false;
+        for (const unit of units) {
+            unit.gx += unit.moveX + unit.pushX;
+            unit.gy += unit.moveY + unit.pushY;
+        }
+        this.rebuildSpatial();
         this.separate(dt);
+        this.rebuildSpatial();
         this.updateArrows(dt, now);
+        this.flushBraceCandidates();
+        this.flushBattleImpacts();
         this.checkWin();
 
         // 阵亡单位周期压实，数组不无限膨胀
@@ -921,7 +991,7 @@ class IsoBattleScene extends Phaser.Scene {
                 if (e.team === unit.team || e.dead) return;
                 const dx = e.gx - unit.gx, dy = e.gy - unit.gy;
                 const d2 = dx * dx + dy * dy;
-                if (d2 < bestD2) { bestD2 = d2; best = e; }
+                if (d2 < bestD2 - 1e-9 || (Math.abs(d2 - bestD2) <= 1e-9 && e.id < best.id)) { bestD2 = d2; best = e; }
             });
             if (best && bestD2 <= r * r) return best;
             if (r >= maxR) return best;
@@ -991,7 +1061,7 @@ class IsoBattleScene extends Phaser.Scene {
             }
         } else {
             if (minD > range) {
-                moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
+                if (unit.type !== 'pikeman' || !unit.braceHold) moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
             } else if (now - unit.lastAttack > unit.typeData.atkSpeed) {
                 unit.lastAttack = now;
                 this.playAttackAnim(unit, nearest);
@@ -1000,8 +1070,7 @@ class IsoBattleScene extends Phaser.Scene {
                 this.scheduleBattleAction(95, () => {
                     if (unit.dead || victim.dead || this.battleOver) return;
                     if (dist(unit, victim) > range + 0.7) return;
-                    const dmg = Math.max(1, unit.typeData.atk - victim.typeData.def);
-                    applyDamage(victim, dmg, unit);
+                    resolveAttack(victim, unit);
                     this.meleeImpact(unit, victim);
                 });
             }
@@ -1012,6 +1081,7 @@ class IsoBattleScene extends Phaser.Scene {
     separate(dt) {
         const R = 0.52, R2 = R * R;
         const units = this._aliveArr;
+        for (const unit of units) { unit.separateX = 0; unit.separateY = 0; }
         for (let i = 0; i < units.length; i++) {
             const a = units[i];
             if (a.dead) continue;
@@ -1023,15 +1093,16 @@ class IsoBattleScene extends Phaser.Scene {
                     const d = Math.sqrt(d2);
                     const push = (R - d) * 0.5 * Math.min(1, dt * 14);
                     const nx = dx / d, ny = dy / d;
-                    a.gx -= nx * push; a.gy -= ny * push;
-                    b.gx += nx * push; b.gy += ny * push;
+                    a.separateX -= nx * push; a.separateY -= ny * push;
+                    b.separateX += nx * push; b.separateY += ny * push;
                 }
             });
         }
         for (let i = 0; i < units.length; i++) {
             const u = units[i];
-            if (u.gx < 0.6) u.gx = 0.6; else if (u.gx > GRID_W - 0.6) u.gx = GRID_W - 0.6;
-            if (u.gy < 0.6) u.gy = 0.6; else if (u.gy > GRID_H - 0.6) u.gy = GRID_H - 0.6;
+            // 对称累计推开，并消除长时间镜像模拟中的浮点方向偏差。
+            u.gx = quantizePosition(clamp(u.gx + u.separateX, 0.6, GRID_W - 0.6), GRID_W);
+            u.gy = quantizePosition(clamp(u.gy + u.separateY, 0.6, GRID_H - 0.6), GRID_H);
         }
     }
 
@@ -1076,10 +1147,10 @@ class IsoBattleScene extends Phaser.Scene {
                 this.forEachNear(a.tx, a.ty, hd, u => {
                     if (u.team === a.team || u.dead) return;
                     const d = Math.hypot(u.gx - a.tx, u.gy - a.ty);
-                    if (d < hd) { hd = d; hit = u; }
+                    if (d < hd - 1e-9 || (hit && Math.abs(d - hd) <= 1e-9 && u.id < hit.id)) { hd = d; hit = u; }
                 });
                 if (hit) {
-                    applyDamage(hit, Math.max(1, a.dmg - hit.typeData.def), a.source);
+                    resolveAttack(hit, a.source, { rawAttack: a.dmg });
                     this.bloodBurst(s.x, s.y - 8, 6, 85, hit.sizeK || 1);
                 } else if (!this.lowFX) {
                     this.impactPuff(s.x, s.y, 0xcfcfcf);
@@ -1307,100 +1378,110 @@ class IsoBattleScene extends Phaser.Scene {
         });
     }
 
-    // 盖印真实躺尸贴图进留痕层（帝国时代式死亡素材），成功返回 true
-    stampCorpse(unit, x, groundY, fallDir) {
-        const key = 'units/corpse_' + unit.team + '_' + unit.type;
-        if (!this.textures.exists(key)) return false;
-        const isCav = unit.type === 'cavalry';
-        const sc = unit.typeData.scale * (isCav ? 0.37 : 0.30)   // 与活体显示同公式
-            * (0.94 + Math.random() * 0.12);                    // 大小微抖动，避免千人一面
-        const img = this.add.image(x, groundY, key);
-        img.setScale(sc)
-            .setFlipX(fallDir < 0)
-            .setAngle((Math.random() - 0.5) * 14)
-            .setTint(0xb8b8b8);
-        img.y = groundY - img.displayHeight * 0.42;   // 底缘微沉入地面线，贴地
-        this.scarRT.draw(img);
-        img.destroy();
+    // 原精灵末帧原位盖印：不再替换尺寸、原点或随机旋转，接触阴影一起保留。
+    stampCorpse(unit) {
+        const death = unit.deathVisual;
+        if (!death || death.battleId !== this.battleId || !this.scarRT) return false;
+        this.scarRT.draw(unit.shadow);
+        this.scarRT.draw(unit.spr);
         return true;
     }
 
     killUnit(unit, from) {
-        const battleId = this.battleId;
-        this.dyingUnits.add(unit);
-        // 死亡编排：击杀瞬间喷血变灰 → 顺击退方向倒下（重力加速，骑兵带惯性前冲）
-        // → 落地扬尘溅血，盖印真实躺尸素材进留痕层永久保留
         const s = gridToScreen(unit.gx, unit.gy);
         const isCav = unit.type === 'cavalry';
         const dk = Math.max(0.6, unit.sizeK || 1);
-
-        // 倒向：被击退方向（攻击者在屏幕哪侧就往哪侧倒），无来源则随机
-        let fallDir;
-        if (from) {
-            const dsx = (unit.gx - unit.gy) - (from.gx - from.gy);
-            fallDir = dsx > 0.05 ? 1 : dsx < -0.05 ? -1 : (Math.random() > 0.5 ? 1 : -1);
-        } else {
-            fallDir = Math.random() > 0.5 ? 1 : -1;
-        }
-
-        this.bloodBurst(s.x, s.y - 12 * dk, isCav ? 18 : 14, 120, dk);
-
+        const def = typeof MANIFEST !== 'undefined' && MANIFEST.deaths?.[`${unit.team}_${unit.type}`];
+        const key = def && def.file.replace('.png', '');
+        const clip = key && this.textures.exists(key) ? def : null;
+        const corpseKey = `units/corpse_${unit.team}_${unit.type}`;
+        const hasCorpse = !clip && this.textures.exists(corpseKey);
         const spr = unit.spr;
-        unit.shadow.destroy();
+        const flipX = (unit.faceDir || 1) < 0;
+        const sc = clip ? clip.scale : unit.baseScale;
+        const foot = footProfile(unit.type, unit.visualDir);
+        // 骑兵沿生前世界速度滑移，最后一帧之前落稳；不随机改变倒向。
+        const vx = isCav ? ((unit.velX || 0) - (unit.velY || 0)) * TW / 2 : 0;
+        const vy = isCav ? ((unit.velX || 0) + (unit.velY || 0)) * TH / 2 : 0;
+        const speed = Math.hypot(vx, vy);
+        const slide = Math.min(14, speed * 0.07);
+        const shadowWidth = foot.w * unit.baseScale;
+        const corpseWidth = clip ? clip.fw * sc : shadowWidth * 1.4;
+
+        this.tweens.killTweensOf(spr);
+        this.tweens.killTweensOf(unit.lunge);
         spr.anims.stop();
-        spr.setTint(0x9a9a9a);
-
-        const fall = {
-            targets: spr,
-            angle: fallDir * (isCav ? 86 : 80),
-            y: spr.y + (isCav ? 6 : 3),
-            duration: isCav ? 520 : 380,
-            ease: 'Cubic.easeIn',
-            onComplete: () => {
-                if (battleId !== this.battleId) { spr.destroy(); return; }
-                // 落地：尘圈扩散 + 溅血
-                if (!this.lowFX) {
-                    const gdust = this.add.graphics();
-                    gdust.fillStyle(0xc9b28c, 0.5);
-                    gdust.fillEllipse(0, 0, isCav ? 24 : 18, isCav ? 12 : 9);
-                    gdust.setPosition(spr.x, spr.y);
-                    this.groundFX.add(gdust);
-                    this.tweens.add({
-                        targets: gdust, alpha: 0, scaleX: 2.2, scaleY: 1.6,
-                        duration: 500, onComplete: () => gdust.destroy()
-                    });
-                }
-                this.addBloodPool(spr.x, s.y, 15 * dk);
-                this.addGroundBlood(spr.x + (Math.random() - 0.5) * 22 * dk, s.y + (Math.random() - 0.5) * 8, 9 * dk);
-                this.addGroundBlood(spr.x + (Math.random() - 0.5) * 26 * dk, s.y + (Math.random() - 0.5) * 10, 6 * dk);
-                this.addGroundBlood(spr.x + (Math.random() - 0.5) * 14 * dk, s.y + (Math.random() - 0.5) * 6, 4 * dk);
-
-                if (!this.stampCorpse(unit, spr.x, s.y, fallDir)) {
-                    // 无尸体素材时退回压扁盖印
-                    this.tweens.add({
-                        targets: spr,
-                        scaleX: spr.scaleX * (isCav ? 0.45 : 0.6),
-                        duration: isCav ? 300 : 220,
-                        ease: 'Bounce.easeOut',
-                        onComplete: () => {
-                            if (battleId !== this.battleId) { spr.destroy(); return; }
-                            this.scarRT.draw(spr);
-                            spr.destroy();
-                            this.dyingUnits.delete(unit);
-                        }
-                    });
-                } else {
-                    spr.destroy();
-                    this.dyingUnits.delete(unit);
-                }
-            }
+        spr.clearTint();
+        spr.setAngle(0).setAlpha(1).setFlipX(flipX).setScale(sc);
+        if (clip) {
+            spr.setTexture(key, 0).setOrigin(clip.anchorX, clip.anchorY).setPosition(s.x, s.y);
+        } else if (hasCorpse) {
+            spr.setTexture(corpseKey).setOrigin(0.5, 0.92).setPosition(s.x, s.y);
+        } else {
+            // 缺素材时短暂下沉淡出；不把直立角色旋转成纸板尸体。
+            spr.setPosition(s.x, s.y + unit.footDy);
+        }
+        const depth = (unit.gx + unit.gy) * 100 + 50;
+        spr.setDepth(depth);
+        unit.shadow.setTexture('death-contact-shadow').setOrigin(0.5, 0.5)
+            .setAngle(0).setAlpha(1).setFlipX(false)
+            .setPosition(s.x + foot.dx * unit.baseScale * (flipX ? -1 : 1), s.y)
+            .setScale(shadowWidth / 96, foot.h * unit.baseScale / 48).setDepth(depth - 2);
+        unit.deathVisual = {
+            battleId: this.battleId, elapsed: 0, duration: clip ? (isCav ? 760 : 600) : 240,
+            frames: clip ? clip.frames : 1, frame: 0, clip: !!clip, hasCorpse,
+            x: s.x, y: s.y, depth,
+            slideX: speed ? vx / speed * slide : 0, slideY: speed ? vy / speed * slide : 0,
+            shadowDX: foot.dx * unit.baseScale * (flipX ? -1 : 1),
+            shadowWidth, shadowHeight: foot.h * unit.baseScale,
+            endShadowWidth: Math.max(shadowWidth, corpseWidth * 0.7),
+            endShadowHeight: Math.max(foot.h * unit.baseScale, corpseWidth * 0.18)
         };
-        if (isCav) fall.x = spr.x + (unit.faceDir || 1) * (10 + Math.random() * 8);
-        this.tweens.add(fall);
-
+        this.dyingUnits.add(unit);
+        this.bloodBurst(s.x, s.y - 12 * dk, isCav ? 18 : 14, 120, dk);
         this.deadCount++;
         this._countsDirty = true;
         if (Snd) Snd.play('die');
+    }
+
+    updateDeathVisuals(delta) {
+        const elapsed = this.paused ? 0 : Math.max(0, Math.min(delta, 50)) * this.gameSpeed;
+        for (const unit of this.dyingUnits) {
+            const death = unit.deathVisual;
+            if (!death || death.battleId !== this.battleId) {
+                unit.spr.destroy(); unit.shadow.destroy();
+                unit.deathVisual = null;
+                this.dyingUnits.delete(unit);
+                continue;
+            }
+            if (!elapsed) continue;
+            death.elapsed = Math.min(death.duration, death.elapsed + elapsed);
+            const progress = death.elapsed / death.duration;
+            const settled = Math.min(1, progress * 6 / 5);
+            const drift = 1 - Math.pow(1 - settled, 3);
+            const x = death.x + death.slideX * drift, y = death.y + death.slideY * drift;
+            const frame = Math.min(death.frames - 1, Math.floor(progress * death.frames));
+            if (death.clip && frame !== death.frame) {
+                unit.spr.setFrame(frame);
+                death.frame = frame;
+            }
+            const fading = !death.clip && !death.hasCorpse;
+            unit.spr.setPosition(x, y + (fading ? unit.footDy + progress * 4 : 0))
+                .setDepth(death.depth + death.slideY * drift * 100 / (TH / 2));
+            if (fading) unit.spr.setAlpha(1 - progress);
+            unit.shadow.setPosition(x + death.shadowDX * (1 - settled), y)
+                .setScale((death.shadowWidth + (death.endShadowWidth - death.shadowWidth) * settled) / 96,
+                    (death.shadowHeight + (death.endShadowHeight - death.shadowHeight) * settled) / 48)
+                .setDepth(unit.spr.depth - 2);
+            if (fading) unit.shadow.setAlpha(1 - progress);
+            if (progress < 1) continue;
+            const dk = Math.max(0.6, unit.sizeK || 1);
+            this.addBloodPool(x, y, 15 * dk);
+            if (!fading) this.stampCorpse(unit);
+            unit.spr.destroy(); unit.shadow.destroy();
+            unit.deathVisual = null;
+            this.dyingUnits.delete(unit);
+        }
     }
 
     // ---------------- 渲染同步 ----------------

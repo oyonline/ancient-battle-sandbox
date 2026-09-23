@@ -10,16 +10,23 @@ const context = vm.createContext({
 for (const name of ['units.js', 'game.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', name), 'utf8'), context);
 }
-vm.runInContext('this.engine = { IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage };', context);
-const { IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage } = context.engine;
+vm.runInContext('this.engine = { IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack };', context);
+const { IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack } = context.engine;
 const snapshot = value => JSON.parse(JSON.stringify(value));
 
 function displayObject() {
     return {
         destroyed: false,
-        setOrigin() { return this; }, setScrollFactor() { return this; },
-        setDepth() { return this; }, setScale() { return this; }, setFlipX() { return this; },
-        setTint() { return this; }, anims: { stop() {} },
+        x: 0, y: 0, scaleX: 1, scaleY: 1, frame: 0, texture: '',
+        setOrigin(x, y) { this.originX = x; this.originY = y; return this; }, setScrollFactor() { return this; },
+        setDepth(depth) { this.depth = depth; return this; },
+        setScale(x, y = x) { this.scaleX = x; this.scaleY = y; return this; },
+        setFlipX(value) { this.flipX = value; return this; },
+        setTexture(key, frame = 0) { this.texture = key; this.frame = frame; return this; },
+        setFrame(frame) { this.frame = frame; return this; },
+        setPosition(x, y) { this.x = x; this.y = y; return this; },
+        setAngle(angle) { this.angle = angle; return this; }, setAlpha(alpha) { this.alpha = alpha; return this; },
+        setTint() { return this; }, clearTint() { return this; }, anims: { stop() {} },
         destroy() { this.destroyed = true; },
         clear() {}, lineStyle() {}, lineBetween() {}, fillStyle() {}, fillCircle() {}
     };
@@ -40,6 +47,7 @@ function makeScene() {
         add: { text: () => displayObject(), image: () => displayObject(), sprite: () => displayObject() },
         tweens: { killTweensOf() {}, add() {} },
         anims: { globalTimeScale: 1 },
+        textures: { exists: () => false },
         time: { delayedCall(delay, callback) {
             return { delay, callback, removed: false, remove() { this.removed = true; } };
         } },
@@ -60,4 +68,4 @@ function addUnit(scene, team, type, gx = 30, gy = 30) {
     return unit;
 }
 
-module.exports = { context, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, snapshot, makeScene, addUnit };
+module.exports = { context, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack, snapshot, makeScene, addUnit };

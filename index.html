@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>帝国亲子沙盒 · 统帅试炼</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E🏰%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="css/style.css?v=20260923-1">
+    <link rel="stylesheet" href="css/style.css?v=20260923-2">
 </head>
 <body>
     <!-- 战场：铺满整个视口 -->
@@ -22,6 +22,7 @@
         <button id="btn-home" title="返回战役选择">⚑ 战役</button>
         <button id="btn-mute" title="声音开关" aria-label="关闭声音">🔊</button>
         <button id="btn-panel" title="显示/隐藏配兵面板">📜 面板</button>
+        <span id="performance-hud" aria-live="off" title="帧率与存活士兵数"></span>
     </header>
 
     <!-- 底部悬浮控制条（战斗中） -->
@@ -99,7 +100,7 @@
                 <section id="sec-ready" class="sec">
                     <div class="team-banner both">⚔️ 两军就位，大战一触即发！</div>
                     <div id="army-summary"></div>
-                    <div class="hint-small">克制关系：🐴骑士克🏹弓箭手 · 🔱长枪克🐴骑士 · 🏹弓箭手克近战</div>
+                    <div class="hint-small">🔱长枪拦截骑兵 · 🐴骑兵助跑突击弓手 · ⚔️剑士抗线，🏹弓手远射</div>
                     <button class="big-btn" id="btn-start">🚀 开战！</button>
                     <div class="action-row" id="ready-edit-actions">
                         <button class="secondary-btn" id="btn-ready-red">调整红方</button>
@@ -131,11 +132,11 @@
     <!-- 轮流配兵遮罩（防偷看） -->
     <div class="overlay" id="overlay"></div>
 
-    <script src="assets/manifest.js"></script>
+    <script src="assets/manifest.js?v=20260923-death2"></script>
     <script src="js/phaser.min.js"></script>
-    <script src="js/units.js?v=20260923-1"></script>
-    <script src="js/challenges.js?v=20260923-1"></script>
-    <script src="js/game.js?v=20260923-1"></script>
+    <script src="js/units.js?v=20260923-charge2"></script>
+    <script src="js/challenges.js?v=20260923-3"></script>
+    <script src="js/game.js?v=20260923-charge-death2"></script>
     <script src="js/ui.js?v=20260923-1"></script>
     <script>
         const game = new Phaser.Game({
@@ -143,7 +144,7 @@
             parent: 'game-container',
             width: window.innerWidth,
             height: window.innerHeight,
-            backgroundColor: '#20415e',
+            backgroundColor: '#1c3f5c',
             pixelArt: true,          // 像素风：NEAREST 硬边采样，放大不糊
             roundPixels: true,       // 像素对齐整数格，避免抖动
             antialias: false,

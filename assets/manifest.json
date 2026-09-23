@@ -337,5 +337,79 @@
       "w": 168,
       "h": 85
     }
+  },
+  "deaths": {
+    "red_infantry": {
+      "file": "units/death/red_infantry.png",
+      "fw": 183,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.3
+    },
+    "blue_infantry": {
+      "file": "units/death/blue_infantry.png",
+      "fw": 183,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.3
+    },
+    "red_pikeman": {
+      "file": "units/death/red_pikeman.png",
+      "fw": 162,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.3
+    },
+    "blue_pikeman": {
+      "file": "units/death/blue_pikeman.png",
+      "fw": 162,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.3
+    },
+    "red_archer": {
+      "file": "units/death/red_archer.png",
+      "fw": 167,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.3
+    },
+    "blue_archer": {
+      "file": "units/death/blue_archer.png",
+      "fw": 167,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.3
+    },
+    "red_cavalry": {
+      "file": "units/death/red_cavalry.png",
+      "fw": 182,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.4995
+    },
+    "blue_cavalry": {
+      "file": "units/death/blue_cavalry.png",
+      "fw": 182,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.4995
+    }
   }
 }

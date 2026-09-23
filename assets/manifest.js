@@ -1,4 +1,4 @@
-// 素材清单（由 build_generated_sprites.py 生成；corpses 段由 build_corpse_sprites.py 维护）
+// 素材清单；死亡动画由 tools/build_death_sprites.py 维护。
 const MANIFEST = {
   "units": {
     "blue_infantry": {
@@ -337,6 +337,80 @@ const MANIFEST = {
       "file": "units/corpse_blue_cavalry.png",
       "w": 168,
       "h": 85
+    }
+  },
+  "deaths": {
+    "red_infantry": {
+      "file": "units/death/red_infantry.png",
+      "fw": 183,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.3
+    },
+    "blue_infantry": {
+      "file": "units/death/blue_infantry.png",
+      "fw": 183,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.3
+    },
+    "red_pikeman": {
+      "file": "units/death/red_pikeman.png",
+      "fw": 162,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.3
+    },
+    "blue_pikeman": {
+      "file": "units/death/blue_pikeman.png",
+      "fw": 162,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.3
+    },
+    "red_archer": {
+      "file": "units/death/red_archer.png",
+      "fw": 167,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.3
+    },
+    "blue_archer": {
+      "file": "units/death/blue_archer.png",
+      "fw": 167,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.3
+    },
+    "red_cavalry": {
+      "file": "units/death/red_cavalry.png",
+      "fw": 182,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.4995
+    },
+    "blue_cavalry": {
+      "file": "units/death/blue_cavalry.png",
+      "fw": 182,
+      "fh": 192,
+      "frames": 6,
+      "anchorX": 0.5,
+      "anchorY": 0.9270833333333334,
+      "scale": 0.4995
     }
   }
 };
