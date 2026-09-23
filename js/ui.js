@@ -53,7 +53,7 @@ const UI_TACTIC_OPTIONS = {
     advance: { name: '标准推进', description: '所有兵种按原有方式接近敌人并交战。' },
     assault: { name: '正面强攻', requires: 'infantry', description: '剑士集中向敌阵正面推进，争夺突破口；其他兵种照常作战。' },
     flank: { name: '单翼迂回', requires: 'infantry', description: '剑士约一半在正面牵制，一半沿敌阵外缘寻找侧后方的接敌机会；其他兵种照常作战。' },
-    hold: { name: '枪阵守位', requires: 'pikeman', description: '长枪兵重新布成四面防御的方阵，守位、支援并补位；其他兵种沿用所选阵型、照常作战。' }
+    hold: { name: '枪阵守位', requires: 'pikeman', description: '长枪兵布成四面方阵，近敌转身、小步迎击，内排支援缺口；威胁退去后归位架枪。其他兵种照常作战。' }
 };
 
 // ==================== 战役、配兵与战报 ====================
@@ -503,8 +503,8 @@ const UI = {
         document.getElementById('tactics-ready-title').textContent = deathmatch
             ? '预备队接应 · 收拢溃兵后继续进攻' : '观察：正面能否守住，迂回队何时到位？';
         document.getElementById('tactics-ready-copy').textContent = deathmatch
-            ? '预备队在后方接应、分批增援；溃兵脱离危险后重整，再次出击。阵亡不会复活，重整不会恢复生命。'
-            : '四面枪阵的侧后也有防御。绕行队会沿外缘寻找接敌机会，分散守军；剑士不一定能攻破完整方阵。';
+            ? '观察黄标后撤、橙标逃离、绿标恢复整队、蓝箭头返场。集结旗旁是真实接应队，侧翼也会派人收拢；重整不回血。枪阵仍会转身迎敌、内排补位。'
+            : '枪阵会转身迎敌、小步调整，内排反击入阵者并补位；绕行队沿外缘寻找机会，剑士不一定能攻破完整方阵。';
         document.getElementById('deathmatch-ready-rule').hidden = !deathmatch;
         document.getElementById('ready-morale-title').textContent = deathmatch
             ? '溃逃不会直接判负，稳住后还能继续打。' : '稳住军心，也能赢下战斗。';
@@ -566,7 +566,7 @@ const UI = {
             <tr><th scope="row">${UNIT_TYPES[key].icon} ${UNIT_TYPES[key].name}</th><td>${s.initial}</td><td>${s.alive}</td><td>${s.lost}</td><td>${s.withdrawn ?? 0}</td><td>${s.kills}</td></tr>`).join('');
         return `<div class="report-team ${team}"><div class="report-team-title"><b>${team === 'red' ? '🔴' : '🔵'} ${name}</b><span>有效伤害 ${Math.round(data.damage).toLocaleString()}</span></div>
             <table><caption class="sr-only">${name}各兵种战报，在场包含当前溃逃人数</caption><thead><tr><th scope="col">兵种</th><th scope="col">出战</th><th scope="col">在场</th><th scope="col">阵亡</th><th scope="col">撤离</th><th scope="col">击杀</th></tr></thead><tbody>${rows}</tbody></table>
-            <div class="report-morale"><span>曾溃逃 <b>${data.routed ?? 0}</b> 人</span><span>重整 <b>${data.rallied ?? 0}</b> 人</span><span>当前溃逃 <b>${data.routing ?? 0}</b> 人</span></div></div>`;
+            <div class="report-morale"><span>曾溃逃 <b>${data.routed ?? 0}</b> 人</span><span>重整 <b>${data.rallied ?? 0}</b> 人</span><span>当前溃逃 <b>${data.routing ?? 0}</b> 人</span><span>重整后命中 <b>${data.reengaged ?? 0}</b> 人</span><span>返场伤害 <b>${Math.round(data.postRallyDamage ?? 0).toLocaleString()}</b></span></div></div>`;
     },
 
     onBattleEnd(winner, report) {
@@ -641,7 +641,7 @@ const UI = {
             stage.textContent = data.stage;
             stage.title = data.stage;
             let strength = data.order === 'hold'
-                ? `守位就绪 ${data.ready} / ${data.slots} · 曾失守 ${data.breaches} 位`
+                ? `架枪 ${data.ready} · 应战 ${data.engaging ?? 0} · 调整位置 ${data.repositioning ?? 0} · 曾失守 ${data.breaches} 位`
                 : data.order === 'flank' ? `正面 ${data.main} 人 · 迂回 ${data.flank} 人可战` : `主队 ${data.main} 人可战`;
             if (this.battleOptions.reserves[team]) {
                 strength += ` · 预备待命 ${data.reserve ?? 0} · 已投入 ${data.committed ?? 0}`;
@@ -654,6 +654,10 @@ const UI = {
     updateMorale() {
         const summary = this.phase === 'battle' ? this.scene?.getMoraleSummary?.() : null;
         document.getElementById('morale-hud').hidden = !summary;
+        const cue = this.scene?.moraleCue;
+        const cueEl = document.getElementById('morale-cue');
+        cueEl.hidden = !summary || !cue || this.scene.simulationTime - cue.atMs > 4500;
+        cueEl.textContent = cueEl.hidden ? '' : cue.text;
         for (const team of ['red', 'blue']) {
             const data = summary?.[team];
             const present = (data?.steady || 0) + (data?.wavering || 0) + (data?.routing || 0);
@@ -666,6 +670,8 @@ const UI = {
             const reasonEl = document.getElementById(`morale-${team}-reason`);
             reasonEl.textContent = reason;
             reasonEl.title = reason;
+            const flow = document.getElementById(`morale-${team}-flow`);
+            flow.textContent = !present ? '' : `后撤 ${data.fallingBack ?? 0} · 逃离 ${data.escaping ?? data.routing ?? 0} · 恢复 ${data.recovering ?? 0} · 整队 ${data.forming ?? 0} · 返场 ${data.returning ?? 0} · 重整后命中 ${data.reengaged ?? 0}人`;
         }
     },
 

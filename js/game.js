@@ -573,13 +573,14 @@ class IsoBattleScene extends Phaser.Scene {
         this.morale = new MoraleSystem(this);
         this.collapseSince = { red: null, blue: null };
         this.moraleLastReason = { red: '', blue: '' };
+        this.moraleCue = null;
         this.endReason = null;
         this.resolvingOutcome = false;
         this._rallyAnchors = [];
         this._rallyRefresh = -Infinity;
         this._lastMoraleUI = 0;
         const emptyStats = () => ({ initial: 0, alive: 0, lost: 0, kills: 0, damage: 0,
-            withdrawn: 0, routed: 0, rallied: 0 });
+            withdrawn: 0, routed: 0, rallied: 0, reengaged: 0, postRallyDamage: 0 });
         this.battleStats = {};
         for (const team of ['red', 'blue']) {
             this.battleStats[team] = {
@@ -598,17 +599,28 @@ class IsoBattleScene extends Phaser.Scene {
         }
     }
 
-    recordDamage(target, damage, from) {
+    recordDamage(target, damage, from, attackStartedAt = from?.lastAttack) {
         if (!from || from.battleId !== this.battleId || from.team === target.team) return;
         const team = this.battleStats[from.team];
         team.damage += damage;
         team.byType[from.type].damage += damage;
+        if (damage > 0 && from.everRallied && attackStartedAt >= from.lastRalliedAt) {
+            for (const stats of [team, team.byType[from.type]]) {
+                stats.postRallyDamage += damage;
+                if (!from.everReengaged) stats.reengaged++;
+            }
+            from.everReengaged = true;
+            if (from.moralePhase === 'returning') from.moralePhase = null;
+        }
     }
 
     addBattleEvent(key, text, team) {
         if (this.battleMilestones.has(key)) return;
         this.battleMilestones.add(key);
         this.battleEvents.push({ atMs: Math.round(this.simulationTime), text, team });
+        if (/^(morale-|tactic-rally|tactic-rescue)/.test(key)) {
+            this.moraleCue = { text, atMs: this.simulationTime };
+        }
     }
 
     recordDeath(unit, from) {
@@ -663,13 +675,21 @@ class IsoBattleScene extends Phaser.Scene {
         for (const team of ['red', 'blue']) {
             const stats = this.battleStats[team];
             result[team] = { steady: 0, wavering: 0, routing: 0, withdrawn: stats.withdrawn,
-                rallied: stats.rallied, average: 0, lastReason: this.moraleLastReason[team] };
+                rallied: stats.rallied, reengaged: stats.reengaged, postRallyDamage: stats.postRallyDamage,
+                fallingBack: 0, escaping: 0, recovering: 0, forming: 0, returning: 0,
+                average: 0, lastReason: this.moraleLastReason[team] };
         }
         for (const unit of this.units) {
             if (unit.dead || unit.withdrawn) continue;
             const stats = result[unit.team];
             stats[unit.moraleState || 'steady']++;
             stats.average += unit.morale ?? 100;
+            if (unit.moraleState === 'routing') {
+                if (unit.moralePhase === 'recovering') stats.recovering++;
+                else stats.escaping++;
+            } else if (unit.rallyWaiting) stats.forming++;
+            else if (unit.moraleState === 'wavering' && unit.moraleFallBackUntil > this.simulationTime) stats.fallingBack++;
+            else if (unit.moralePhase === 'returning') stats.returning++;
         }
         for (const stats of Object.values(result)) {
             const count = stats.steady + stats.wavering + stats.routing;
@@ -683,6 +703,12 @@ class IsoBattleScene extends Phaser.Scene {
         const state = unit.moraleState;
         const stats = this.battleStats[unit.team];
         if (state === 'routing') {
+            unit.routStartedAt = this.simulationTime;
+            unit.moralePhase = 'breaking';
+            unit.moraleFallBackUntil = 0;
+            unit.rallyWaiting = false; unit.rallyReadyAt = null;
+            unit.tacticalRejoined = false;
+            unit.guardReady = false; unit.guardStableTime = 0;
             unit.actionEpoch = (unit.actionEpoch || 0) + 1;
             unit.braceReady = false; unit.braceHold = false; unit.braceTime = 0;
             this.cavalryAI?.enterMelee(unit);
@@ -695,6 +721,9 @@ class IsoBattleScene extends Phaser.Scene {
                 stats.routed++; stats.byType[unit.type].routed++;
             }
         } else if (previousState === 'routing') {
+            unit.lastRalliedAt = this.simulationTime;
+            unit.moralePhase = 'returning';
+            this.tactics?.onRallied?.(unit);
             if (!unit.everRallied) {
                 unit.everRallied = true;
                 stats.rallied++; stats.byType[unit.type].rallied++;
@@ -703,10 +732,40 @@ class IsoBattleScene extends Phaser.Scene {
         }
         const label = state === 'routing' ? '开始溃逃' : previousState === 'routing' ? '完成重整'
             : state === 'wavering' ? '出现动摇' : '稳住阵脚';
-        const text = `${side}${unit.typeData.name}${label}：${reason}`;
-        this.moraleLastReason[unit.team] = `${label} · ${reason}`;
-        this.addBattleEvent(`morale-${unit.team}-${previousState === 'routing' ? 'rally' : state}`, text, unit.team);
+        const sector = this.moraleSector(unit);
+        const text = `${side}${sector}${unit.typeData.name}${label}：${reason}`;
+        this.moraleLastReason[unit.team] = `${sector}${label} · ${reason}`;
+        this.addBattleEvent(`morale-${unit.team}-${sector}-${previousState === 'routing' ? 'rally' : state}`, text, unit.team);
         this._countsDirty = true;
+    }
+
+    moraleSector(unit) {
+        const middle = this.tactics?.formations[unit.team]?.cy ?? GRID_H / 2;
+        return unit.gy < middle - 3 ? '上翼' : unit.gy > middle + 3 ? '下翼' : '中路';
+    }
+
+    updateFallingBackUnit(unit, now, dt) {
+        if (unit.moraleState !== 'wavering' || !(unit.moraleFallBackUntil > now) ||
+            !['infantry', 'pikeman'].includes(unit.type)) return false;
+        const slot = unit.formationSlot;
+        if (unit.tacticalRole === 'guard' && this.tactics?.formations[unit.team] &&
+            slot?.unit === unit && unit.guardSupport >= 2 && Math.hypot(unit.gx - slot.gx, unit.gy - slot.gy) <= 0.81) {
+            // 有邻兵支援时由战阵统一转向、迎击与补位，不因同一处伤亡让整排自行后退。
+            unit.moraleFallBackUntil = 0;
+            return false;
+        }
+        const enemy = this.nearestEnemy(unit);
+        if (!enemy || dist(unit, enemy) > 3) return false;
+        const dx = enemy.gx - unit.gx, dy = enemy.gy - unit.gy, length = Math.hypot(dx, dy) || 1;
+        unit.retreatFacingX = dx / length; unit.retreatFacingY = dy / length;
+        moveToward(unit, unit.gx - dx / length, unit.gy - dy / length, unit.typeData.speed * 0.45, dt);
+        if (unit.moving) {
+            unit.guardReady = false; unit.guardStableTime = 0;
+            unit.braceReady = false; unit.braceHold = false; unit.braceTime = 0;
+        }
+        // 有序后退仍能自卫；真正溃逃由 routing 分支接管并禁止攻击。
+        CombatRules.attack(this, unit, enemy, now, unit.typeData.range);
+        return true;
     }
 
     updateRoutedUnit(unit, dt) {
@@ -757,7 +816,10 @@ class IsoBattleScene extends Phaser.Scene {
         const direction = Math.hypot(dx, dy);
         if (direction < 0.001) { dx = unit.team === 'red' ? -1 : 1; dy = 0; }
         const normalize = Math.hypot(dx, dy);
-        moveToward(unit, unit.gx + dx / normalize * 3, unit.gy + dy / normalize * 3, unit.typeData.speed, dt);
+        const closeEnemy = now - (unit.routStartedAt ?? -Infinity) < 900 ? this.nearestEnemy(unit) : null;
+        const breaking = closeEnemy && dist(unit, closeEnemy) < 3;
+        moveToward(unit, unit.gx + dx / normalize * 3, unit.gy + dy / normalize * 3,
+            unit.typeData.speed * (breaking ? 0.7 : 1), dt);
     }
 
     withdrawUnit(unit) {
@@ -796,7 +858,7 @@ class IsoBattleScene extends Phaser.Scene {
         const impacts = this.battleImpacts;
         this.battleImpacts = [];
         // 同一步已成立的命中全部生效，攻击者在此批中阵亡也不会抹掉其攻击。
-        for (const { target, damage, from } of impacts) applyDamage(target, damage, from);
+        for (const { target, damage, from, attackStartedAt } of impacts) applyDamage(target, damage, from, attackStartedAt);
     }
 
     queueBrace(guard, cavalry) {
@@ -882,9 +944,10 @@ class IsoBattleScene extends Phaser.Scene {
             g.lineStyle(2, formation.team === 'blue' ? 0x6abaff : 0xff8b77, 0.45);
             corners.forEach((p, i) => g.lineBetween(p.x, p.y, corners[(i + 1) % 4].x, corners[(i + 1) % 4].y));
             for (const guard of formation.members) {
-                if (!this.tactics.active(guard) || guard.formationSlot.rank > 1) continue;
+                if (!this.tactics.active(guard) || (guard.formationSlot.rank > 1 && !guard.guardEngaging)) continue;
                 const a = gridToScreen(guard.gx, guard.gy);
-                const b = gridToScreen(guard.gx + guard.guardFacingX * 1.15, guard.gy + guard.guardFacingY * 1.15);
+                const length = guard.guardReady ? 1.15 : 0.8;
+                const b = gridToScreen(guard.gx + guard.guardFacingX * length, guard.gy + guard.guardFacingY * length);
                 g.lineStyle(2, guard.guardReady ? 0x9de3ef : 0xe2b65b, guard.guardReady ? 0.7 : 0.35);
                 g.lineBetween(a.x, a.y - 7, b.x, b.y - 7);
             }
@@ -896,6 +959,23 @@ class IsoBattleScene extends Phaser.Scene {
                 const p = gridToScreen(unit.gx, unit.gy);
                 g.lineStyle(1.8, 0x72e0ad, 0.85);
                 g.strokeEllipse(p.x, p.y, 23, 12);
+            }
+            const reserve = (group.safeReserve || []).filter(unit => this.tactics.active(unit) &&
+                unit.moraleState === 'steady' && !unit.reserveCommitted && this.tactics.safeAt(unit.team, unit.gx, unit.gy));
+            // 旗只落在真实安全接应者身旁，预备队离开后不保留虚假的恢复点。
+            const anchors = [];
+            for (const unit of reserve) {
+                if (anchors.some(other => dist(unit, other) <= 8)) continue;
+                if (reserve.filter(other => dist(unit, other) <= 4).length >= 3) anchors.push(unit);
+            }
+            for (const anchor of anchors) {
+                const p = gridToScreen(anchor.gx, anchor.gy);
+                const pulse = 0.7 + Math.sin(this.simulationTime * 0.004) * 0.15;
+                g.lineStyle(2, 0x72e0ad, pulse);
+                g.strokeEllipse(p.x, p.y, 78, 38);
+                g.lineBetween(p.x, p.y, p.x, p.y - 46);
+                g.lineBetween(p.x, p.y - 46, p.x + 20, p.y - 40);
+                g.lineBetween(p.x + 20, p.y - 40, p.x, p.y - 33);
             }
             const wing = group.flank.filter(unit => this.tactics.active(unit));
             if (!wing.length) continue;
@@ -1143,6 +1223,7 @@ class IsoBattleScene extends Phaser.Scene {
             unit.moving = false;
             if (this.resolvingOutcome) continue;
             if (unit.moraleState === 'routing') { this.updateRoutedUnit(unit, dt); continue; }
+            if (this.updateFallingBackUnit(unit, now, dt)) continue;
             if (unit.type === 'cavalry') {
                 if (this.cavalryAI.update(unit, now, dt)) continue;
             }
@@ -1234,7 +1315,7 @@ class IsoBattleScene extends Phaser.Scene {
         }
     }
 
-    // 播放攻击动画：骑兵先朝向当前目标，然后在挥砍期间锁定完整朝向。
+    // 攻击时朝向实际目标，出手期间锁定画面朝向。
     // 伤害在挥砍帧上结算（见 updateNormalUnit）。
     playAttackAnim(unit, target = null) {
         if (unit.type === 'cavalry' && target) {
@@ -1245,6 +1326,8 @@ class IsoBattleScene extends Phaser.Scene {
                 unit.visualDir = cavalryHeadingFromMotion(dx, dy, unit.visualDir);
                 unit.faceDir = cavalryRenderSign(unit.visualDir);
             }
+        } else if (unit.tacticalRole === 'guard' && target) {
+            this.faceGuardSprite(unit, target.gx - unit.gx, target.gy - unit.gy);
         }
         unit.animState = 'attack';
         unit.animLock = this.simulationTime + 320;
@@ -1252,6 +1335,15 @@ class IsoBattleScene extends Phaser.Scene {
         unit.dirDX = 0;
         unit.dirDY = 0;
         unit.spr.play(this.unitAnimKey(unit, 'attack'), true);
+    }
+
+    faceGuardSprite(unit, dx, dy) {
+        // 步兵素材只有左右两面；按等距投影中的枪头方向翻面，近竖直方向保留原面避免闪烁。
+        const length = Math.hypot(dx, dy);
+        if (!length || Math.abs(dx - dy) / length < 0.12) return;
+        unit.faceDir = dx - dy > 0 ? 1 : -1;
+        unit.spr.setFlipX(unit.faceDir < 0);
+        unit.faceAcc = 0;
     }
 
     unitAnimKey(unit, clip) {
@@ -1351,7 +1443,7 @@ class IsoBattleScene extends Phaser.Scene {
             tx: clamp(target.gx + lead(target.velX), 0.5, GRID_W - 0.5),
             ty: clamp(target.gy + lead(target.velY), 0.5, GRID_H - 0.5),
             t: 0, dur: flightT,
-            dmg: from.typeData.atk, team: from.team, source: from
+            dmg: from.typeData.atk, team: from.team, source: from, firedAt: this.simulationTime
         });
         if (Snd) Snd.play('arrow');
     }
@@ -1384,7 +1476,7 @@ class IsoBattleScene extends Phaser.Scene {
                     if (d < hd - 1e-9 || (hit && Math.abs(d - hd) <= 1e-9 && u.id < hit.id)) { hd = d; hit = u; }
                 });
                 if (hit) {
-                    resolveAttack(hit, a.source, { rawAttack: a.dmg });
+                    resolveAttack(hit, a.source, { rawAttack: a.dmg, attackStartedAt: a.firedAt });
                     this.bloodBurst(s.x, s.y - 8, 6, 85, hit.sizeK || 1);
                 } else if (!this.lowFX) {
                     this.impactPuff(s.x, s.y, 0xcfcfcf);
@@ -1804,10 +1896,18 @@ class IsoBattleScene extends Phaser.Scene {
         // ---- 朝向：累计位移过阈值才翻转（避免受击/挤开抖动导致来回闪脸）----
         // 放在应用位置之前，好让逐帧补正和影子镜像都用上本帧的朝向
         if (unit.type !== 'cavalry' && unit.animState !== 'attack') {
-            unit.faceAcc += sdx;
-            if (unit.faceAcc > 2)       { unit.spr.setFlipX(false); unit.faceDir = 1;  unit.faceAcc = 0; }
-            else if (unit.faceAcc < -2) { unit.spr.setFlipX(true);  unit.faceDir = -1; unit.faceAcc = 0; }
-            else if (Math.abs(unit.faceAcc) > 60) unit.faceAcc = 0;
+            if (unit.moraleState === 'wavering' && unit.moraleFallBackUntil > this.simulationTime) {
+                this.faceGuardSprite(unit, unit.retreatFacingX ?? unit.moraleFacingX, unit.retreatFacingY ?? unit.moraleFacingY);
+            } else if (unit.moraleState === 'routing' && this.simulationTime - (unit.routStartedAt ?? -Infinity) < 900) {
+                this.faceGuardSprite(unit, unit.moraleFacingX, unit.moraleFacingY);
+            } else if (unit.tacticalRole === 'guard' && unit.moraleState !== 'routing') {
+                this.faceGuardSprite(unit, unit.guardFacingX, unit.guardFacingY);
+            } else {
+                unit.faceAcc += sdx;
+                if (unit.faceAcc > 2)       { unit.spr.setFlipX(false); unit.faceDir = 1;  unit.faceAcc = 0; }
+                else if (unit.faceAcc < -2) { unit.spr.setFlipX(true);  unit.faceDir = -1; unit.faceAcc = 0; }
+                else if (Math.abs(unit.faceAcc) > 60) unit.faceAcc = 0;
+            }
         }
         unit.lastSX = x; unit.lastSY = y;
 
@@ -1841,6 +1941,7 @@ class IsoBattleScene extends Phaser.Scene {
 
         // 受击反馈：轻染红（乘法染色保留像素图案，不再全白填充闪白）
         if (this.simulationTime < unit.flashUntil) unit.spr.setTint(0xff7d6e);
+        else if (unit.moraleBoostUntil > this.simulationTime) unit.spr.setTint(0xffe9a9);
         else unit.spr.clearTint();
 
         // 血条：画进共享 hpGfx（全场景一张，深度压在所有单位之上）。
@@ -1854,16 +1955,30 @@ class IsoBattleScene extends Phaser.Scene {
             this.hpGfx.fillStyle(unit.team === 'red' ? 0xff4444 : 0x3d7be8, 1);
             this.hpGfx.fillRect(px - w / 2, py + hy + 1, w * ratio, 4);
         }
-        // 士气标识也合批绘制：黄色短条为动摇，橙色双斜线为溃逃。
-        if (unit.moraleState === 'wavering' || unit.moraleState === 'routing') {
+        // 颜色和形状一起区分脱离、恢复与返场，所有进度跟随模拟时钟。
+        const recovering = unit.moraleState === 'routing' && unit.moralePhase === 'recovering';
+        const forming = unit.rallyWaiting && unit.moraleState !== 'routing';
+        const fallingBack = unit.moraleState === 'wavering' && unit.moraleFallBackUntil > this.simulationTime;
+        const returning = unit.moralePhase === 'returning' && unit.moraleState !== 'routing' && !fallingBack;
+        if (unit.moraleState === 'wavering' || unit.moraleState === 'routing' || forming || returning) {
             const routing = unit.moraleState === 'routing';
             const width = Math.max(12, 28 * (unit.sizeK || 1));
             const my = y + unit.footDy - unit.spr.displayHeight * 0.82 - 13;
             this.hpGfx.fillStyle(0x201b15, 0.9);
             this.hpGfx.fillRect(x - width / 2 - 1, my - 1, width + 2, 5);
-            this.hpGfx.fillStyle(routing ? 0xff864f : 0xffce62, 1);
-            this.hpGfx.fillRect(x - width / 2, my, width * Math.max(0.08, unit.morale / 100), 3);
-            if (routing) {
+            const color = recovering || forming ? 0x72e0ad : returning ? 0x8cdaff : routing ? 0xff864f : 0xffce62;
+            const progress = recovering ? unit.moraleRecoveryProgress || 0 : forming || returning ? 1 : unit.morale / 100;
+            this.hpGfx.fillStyle(color, 1);
+            this.hpGfx.fillRect(x - width / 2, my, width * Math.max(0.08, progress), 3);
+            if (recovering || forming) {
+                this.hpGfx.lineStyle(2, color, 1);
+                this.hpGfx.lineBetween(x - 3, my - 9, x - 3, my - 4);
+                this.hpGfx.lineBetween(x + 3, my - 9, x + 3, my - 4);
+            } else if (returning) {
+                this.hpGfx.lineStyle(2, color, 1);
+                this.hpGfx.lineBetween(x - 4, my - 5, x, my - 9);
+                this.hpGfx.lineBetween(x, my - 9, x + 4, my - 5);
+            } else if (routing) {
                 this.hpGfx.lineStyle(2, 0xff864f, 1);
                 this.hpGfx.lineBetween(x - 3, my - 7, x - 6, my - 3);
                 this.hpGfx.lineBetween(x + 3, my - 7, x, my - 3);

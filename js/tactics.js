@@ -165,15 +165,114 @@ class TacticsSystem {
         });
         if (!anchors.length) return null;
         const center = { gx: anchors[0].gx, gy: anchors[0].gy };
-        const f = this.forward(unit.team);
-        // 已绕到侧后的溃兵先沿方阵外侧退回，接应点不能诱导他们横穿整座敌阵。
-        if ((unit.gx - group.cx) * f > -group.half - 2.5) {
-            const sign = unit.gy <= group.cy ? -1 : 1;
-            const outsideY = group.cy + sign * (group.half + 7);
-            if (Math.abs(unit.gy - group.cy) < group.half + 6.5) return { gx: unit.gx, gy: outsideY };
-            return { gx: group.cx - f * (group.half + 3.5), gy: outsideY };
+        return this.outsideRoute(unit, center, group, 2.6);
+    }
+
+    outsideRoute(unit, destination, group, padding) {
+        const formation = this.formations[this.enemies(unit.team)];
+        if (!formation || !formation.members.some(other => this.active(other))) return destination;
+        const left = formation.cx - formation.half - padding, right = formation.cx + formation.half + padding;
+        const top = formation.cy - formation.half - padding, bottom = formation.cy + formation.half + padding;
+        const front = this.forward(unit.team) > 0 ? left - 0.1 : right + 0.1;
+        const rear = this.forward(unit.team) > 0 ? right + 0.1 : left - 0.1;
+        const inside = point => point.gx > left && point.gx < right && point.gy > top && point.gy < bottom;
+        if (inside(unit)) {
+            // 已在危险边缘的人先从最近一面退出，不能为了回接应点横穿敌阵。
+            const exits = [{ gx: front, gy: unit.gy }, { gx: rear, gy: unit.gy },
+                { gx: unit.gx, gy: top - 0.1 }, { gx: unit.gx, gy: bottom + 0.1 }];
+            exits.sort((a, b) => dist(unit, a) - dist(unit, b) || dist(a, destination) - dist(b, destination));
+            return exits[0];
         }
-        return center;
+        const blocked = (a, b) => {
+            let enter = 0, leave = 1;
+            for (const [origin, delta, low, high] of [[a.gx, b.gx - a.gx, left, right], [a.gy, b.gy - a.gy, top, bottom]]) {
+                if (Math.abs(delta) < 1e-9) { if (origin <= low || origin >= high) return false; continue; }
+                const first = (low - origin) / delta, last = (high - origin) / delta;
+                enter = Math.max(enter, Math.min(first, last)); leave = Math.min(leave, Math.max(first, last));
+            }
+            return enter < leave - 1e-8 && leave > 0 && enter < 1;
+        };
+        if (!blocked(unit, destination)) return destination;
+        // 只有四个外角的可见图，选最短安全折线；没有逐兵全图寻路。
+        const nodes = [unit, destination, { gx: front, gy: top - 0.1 },
+            { gx: rear, gy: top - 0.1 }, { gx: front, gy: bottom + 0.1 },
+            { gx: rear, gy: bottom + 0.1 }];
+        const costs = [0, Infinity, Infinity, Infinity, Infinity, Infinity], previous = [], visited = new Set();
+        for (let step = 0; step < nodes.length; step++) {
+            let next = -1;
+            for (let i = 0; i < nodes.length; i++) if (!visited.has(i) && (next < 0 || costs[i] < costs[next] - 1e-9)) next = i;
+            if (next < 0 || !Number.isFinite(costs[next]) || next === 1) break;
+            visited.add(next);
+            for (let i = 1; i < nodes.length; i++) {
+                if (visited.has(i) || blocked(nodes[next], nodes[i])) continue;
+                const cost = costs[next] + dist(nodes[next], nodes[i]);
+                if (cost < costs[i] - 1e-9) { costs[i] = cost; previous[i] = next; }
+            }
+        }
+        if (!Number.isFinite(costs[1])) return null;
+        let first = 1;
+        while (previous[first] !== 0 && previous[first] != null) first = previous[first];
+        return nodes[first];
+    }
+
+    updateReception(group, routed) {
+        const waiting = group.reserve.filter(unit => this.active(unit) && !unit.reserveCommitted);
+        const wing = routed.filter(unit => unit.tacticalRole === 'flank' &&
+            (unit.gx - group.cx) * this.forward(unit.team) > -group.half - 3);
+        const candidate = wing.sort((a, b) => a.id - b.id)[0];
+        const helpers = candidate && waiting.length >= 6 ? waiting.slice(-Math.min(5, waiting.length - 3)) : [];
+        const sign = candidate?.gy <= group.cy ? -1 : 1;
+        const center = { gx: group.cx - this.forward(group.team) * group.half * 0.25,
+            gy: group.cy + sign * (group.half + 7.5) };
+        for (const unit of group.reserve) unit.receptionSlot = null;
+        if (!candidate || !this.safeAt(group.team, center.gx, center.gy)) return;
+        helpers.forEach((unit, index) => {
+            const point = { gx: center.gx + this.forward(group.team) * (index - (helpers.length - 1) / 2) * 0.82,
+                gy: center.gy };
+            if (this.safeAt(group.team, point.gx, point.gy)) unit.receptionSlot = point;
+        });
+    }
+
+    onRallied(unit) {
+        if (unit.type !== 'infantry' || !this.groups[unit.team] || !this.active(unit)) return false;
+        unit.rallyWaiting = true; unit.rallyReadyAt = this.scene.simulationTime;
+        unit.moralePhase = 'forming'; unit.tacticalRejoined = false;
+        return true;
+    }
+
+    releaseRally(group, units) {
+        if (!units.length) return;
+        for (const unit of units) {
+            unit.rallyWaiting = false; unit.moralePhase = 'returning';
+            unit.tacticalRejoined = true; unit.tacticalContact = true;
+            if (unit.route) unit.routeIndex = unit.route.length;
+            if (unit.tacticalRole === 'reserve' && !unit.reserveCommitted) {
+                unit.reserveCommitted = true; group.committed++;
+            }
+        }
+        group.lastRallyWave = { count: units.length, at: this.scene.simulationTime };
+        group.rallyWave = (group.rallyWave || 0) + 1;
+        this.scene.addBattleEvent(`tactic-rally-${group.team}-${group.rallyWave}`,
+            `${group.team === 'red' ? '红方' : '蓝方'}${units.length}名重整士兵结队返场`, group.team);
+    }
+
+    updateRallyWaves(group, now) {
+        const members = [...group.main, ...group.flank, ...group.reserve];
+        for (const unit of members) if (unit.moraleState === 'routing') {
+            unit.rallyWaiting = false; unit.tacticalRejoined = false;
+            if (unit.moralePhase === 'forming' || unit.moralePhase === 'returning') unit.moralePhase = 'retreating';
+        }
+        const waiting = members.filter(unit => unit.rallyWaiting && this.active(unit));
+        const released = new Set();
+        for (const unit of waiting) {
+            if (released.has(unit)) continue;
+            const neighbors = waiting.filter(other => !released.has(other) && dist(unit, other) <= 3);
+            if (!this.safeAt(unit.team, unit.gx, unit.gy) || neighbors.length >= 3 || now - unit.rallyReadyAt >= 1500) {
+                const batch = neighbors.filter(other => this.safeAt(other.team, other.gx, other.gy) || other === unit);
+                this.releaseRally(group, batch);
+                batch.forEach(other => released.add(other));
+            }
+        }
     }
 
     updateReserves(group, now) {
@@ -183,6 +282,7 @@ class TacticsSystem {
         const front = [...group.main, ...group.flank, ...group.reserve.filter(unit => unit.reserveCommitted)];
         const ready = front.filter(unit => this.active(unit));
         const routing = front.filter(unit => !unit.dead && !unit.withdrawn && unit.moraleState === 'routing').length;
+        this.updateReception(group, front.filter(unit => !unit.dead && !unit.withdrawn && unit.moraleState === 'routing'));
         if (group.engagedAt == null && (front.some(unit => unit.dead || unit.everRouted) || ready.some(unit => {
             const enemy = this.scene.nearestEnemy(unit);
             return enemy && dist(unit, enemy) < 2.5;
@@ -215,12 +315,24 @@ class TacticsSystem {
             const guards = formation.members.filter(u => this.active(u));
             for (const guard of guards) {
                 const slot = guard.formationSlot;
-                const closest = this.scene.nearestEnemy(guard);
-                guard.tacticNearest = closest;
-                const dx = closest ? closest.gx - guard.gx : 0, dy = closest ? closest.gy - guard.gy : 0;
-                const enemyBehind = closest && dist(guard, closest) < 1.1 && dx * slot.faceX + dy * slot.faceY < -0.12;
-                this.turnGuard(guard, enemyBehind ? dx : slot.faceX, enemyBehind ? dy : slot.faceY, dt);
-                const atSlot = Math.hypot(guard.gx - slot.gx, guard.gy - slot.gy) < 0.24;
+                const threat = this.guardThreat(guard);
+                guard.tacticNearest = threat;
+                guard.target = threat;
+                const distance = threat ? dist(guard, threat) : Infinity;
+                const dx = threat ? threat.gx - guard.gx : 0, dy = threat ? threat.gy - guard.gy : 0;
+                const front = distance > 0.001 ? (dx * slot.faceX + dy * slot.faceY) / distance : 1;
+                // 保留本面的长枪屏障；真正逼到身边的侧后敌人才让这一小片守军转向。
+                guard.guardReacting = !!threat && front < (guard.guardReacting ? 0.65 : 0.55) &&
+                    distance <= (guard.guardReacting ? 2.15 : 1.8);
+                const fx = guard.guardReacting ? dx : slot.faceX, fy = guard.guardReacting ? dy : slot.faceY;
+                guard.guardTurning = this.turnGuard(guard, fx, fy, dt) > dt * 0.35;
+                guard.guardEngaging = !!threat;
+            }
+            // 队形支撑来自邻近活跃友军的身体；穿过友军的枪线另由 clearLane 限制同向长枪。
+            // 守军自己的走动、转向和受击仍会打断自己的架枪，不把邻兵转身扩散成全排失架。
+            for (const guard of guards) {
+                const slot = guard.formationSlot;
+                const inPost = Math.hypot(guard.gx - slot.gx, guard.gy - slot.gy) <= 0.81;
                 let support = 0, depth = 0;
                 this.scene.forEachNear(guard.gx, guard.gy, 1.7, other => {
                     if (other === guard || other.team !== guard.team || other.tacticalRole !== 'guard' || !this.active(other)) return;
@@ -229,8 +341,10 @@ class TacticsSystem {
                         (other.gy - guard.gy) * guard.guardFacingY < -0.3) depth++;
                 });
                 guard.guardSupport = support;
-                const aligned = guard.guardFacingX * slot.faceX + guard.guardFacingY * slot.faceY > 0.94;
-                guard.guardStableTime = !guard.moving && !enemyBehind && atSlot && aligned && support >= 2
+                const vx = (guard.velX || 0) - (guard.separateX || 0) / dt;
+                const vy = (guard.velY || 0) - (guard.separateY || 0) / dt;
+                guard.guardStableTime = !guard.moving && Math.hypot(vx, vy) <= 0.15 &&
+                    !guard.guardTurning && inPost && support >= 2
                     ? Math.min(0.65, guard.guardStableTime + dt) : 0;
                 guard.guardReady = guard.guardStableTime >= 0.65 - 1e-9;
                 // 既有骑兵迎击读取同一架枪状态；不另叠一份伤害或护甲。
@@ -245,6 +359,7 @@ class TacticsSystem {
         }
         for (const group of Object.values(this.groups)) {
             this.updateReserves(group, now);
+            this.updateRallyWaves(group, now);
             if (!group.launched) {
                 const flank = group.flank.filter(u => this.active(u));
                 const arrived = flank.filter(u => u.routeIndex >= u.route.length).length;
@@ -294,15 +409,35 @@ class TacticsSystem {
     }
 
     turnGuard(unit, fx, fy, dt) {
+        if (Math.hypot(fx, fy) < 0.001) return 0;
         const wanted = Math.atan2(fy, fx), current = Math.atan2(unit.guardFacingY, unit.guardFacingX);
         let delta = Math.atan2(Math.sin(wanted - current), Math.cos(wanted - current));
+        if (Math.abs(Math.abs(delta) - Math.PI) < 1e-9) delta = Math.PI * this.forward(unit.team);
         if (Math.abs(delta) < 1e-9) {
             const length = Math.hypot(fx, fy);
             unit.guardFacingX = fx / length; unit.guardFacingY = fy / length;
-            return;
+            return 0;
         }
         delta = clamp(delta, -2.6 * dt, 2.6 * dt);
         unit.guardFacingX = Math.cos(current + delta); unit.guardFacingY = Math.sin(current + delta);
+        return Math.abs(delta);
+    }
+
+    guardThreat(unit) {
+        const candidates = [];
+        this.scene.forEachNear(unit.gx, unit.gy, 2.8, other => {
+            if (other.team !== unit.team && CombatRules.canBeHit(other) && dist(unit, other) <= 2.8) candidates.push(other);
+        });
+        candidates.sort((a, b) => {
+            const state = Number(a.moraleState === 'routing') - Number(b.moraleState === 'routing');
+            const distance = dist(unit, a) - dist(unit, b);
+            return state || (Math.abs(distance) > 1e-9 ? distance : a.id - b.id);
+        });
+        const best = candidates[0], previous = unit.tacticNearest;
+        // 距离相近就继续应付原来的敌人；更迫近的敌人可以立即接管注意力。
+        if (best && candidates.includes(previous) && previous.moraleState === best.moraleState &&
+            dist(unit, previous) <= dist(unit, best) + 0.3) return previous;
+        return best || null;
     }
 
     updateUnit(unit, now, dt) {
@@ -311,6 +446,21 @@ class TacticsSystem {
         const group = this.groups[unit.team];
         const enemy = this.scene.nearestEnemy(unit);
         if (!enemy) return true;
+        if (unit.rallyWaiting) return true;
+        if (unit.moralePhase === 'returning') {
+            let target = enemy, score = dist(unit, enemy) + (this.clearLane(unit, enemy) ? 0 : 2.5);
+            this.scene.forEachNear(unit.gx, unit.gy, 6, other => {
+                if (other.team === unit.team || !CombatRules.canBeHit(other)) return;
+                const distance = dist(unit, other);
+                if (distance > 6 + 1e-9) return;
+                const candidate = distance + (this.clearLane(unit, other) ? 0 : 2.5);
+                if (candidate < score - 1e-9 || (Math.abs(candidate - score) <= 1e-9 && other.id < target.id)) {
+                    target = other; score = candidate;
+                }
+            });
+            this.fight(unit, target, now, dt, unit.typeData.range);
+            return true;
+        }
         if (unit.everRallied && !unit.tacticalRejoined) {
             unit.tacticalRejoined = true;
             unit.tacticalContact = true;
@@ -321,7 +471,9 @@ class TacticsSystem {
                 // 接应队确实被冲到面前时自卫；不享受永久安全或额外战斗属性。
                 this.fight(unit, enemy, now, dt, unit.typeData.range);
             } else {
-                const slot = unit.reserveSlot;
+                const slot = unit.receptionSlot && this.safeAt(unit.team, unit.receptionSlot.gx, unit.receptionSlot.gy)
+                    ? this.outsideRoute(unit, unit.receptionSlot, group, 6.3) : unit.reserveSlot;
+                if (!slot) return true;
                 if (Math.hypot(unit.gx - slot.gx, unit.gy - slot.gy) > 0.2) {
                     this.move(unit, slot.gx, slot.gy, unit.typeData.speed, dt);
                 }
@@ -361,10 +513,10 @@ class TacticsSystem {
     updateGuard(unit, now, dt) {
         const slot = unit.formationSlot;
         const closest = unit.tacticNearest;
-        if (!closest) return;
-        const nearDistance = dist(unit, closest);
-        if (Math.hypot(unit.gx - slot.gx, unit.gy - slot.gy) >= 0.24 && nearDistance > 0.82) {
-            this.move(unit, slot.gx, slot.gy, unit.typeData.speed * 0.8, dt);
+        unit.guardEngaging = !!closest && unit.guardTurning;
+        if (!closest) {
+            if (Math.hypot(unit.gx - slot.gx, unit.gy - slot.gy) >= 0.2) this.moveGuard(unit, slot, dt);
+            return;
         }
         const reach = unit.guardReady && slot.rank < 2 ? 2.35 : unit.typeData.range;
         let target = null, score = Infinity;
@@ -372,10 +524,70 @@ class TacticsSystem {
             if (other.team === unit.team || !CombatRules.canBeHit(other)) return;
             const distance = dist(unit, other);
             if (distance > reach || !this.inFacing(unit, other) || !this.clearLane(unit, other, true)) return;
-            if (slot.rank >= 2 && distance > 1.05) return;
             if (distance < score - 1e-9 || (Math.abs(distance - score) <= 1e-9 && other.id < target.id)) { score = distance; target = other; }
         });
-        if (target) this.attack(unit, target, now, reach);
+        if (target) {
+            unit.guardEngaging = true;
+            unit.target = target;
+            this.attack(unit, target, now, reach);
+            return;
+        }
+        if (Math.hypot(unit.gx - slot.gx, unit.gy - slot.gy) > 0.82) {
+            this.moveGuard(unit, slot, dt);
+            return;
+        }
+        const formation = this.formations[unit.team];
+        const intruding = formation && Math.abs(closest.gx - formation.cx) <= formation.half + 0.1 &&
+            Math.abs(closest.gy - formation.cy) <= formation.half + 0.1;
+        // 正面完整的枪墙让来敌进入枪距，不为了追近半步反复放下整排长枪。
+        // 被侧后贴近或已有敌人入阵时，附近守军才离开自己的站位迎击。
+        if (!unit.guardReacting && !intruding) return;
+        // 架枪中的前排只做小幅迎击；受威胁转身和内排自卫都用普通枪距。
+        const standoff = reach - 0.12;
+        const dx = closest.gx - unit.gx, dy = closest.gy - unit.gy, distance = Math.hypot(dx, dy);
+        const nx = distance > 0.001 ? dx / distance : slot.faceX;
+        const ny = distance > 0.001 ? dy / distance : slot.faceY;
+        const advance = Math.max(0, distance - standoff);
+        const direct = { gx: unit.gx + nx * advance, gy: unit.gy + ny * advance };
+        const options = [direct];
+        if (!this.clearLane(unit, closest, true)) {
+            const side = this.forward(unit.team);
+            options.push({ gx: unit.gx - ny * 0.45 * side + nx * 0.15, gy: unit.gy + nx * 0.45 * side + ny * 0.15 },
+                { gx: unit.gx + ny * 0.45 * side + nx * 0.15, gy: unit.gy - nx * 0.45 * side + ny * 0.15 });
+        }
+        let chosen = null, best = Infinity;
+        for (const point of options) {
+            const fromSlotX = point.gx - slot.gx, fromSlotY = point.gy - slot.gy;
+            const offset = Math.hypot(fromSlotX, fromSlotY);
+            if (offset > 0.8) {
+                point.gx = slot.gx + fromSlotX / offset * 0.8;
+                point.gy = slot.gy + fromSlotY / offset * 0.8;
+            }
+            const travel = Math.hypot(point.gx - unit.gx, point.gy - unit.gy);
+            if (travel < 0.08) continue;
+            let occupied = false;
+            this.scene.forEachNear(point.gx, point.gy, 0.73, other => {
+                if (other !== unit && CombatRules.canBeHit(other) &&
+                    Math.hypot(other.gx - point.gx, other.gy - point.gy) < CombatRules.contactDistance(unit, other)) occupied = true;
+            });
+            if (occupied) continue;
+            const projected = { ...unit, gx: point.gx, gy: point.gy };
+            const scene = { forEachNear: (gx, gy, radius, visit) => this.scene.forEachNear(gx, gy, radius,
+                other => { if (other !== unit) visit(other); }) };
+            const clear = CombatRules.clearLane(scene, projected, closest, true);
+            const score = (clear ? 0 : 4) + Math.hypot(point.gx - closest.gx, point.gy - closest.gy) + travel * 0.2;
+            if (score < best - 1e-9) { best = score; chosen = point; }
+        }
+        if (chosen) this.moveGuard(unit, chosen, dt);
+    }
+
+    moveGuard(unit, point, dt) {
+        this.move(unit, point.gx, point.gy, unit.typeData.speed * 0.8, dt);
+        if (unit.moving) {
+            if (unit.tacticNearest) unit.guardEngaging = true;
+            unit.guardReady = false; unit.guardStableTime = 0;
+            unit.braceReady = false; unit.braceTime = 0; unit.braceHold = false;
+        }
     }
 
     inFacing(unit, target) { return CombatRules.inFacing(unit, target); }
@@ -409,9 +621,12 @@ class TacticsSystem {
         for (const team of ['red', 'blue']) {
             const formation = this.formations[team], group = this.groups[team];
             const guards = formation?.members.filter(u => this.active(u)) || [];
+            const engaging = guards.filter(u => u.guardEngaging).length;
+            const repositioning = guards.filter(u => u.moving).length;
             result[team] = {
                 order: this.orders[team], label: TACTIC_LABELS[this.orders[team]],
-                stage: group?.phase || (formation ? (formation.breaches ? '阵线受压 · 就近补位' :
+                stage: group?.phase || (formation ? (engaging ? '近敌转向 · 局部迎击' :
+                    formation.breaches ? '阵线受压 · 就近补位' : repositioning ? '威胁已退 · 归位重架' :
                     formation.sparse ? '小队守位 · 阵线稀疏' : '四面守位 · 等待接敌') : '自由接敌'),
                 main: group ? group.main.filter(u => this.active(u)).length :
                     this.scene.units.filter(u => u.team === team && this.active(u)).length,
@@ -421,6 +636,7 @@ class TacticsSystem {
                     !u.dead && !u.withdrawn && u.moraleState === 'routing').length : 0,
                 committed: group?.committed || 0,
                 rallied: group ? [...group.main, ...group.flank, ...group.reserve].filter(u => u.everRallied).length : 0,
+                engaging, repositioning,
                 ready: guards.filter(u => u.guardReady).length,
                 slots: formation?.slots.length || 0, breaches: formation?.breaches || 0
             };

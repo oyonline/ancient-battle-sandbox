@@ -39,9 +39,13 @@ class MoraleSystem {
         unit.moraleFacingX = unit.team === 'blue' ? -1 : 1;
         unit.moraleFacingY = 0;
         unit.moraleSheltered = false;
+        unit.moraleFallBackUntil = 0;
+        unit.nextMoraleFallBackAt = 0;
+        unit.moraleRecoveryProgress = 0;
+        unit.moraleBoostUntil = 0;
         this.records.set(unit, {
             casualty: [], charge: [], contagion: [], lowTime: 0,
-            canSpread: false, spread: false, safeTime: 0,
+            canSpread: false, spread: false, safeTime: 0, reserveSafeTime: 0, nextBoostAt: 0,
             pressureTime: 0, pressure: 0, pressureReason: '', sheltered: false
         });
     }
@@ -192,6 +196,14 @@ class MoraleSystem {
         return accepted;
     }
 
+    threatenedNow(snap) {
+        let threatened = false;
+        this.near(snap.gx, snap.gy, 6, other => {
+            if (other.team !== snap.team && other.state !== 'routing' && !other.unit.dead && !other.unit.withdrawn) threatened = true;
+        });
+        return threatened;
+    }
+
     update(dt) {
         this.ensureBattle();
         this.now = this.scene.simulationTime || 0;
@@ -252,16 +264,23 @@ class MoraleSystem {
             if (casualty > Math.max(charge, contagion, pressure)) reason = loss.deaths ? '附近友军伤亡惨重' : '持续遭到打击';
             else if (contagion > Math.max(casualty, charge, pressure)) reason = '附近友军溃逃';
             else if (pressure > Math.max(casualty, charge, contagion)) reason = record.pressureReason;
-            unit.moraleSheltered = record.sheltered && ownDamage === 0;
+            // 局部压力可每 200ms 缓存，恢复安全却必须每帧确认，不能在敌人已靠近时继续读旧安全状态。
+            unit.moraleSheltered = record.sheltered && ownDamage === 0 && !this.threatenedNow(snap);
+            const previousSafeTime = record.safeTime;
             record.safeTime = unit.moraleSheltered ? record.safeTime + elapsed : 0;
-            const recoveredSeconds = Math.max(0, record.safeTime - 3) - Math.max(0, record.safeTime - elapsed - 3);
-            const reserveSupport = unit.moraleSheltered && this.scene.tactics?.reserveSupport(unit);
-            const recovery = realLoss + contagion > 0 ? 0 : (reserveSupport ? 6 : 3) * recoveredSeconds;
+            const reserveSupport = unit.moraleSheltered && this.scene.tactics?.reserveSupport(unit) === true;
+            const previousReserveTime = record.reserveSafeTime;
+            record.reserveSafeTime = reserveSupport ? record.reserveSafeTime + elapsed : 0;
+            const safeTime = reserveSupport ? record.reserveSafeTime : record.safeTime;
+            const previousTime = reserveSupport ? previousReserveTime : previousSafeTime;
+            const wait = reserveSupport ? 1.5 : 3;
+            const recoveredSeconds = Math.max(0, safeTime - wait) - Math.max(0, previousTime - wait);
+            const recovery = realLoss + contagion > 0 ? 0 : (reserveSupport ? 8 : 3) * Math.max(0, recoveredSeconds);
             const value = Math.max(0, Math.min(100, unit.morale - realLoss - contagion + recovery));
+            const rallyThreshold = reserveSupport ? 50 : this.scene.battleOptions?.deathmatch ? 60 : 45;
             let state = snap.state;
             if (state === 'routing') {
-                const rallyThreshold = this.scene.battleOptions?.deathmatch ? 60 : 45;
-                if (value >= rallyThreshold && unit.moraleSheltered && record.safeTime >= 3) {
+                if (value >= rallyThreshold && unit.moraleSheltered && safeTime >= wait) {
                     state = value >= 50 ? 'steady' : 'wavering';
                     record.lowTime = 0; record.spread = false;
                     reason = '友军接应，重新集结';
@@ -284,13 +303,49 @@ class MoraleSystem {
                 }
             }
             if (!reason && recovery > 0) reason = '安全接应，士气恢复';
-            results.push({ unit, value, state, previous: snap.state, reason: reason || unit.moraleReason });
+            results.push({ unit, value, state, previous: snap.state, reason: reason || unit.moraleReason,
+                snap, record, ownDamage, realLoss, physicalImpact: ownDamage > 0 || loss.deaths > 0, rallyThreshold });
+        }
+        // 只响应本帧实际发生的新溃逃；先算崩溃，再给未受损的近处可战友军有限稳阵。
+        // 不救回已经进入崩溃计时的人，也不让同一敌人每帧重复发放奖励。
+        const enemyRouts = results.filter(result => result.state === 'routing' && result.previous !== 'routing');
+        for (const result of results) {
+            if (result.state === 'routing' || result.previous === 'routing' || result.ownDamage > 0 || result.realLoss > 0 ||
+                result.record.lowTime > 0 || this.now < result.record.nextBoostAt) continue;
+            const nearbyRout = enemyRouts.some(other => other.snap.team !== result.snap.team &&
+                Math.hypot(other.snap.gx - result.snap.gx, other.snap.gy - result.snap.gy) <= 3 + 1e-9);
+            if (!nearbyRout) continue;
+            // 周围仍在混战时不能因击溃一人持续振奋；用本帧最终状态确认这片局部已稳住。
+            const contested = results.some(other => other.snap.team !== result.snap.team && other.state !== 'routing' &&
+                Math.hypot(other.snap.gx - result.snap.gx, other.snap.gy - result.snap.gy) <= 3 + 1e-9);
+            if (contested) continue;
+            const boost = Math.min(4, 100 - result.value);
+            if (boost <= 0) continue;
+            result.value += boost;
+            result.state = result.value >= 50 ? 'steady' : 'wavering';
+            result.reason = '近处敌军溃散，稳住阵脚';
+            result.record.nextBoostAt = this.now + 8000;
+            result.unit.moraleBoostUntil = this.now + 1200;
         }
         // 先提交所有人的结果，再通知外部；回调不能改变同一步其他人的判断。
         for (const result of results) {
             result.unit.morale = result.value;
             result.unit.moraleState = result.state;
             result.unit.moraleReason = result.reason;
+            if (result.state !== 'wavering') result.unit.moraleFallBackUntil = 0;
+            else if (result.value < 38 && result.physicalImpact && ['infantry', 'pikeman'].includes(result.unit.type) &&
+                this.now >= result.unit.nextMoraleFallBackAt) {
+                result.unit.moraleFallBackUntil = this.now + 900;
+                result.unit.nextMoraleFallBackAt = this.now + 5000;
+            }
+            if (result.state === 'routing') {
+                const started = result.previous !== 'routing' ? this.now : result.unit.routStartedAt ?? 0;
+                result.unit.moralePhase = this.now - started < 900 ? 'breaking'
+                    : result.unit.moraleSheltered ? 'recovering' : 'escaping';
+                result.unit.moraleRecoveryProgress = result.unit.moraleSheltered
+                    ? Math.max(0, Math.min(1, result.value / result.rallyThreshold)) : 0;
+            } else if (result.previous === 'routing') result.unit.moraleRecoveryProgress = 1;
+            else if (!['forming', 'returning'].includes(result.unit.moralePhase)) result.unit.moraleRecoveryProgress = 0;
         }
         this.routs = nextRouts;
         this.damage.clear(); this.deaths = []; this.charges = [];

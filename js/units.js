@@ -365,6 +365,10 @@ function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
 }
 
 function knockback(target, from, amount) {
+    if (target.tacticalRole === 'guard' && amount > 0) {
+        target.guardReady = false; target.guardStableTime = 0;
+        target.braceReady = false; target.braceTime = 0; target.braceHold = false;
+    }
     const a = Math.atan2(target.gy - from.gy, target.gx - from.gx);
     if (target.scene && target.scene.planningStep) {
         target.pushX += Math.cos(a) * amount;
@@ -388,14 +392,15 @@ function resolveAttack(target, from, options = {}) {
     const damage = calculateAttackDamage(from, target, {
         ...options, multiplier: (options.multiplier ?? 1) * formationMultiplier
     });
+    const attackStartedAt = options.attackStartedAt ?? scene?.simulationTime;
     if (scene && scene.collectingImpacts) {
-        scene.battleImpacts.push({ target, damage, from });
+        scene.battleImpacts.push({ target, damage, from, attackStartedAt });
         return damage;
     }
-    return applyDamage(target, damage, from);
+    return applyDamage(target, damage, from, attackStartedAt);
 }
 
-function applyDamage(target, dmg, from) {
+function applyDamage(target, dmg, from, attackStartedAt) {
     if (target.dead || target.withdrawn || target.hp <= 0 || !Number.isFinite(dmg) || dmg <= 0) return 0;
     const scene = target.scene;
     if (scene && (target.battleId !== scene.battleId || (from && from.battleId !== scene.battleId))) return 0;
@@ -403,7 +408,7 @@ function applyDamage(target, dmg, from) {
     target.hp = Math.max(0, target.hp - dmg);
     target.flashUntil = (scene ? scene.simulationTime : 0) + 130;
     if (scene) {
-        scene.recordDamage(target, effectiveDamage, from);
+        scene.recordDamage(target, effectiveDamage, from, attackStartedAt);
         scene.morale?.queueDamage(target, effectiveDamage);
     }
     if (target.hp <= 0 && !target.dead) {

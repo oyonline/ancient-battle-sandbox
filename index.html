@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>帝国亲子沙盒 · 统帅试炼</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E🏰%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="css/style.css?v=20260923-reserve1">
+    <link rel="stylesheet" href="css/style.css?v=20260923-morale-flow1">
 </head>
 <body>
     <!-- 战场：铺满整个视口 -->
@@ -27,6 +27,7 @@
 
     <!-- 底部悬浮控制条（战斗中） -->
     <div id="controlbar" hidden>
+        <div id="morale-cue" class="morale-cue" role="status" hidden></div>
         <div id="deathmatch-hud-rule" class="deathmatch-rule" hidden>死斗：溃兵可重整，直到一方全灭</div>
         <div id="tactics-hud" class="tactics-hud" aria-label="两军战术与可战兵力" aria-live="off" hidden>
             <div class="tactics-team red" id="tactics-red">
@@ -43,11 +44,13 @@
                 <div class="morale-heading"><b>红方士气</b><span>均值 <strong id="morale-red-average">—</strong></span></div>
                 <div class="morale-counts"><span>稳定 <b id="morale-red-steady">0</b></span><span class="morale-wavering">动摇 <b id="morale-red-wavering">0</b></span><span class="morale-routing">溃逃 <b id="morale-red-routing">0</b></span><small>人</small></div>
                 <div class="morale-reason" id="morale-red-reason">阵线稳定</div>
+                <div class="morale-flow" id="morale-red-flow"></div>
             </div>
             <div class="morale-team blue">
                 <div class="morale-heading"><b>蓝方士气</b><span>均值 <strong id="morale-blue-average">—</strong></span></div>
                 <div class="morale-counts"><span>稳定 <b id="morale-blue-steady">0</b></span><span class="morale-wavering">动摇 <b id="morale-blue-wavering">0</b></span><span class="morale-routing">溃逃 <b id="morale-blue-routing">0</b></span><small>人</small></div>
                 <div class="morale-reason" id="morale-blue-reason">阵线稳定</div>
+                <div class="morale-flow" id="morale-blue-flow"></div>
             </div>
         </div>
         <button class="ctl-btn" id="btn-pause">⏸️ 暂停</button>
@@ -88,7 +91,7 @@
                             <button class="secondary-btn" data-tactics-entry="flank"><b>↪ 单翼迂回</b><small>100 对 100 · 50 人牵制，50 人沿外缘绕行</small></button>
                         </div>
                     </div>
-                    <p class="morale-guide">侧翼受袭、附近友军接连阵亡，会让阵线动摇。<span class="morale-wavering">黄标：动摇</span> · <span class="morale-routing">橙标：溃逃</span>；退到安全友军身旁，有机会重整。</p>
+                    <p class="morale-guide">士兵受压会短暂后退，撑不住才转身逃离。黄标动摇 · 橙标溃逃 · 绿标恢复/整队 · 蓝箭头返场。绿色集结旗旁的真实预备队可加快接应；重整不回血。</p>
                     <div id="challenge-list" class="challenge-grid"></div>
                     <button id="btn-sandbox" class="sandbox-entry">
                         <span><b>⚔️ 自由对战</b><small>两位队长轮流配兵 · 每方 4000 金币 · 千人沙盒</small></span>
@@ -180,13 +183,13 @@
 
     <script src="assets/manifest.js?v=20260923-death2"></script>
     <script src="js/phaser.min.js"></script>
-    <script src="js/units.js?v=20260923-reserve1"></script>
+    <script src="js/units.js?v=20260923-morale-flow1"></script>
     <script src="js/combat.js?v=20260923-reserve1"></script>
-    <script src="js/morale.js?v=20260923-reserve1"></script>
-    <script src="js/tactics.js?v=20260923-reserve1"></script>
+    <script src="js/morale.js?v=20260923-morale-flow1"></script>
+    <script src="js/tactics.js?v=20260923-morale-flow1"></script>
     <script src="js/challenges.js?v=20260923-tactics1"></script>
-    <script src="js/game.js?v=20260923-reserve1"></script>
-    <script src="js/ui.js?v=20260923-reserve1"></script>
+    <script src="js/game.js?v=20260923-morale-flow1"></script>
+    <script src="js/ui.js?v=20260923-morale-flow1"></script>
     <script>
         const game = new Phaser.Game({
             type: Phaser.AUTO,

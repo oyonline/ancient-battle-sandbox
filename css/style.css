@@ -122,6 +122,8 @@ button:active { transform: scale(0.94); }
 .morale-counts small { color: #bfa982; font-size: 10px; }
 .morale-wavering { color: #ffce62; }
 .morale-routing { color: #ff864f; }
+.morale-flow { color: #a9d5c5; font-size: 10px; line-height: 1.6; margin-top: 3px; }
+.morale-cue { flex: 0 0 100%; padding: 6px 9px; border-left: 2px solid #72e0ad; background: #17382b99; color: #c1f4d8; font: 12px/1.5 "PingFang SC", sans-serif; }
 .morale-reason { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #bba888; font-size: 10px; margin-top: 2px; }
 .morale-guide { margin: 0; padding: 9px 12px; border-left: 2px solid #a98a49; background: rgba(25, 18, 11, 0.3); color: #cbb893; font: 12px/1.8 "PingFang SC", sans-serif; }
 .morale-guide b { color: #ead4a3; font-weight: 600; }
