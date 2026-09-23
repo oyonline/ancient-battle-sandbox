@@ -9,6 +9,7 @@ const VIEW_H = OY + (GRID_W + GRID_H) * TH / 2 + 60;
 
 // 空间哈希：每 3×3 格一个桶，索敌/碰撞只查附近桶，千人规模避免 O(n²)
 const SP_CELL = 3;
+const SIMULATION_STEP_MS = 1000 / 60;
 
 function gridToScreen(gx, gy) {
     return { x: (gx - gy) * TW / 2 + OX, y: (gx + gy) * TH / 2 + OY };
@@ -173,6 +174,10 @@ class IsoBattleScene extends Phaser.Scene {
         this.battleOver = false;
         this.paused = false;
         this.gameSpeed = 1;
+        this.battleId = 0;
+        this.countdownTimers = [];
+        this.countdownTexts = [];
+        this.resetBattleData();
         this.cavalryAI = new CavalryAI();
 
         // 空间哈希与聚合量（每帧重建，桶数组复用避免 GC）
@@ -526,6 +531,105 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     // ---------------- 部署与开战 ----------------
+    resetBattleData() {
+        this.battleId = (this.battleId || 0) + 1;
+        this.simulationTime = 0;
+        this.simulationAccumulator = 0;
+        this.battleQueue = [];
+        this.battleEvents = [];
+        this.battleMilestones = new Set();
+        this.dyingUnits = new Set();
+        const emptyStats = () => ({ initial: 0, alive: 0, lost: 0, kills: 0, damage: 0 });
+        this.battleStats = {};
+        for (const team of ['red', 'blue']) {
+            this.battleStats[team] = {
+                ...emptyStats(),
+                byType: Object.fromEntries(Object.keys(UNIT_TYPES).map(type => [type, emptyStats()]))
+            };
+        }
+    }
+
+    registerUnit(unit) {
+        unit.battleId = this.battleId;
+        const team = this.battleStats[unit.team];
+        for (const stats of [team, team.byType[unit.type]]) {
+            stats.initial++;
+            stats.alive++;
+        }
+    }
+
+    recordDamage(target, damage, from) {
+        if (!from || from.battleId !== this.battleId || from.team === target.team) return;
+        const team = this.battleStats[from.team];
+        team.damage += damage;
+        team.byType[from.type].damage += damage;
+    }
+
+    addBattleEvent(key, text, team) {
+        if (this.battleMilestones.has(key)) return;
+        this.battleMilestones.add(key);
+        this.battleEvents.push({ atMs: Math.round(this.simulationTime), text, team });
+    }
+
+    recordDeath(unit, from) {
+        const team = this.battleStats[unit.team];
+        for (const stats of [team, team.byType[unit.type]]) {
+            stats.alive--;
+            stats.lost++;
+        }
+        if (unit.team === 'red') this.redAlive = team.alive;
+        else this.blueAlive = team.alive;
+        if (from && from.battleId === this.battleId && from.team !== unit.team) {
+            const attacker = this.battleStats[from.team];
+            attacker.kills++;
+            attacker.byType[from.type].kills++;
+            const side = from.team === 'red' ? '红方' : '蓝方';
+            this.addBattleEvent('first-kill', `${side}${UNIT_TYPES[from.type].name}取得首杀`, from.team);
+            if (from.type === 'cavalry' && unit.type === 'archer') {
+                this.addBattleEvent('cavalry-archer', `${side}骑兵首次击杀弓箭手`, from.team);
+            }
+        }
+        if (team.initial > 0 && team.lost * 2 >= team.initial) {
+            this.addBattleEvent(`half-${unit.team}`, `${unit.team === 'red' ? '红方' : '蓝方'}损失达到初始兵力的一半`, unit.team);
+        }
+    }
+
+    getBattleReport() {
+        return {
+            red: this.battleStats.red.alive,
+            blue: this.battleStats.blue.alive,
+            durationMs: Math.round(this.simulationTime),
+            teams: JSON.parse(JSON.stringify(this.battleStats)),
+            events: this.battleEvents.map(event => ({ ...event }))
+        };
+    }
+
+    scheduleBattleAction(delayMs, callback) {
+        this.battleQueue.push({ atMs: this.simulationTime + delayMs, battleId: this.battleId, callback });
+    }
+
+    flushBattleActions() {
+        const ready = [], pending = [];
+        for (const action of this.battleQueue) {
+            (action.atMs <= this.simulationTime + 1e-7 ? ready : pending).push(action);
+        }
+        this.battleQueue = pending;
+        ready.sort((a, b) => a.atMs - b.atMs);
+        for (const action of ready) {
+            if (action.battleId === this.battleId) action.callback();
+        }
+    }
+
+    cancelCountdown() {
+        for (const timer of this.countdownTimers || []) timer.remove(false);
+        for (const text of this.countdownTexts || []) {
+            this.tweens.killTweensOf(text);
+            text.destroy();
+        }
+        this.countdownTimers = [];
+        this.countdownTexts = [];
+    }
+
     deployUnits(redConfig, blueConfig, redFormation, blueFormation) {
         this.clearUnits();
         this.drawSpawnZones();
@@ -605,7 +709,7 @@ class IsoBattleScene extends Phaser.Scene {
             team, type, typeData, gx, gy,
             hp: typeData.hp, maxHp: typeData.hp,
             spr, shadow,
-            lastAttack: 0, lastContact: 0,
+            lastAttack: -typeData.atkSpeed, lastContact: 0,
             state: 'charge', stateTime: 0, reformX: null, target: null,
             moving: false, dead: false, flashUntil: 0,
             bobPhase: Math.random() * Math.PI * 2,
@@ -625,36 +729,50 @@ class IsoBattleScene extends Phaser.Scene {
             // 行军入场：从己方一侧滑进阵地
             slideOff: (team === 'red' ? -1 : 1) * (80 + Math.random() * 70)
         };
+        this.registerUnit(unit);
         this.units.push(unit);
         return unit;
     }
 
     startCountdown(onDone) {
+        this.cancelCountdown();
+        const battleId = this.battleId;
         const cam = this.cameras.main;
         const steps = ['3', '2', '1', '开战！'];
         steps.forEach((txt, i) => {
-            this.time.delayedCall(i * 800, () => {
+            const timer = this.time.delayedCall(i * 800, () => {
+                if (battleId !== this.battleId) return;
                 const t = this.add.text(cam.width / 2, cam.height * 0.32, txt, {
                     fontSize: txt === '开战！' ? '96px' : '120px',
                     fontStyle: 'bold', color: txt === '开战！' ? '#ffd24a' : '#ffffff',
                     stroke: '#000000', strokeThickness: 8,
                     fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif'
                 }).setOrigin(0.5).setScrollFactor(0).setDepth(200000);
-                this.tweens.add({ targets: t, scale: txt === '开战！' ? 1.15 : 1, alpha: 0, duration: 700, onComplete: () => t.destroy() });
+                this.countdownTexts.push(t);
+                this.tweens.add({ targets: t, scale: txt === '开战！' ? 1.15 : 1, alpha: 0, duration: 700, onComplete: () => {
+                    this.countdownTexts = this.countdownTexts.filter(text => text !== t);
+                    t.destroy();
+                } });
                 if (Snd) Snd.play(i === 3 ? 'go' : 'tick');
                 if (i === 3) { this.battleStarted = true; this.spawnZoneGfx.clear(); if (onDone) onDone(); }
             });
+            this.countdownTimers.push(timer);
         });
     }
 
     clearUnits() {
-        this.units.forEach(u => {
+        this.cancelCountdown();
+        // 模拟数组可能已压实，仍在倒地动画中的单位必须一起清理。
+        const visualUnits = new Set([...this.units, ...(this.dyingUnits || [])]);
+        visualUnits.forEach(u => {
             this.tweens.killTweensOf(u.spr);   // 死亡倒地 tween 可能在跑，先停掉防止盖印已销毁精灵
+            this.tweens.killTweensOf(u.lunge);
             u.spr.destroy(); u.shadow.destroy();
         });
         this.units = [];
         this.arrows = [];
         this.bloods = [];
+        this.bloodQueue = [];
         if (this.scarRT) this.scarRT.clear();   // 清空尸体与血渍
         if (this.arrowGfx) this.arrowGfx.clear();
         if (this.bloodGfx) this.bloodGfx.clear();
@@ -665,6 +783,12 @@ class IsoBattleScene extends Phaser.Scene {
         if (this.winnerText) { this.winnerText.destroy(); this.winnerText = null; }
         this.battleOver = false;
         this.battleStarted = false;
+        this.paused = false;
+        this.gameSpeed = 1;
+        this._countsDirty = false;
+        this._lastCountUI = 0;
+        this.resetBattleData();
+        this.syncAnimTimeScale();
     }
 
     // ---------------- 战斗主循环 ----------------
@@ -687,8 +811,6 @@ class IsoBattleScene extends Phaser.Scene {
             if (typeof UI !== 'undefined') UI.updateCounts();
         }
         if (!this.battleStarted || this.paused || this.battleOver) { this.syncRender(time); return; }
-        const now = this.time.now;
-
         // 本帧视口（世界坐标）+ LOD 开关：拉远看全局时砍掉小特效
         const cam = this.cameras.main;
         const v = cam.worldView;
@@ -697,7 +819,26 @@ class IsoBattleScene extends Phaser.Scene {
         this._fxBudget = 46;
         this._dustBudget = 8;
 
-        // 空间哈希：每帧重建（O(n)），索敌/碰撞全部走桶查询
+        this.advanceBattle(delta);
+        this.syncRender(time);
+    }
+
+    advanceBattle(delta) {
+        if (!this.battleStarted || this.paused || this.battleOver) return;
+        // 固定步长使相同阵容在 1x/2x 下执行相同的战斗步骤。
+        this.simulationAccumulator += Math.max(0, Math.min(delta, 50)) * this.gameSpeed;
+        while (this.simulationAccumulator + 1e-7 >= SIMULATION_STEP_MS && !this.battleOver) {
+            this.simulationAccumulator = Math.max(0, this.simulationAccumulator - SIMULATION_STEP_MS);
+            this.simulationTime += SIMULATION_STEP_MS;
+            this.stepBattle(SIMULATION_STEP_MS / 1000);
+        }
+    }
+
+    stepBattle(dt) {
+        const now = this.simulationTime;
+        this.flushBattleActions();
+
+        // 空间哈希：每个模拟步重建（O(n)），索敌/碰撞全部走桶查询
         this.rebuildSpatial();
         const units = this._aliveArr;
 
@@ -713,6 +854,7 @@ class IsoBattleScene extends Phaser.Scene {
 
         for (let i = 0; i < units.length; i++) {
             const unit = units[i];
+            if (unit.dead) continue;
             unit.moving = false;
             if (unit.type === 'cavalry' && unit.state !== 'melee') {
                 if (this.cavalryAI.update(unit, now, dt)) continue;
@@ -721,7 +863,6 @@ class IsoBattleScene extends Phaser.Scene {
         }
         this.separate(dt);
         this.updateArrows(dt, now);
-        this.syncRender(time);
         this.checkWin();
 
         // 阵亡单位周期压实，数组不无限膨胀
@@ -801,7 +942,7 @@ class IsoBattleScene extends Phaser.Scene {
             }
         }
         unit.animState = 'attack';
-        unit.animLock = this.time.now + 320;
+        unit.animLock = this.simulationTime + 320;
         unit.faceAcc = 0;
         unit.dirDX = 0;
         unit.dirDY = 0;
@@ -842,7 +983,7 @@ class IsoBattleScene extends Phaser.Scene {
                     this.playAttackAnim(unit, shootTarget);
                     const victim = shootTarget;
                     // 拉弓 → 松弦放箭（与动画同步）
-                    this.time.delayedCall(110, () => {
+                    this.scheduleBattleAction(110, () => {
                         if (unit.dead || victim.dead || this.battleOver) return;
                         this.fireArrow(unit, victim);
                     });
@@ -856,7 +997,7 @@ class IsoBattleScene extends Phaser.Scene {
                 this.playAttackAnim(unit, nearest);
                 const victim = nearest;
                 // 蓄力 → 劈砍帧上结算伤害（目标脱离则挥空）
-                this.time.delayedCall(95, () => {
+                this.scheduleBattleAction(95, () => {
                     if (unit.dead || victim.dead || this.battleOver) return;
                     if (dist(unit, victim) > range + 0.7) return;
                     const dmg = Math.max(1, unit.typeData.atk - victim.typeData.def);
@@ -873,8 +1014,9 @@ class IsoBattleScene extends Phaser.Scene {
         const units = this._aliveArr;
         for (let i = 0; i < units.length; i++) {
             const a = units[i];
+            if (a.dead) continue;
             this.forEachNear(a.gx, a.gy, R, b => {
-                if (b.id <= a.id) return;          // 每对只处理一次
+                if (b.dead || b.id <= a.id) return;          // 每对只处理一次
                 const dx = b.gx - a.gx, dy = b.gy - a.gy;
                 const d2 = dx * dx + dy * dy;
                 if (d2 < R2 && d2 > 0.0001) {
@@ -904,7 +1046,7 @@ class IsoBattleScene extends Phaser.Scene {
             tx: clamp(target.gx + lead(target.velX), 0.5, GRID_W - 0.5),
             ty: clamp(target.gy + lead(target.velY), 0.5, GRID_H - 0.5),
             t: 0, dur: flightT,
-            dmg: from.typeData.atk, team: from.team
+            dmg: from.typeData.atk, team: from.team, source: from
         });
         if (Snd) Snd.play('arrow');
     }
@@ -937,7 +1079,7 @@ class IsoBattleScene extends Phaser.Scene {
                     if (d < hd) { hd = d; hit = u; }
                 });
                 if (hit) {
-                    applyDamage(hit, Math.max(1, a.dmg - hit.typeData.def), null);
+                    applyDamage(hit, Math.max(1, a.dmg - hit.typeData.def), a.source);
                     this.bloodBurst(s.x, s.y - 8, 6, 85, hit.sizeK || 1);
                 } else if (!this.lowFX) {
                     this.impactPuff(s.x, s.y, 0xcfcfcf);
@@ -1184,6 +1326,8 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     killUnit(unit, from) {
+        const battleId = this.battleId;
+        this.dyingUnits.add(unit);
         // 死亡编排：击杀瞬间喷血变灰 → 顺击退方向倒下（重力加速，骑兵带惯性前冲）
         // → 落地扬尘溅血，盖印真实躺尸素材进留痕层永久保留
         const s = gridToScreen(unit.gx, unit.gy);
@@ -1213,6 +1357,7 @@ class IsoBattleScene extends Phaser.Scene {
             duration: isCav ? 520 : 380,
             ease: 'Cubic.easeIn',
             onComplete: () => {
+                if (battleId !== this.battleId) { spr.destroy(); return; }
                 // 落地：尘圈扩散 + 溅血
                 if (!this.lowFX) {
                     const gdust = this.add.graphics();
@@ -1238,12 +1383,15 @@ class IsoBattleScene extends Phaser.Scene {
                         duration: isCav ? 300 : 220,
                         ease: 'Bounce.easeOut',
                         onComplete: () => {
+                            if (battleId !== this.battleId) { spr.destroy(); return; }
                             this.scarRT.draw(spr);
                             spr.destroy();
+                            this.dyingUnits.delete(unit);
                         }
                     });
                 } else {
                     spr.destroy();
+                    this.dyingUnits.delete(unit);
                 }
             }
         };
@@ -1276,7 +1424,7 @@ class IsoBattleScene extends Phaser.Scene {
         const sdx = x - prevX, sdy = y - prevY;
 
         // 离屏单位也必须按时释放攻击锁，否则会永久冻结在旧方向。
-        if (unit.animState === 'attack' && time > unit.animLock) unit.animState = null;
+        if (unit.animState === 'attack' && this.simulationTime > unit.animLock) unit.animState = null;
 
         // 攻击动画期间冻结完整朝向；行走时将屏幕位移平滑后量化为 8 个方向。
         if (unit.type === 'cavalry' && unit.animState !== 'attack' && unit.moving) {
@@ -1373,7 +1521,7 @@ class IsoBattleScene extends Phaser.Scene {
         unit.shadow.setPosition(x + ox * 0.55, y).setScale(shadowSign, 1).setDepth(depth - 2);
 
         // 受击反馈：轻染红（乘法染色保留像素图案，不再全白填充闪白）
-        if (this.time.now < unit.flashUntil) unit.spr.setTint(0xff7d6e);
+        if (this.simulationTime < unit.flashUntil) unit.spr.setTint(0xff7d6e);
         else unit.spr.clearTint();
 
         // 血条：画进共享 hpGfx（全场景一张，深度压在所有单位之上）。
@@ -1394,19 +1542,23 @@ class IsoBattleScene extends Phaser.Scene {
         if (this.battleOver) return;
         const red = this.redAlive, blue = this.blueAlive;
         if (red > 0 && blue > 0) return;
+        // 已发出的箭继续落地：最后一名射手阵亡后仍可能双方同归于尽。
+        if (this.arrows.length > 0) return;
         this.battleOver = true;
-        const winner = red > 0 ? 'red' : 'blue';
+        this.battleQueue = [];
+        const winner = red > 0 ? 'red' : blue > 0 ? 'blue' : 'draw';
         this.showVictory(winner);
-        UI.onBattleEnd(winner, { red, blue });
+        UI.onBattleEnd(winner, this.getBattleReport());
     }
 
     showVictory(winner) {
         const isRed = winner === 'red';
+        const isDraw = winner === 'draw';
         const cam = this.cameras.main;
         this.winnerText = this.add.text(cam.width / 2, cam.height * 0.38,
-            isRed ? '红方胜利！🎉' : '蓝方胜利！🎉', {
+            isDraw ? '双方平局！' : isRed ? '红方胜利！🎉' : '蓝方胜利！🎉', {
             fontSize: '84px', fontStyle: 'bold',
-            color: isRed ? '#ff5b5b' : '#57a0ff',
+            color: isDraw ? '#ffd24a' : isRed ? '#ff5b5b' : '#57a0ff',
             stroke: '#000000', strokeThickness: 10,
             fontFamily: '"PingFang SC", "Microsoft YaHei", sans-serif'
         }).setOrigin(0.5).setScrollFactor(0).setDepth(200001).setScale(0.3);

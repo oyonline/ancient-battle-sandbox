@@ -160,7 +160,7 @@ class CavalryAI {
         if (now - unit.lastContact > 300) {
             unit.lastContact = now;
             unit.scene.forEachNear(unit.gx, unit.gy, 0.75, e => {
-                if (e.team === unit.team || e.dead || dist(unit, e) >= 0.75) return;
+                if (unit.dead || e.team === unit.team || e.dead || dist(unit, e) >= 0.75) return;
                 applyDamage(e, Math.max(1, Math.floor(td().atk * 0.5 - e.typeData.def)), unit);
                 // 枪阵刺伤：硬闯长枪阵，马自己也要掉血
                 if (e.type === 'pikeman' && !unit.dead) applyDamage(unit, 6, e);
@@ -218,14 +218,23 @@ function knockback(target, from, amount) {
 }
 
 function applyDamage(target, dmg, from) {
+    if (target.dead || target.hp <= 0 || !Number.isFinite(dmg) || dmg <= 0) return 0;
+    const scene = target.scene;
+    if (scene && (target.battleId !== scene.battleId || (from && from.battleId !== scene.battleId))) return 0;
     // 长枪兵对骑兵加成（亲子版强化：克制要看得见）
     if (from && from.type === 'pikeman' && target.type === 'cavalry') {
         dmg = Math.max(2, Math.floor(dmg * UNIT_TYPES.pikeman.antiCav - target.typeData.def * 0.5));
     }
-    target.hp -= dmg;
-    target.flashUntil = (target.scene ? target.scene.time.now : 0) + 130;
+    const effectiveDamage = Math.min(target.hp, dmg);
+    target.hp = Math.max(0, target.hp - dmg);
+    target.flashUntil = (scene ? scene.simulationTime : 0) + 130;
+    if (scene) scene.recordDamage(target, effectiveDamage, from);
     if (target.hp <= 0 && !target.dead) {
         target.dead = true;
-        if (target.scene) target.scene.killUnit(target, from);
+        if (scene) {
+            scene.recordDeath(target, from);
+            scene.killUnit(target, from);
+        }
     }
+    return effectiveDamage;
 }

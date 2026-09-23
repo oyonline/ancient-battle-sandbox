@@ -49,326 +49,471 @@ const PRESETS = {
     thousand:{ name: '千人军团', config: { infantry: 300, pikeman: 60, archer: 80, cavalry: 60 } }
 };
 
-// ==================== UI 控制器（底部抽屉 + 三步流程） ====================
+// ==================== 战役、配兵与战报 ====================
 const UI = {
     scene: null,
-    phase: 'buy-red',            // buy-red | buy-blue | ready | battle | result
+    phase: 'home',
+    mode: 'sandbox',
+    challenge: null,
     configs: { red: {}, blue: {} },
     formations: { red: 'custom', blue: 'custom' },
+    editing: false,
+    countdown: false,
+    progress: {},
+    holdStops: [],
 
     init() {
+        this.loadProgress();
         this.bindControls();
-        // 演示直通：?auto=千人军团预设名 → 跳过配兵直接开战（快速观战/压测用）
         const auto = new URLSearchParams(location.search).get('auto');
         if (auto && PRESETS[auto]) { this.autoplay(auto); return; }
-        this.buildBuy('red');
-        this.showOverlay('red');
-        this.setStep(1);
+        this.showHome();
+    },
+
+    onSceneReady(scene) {
+        this.scene = scene;
+        this.syncControls();
     },
 
     autoplay(preset) {
         if (!this.scene) { setTimeout(() => this.autoplay(preset), 100); return; }
-        this.phase = 'battle';
-        this.configs.red = { ...PRESETS[preset].config };
-        this.configs.blue = { ...PRESETS[preset].config };
-        this.setStep(3);
-        document.getElementById('phase-hint').textContent = '自动演示：' + PRESETS[preset].name;
-        this.openSheet(false);
-        this.scene.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue);
-        this.updateCounts();
-        this.scene.startCountdown(() => {});
+        this.mode = 'sandbox';
+        this.challenge = null;
+        this.configs = { red: { ...PRESETS[preset].config }, blue: { ...PRESETS[preset].config } };
+        this.deployArmies();
+        this.startBattle();
     },
 
-    onSceneReady(scene) { this.scene = scene; },
+    loadProgress() {
+        try {
+            const saved = JSON.parse(localStorage.getItem('battle-challenges-v1') || '{}');
+            for (const c of CHALLENGES) {
+                if (Number.isInteger(saved?.[c.id]?.wins) && saved[c.id].wins > 0) {
+                    this.progress[c.id] = { wins: saved[c.id].wins };
+                }
+            }
+        } catch (_) { /* 浏览器禁用存储时仍可正常游玩。 */ }
+    },
 
-    // ---------------- 流程控制 ----------------
+    saveWin() {
+        const id = this.challenge.id;
+        this.progress[id] = { wins: (this.progress[id]?.wins || 0) + 1 };
+        try { localStorage.setItem('battle-challenges-v1', JSON.stringify(this.progress)); }
+        catch (_) { /* 通关仍保留在本次会话。 */ }
+    },
+
+    setPhase(phase) {
+        this.phase = phase;
+        document.body.dataset.phase = phase;
+        this.syncControls();
+    },
+
+    syncControls() {
+        const fighting = this.phase === 'battle';
+        document.getElementById('controlbar').hidden = !fighting;
+        document.getElementById('btn-pause').disabled = !fighting || this.countdown;
+        document.getElementById('btn-pause').textContent = this.scene?.paused ? '▶ 继续' : '⏸ 暂停';
+        document.getElementById('btn-lock').disabled = !this.scene;
+        document.getElementById('btn-start').disabled = !this.scene || this.phase !== 'ready';
+        document.getElementById('btn-start').textContent = fighting ? '两军交战中…' : '🚀 开战！';
+        document.getElementById('ready-edit-actions').hidden = fighting;
+        document.querySelectorAll('.speed-btn').forEach(b => {
+            b.classList.toggle('active', Number(b.dataset.speed) === (this.scene?.gameSpeed || 1));
+        });
+    },
+
     setStep(n) {
+        const challenge = this.mode === 'challenge';
+        document.getElementById('steps').hidden = n === 0;
+        document.getElementById('sheet-label').hidden = n !== 0;
+        document.getElementById('sheet-label').textContent = this.phase === 'result' ? '⚑ 战后复盘' : '⚑ 统帅试炼';
         document.querySelectorAll('#steps .step').forEach(el => {
-            const k = +el.dataset.step;
+            const k = Number(el.dataset.step);
+            el.hidden = challenge && k === 2;
             el.classList.toggle('on', k === n);
             el.classList.toggle('done', k < n);
+            el.querySelector('span').textContent = k === 1 ? (challenge ? '我的军队' : '红方配兵') : k === 2 ? '蓝方配兵' : '准备开战';
+            el.querySelector('i').textContent = challenge && k === 3 ? '2' : String(k);
         });
-        const hints = {
-            1: '第 1 步：红方队长配兵',
-            2: '第 2 步：蓝方队长配兵',
-            3: '第 3 步：开战！'
-        };
-        document.getElementById('phase-hint').textContent = hints[n] || '';
+        const hint = n === 0 ? '观察敌阵，找到你的解法' : n === 3 ? '两军就位，准备开战' : challenge ? this.challenge.title + ' · 为红方配兵' : (n === 1 ? '红方' : '蓝方') + '队长正在配兵';
+        document.getElementById('phase-hint').textContent = hint;
     },
 
     showSection(name) {
         document.querySelectorAll('.sheet-body .sec').forEach(s => s.classList.remove('on'));
         document.getElementById('sec-' + name).classList.add('on');
+        document.querySelector('.sheet-body').scrollTop = 0;
         this.openSheet(true);
     },
 
     openSheet(open) {
         document.getElementById('sheet').classList.toggle('open', open);
         document.getElementById('btn-fold').textContent = open ? '▾' : '▴';
+        document.getElementById('btn-fold').setAttribute('aria-expanded', String(open));
     },
 
-    // ---------------- 配兵面板 ----------------
-    buildBuy(team) {
-        const isRed = team === 'red';
-        this.phase = 'buy-' + team;
-
-        // 队伍横幅 + 锁定按钮
-        const banner = document.getElementById('team-banner');
-        banner.textContent = isRed ? '🔴 红方队长，组建你的军队！' : '🔵 蓝方队长，组建你的军队！';
-        banner.className = 'team-banner ' + team;
-        const lock = document.getElementById('btn-lock');
-        lock.textContent = isRed ? '🔒 配好了，换蓝方队长！' : '🔒 配好了，准备开战！';
-        lock.className = 'big-btn ' + team;
-
-        // 兵种卡片
-        const wrap = document.getElementById('unit-cards');
-        wrap.innerHTML = '';
-        Object.entries(UNIT_TYPES).forEach(([key, t]) => {
-            const card = document.createElement('div');
-            card.className = 'ucard';
-            card.innerHTML = `
-                <img class="uc-img" src="assets/units/${team}_${key}.png" alt="${t.name}">
-                <div class="uc-body">
-                    <div class="uc-top"><span class="uc-name">${t.icon} ${t.name}</span><span class="uc-cost">🪙${t.cost}</span></div>
-                    <div class="uc-stats">⚔️${t.atk} · 🛡️${t.def} · ❤️${t.hp}</div>
-                    <div class="uc-tip">${t.tip}</div>
-                </div>
-                <div class="uc-step">
-                    <button class="step-btn minus" data-type="${key}">－</button>
-                    <b class="uc-num" id="num-${key}">0</b>
-                    <button class="step-btn plus" data-type="${key}">＋</button>
-                </div>`;
-            wrap.appendChild(card);
-
-            // 按住连点
-            this.bindHold(card.querySelector('.step-btn.minus'), () => this.changeCount(team, key, -1));
-            this.bindHold(card.querySelector('.step-btn.plus'), () => this.changeCount(team, key, +1));
-        });
-
-        // 阵型
-        const fRow = document.getElementById('formation-row');
-        fRow.innerHTML = '';
-        Object.entries(FORMATIONS).forEach(([key, f]) => {
-            const chip = document.createElement('button');
-            chip.className = 'chip' + (this.formations[team] === key ? ' active' : '');
-            chip.textContent = f.name;
-            chip.onclick = () => {
-                this.formations[team] = key;
-                fRow.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-                chip.classList.add('active');
-                Snd.play('buy');
-            };
-            fRow.appendChild(chip);
-        });
-
-        // 恢复数量显示
-        Object.keys(UNIT_TYPES).forEach(k => this.renderNum(team, k));
-        this.updateBudget(team);
-    },
-
-    // 按下立即执行一次，长按进入连发；按得越久步进越大（配 500 人大军不用点到天亮）
-    bindHold(el, fn) {
-        let timer = null, rep = null, held = 0;
-        const stop = () => { clearTimeout(timer); clearInterval(rep); timer = rep = null; held = 0; };
-        el.addEventListener('pointerdown', e => {
-            e.preventDefault();
-            fn();
-            timer = setTimeout(() => {
-                rep = setInterval(() => {
-                    held++;
-                    const step = held < 10 ? 1 : held < 30 ? 8 : 25;
-                    for (let i = 0; i < step; i++) fn();
-                }, 60);
-            }, 380);
-        });
-        ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.addEventListener(ev, stop));
-    },
-
-    changeCount(team, type, delta) {
-        if (this.phase !== 'buy-' + team) return;
-        const t = UNIT_TYPES[type];
-        const cur = this.configs[team][type] || 0;
-        if (delta > 0) {
-            if (this.spent(team) + t.cost > BUDGET) { this.flashBudget(); return; }
-            if (cur >= t.maxCount) return;
-        }
-        this.configs[team][type] = Math.max(0, cur + delta);
-        this.renderNum(team, type);
-        Snd.play('buy');
-        this.updateBudget(team);
-    },
-
-    renderNum(team, type) {
-        const n = this.configs[team][type] || 0;
-        const el = document.getElementById('num-' + type);
-        if (el) el.textContent = n;
-        const card = el && el.closest('.ucard');
-        if (card) card.classList.toggle('dim', n === 0);
-    },
-
-    applyPreset(name) {
-        if (this.phase !== 'buy-red' && this.phase !== 'buy-blue') return;
-        const team = this.phase.split('-')[1];
-        const cfg = PRESETS[name].config;
-        this.configs[team] = {};
-        Object.entries(cfg).forEach(([k, n]) => {
-            if (n > 0) this.configs[team][k] = Math.min(n, UNIT_TYPES[k].maxCount);
-        });
-        Object.keys(UNIT_TYPES).forEach(k => this.renderNum(team, k));
-        Snd.play('lock');
-        this.updateBudget(team);
-    },
-
-    clearArmy() {
-        if (this.phase !== 'buy-red' && this.phase !== 'buy-blue') return;
-        const team = this.phase.split('-')[1];
-        this.configs[team] = {};
-        Object.keys(UNIT_TYPES).forEach(k => this.renderNum(team, k));
-        this.updateBudget(team);
-    },
-
-    spent(team) {
-        return Object.entries(this.configs[team]).reduce(
-            (s, [k, n]) => s + UNIT_TYPES[k].cost * n, 0);
-    },
-
-    troops(team) {
-        return Object.values(this.configs[team]).reduce((a, b) => a + b, 0);
-    },
-
-    updateBudget(team) {
-        const left = BUDGET - this.spent(team);
-        document.getElementById('budget-left').textContent = left;
-        document.getElementById('budget-fill').style.width = (left / BUDGET * 100) + '%';
-        document.getElementById('troop-total').textContent = '兵力 ' + this.troops(team);
-    },
-
-    flashBudget() {
-        const el = document.getElementById('budget-left');
-        el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
-        if (navigator.vibrate) navigator.vibrate(60);
-    },
-
-    lockTeam() {
-        const team = this.phase.split('-')[1];
-        if (this.troops(team) === 0) { alert('至少要买 1 个兵哦！'); return; }
-        Snd.play('lock');
-
-        if (team === 'red') {
-            this.buildBuy('blue');
-            this.setStep(2);
-            this.showOverlay('blue');
-        } else {
-            this.deployArmies();
-        }
-    },
-
-    // ---------------- 轮流配兵遮罩 ----------------
-    showOverlay(team) {
-        const ov = document.getElementById('overlay');
-        const isRed = team === 'red';
-        ov.className = 'overlay show ' + team;
-        ov.innerHTML = `
-            <div class="overlay-card">
-                <div class="overlay-emoji">${isRed ? '🔴' : '🔵'}</div>
-                <div class="overlay-title">轮到${isRed ? '红方' : '蓝方'}队长！</div>
-                <div class="overlay-sub">${isRed ? '蓝方' : '红方'}请先闭上眼睛，别偷看阵容哦～</div>
-                <button class="big-btn ${team}" id="btn-reveal">我要配兵！</button>
-            </div>`;
-        document.getElementById('btn-reveal').onclick = () => {
-            ov.className = 'overlay';
-            Snd.play('tick');
-        };
-    },
-
-    // ---------------- 部署与开战 ----------------
-    deployArmies() {
-        this.phase = 'ready';
-        this.setStep(3);
-
-        // 双方阵容摘要
-        const summarize = team => {
-            const parts = Object.entries(this.configs[team])
-                .filter(([, n]) => n > 0)
-                .map(([k, n]) => `${UNIT_TYPES[k].icon}${UNIT_TYPES[k].name}×${n}`);
-            return parts.length ? parts.join('　') : '（空军队）';
-        };
-        document.getElementById('army-summary').innerHTML = `
-            <div class="sum red"><b>🔴 红方</b> ${summarize('red')}<span class="sum-f">${FORMATIONS[this.formations.red].name}</span></div>
-            <div class="sum blue"><b>🔵 蓝方</b> ${summarize('blue')}<span class="sum-f">${FORMATIONS[this.formations.blue].name}</span></div>`;
-
-        this.scene.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue);
+    clearBattle() {
+        this.stopHolds();
+        this.countdown = false;
+        if (this.scene) this.scene.clearUnits();
+        document.getElementById('overlay').className = 'overlay';
         this.updateCounts();
-        this.showSection('ready');
     },
 
-    startBattle() {
-        if (this.phase === 'battle' || !this.scene) return;
-        this.phase = 'battle';
-        document.getElementById('phase-hint').textContent = '战斗中！拖动画面查看战况';
-        this.openSheet(false);   // 开战观战：自动收起面板
-        this.scene.startCountdown(() => {});
+    showHome() {
+        this.clearBattle();
+        this.setPhase('home');
+        this.setStep(0);
+        this.renderChallenges();
+        this.showSection('home');
     },
 
-    onBattleEnd(winner, stats) {
-        this.phase = 'result';
-        const isRed = winner === 'red';
-        const title = document.getElementById('result-title');
-        title.textContent = isRed ? '🔴 红方胜利！' : '🔵 蓝方胜利！';
-        title.className = 'result-title ' + winner;
-        document.getElementById('result-detail').innerHTML =
-            `存活兵力 — 红方 <b>${stats.red}</b> 人 · 蓝方 <b>${stats.blue}</b> 人`;
-        this.showSection('result');
+    renderChallenges() {
+        const completed = CHALLENGES.filter(c => this.progress[c.id]).length;
+        document.getElementById('campaign-progress').textContent = completed + ' / 5 已通过';
+        document.getElementById('challenge-list').innerHTML = CHALLENGES.map((c, i) => `
+            <button class="challenge-card ${this.progress[c.id] ? 'completed' : ''}" data-challenge="${c.id}">
+                <span class="challenge-number">0${i + 1}</span>
+                <img src="assets/units/blue_${c.unit}.png" alt="" class="challenge-unit">
+                <span class="challenge-copy"><small>${c.subtitle}</small><strong>${c.title}</strong><span>${c.description}</span>
+                <span class="challenge-meta"><b>🪙 ${c.budget}</b><span>${this.progress[c.id] ? '✓ 已通过' : c.difficulty}</span></span></span>
+                <span class="challenge-arrow" aria-hidden="true">↗</span>
+            </button>`).join('');
+        document.querySelectorAll('[data-challenge]').forEach(b => {
+            b.onclick = () => this.startChallenge(b.dataset.challenge);
+        });
     },
 
-    updateCounts() {
-        if (!this.scene) return;
-        // 场景每帧在空间哈希重建时聚合存活数，这里直接读，不再 O(n) 扫两遍
-        document.getElementById('red-count').textContent = this.scene.redAlive || 0;
-        document.getElementById('blue-count').textContent = this.scene.blueAlive || 0;
+    startChallenge(id) {
+        const challenge = CHALLENGES.find(c => c.id === id);
+        if (!challenge) return;
+        this.clearBattle();
+        this.mode = 'challenge';
+        this.challenge = challenge;
+        this.editing = false;
+        this.configs = { red: {}, blue: { ...challenge.enemy } };
+        this.formations = { red: 'custom', blue: challenge.enemyFormation };
+        this.buildBuy('red');
+        this.setStep(1);
+        this.showSection('buy');
+        Snd.play('tick');
     },
 
     resetAll() {
-        this.phase = 'buy-red';
+        this.clearBattle();
+        this.mode = 'sandbox';
+        this.challenge = null;
+        this.editing = false;
         this.configs = { red: {}, blue: {} };
         this.formations = { red: 'custom', blue: 'custom' };
-        if (this.scene) this.scene.clearUnits();
         this.buildBuy('red');
         this.setStep(1);
         this.showSection('buy');
         this.showOverlay('red');
     },
 
-    // ---------------- 事件绑定 ----------------
+    budget(team) { return this.mode === 'challenge' && team === 'red' ? this.challenge.budget : BUDGET; },
+    spent(team) { return armyCost(this.configs[team]); },
+    troops(team) { return Object.values(this.configs[team]).reduce((sum, n) => sum + n, 0); },
+    armyText(config) {
+        return Object.entries(config).filter(([, n]) => n > 0).map(([key, n]) => `${UNIT_TYPES[key].icon}${UNIT_TYPES[key].name} × ${n}`).join(' · ');
+    },
+
+    buildBuy(team) {
+        this.stopHolds();
+        this.setPhase('buy-' + team);
+        const isRed = team === 'red';
+        const banner = document.getElementById('team-banner');
+        banner.textContent = this.mode === 'challenge' ? '🔴 我的军队 · 你来决定怎么赢' : (isRed ? '🔴 红方' : '🔵 蓝方') + '队长，组建你的军队！';
+        banner.className = 'team-banner ' + team;
+        const lock = document.getElementById('btn-lock');
+        lock.textContent = this.editing || this.mode === 'challenge' || !isRed ? '⚑ 阵容就绪，检阅军队' : '🔒 配好了，换蓝方队长！';
+        lock.className = 'big-btn ' + team;
+        const brief = document.getElementById('challenge-brief');
+        brief.hidden = this.mode !== 'challenge';
+        if (this.challenge) {
+            brief.innerHTML = `<div class="brief-heading"><b>${this.challenge.icon} ${this.challenge.title}</b><span>目标：击败蓝方敌军</span></div>
+                <p>敌阵：${this.armyText(this.challenge.enemy)}</p>
+                <details><summary>需要一点战术提示？</summary><p>${this.challenge.hint}</p></details>`;
+        }
+        document.getElementById('buy-message').textContent = '按住 ＋ 连续加兵 · 挑战中预设会按预算缩减';
+        const wrap = document.getElementById('unit-cards');
+        wrap.innerHTML = '';
+        for (const [key, t] of Object.entries(UNIT_TYPES)) {
+            const card = document.createElement('div');
+            card.className = 'ucard';
+            card.innerHTML = `<img class="uc-img" src="assets/units/${team}_${key}.png" alt="${t.name}">
+                <div class="uc-body"><div class="uc-top"><span class="uc-name">${t.name}</span><span class="uc-cost">🪙${t.cost}</span></div>
+                <div class="uc-stats">⚔️${t.atk} · 🛡️${t.def} · ❤️${t.hp}</div><div class="uc-tip">${t.tip}</div></div>
+                <div class="uc-step"><button class="step-btn minus" aria-label="减少${t.name}">－</button>
+                <b class="uc-num" id="num-${key}">0</b><button class="step-btn plus" aria-label="增加${t.name}">＋</button></div>`;
+            wrap.appendChild(card);
+            this.bindHold(card.querySelector('.minus'), () => this.changeCount(team, key, -1));
+            this.bindHold(card.querySelector('.plus'), () => this.changeCount(team, key, 1));
+        }
+        const row = document.getElementById('formation-row');
+        row.innerHTML = '';
+        for (const [key, f] of Object.entries(FORMATIONS)) {
+            const button = document.createElement('button');
+            button.className = 'chip' + (this.formations[team] === key ? ' active' : '');
+            button.textContent = f.name;
+            button.setAttribute('aria-pressed', String(this.formations[team] === key));
+            button.onclick = () => {
+                if (this.phase !== 'buy-' + team) return;
+                this.formations[team] = key;
+                row.querySelectorAll('.chip').forEach(c => {
+                    c.classList.toggle('active', c === button);
+                    c.setAttribute('aria-pressed', String(c === button));
+                });
+                Snd.play('buy');
+            };
+            row.appendChild(button);
+        }
+        Object.keys(UNIT_TYPES).forEach(k => this.renderNum(team, k));
+        this.updateBudget(team);
+    },
+
+    stopHolds() {
+        this.holdStops.forEach(stop => stop());
+        this.holdStops = [];
+    },
+
+    bindHold(el, fn) {
+        let timer, repeat, held = 0;
+        const stop = () => { clearTimeout(timer); clearInterval(repeat); held = 0; };
+        this.holdStops.push(stop);
+        el.addEventListener('pointerdown', e => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            el.setPointerCapture(e.pointerId);
+            fn();
+            timer = setTimeout(() => {
+                repeat = setInterval(() => {
+                    held++;
+                    const step = held < 10 ? 1 : held < 30 ? 8 : 25;
+                    for (let i = 0; i < step; i++) fn();
+                }, 60);
+            }, 380);
+        });
+        ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => el.addEventListener(ev, stop));
+        el.addEventListener('click', e => { if (e.detail === 0) fn(); });
+    },
+
+    changeCount(team, type, delta) {
+        if (this.phase !== 'buy-' + team) return;
+        const t = UNIT_TYPES[type], current = this.configs[team][type] || 0;
+        if (delta > 0 && this.spent(team) + t.cost > this.budget(team)) { this.flashBudget(); return; }
+        if (delta > 0 && current >= t.maxCount) return;
+        this.configs[team][type] = Math.max(0, current + delta);
+        this.renderNum(team, type);
+        this.updateBudget(team);
+        Snd.play('buy');
+    },
+
+    renderNum(team, type) {
+        const n = this.configs[team][type] || 0;
+        const el = document.getElementById('num-' + type);
+        el.textContent = n;
+        el.closest('.ucard').classList.toggle('dim', n === 0);
+    },
+
+    applyPreset(name) {
+        if (!this.phase.startsWith('buy-')) return;
+        const team = this.phase.split('-')[1];
+        this.configs[team] = fitArmyToBudget(PRESETS[name].config, this.budget(team));
+        Object.keys(UNIT_TYPES).forEach(k => this.renderNum(team, k));
+        this.updateBudget(team);
+        document.getElementById('buy-message').textContent = this.mode === 'challenge' ? '已按本关预算缩减预设；你还可以微调兵种和数量。' : '预设已就绪，继续微调或直接检阅军队。';
+        Snd.play('lock');
+    },
+
+    clearArmy() {
+        if (!this.phase.startsWith('buy-')) return;
+        const team = this.phase.split('-')[1];
+        this.configs[team] = {};
+        Object.keys(UNIT_TYPES).forEach(k => this.renderNum(team, k));
+        this.updateBudget(team);
+    },
+
+    updateBudget(team) {
+        const budget = this.budget(team), left = budget - this.spent(team);
+        document.getElementById('budget-left').textContent = left;
+        document.getElementById('budget-fill').style.width = Math.max(0, left / budget * 100) + '%';
+        document.getElementById('budget-total').textContent = '预算 ' + budget + ' 金币';
+        document.getElementById('troop-total').textContent = '兵力 ' + this.troops(team);
+    },
+
+    flashBudget() {
+        const el = document.getElementById('budget-left');
+        el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+        document.getElementById('buy-message').textContent = '金币不够了，先减少一些士兵再调整。';
+    },
+
+    lockTeam() {
+        if (!this.phase.startsWith('buy-') || !this.scene) return;
+        const team = this.phase.split('-')[1];
+        if (!this.troops(team)) {
+            document.getElementById('buy-message').textContent = '先招募至少一名士兵，或选择一个预设阵容。';
+            return;
+        }
+        if (this.spent(team) > this.budget(team)) { this.flashBudget(); return; }
+        this.stopHolds();
+        Snd.play('lock');
+        if (team === 'red' && this.mode === 'sandbox' && !this.editing) {
+            this.buildBuy('blue');
+            this.setStep(2);
+            this.showOverlay('blue');
+        } else {
+            this.editing = false;
+            this.deployArmies();
+        }
+    },
+
+    showOverlay(team) {
+        const ov = document.getElementById('overlay');
+        const name = team === 'red' ? '红方' : '蓝方';
+        ov.className = 'overlay show ' + team;
+        ov.innerHTML = `<div class="overlay-card"><div class="overlay-emoji">${team === 'red' ? '🔴' : '🔵'}</div>
+            <div class="overlay-title">轮到${name}队长！</div><div class="overlay-sub">另一位队长请先闭上眼睛，别偷看阵容哦～</div>
+            <button class="big-btn ${team}" id="btn-reveal">我要配兵！</button></div>`;
+        document.getElementById('btn-reveal').onclick = () => { ov.className = 'overlay'; Snd.play('tick'); };
+    },
+
+    deployArmies() {
+        if (!this.scene || !this.troops('red') || !this.troops('blue')) return;
+        this.countdown = false;
+        this.scene.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue);
+        this.setPhase('ready');
+        this.setStep(3);
+        document.getElementById('army-summary').innerHTML = ['red', 'blue'].map(team => `
+            <div class="sum ${team}"><b>${team === 'red' ? '🔴 红方' : '🔵 蓝方'}</b> ${this.armyText(this.configs[team])}
+            <span class="sum-f">${FORMATIONS[this.formations[team]].name}</span></div>`).join('');
+        document.getElementById('btn-ready-red').textContent = this.mode === 'challenge' ? '调整我的阵容' : '调整红方';
+        document.getElementById('btn-ready-blue').hidden = this.mode === 'challenge';
+        this.updateCounts();
+        this.showSection('ready');
+    },
+
+    startBattle() {
+        if (this.phase !== 'ready' || !this.scene) return;
+        this.countdown = true;
+        this.setPhase('battle');
+        document.getElementById('phase-hint').textContent = (this.challenge ? this.challenge.title + ' · ' : '') + '拖动画面查看战况';
+        this.openSheet(false);
+        this.scene.startCountdown(() => { this.countdown = false; this.syncControls(); });
+    },
+
+    editArmy(team) {
+        if (!['result', 'ready', 'battle'].includes(this.phase)) return;
+        if (this.mode === 'challenge' && team !== 'red') return;
+        this.clearBattle();
+        this.editing = true;
+        this.buildBuy(team);
+        this.setStep(team === 'red' ? 1 : 2);
+        this.showSection('buy');
+    },
+
+    rematch(swap = false) {
+        if (this.phase !== 'result') return;
+        if (swap && this.mode === 'challenge') return;
+        if (swap) {
+            [this.configs.red, this.configs.blue] = [this.configs.blue, this.configs.red];
+            [this.formations.red, this.formations.blue] = [this.formations.blue, this.formations.red];
+        }
+        this.deployArmies();
+        this.startBattle();
+    },
+
+    formatTime(ms) {
+        const seconds = Math.floor(ms / 1000);
+        return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0');
+    },
+
+    onBattleEnd(winner, report) {
+        if (this.phase !== 'battle') return;
+        this.countdown = false;
+        this.setPhase('result');
+        this.setStep(0);
+        this.updateCounts();
+        const wonChallenge = this.mode === 'challenge' && winner === 'red';
+        if (wonChallenge) this.saveWin();
+        document.getElementById('result-eyebrow').textContent = this.challenge ? this.challenge.title + ' · 本局战报' : '自由对战 · 本局战报';
+        const title = document.getElementById('result-title');
+        title.className = 'result-title ' + winner;
+        title.textContent = winner === 'draw' ? '势均力敌 · 平局' : this.challenge ? (wonChallenge ? '挑战成功！' : '再试一种解法') : (winner === 'red' ? '🔴 红方胜利！' : '🔵 蓝方胜利！');
+        document.getElementById('phase-hint').textContent = '读一读战报，准备下一次出击';
+        document.getElementById('result-detail').textContent = '存活兵力：红方 ' + report.red + ' 人 · 蓝方 ' + report.blue + ' 人';
+        const leaders = Object.entries(report.teams.red.byType).filter(([, s]) => s.initial > 0).sort((a, b) => b[1].kills - a[1].kills);
+        const leader = leaders[0];
+        document.getElementById('result-metrics').innerHTML = `
+            <div><small>战斗用时</small><b>${this.formatTime(report.durationMs)}</b></div>
+            <div><small>红方存活 / 出战</small><b>${report.red} <em>/ ${report.teams.red.initial}</em></b></div>
+            <div><small>红方击杀最多</small><b>${leader && leader[1].kills > 0 ? UNIT_TYPES[leader[0]].name : '暂无击杀'}</b></div>`;
+        document.getElementById('report-tables').innerHTML = ['red', 'blue'].map(team => {
+            const data = report.teams[team];
+            const rows = Object.entries(data.byType).filter(([, s]) => s.initial > 0).map(([key, s]) => `
+                <tr><th scope="row">${UNIT_TYPES[key].icon} ${UNIT_TYPES[key].name}</th><td>${s.initial}</td><td>${s.alive}</td><td>${s.lost}</td><td>${s.kills}</td></tr>`).join('');
+            return `<div class="report-team ${team}"><div class="report-team-title"><b>${team === 'red' ? '🔴 红方' : '🔵 蓝方'}</b><span>有效伤害 ${Math.round(data.damage).toLocaleString()}</span></div>
+                <table><caption class="sr-only">${team === 'red' ? '红方' : '蓝方'}各兵种战报</caption><thead><tr><th scope="col">兵种</th><th scope="col">出战</th><th scope="col">存活</th><th scope="col">损失</th><th scope="col">击杀</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+        }).join('');
+        const events = document.getElementById('battle-events');
+        events.replaceChildren();
+        for (const event of report.events) {
+            const li = document.createElement('li');
+            li.textContent = this.formatTime(event.atMs) + '　' + event.text;
+            events.appendChild(li);
+        }
+        if (!report.events.length) { const li = document.createElement('li'); li.textContent = '本局暂无关键交战记录'; events.appendChild(li); }
+        document.querySelector('.battle-events').open = false;
+        document.getElementById('btn-edit-red').textContent = this.challenge ? '✎ 调整阵容再挑战' : '✎ 调整红方再战';
+        document.getElementById('btn-edit-blue').hidden = !!this.challenge;
+        document.getElementById('btn-swap').hidden = !!this.challenge;
+        const next = document.getElementById('btn-next');
+        const index = CHALLENGES.indexOf(this.challenge);
+        next.hidden = !wonChallenge || index >= CHALLENGES.length - 1;
+        next.onclick = () => this.startChallenge(CHALLENGES[index + 1].id);
+        this.showSection('result');
+    },
+
+    updateCounts() {
+        document.getElementById('red-count').textContent = this.scene?.redAlive || 0;
+        document.getElementById('blue-count').textContent = this.scene?.blueAlive || 0;
+    },
+
     bindControls() {
+        document.getElementById('btn-home').onclick = () => this.showHome();
+        document.getElementById('btn-sandbox').onclick = () => this.resetAll();
         document.getElementById('btn-lock').onclick = () => this.lockTeam();
         document.getElementById('btn-start').onclick = () => this.startBattle();
-        document.getElementById('btn-again').onclick = () => this.resetAll();
-        document.getElementById('btn-restart').onclick = () => this.resetAll();
-
-        document.getElementById('btn-pause').onclick = () => { if (this.scene) this.scene.togglePause(); };
+        document.getElementById('btn-again').onclick = () => this.showHome();
+        document.getElementById('btn-edit-red').onclick = () => this.editArmy('red');
+        document.getElementById('btn-edit-blue').onclick = () => this.editArmy('blue');
+        document.getElementById('btn-ready-red').onclick = () => this.editArmy('red');
+        document.getElementById('btn-ready-blue').onclick = () => this.editArmy('blue');
+        document.getElementById('btn-rematch').onclick = () => this.rematch();
+        document.getElementById('btn-swap').onclick = () => this.rematch(true);
+        document.getElementById('btn-restart').onclick = () => this.editArmy('red');
+        document.getElementById('btn-pause').onclick = () => {
+            if (this.phase !== 'battle' || this.countdown || !this.scene) return;
+            this.scene.togglePause(); this.syncControls();
+        };
         document.querySelectorAll('.speed-btn').forEach(b => b.onclick = () => {
-            if (this.scene) this.scene.setSpeed(parseFloat(b.dataset.speed));
-            document.querySelectorAll('.speed-btn').forEach(x => x.classList.remove('active'));
-            b.classList.add('active');
+            if (!this.scene || this.phase !== 'battle') return;
+            this.scene.setSpeed(Number(b.dataset.speed)); this.syncControls();
         });
-
         document.getElementById('btn-mute').onclick = () => {
             Snd.muted = !Snd.muted;
             document.getElementById('btn-mute').textContent = Snd.muted ? '🔇' : '🔊';
+            document.getElementById('btn-mute').setAttribute('aria-label', Snd.muted ? '开启声音' : '关闭声音');
         };
-        document.getElementById('btn-panel').onclick = () =>
-            this.openSheet(!document.getElementById('sheet').classList.contains('open'));
-        document.getElementById('btn-fold').onclick = () =>
-            this.openSheet(!document.getElementById('sheet').classList.contains('open'));
-        // 点击面板头部（非按钮区域）也可折叠/展开
+        const toggleSheet = () => this.openSheet(!document.getElementById('sheet').classList.contains('open'));
+        document.getElementById('btn-panel').onclick = toggleSheet;
+        document.getElementById('btn-fold').onclick = toggleSheet;
         document.querySelector('.sheet-head').addEventListener('click', e => {
-            if (e.target.closest('#btn-fold')) return;
-            this.openSheet(!document.getElementById('sheet').classList.contains('open'));
+            if (!e.target.closest('button')) toggleSheet();
         });
-
-        document.querySelectorAll('.preset-btn[data-preset]').forEach(b =>
-            b.onclick = () => this.applyPreset(b.dataset.preset));
+        document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => this.applyPreset(b.dataset.preset));
         document.getElementById('btn-clear').onclick = () => this.clearArmy();
+        window.addEventListener('blur', () => this.holdStops.forEach(stop => stop()));
     }
 };

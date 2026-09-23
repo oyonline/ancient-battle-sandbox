@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>帝国亲子沙盒 · 配兵对战</title>
-    <link rel="stylesheet" href="css/style.css">
+    <title>帝国亲子沙盒 · 统帅试炼</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E🏰%3C/text%3E%3C/svg%3E">
+    <link rel="stylesheet" href="css/style.css?v=20260923-1">
 </head>
 <body>
     <!-- 战场：铺满整个视口 -->
@@ -13,28 +14,30 @@
     <!-- 顶部悬浮状态条 -->
     <header id="topbar">
         <h1>🏰 帝国亲子沙盒</h1>
-        <span id="phase-hint">第 1 步：红方队长配兵</span>
+        <span id="phase-hint">观察敌阵，找到你的解法</span>
         <div class="counts">
             <span class="red-c">🔴 <span id="red-count">0</span></span>
             <span class="blue-c">🔵 <span id="blue-count">0</span></span>
         </div>
-        <button id="btn-mute" title="声音开关">🔊</button>
+        <button id="btn-home" title="返回战役选择">⚑ 战役</button>
+        <button id="btn-mute" title="声音开关" aria-label="关闭声音">🔊</button>
         <button id="btn-panel" title="显示/隐藏配兵面板">📜 面板</button>
     </header>
 
     <!-- 底部悬浮控制条（战斗中） -->
-    <div id="controlbar">
+    <div id="controlbar" hidden>
         <button class="ctl-btn" id="btn-pause">⏸️ 暂停</button>
         <button class="speed-btn" data-speed="0.5">🐌 0.5x</button>
         <button class="speed-btn active" data-speed="1">▶️ 1x</button>
         <button class="speed-btn" data-speed="2">🚀 2x</button>
-        <button class="ctl-btn" id="btn-restart">🔄 重新开始</button>
+        <button class="ctl-btn" id="btn-restart">✎ 调整阵容</button>
     </div>
 
     <!-- 底部抽屉：配兵 / 就绪 / 结果 -->
     <aside id="sheet" class="open">
         <div class="sheet-inner">
             <div class="sheet-head">
+                <span id="sheet-label">⚑ 统帅试炼</span>
                 <div class="steps" id="steps">
                     <div class="step on" data-step="1"><i>1</i><span>红方配兵</span></div>
                     <div class="step" data-step="2"><i>2</i><span>蓝方配兵</span></div>
@@ -44,15 +47,32 @@
             </div>
 
             <div class="sheet-body">
+                <section id="sec-home" class="sec on">
+                    <div class="lobby-intro">
+                        <div>
+                            <div class="eyebrow">五场战役 · 不止一种解法</div>
+                            <h2>小小统帅，大有谋略。</h2>
+                            <p>看敌阵，配军队。打完读战报，换个思路再来一局。</p>
+                        </div>
+                        <span class="campaign-progress" id="campaign-progress">0 / 5 已通过</span>
+                    </div>
+                    <div id="challenge-list" class="challenge-grid"></div>
+                    <button id="btn-sandbox" class="sandbox-entry">
+                        <span><b>⚔️ 自由对战</b><small>两位队长轮流配兵 · 每方 4000 金币 · 千人沙盒</small></span>
+                        <span aria-hidden="true">开始 →</span>
+                    </button>
+                    <p class="hint-small">所有挑战均可直接尝试 · 通关记录保存在当前浏览器</p>
+                </section>
                 <!-- 第1/2步：配兵 -->
-                <section id="sec-buy" class="sec on">
+                <section id="sec-buy" class="sec">
+                    <div id="challenge-brief" class="challenge-brief" hidden></div>
                     <div class="team-banner" id="team-banner">🔴 红方队长，组建你的军队！</div>
 
                     <div class="budget-hud">
                         <div class="bh-coin"><span>🪙</span><b id="budget-left">4000</b></div>
                         <div class="bh-mid">
                             <div class="bh-bar"><i id="budget-fill"></i></div>
-                            <div class="bh-meta"><span id="troop-total">兵力 0</span><span>预算 4000 金币</span></div>
+                            <div class="bh-meta"><span id="troop-total">兵力 0</span><span id="budget-total">预算 4000 金币</span></div>
                         </div>
                     </div>
 
@@ -72,7 +92,7 @@
                     </div>
 
                     <button class="big-btn red" id="btn-lock">🔒 配好了，换蓝方队长！</button>
-                    <div class="hint-small">提示：可以按住 ＋ 连续加兵</div>
+                    <div id="buy-message" class="hint-small" role="status" aria-live="polite">按住 ＋ 连续加兵 · 挑战中预设会按预算缩减</div>
                 </section>
 
                 <!-- 第3步前：双方就绪 -->
@@ -81,13 +101,28 @@
                     <div id="army-summary"></div>
                     <div class="hint-small">克制关系：🐴骑士克🏹弓箭手 · 🔱长枪克🐴骑士 · 🏹弓箭手克近战</div>
                     <button class="big-btn" id="btn-start">🚀 开战！</button>
+                    <div class="action-row" id="ready-edit-actions">
+                        <button class="secondary-btn" id="btn-ready-red">调整红方</button>
+                        <button class="secondary-btn" id="btn-ready-blue">调整蓝方</button>
+                    </div>
                 </section>
 
                 <!-- 结果 -->
                 <section id="sec-result" class="sec">
+                    <div class="eyebrow" id="result-eyebrow">本局战报</div>
                     <div class="result-title" id="result-title">🎉 胜利！</div>
                     <div id="result-detail"></div>
-                    <button class="big-btn" id="btn-again">🔁 再来一局！</button>
+                    <div id="result-metrics" class="result-metrics"></div>
+                    <div id="report-tables" class="report-tables"></div>
+                    <details class="battle-events"><summary>战场纪事 <span>按战斗时间记录</span></summary><ol id="battle-events"></ol></details>
+                    <div class="result-actions">
+                        <button class="big-btn" id="btn-edit-red">✎ 调整阵容再战</button>
+                        <button class="secondary-btn" id="btn-rematch">↻ 原阵再战</button>
+                        <button class="secondary-btn" id="btn-edit-blue">调整蓝方</button>
+                        <button class="secondary-btn" id="btn-swap">⇄ 交换双方再战</button>
+                        <button class="secondary-btn" id="btn-next" hidden>下一场挑战 →</button>
+                    </div>
+                    <button class="text-btn" id="btn-again">返回战役选择</button>
                 </section>
             </div>
         </div>
@@ -98,9 +133,10 @@
 
     <script src="assets/manifest.js"></script>
     <script src="js/phaser.min.js"></script>
-    <script src="js/units.js"></script>
-    <script src="js/game.js"></script>
-    <script src="js/ui.js"></script>
+    <script src="js/units.js?v=20260923-1"></script>
+    <script src="js/challenges.js?v=20260923-1"></script>
+    <script src="js/game.js?v=20260923-1"></script>
+    <script src="js/ui.js?v=20260923-1"></script>
     <script>
         const game = new Phaser.Game({
             type: Phaser.AUTO,
