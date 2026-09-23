@@ -1237,17 +1237,18 @@ class IsoBattleScene extends Phaser.Scene {
     // ---------------- 血粒子：喷溅 → 抛物线 → 落地留血渍 ----------------
     // 千人规模下可能同时几十处在溅血：全部合批到一张 bloodGfx 每帧重画
     bloodBurst(x, y, n = 6, power = 95, k = 1) {
-        if (this.bloods.length > 72) return;   // 上限防爆屏（血渍已走帧内合批，不再怕量）
+        if (this.bloods.length >= 72) return;  // 保留并发上限，增加单次喷溅的饱满度
         const kk = Math.max(0.5, k);
         const parts = [];
-        for (let i = 0; i < n; i++) {
+        const count = Math.ceil(n * 1.4);
+        for (let i = 0; i < count; i++) {
             const a = Math.random() * Math.PI * 2;
             const sp = power * (0.45 + Math.random() * 0.75) * kk;
             parts.push({
                 x: 0, y: 0,
                 vx: Math.cos(a) * sp,
                 vy: -Math.abs(Math.sin(a)) * sp * 0.85 - 26 * kk,
-                s: (2.0 + Math.random() * 2.8) * kk,        // 像素方块边长
+                s: (2.3 + Math.random() * 3.1) * kk,        // 像素方块边长
                 floor: (3 + Math.random() * 9) * kk,         // 相对喷点的落地深度
                 landed: false, rest: 0
             });
@@ -1294,10 +1295,10 @@ class IsoBattleScene extends Phaser.Scene {
         if (!q.length || !this.scarRT) return;
         const st = this.add.graphics();
         for (let i = 0; i < q.length; i += 3) {
-            const x = q[i], y = q[i + 1], s = q[i + 2];
-            st.fillStyle(0x6e0f0f, 0.85);
+            const x = q[i], y = q[i + 1], s = q[i + 2] * 1.2;
+            st.fillStyle(0x6e0f0f, 0.9);
             st.fillRect(x - s / 2, y - s * 0.3, s, s * 0.55);
-            st.fillStyle(0x8c1616, 0.8);
+            st.fillStyle(0x951919, 0.85);
             st.fillRect(x - s * 0.3, y - s * 0.14, s * 0.55, s * 0.28);
         }
         this.scarRT.draw(st);
@@ -1310,11 +1311,13 @@ class IsoBattleScene extends Phaser.Scene {
         if (!this.scarRT) return;
         const st = this.add.graphics();
         st.fillStyle(0x5a0c0c, 0.9);
-        st.fillRect(-s * 0.5, -s * 0.3, s, s * 0.62);
+        st.fillEllipse(0, 0, s, s * 0.62);
+        st.fillEllipse(-s * 0.32, s * 0.08, s * 0.55, s * 0.36);
+        st.fillEllipse(s * 0.3, -s * 0.06, s * 0.5, s * 0.34);
         st.fillStyle(0x7d1212, 0.85);
-        st.fillRect(-s * 0.42, -s * 0.22, s * 0.82, s * 0.46);
-        st.fillStyle(0x931818, 0.8);
-        st.fillRect(-s * 0.28, -s * 0.12, s * 0.5, s * 0.26);
+        st.fillEllipse(0, 0, s * 0.82, s * 0.46);
+        st.fillStyle(0x991b1b, 0.85);
+        st.fillEllipse(s * 0.04, s * 0.02, s * 0.5, s * 0.26);
         st.setPosition(x, y);
         this.scarRT.draw(st);
         st.destroy();
@@ -1476,7 +1479,7 @@ class IsoBattleScene extends Phaser.Scene {
             if (fading) unit.shadow.setAlpha(1 - progress);
             if (progress < 1) continue;
             const dk = Math.max(0.6, unit.sizeK || 1);
-            this.addBloodPool(x, y, 15 * dk);
+            this.addBloodPool(x, y, 21 * dk);
             if (!fading) this.stampCorpse(unit);
             unit.spr.destroy(); unit.shadow.destroy();
             unit.deathVisual = null;
