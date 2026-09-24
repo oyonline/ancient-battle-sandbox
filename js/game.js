@@ -289,6 +289,27 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     // ---------------- 地面与装饰 ----------------
+    terrainHeight(gx, gy) {
+        return Terrain.height(this.battleOptions.terrain, gx, gy);
+    }
+
+    groundPoint(gx, gy) {
+        const point = gridToScreen(gx, gy);
+        point.y -= this.terrainHeight(gx, gy) * Terrain.HEIGHT_SCALE;
+        return point;
+    }
+
+    groundTile(gx, gy) {
+        return [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]]
+            .map(([dx, dy]) => this.groundPoint(gx + dx, gy + dy));
+    }
+
+    setTerrain(key) {
+        this.battleOptions.terrain = Terrain.normalize(key);
+        // 只有已创建的真实画布需要重烘焙；无绘图的战斗测试仍用同一高度数据。
+        if (this.groundImage && this._groundTerrain !== this.battleOptions.terrain) this.drawGround();
+    }
+
     // 帝国风地形：杂色草地 + 立体倒角 + 水域环绕 + 海岸黄边
     // 70×70 = 4900 块、数万条图形指令：一次性烘焙成大贴图，之后每帧只画一张图
     drawGround() {
@@ -307,7 +328,8 @@ class IsoBattleScene extends Phaser.Scene {
 
         for (let gy = 0; gy < GRID_H; gy++) {
             for (let gx = 0; gx < GRID_W; gx++) {
-                const { x, y } = gridToScreen(gx, gy);
+                const { x, y } = this.groundPoint(gx, gy);
+                const tile = this.groundTile(gx, gy);
                 const r1 = hash(gx, gy), r2 = hash(gx + 97, gy + 31);
 
                 if (isWater(gx, gy)) {
@@ -339,11 +361,16 @@ class IsoBattleScene extends Phaser.Scene {
                     const k = dirt * 0.85;
                     cr += (152 - cr) * k; cg += (124 - cg) * k; cb += (84 - cb) * k;
                 }
-                const lf = 0.9 + r1 * 0.16;                         // 整块明度
+                const elevation = this.terrainHeight(gx, gy);
+                // 明暗跟随坡面法向，平台略偏干草色；无需逐帧重绘地形。
+                const slopeLight = (this.terrainHeight(gx + 0.5, gy) - this.terrainHeight(gx - 0.5, gy)) * 0.4
+                    + (this.terrainHeight(gx, gy + 0.5) - this.terrainHeight(gx, gy - 0.5)) * 0.25;
+                cr += elevation * 5; cb += elevation * 2;
+                const lf = clamp(0.9 + r1 * 0.16 + slopeLight, 0.72, 1.25);
                 const base = [Math.round(cr * lf), Math.round(cg * lf), Math.round(cb * lf)];
                 const col = Phaser.Display.Color.GetColor(base[0], base[1], base[2]);
                 g.fillStyle(col, 1);
-                g.fillPoints(dia(x, y, 1.0), true);
+                g.fillPoints(tile, true);
 
                 // 2~3 块不规则深浅草斑
                 const patches = 2 + Math.floor(r2 * 2);
@@ -377,19 +404,50 @@ class IsoBattleScene extends Phaser.Scene {
 
                 // 立体倒角：上左边缘亮，下右边缘暗
                 g.lineStyle(2, 0xd7e8b0, 0.28);
-                g.lineBetween(x - TW / 2, y, x, y - TH / 2);
-                g.lineBetween(x, y - TH / 2, x + TW / 2, y);
+                g.lineBetween(tile[3].x, tile[3].y, tile[0].x, tile[0].y);
+                g.lineBetween(tile[0].x, tile[0].y, tile[1].x, tile[1].y);
                 g.lineStyle(2, 0x1e3311, 0.3);
-                g.lineBetween(x + TW / 2, y, x, y + TH / 2);
-                g.lineBetween(x, y + TH / 2, x - TW / 2, y);
+                g.lineBetween(tile[1].x, tile[1].y, tile[2].x, tile[2].y);
+                g.lineBetween(tile[2].x, tile[2].y, tile[3].x, tile[3].y);
             }
         }
 
+        if (this.battleOptions.terrain !== 'flat') {
+            // 连续等高线勾出坡形，不用高台立墙冒充可通行的缓坡。
+            const { cx, cy, rx, ry } = Terrain.maps[this.battleOptions.terrain];
+            for (const radius of [0.35, 0.55, 0.75, 0.95]) {
+                const points = [];
+                for (let i = 0; i <= 100; i++) {
+                    const a = i / 100 * TWO_PI;
+                    const gx = cx + Math.cos(a) * rx * radius;
+                    const gy = cy + Math.sin(a) * ry * radius;
+                    if (gx >= 1 && gx <= GRID_W - 1) points.push(this.groundPoint(gx, gy));
+                }
+                g.lineStyle(radius === 0.35 ? 3 : 2, 0xe9ddac, radius === 0.35 ? 0.7 : 0.4);
+                g.strokePoints(points, false);
+            }
+        }
+        this.groundImage?.destroy();
+        if (this.textures.exists('groundTex')) this.textures.remove('groundTex');
         g.generateTexture('groundTex', VIEW_W, VIEW_H);
         g.destroy();
-        this.add.image(0, 0, 'groundTex').setOrigin(0, 0).setDepth(0);
+        this.groundImage = this.add.image(0, 0, 'groundTex').setOrigin(0, 0).setDepth(0);
+        this._groundTerrain = this.battleOptions.terrain;
+        this.terrainLabel?.destroy();
+        this.terrainLabel = null;
+        if (this.battleOptions.terrain !== 'flat') {
+            const { cx, cy } = Terrain.maps[this.battleOptions.terrain];
+            const labelPoint = this.groundPoint(cx, cy - 11);
+            this.terrainLabel = this.add.text(labelPoint.x, labelPoint.y - 42,
+                Terrain.maps[this.battleOptions.terrain].name + ' · 缓坡', {
+                    fontFamily: 'sans-serif', fontSize: '30px', color: '#fff3c7',
+                    stroke: '#394629', strokeThickness: 6
+                }).setOrigin(0.5).setDepth(7);
+        }
 
         // 水面高光闪点（缓慢呼吸）
+        if (this.waterSparklesCreated) return;
+        this.waterSparklesCreated = true;
         for (let i = 0; i < 14; i++) {
             const side = i % 4;
             const t = hash(i, 777);
@@ -481,12 +539,8 @@ class IsoBattleScene extends Phaser.Scene {
         const zone = (x0, x1, color) => {
             for (let gy = 1; gy < GRID_H - 1; gy++)
                 for (let gx = x0; gx < x1; gx++) {
-                    const { x, y } = gridToScreen(gx, gy);
                     g.fillStyle(color, 1);
-                    g.fillPoints([
-                        { x, y: y - TH / 2 }, { x: x + TW / 2, y },
-                        { x, y: y + TH / 2 }, { x: x - TW / 2, y }
-                    ], true);
+                    g.fillPoints(this.groundTile(gx, gy), true);
                 }
         };
         zone(2, 14, 0xff5555);
@@ -527,9 +581,9 @@ class IsoBattleScene extends Phaser.Scene {
         this.baseZoom = Math.max(w / mw, h / mh) * 1.06;
         // 平移边界 = 地图菱形外扩一圈，缩多大都不会把地图拖出视野
         cam.setBounds(-320, -40, VIEW_W + 640, VIEW_H + 200);
-        if (this.tactics && this.units.length) {
-            const points = this.units.flatMap(unit => [gridToScreen(unit.gx, unit.gy),
-                ...(unit.route || []).map(point => gridToScreen(point.gx, point.gy))]);
+        if ((this.tactics || this.battleOptions.terrain !== 'flat') && this.units.length) {
+            const points = this.units.flatMap(unit => [this.groundPoint(unit.gx, unit.gy),
+                ...(unit.route || []).map(point => this.groundPoint(point.gx, point.gy))]);
             const minX = Math.min(...points.map(p => p.x)) - 100, maxX = Math.max(...points.map(p => p.x)) + 100;
             const minY = Math.min(...points.map(p => p.y)) - 110, maxY = Math.max(...points.map(p => p.y)) + 100;
             this.baseZoom = Math.min((w - 40) / (maxX - minX), Math.max(220, h - 230) / (maxY - minY));
@@ -557,7 +611,8 @@ class IsoBattleScene extends Phaser.Scene {
     // ---------------- 部署与开战 ----------------
     resetBattleData() {
         this.tactics = null;
-        this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 } };
+        this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat' };
+        this.firstContactMs = null;
         if (this.tacticsGfx) this.tacticsGfx.clear();
         this.battleId = (this.battleId || 0) + 1;
         this.simulationTime = 0;
@@ -601,6 +656,7 @@ class IsoBattleScene extends Phaser.Scene {
 
     recordDamage(target, damage, from, attackStartedAt = from?.lastAttack) {
         if (!from || from.battleId !== this.battleId || from.team === target.team) return;
+        if (damage > 0 && this.firstContactMs == null) this.firstContactMs = Math.round(this.simulationTime);
         const team = this.battleStats[from.team];
         team.damage += damage;
         team.byType[from.type].damage += damage;
@@ -661,6 +717,8 @@ class IsoBattleScene extends Phaser.Scene {
             red: this.battleStats.red.alive,
             blue: this.battleStats.blue.alive,
             durationMs: Math.round(this.simulationTime),
+            terrain: this.battleOptions.terrain,
+            firstContactMs: this.firstContactMs,
             teams,
             morale: this.getMoraleSummary(),
             deathmatch: this.battleOptions.deathmatch,
@@ -895,7 +953,7 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     deployUnits(redConfig, blueConfig, redFormation, blueFormation, orders = {}, options = {}) {
-        this.clearUnits();
+        this.clearUnits(options.terrain);
         this.drawSpawnZones();
         const armies = [
             ['red', redConfig, redFormation],
@@ -940,14 +998,14 @@ class IsoBattleScene extends Phaser.Scene {
         g.clear();
         for (const formation of Object.values(this.tactics.formations)) {
             const h = formation.half + 0.42;
-            const corners = [[-h, -h], [h, -h], [h, h], [-h, h]].map(([x, y]) => gridToScreen(formation.cx + x, formation.cy + y));
+            const corners = [[-h, -h], [h, -h], [h, h], [-h, h]].map(([x, y]) => this.groundPoint(formation.cx + x, formation.cy + y));
             g.lineStyle(2, formation.team === 'blue' ? 0x6abaff : 0xff8b77, 0.45);
             corners.forEach((p, i) => g.lineBetween(p.x, p.y, corners[(i + 1) % 4].x, corners[(i + 1) % 4].y));
             for (const guard of formation.members) {
                 if (!this.tactics.active(guard) || (guard.formationSlot.rank > 1 && !guard.guardEngaging)) continue;
-                const a = gridToScreen(guard.gx, guard.gy);
+                const a = this.groundPoint(guard.gx, guard.gy);
                 const length = guard.guardReady ? 1.15 : 0.8;
-                const b = gridToScreen(guard.gx + guard.guardFacingX * length, guard.gy + guard.guardFacingY * length);
+                const b = this.groundPoint(guard.gx + guard.guardFacingX * length, guard.gy + guard.guardFacingY * length);
                 g.lineStyle(2, guard.guardReady ? 0x9de3ef : 0xe2b65b, guard.guardReady ? 0.7 : 0.35);
                 g.lineBetween(a.x, a.y - 7, b.x, b.y - 7);
             }
@@ -956,7 +1014,7 @@ class IsoBattleScene extends Phaser.Scene {
             // 青绿色脚圈标出仍在后方接应的预备队；投入前线后取消待命标记。
             for (const unit of group.reserve || []) {
                 if (!this.tactics.active(unit) || unit.tacticalRole !== 'reserve' || unit.reserveCommitted) continue;
-                const p = gridToScreen(unit.gx, unit.gy);
+                const p = this.groundPoint(unit.gx, unit.gy);
                 g.lineStyle(1.8, 0x72e0ad, 0.85);
                 g.strokeEllipse(p.x, p.y, 23, 12);
             }
@@ -969,7 +1027,7 @@ class IsoBattleScene extends Phaser.Scene {
                 if (reserve.filter(other => dist(unit, other) <= 4).length >= 3) anchors.push(unit);
             }
             for (const anchor of anchors) {
-                const p = gridToScreen(anchor.gx, anchor.gy);
+                const p = this.groundPoint(anchor.gx, anchor.gy);
                 const pulse = 0.7 + Math.sin(this.simulationTime * 0.004) * 0.15;
                 g.lineStyle(2, 0x72e0ad, pulse);
                 g.strokeEllipse(p.x, p.y, 78, 38);
@@ -981,7 +1039,7 @@ class IsoBattleScene extends Phaser.Scene {
             if (!wing.length) continue;
             const leader = wing[Math.floor(wing.length / 2)];
             if (!group.launched) {
-                const points = [{ gx: leader.gx, gy: leader.gy }, ...leader.route.slice(leader.routeIndex)].map(p => gridToScreen(p.gx, p.gy));
+                const points = [{ gx: leader.gx, gy: leader.gy }, ...leader.route.slice(leader.routeIndex)].map(p => this.groundPoint(p.gx, p.gy));
                 g.lineStyle(3, 0xf6cc68, 0.65);
                 points.forEach((p, i) => {
                     if (i) g.lineBetween(points[i - 1].x, points[i - 1].y, p.x, p.y);
@@ -989,7 +1047,7 @@ class IsoBattleScene extends Phaser.Scene {
                 });
             }
             for (const unit of wing) {
-                const p = gridToScreen(unit.gx, unit.gy);
+                const p = this.groundPoint(unit.gx, unit.gy);
                 g.lineStyle(1.5, 0xf6cc68, 0.7);
                 g.strokeEllipse(p.x, p.y, 21, 10);
             }
@@ -1028,7 +1086,7 @@ class IsoBattleScene extends Phaser.Scene {
     spawnUnit(team, type, gx, gy) {
         const typeData = UNIT_TYPES[type];
         const key = `units/${team}_${type}`;
-        const { x, y } = gridToScreen(gx, gy);
+        const { x, y } = this.groundPoint(gx, gy);
         const depth = (gx + gy) * 100;
 
         // 人物清晰优先：步兵约 47px，骑兵约 58px；仍保持在单格可读范围内
@@ -1071,7 +1129,7 @@ class IsoBattleScene extends Phaser.Scene {
             randSeed: null,
             nextShift: null,                            // 下次走位时刻（首次命中后按种子错峰惰性初始化）
             bobPhase: Math.random() * Math.PI * 2,
-            lastSX: x, lastSY: y, scene: this,
+            lastSX: x, lastSY: gridToScreen(gx, gy).y, scene: this,
             sizeK: fx,                                  // 特效幅度系数（1 = 原体型）
             baseScale: sc,                              // 贴图显示缩放（待机呼吸在其上做微缩放）
             footDy,                                     // 贴图底边 → 脚底 的下压距离（对齐地面线）
@@ -1119,7 +1177,7 @@ class IsoBattleScene extends Phaser.Scene {
         });
     }
 
-    clearUnits() {
+    clearUnits(terrain = 'flat') {
         this.cancelCountdown();
         // 模拟数组可能已压实，仍在倒地动画中的单位必须一起清理。
         const visualUnits = new Set([...this.units, ...(this.dyingUnits || [])]);
@@ -1148,6 +1206,7 @@ class IsoBattleScene extends Phaser.Scene {
         this._countsDirty = false;
         this._lastCountUI = 0;
         this.resetBattleData();
+        this.setTerrain(terrain);
         this.syncAnimTimeScale();
     }
 
@@ -1367,8 +1426,10 @@ class IsoBattleScene extends Phaser.Scene {
         const minD = dist(unit, nearest);
 
         if (unit.typeData.ranged) {
+            const terrain = this.battleOptions.terrain;
+            const targetRange = Terrain.rangedRange(terrain, unit, nearest);
             // 弓箭手：射程内集火同一残血目标（血量主导、id 决胜），保持距离放风筝
-            if (minD > range) {
+            if (minD > targetRange) {
                 moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed * 0.55, dt);
             } else if (minD < 3.2) {
                 // 敌人逼近：边退边让队友输出
@@ -1377,9 +1438,9 @@ class IsoBattleScene extends Phaser.Scene {
             }
             if (now - unit.lastAttack > unit.typeData.atkSpeed) {
                 let shootTarget = null, bestScore = Infinity;
-                this.forEachNear(unit.gx, unit.gy, range, e => {
+                this.forEachNear(unit.gx, unit.gy, range * Terrain.MAX_RANGE_MULTIPLIER, e => {
                     if (e.team === unit.team || e.dead || e.withdrawn) return;
-                    if (dist(unit, e) > range) return;
+                    if (dist(unit, e) > Terrain.rangedRange(terrain, unit, e)) return;
                     const score = e.hp * 1000 + e.id;
                     if (score < bestScore) { bestScore = score; shootTarget = e; }
                 });
@@ -1392,6 +1453,7 @@ class IsoBattleScene extends Phaser.Scene {
                     this.scheduleBattleAction(110, () => {
                         if (unit.dead || unit.withdrawn || unit.moraleState === 'routing' || unit.actionEpoch !== actionEpoch ||
                             victim.dead || victim.withdrawn || this.battleOver) return;
+                        if (terrain !== 'flat' && dist(unit, victim) > Terrain.rangedRange(terrain, unit, victim)) return;
                         this.fireArrow(unit, victim);
                     });
                 }
@@ -1512,10 +1574,13 @@ class IsoBattleScene extends Phaser.Scene {
         const flightT = clamp(d / 12, 0.3, 0.75);
         // 预判提前量：瞄目标飞行期间的预估位置
         const lead = (v) => v ? clamp(v * flightT, -1.5, 1.5) : 0;
+        const tx = clamp(target.gx + lead(target.velX), 0.5, GRID_W - 0.5);
+        const ty = clamp(target.gy + lead(target.velY), 0.5, GRID_H - 0.5);
         this.arrows.push({
             sx: from.gx, sy: from.gy,
-            tx: clamp(target.gx + lead(target.velX), 0.5, GRID_W - 0.5),
-            ty: clamp(target.gy + lead(target.velY), 0.5, GRID_H - 0.5),
+            tx, ty,
+            sourceHeight: this.terrainHeight(from.gx, from.gy),
+            targetHeight: this.terrainHeight(tx, ty),
             t: 0, dur: flightT,
             dmg: from.typeData.atk, team: from.team, source: from, firedAt: this.simulationTime
         });
@@ -1532,6 +1597,8 @@ class IsoBattleScene extends Phaser.Scene {
             const gx = a.sx + (a.tx - a.sx) * p;
             const gy = a.sy + (a.ty - a.sy) * p;
             const s = gridToScreen(gx, gy);
+            // 端点高度插值加抛物线，不让飞行中的箭贴着途经山坡起伏。
+            s.y -= ((a.sourceHeight || 0) * (1 - p) + (a.targetHeight || 0) * p) * Terrain.HEIGHT_SCALE;
             const arcH = Math.sin(p * Math.PI) * 46;
 
             g.lineStyle(1.5, 0x5b4632, 1);
@@ -1550,7 +1617,8 @@ class IsoBattleScene extends Phaser.Scene {
                     if (d < hd - 1e-9 || (hit && Math.abs(d - hd) <= 1e-9 && u.id < hit.id)) { hd = d; hit = u; }
                 });
                 if (hit) {
-                    resolveAttack(hit, a.source, { rawAttack: a.dmg, attackStartedAt: a.firedAt });
+                    resolveAttack(hit, a.source, { rawAttack: a.dmg, attackStartedAt: a.firedAt,
+                        sourceHeight: a.sourceHeight });
                     this.bloodBurst(s.x, s.y - 8, 6, 85, hit.sizeK || 1);
                 } else if (!this.lowFX) {
                     this.impactPuff(s.x, s.y, 0xcfcfcf);
@@ -1563,8 +1631,8 @@ class IsoBattleScene extends Phaser.Scene {
     // ---------------- 特效 ----------------
     meleeImpact(attacker, target) {
         // 屏幕空间攻击方向（y 加权贴合地面斜向）
-        const sA = gridToScreen(attacker.gx, attacker.gy);
-        const s = gridToScreen(target.gx, target.gy);
+        const sA = this.groundPoint(attacker.gx, attacker.gy);
+        const s = this.groundPoint(target.gx, target.gy);
         const ang = Math.atan2((s.y - sA.y) * 2, s.x - sA.x);
 
         // 全局拉远观战时只保留伤害与血（lowFX），近景才放全套打击感
@@ -1731,7 +1799,7 @@ class IsoBattleScene extends Phaser.Scene {
         if (this.lowFX && Math.random() < 0.75) return;
         this._dustBudget--;
         if (Math.random() < 0.65) {
-            const s = gridToScreen(unit.gx, unit.gy);
+            const s = this.groundPoint(unit.gx, unit.gy);
             const dust = this.add.graphics();
             const ds = Math.max(0.45, unit.sizeK || 1);   // 尘团大小随体型
             for (let i = 0; i < 2; i++) {
@@ -1791,7 +1859,7 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     killUnit(unit, from) {
-        const s = gridToScreen(unit.gx, unit.gy);
+        const s = this.groundPoint(unit.gx, unit.gy);
         const isCav = unit.type === 'cavalry';
         const dk = Math.max(0.6, unit.sizeK || 1);
         const def = typeof MANIFEST !== 'undefined' && MANIFEST.deaths?.[`${unit.team}_${unit.type}`];
@@ -1862,7 +1930,11 @@ class IsoBattleScene extends Phaser.Scene {
             const progress = death.elapsed / death.duration;
             const settled = Math.min(1, progress * 6 / 5);
             const drift = 1 - Math.pow(1 - settled, 3);
-            const x = death.x + death.slideX * drift, y = death.y + death.slideY * drift;
+            const x = death.x + death.slideX * drift;
+            const slideGX = (death.slideX / TW + death.slideY / TH) * drift;
+            const slideGY = (death.slideY / TH - death.slideX / TW) * drift;
+            const heightDelta = this.terrainHeight(unit.gx + slideGX, unit.gy + slideGY) - this.terrainHeight(unit.gx, unit.gy);
+            const y = death.y + death.slideY * drift - heightDelta * Terrain.HEIGHT_SCALE;
             const frame = Math.min(death.frames - 1, Math.floor(progress * death.frames));
             if (death.clip && frame !== death.frame) {
                 unit.spr.setFrame(frame);
@@ -1902,11 +1974,13 @@ class IsoBattleScene extends Phaser.Scene {
 
     syncOne(unit, time, view) {
         if (unit.dead || unit.withdrawn) return;
-        const { x, y } = gridToScreen(unit.gx, unit.gy);
+        const { x, y } = this.groundPoint(unit.gx, unit.gy);
+        // 朝向仍依据地面平面位移，爬坡的视觉抬升不能把马误转成朝北。
+        const planar = gridToScreen(unit.gx, unit.gy);
 
-        const prevX = unit.lastSX === undefined ? x : unit.lastSX;
-        const prevY = unit.lastSY === undefined ? y : unit.lastSY;
-        const sdx = x - prevX, sdy = y - prevY;
+        const prevX = unit.lastSX === undefined ? planar.x : unit.lastSX;
+        const prevY = unit.lastSY === undefined ? planar.y : unit.lastSY;
+        const sdx = planar.x - prevX, sdy = planar.y - prevY;
 
         // 离屏单位也必须按时释放攻击锁，否则会永久冻结在旧方向。
         if (unit.animState === 'attack' && this.simulationTime > unit.animLock) unit.animState = null;
@@ -1930,7 +2004,7 @@ class IsoBattleScene extends Phaser.Scene {
 
         // 视口剔除：屏幕外只刷新快照，不碰显示对象（千人规模的主力 LOD）
         if (view && (x < view.x0 || x > view.x1 || y < view.y0 || y > view.y1)) {
-            unit.lastSX = x; unit.lastSY = y;
+            unit.lastSX = planar.x; unit.lastSY = planar.y;
             return;
         }
 
@@ -1983,7 +2057,7 @@ class IsoBattleScene extends Phaser.Scene {
                 else if (Math.abs(unit.faceAcc) > 60) unit.faceAcc = 0;
             }
         }
-        unit.lastSX = x; unit.lastSY = y;
+        unit.lastSX = planar.x; unit.lastSY = planar.y;
 
         // 待机呼吸：以脚底为支点做极轻微缩放（不再整体上下平移，脚不离地）
         const breath = unit.animState === 'idle' ? Math.sin(time * 0.0035 + unit.bobPhase) : 0;

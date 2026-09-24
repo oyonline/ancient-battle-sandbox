@@ -479,6 +479,22 @@ button:active { transform: scale(0.94); }
 .tactics-ready-guide p { margin: 6px 0 10px; color: #c5b18c; }
 .tactics-ready-guide .secondary-btn { font-size: 12px; padding: 8px 10px; }
 .tactics-ready-guide .secondary-btn.active { border-color: #d9b969; background: #72552b; color: #ffedbf; }
+
+.terrain-hud { padding: 3px 8px; border: 1px solid #86a46b; border-radius: 6px; color: #d5e3b3; background: #273729; font: 12px/1.5 "PingFang SC", sans-serif; white-space: nowrap; }
+.terrain-entry { display: flex; align-items: center; gap: 20px; padding: 16px 18px; border: 1px solid #92a971; border-radius: 10px; background: linear-gradient(115deg, #35472c, #2a3021); }
+.terrain-entry > div { flex: 1; }
+.terrain-entry h3 { margin: 5px 0 7px; color: #e2eabe; font-size: 22px; }
+.terrain-entry p { margin: 0; color: #c8ceaa; font: 12px/1.8 "PingFang SC", sans-serif; }
+.terrain-entry .secondary-btn { flex-shrink: 0; color: #e6eec7; border-color: #a3b47b; background: #465a31; }
+.terrain-panel { padding: 12px 14px; border: 1px solid #81915d; border-radius: 10px; background: #273020; color: #d8e0b6; font: 12px/1.7 "PingFang SC", sans-serif; }
+.terrain-panel > b { font-size: 14px; }
+.terrain-map-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.terrain-map-buttons .secondary-btn { flex: 1; min-width: 90px; padding: 9px 12px; font-size: 13px; background: #373e2c; border-color: #6e7c54; color: #d3d9b4; }
+.terrain-map-buttons .secondary-btn.active { border-color: #d4daa0; color: #f1f4d6; background: #526335; box-shadow: inset 0 0 0 1px #a7b874; }
+.terrain-panel p { margin: 6px 0; }
+.terrain-panel .terrain-rules { color: #d7c99f; }
+.terrain-panel small { display: block; color: #b5b99b; font-size: 11px; }
+.terrain-report { margin: 0; color: #d2dfab; font: 12px/1.7 "PingFang SC", sans-serif; text-align: center; }
 .challenge-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .challenge-card { position: relative; display: flex; align-items: center; text-align: left; gap: 12px; padding: 17px 14px; color: var(--parchment); background: linear-gradient(115deg, #55432b, #3d3020); border: 1px solid #846638; border-radius: 10px; overflow: hidden; min-height: 146px; }
 .challenge-card:hover { border-color: #d9b969; background: linear-gradient(115deg, #685035, #463623); }
@@ -559,6 +575,9 @@ summary { cursor: pointer; }
     .lobby-intro h2 { font-size: 22px; letter-spacing: 0; }
     .campaign-progress { font-size: 10px; padding: 6px; white-space: nowrap; }
     .tactics-entry { padding: 12px; }
+    .terrain-entry { padding: 12px; flex-direction: column; align-items: stretch; gap: 10px; }
+    .terrain-entry h3 { font-size: 19px; }
+    .terrain-hud { font-size: 11px; padding: 2px 6px; }
     .tactics-entry h3 { font-size: 19px; letter-spacing: 0; }
     .tactics-entry-actions { gap: 7px; }
     .tactics-entry-actions .secondary-btn { padding: 10px; }

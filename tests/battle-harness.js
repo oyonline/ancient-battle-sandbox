@@ -7,11 +7,11 @@ const context = vm.createContext({
     Snd: null,
     UI: { onBattleEnd() {} }
 });
-for (const name of ['units.js', 'combat.js', 'morale.js', 'tactics.js', 'game.js']) {
+for (const name of ['terrain.js', 'units.js', 'combat.js', 'morale.js', 'tactics.js', 'game.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', name), 'utf8'), context);
 }
-vm.runInContext('this.engine = { IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack };', context);
-const { IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack } = context.engine;
+vm.runInContext('this.engine = { Terrain, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack };', context);
+const { Terrain, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack } = context.engine;
 const snapshot = value => JSON.parse(JSON.stringify(value));
 
 function displayObject() {
@@ -44,7 +44,8 @@ function makeScene() {
         arrowGfx: displayObject(), spawnZoneGfx: displayObject(),
         cameras: { main: { width: 800, height: 600 } },
         cavalryAI: new CavalryAI(),
-        add: { text: () => displayObject(), image: () => displayObject(), sprite: () => displayObject() },
+        add: { text: () => displayObject(), image: (x, y) => displayObject().setPosition(x, y),
+            sprite: (x, y) => displayObject().setPosition(x, y) },
         tweens: { killTweensOf() {}, add() {} },
         anims: { globalTimeScale: 1 },
         textures: { exists: () => false },
@@ -68,4 +69,4 @@ function addUnit(scene, team, type, gx = 30, gy = 30) {
     return unit;
 }
 
-module.exports = { context, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack, snapshot, makeScene, addUnit };
+module.exports = { context, Terrain, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack, snapshot, makeScene, addUnit };

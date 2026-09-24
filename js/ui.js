@@ -65,7 +65,7 @@ const UI = {
     configs: { red: {}, blue: {} },
     formations: { red: 'custom', blue: 'custom' },
     orders: { red: 'advance', blue: 'advance' },
-    battleOptions: { deathmatch: false, reserves: { red: 0, blue: 0 } },
+    battleOptions: { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat' },
     editing: false,
     countdown: false,
     pendingDeploy: false,
@@ -79,6 +79,8 @@ const UI = {
         const params = new URLSearchParams(location.search);
         const tactics = params.get('tactics');
         if (['assault', 'flank', 'reserve'].includes(tactics)) { this.startTactics(tactics); return; }
+        const terrain = params.get('terrain');
+        if (terrain && Object.hasOwn(Terrain.maps, terrain)) { this.startTerrain(terrain); return; }
         const auto = params.get('auto');
         if (auto && PRESETS[auto]) { this.autoplay(auto); return; }
         this.showHome();
@@ -139,6 +141,7 @@ const UI = {
         document.getElementById('deathmatch-hud-rule').hidden = !fighting || !this.battleOptions.deathmatch;
         this.updateMorale();
         this.updateTactics();
+        this.updateTerrainControls();
         document.getElementById('btn-pause').disabled = !fighting || this.countdown;
         document.getElementById('btn-pause').textContent = this.scene?.paused ? '▶ 继续' : '⏸ 暂停';
         document.getElementById('btn-lock').disabled = !this.scene;
@@ -154,7 +157,7 @@ const UI = {
         const challenge = this.mode === 'challenge';
         document.getElementById('steps').hidden = n === 0;
         document.getElementById('sheet-label').hidden = n !== 0;
-        document.getElementById('sheet-label').textContent = this.phase === 'result' ? '⚑ 战后复盘' : this.mode === 'tactics' ? '⚑ 战阵演练' : '⚑ 统帅试炼';
+        document.getElementById('sheet-label').textContent = this.phase === 'result' ? '⚑ 战后复盘' : this.mode === 'terrain' ? '⛰ 高地演练' : this.mode === 'tactics' ? '⚑ 战阵演练' : '⚑ 统帅试炼';
         document.querySelectorAll('#steps .step').forEach(el => {
             const k = Number(el.dataset.step);
             el.hidden = challenge && k === 2;
@@ -163,7 +166,7 @@ const UI = {
             el.querySelector('span').textContent = k === 1 ? (challenge ? '我的军队' : '红方配兵') : k === 2 ? '蓝方配兵' : '准备开战';
             el.querySelector('i').textContent = challenge && k === 3 ? '2' : String(k);
         });
-        const hint = n === 0 ? '观察敌阵，找到你的解法' : n === 3 ? (this.mode === 'tactics' ? '战阵演练 · 观察枪阵与迂回路线' : '两军就位，准备开战') : challenge ? this.challenge.title + ' · 为红方配兵' : (n === 1 ? '红方' : '蓝方') + '队长正在配兵';
+        const hint = n === 0 ? '观察敌阵，找到你的解法' : n === 3 ? (this.mode === 'terrain' ? '高地演练 · 同阵容换图对照' : this.mode === 'tactics' ? '战阵演练 · 观察枪阵与迂回路线' : '两军就位，准备开战') : challenge ? this.challenge.title + ' · 为红方配兵' : (n === 1 ? '红方' : '蓝方') + '队长正在配兵';
         document.getElementById('phase-hint').textContent = hint;
     },
 
@@ -190,7 +193,49 @@ const UI = {
     },
 
     resetBattleOptions() {
-        this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 } };
+        this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat' };
+    },
+
+    startTerrain(terrain = 'blue_hill') {
+        this.clearBattle();
+        this.mode = 'terrain';
+        this.challenge = null;
+        this.editing = false;
+        const army = { infantry: 36, pikeman: 12, archer: 16, cavalry: 12 };
+        this.configs = { red: { ...army }, blue: { ...army } };
+        this.formations = { red: 'custom', blue: 'custom' };
+        this.orders = { red: 'advance', blue: 'advance' };
+        this.resetBattleOptions();
+        this.battleOptions.terrain = Terrain.normalize(terrain);
+        this.deployArmies();
+    },
+
+    selectTerrain(terrain) {
+        if (!['sandbox', 'terrain'].includes(this.mode) || !['ready', 'result'].includes(this.phase) || this.countdown) return;
+        if (!Object.hasOwn(Terrain.maps, terrain)) return;
+        this.battleOptions.terrain = terrain;
+        // 部署会重绘地形并清空旧战况；只换地图，保留双方阵容与指令。
+        this.deployArmies();
+    },
+
+    updateTerrainControls() {
+        const selectable = ['sandbox', 'terrain'].includes(this.mode);
+        const terrain = Terrain.normalize(this.battleOptions.terrain);
+        const map = Terrain.maps[terrain];
+        for (const phase of ['ready', 'result']) {
+            document.getElementById('terrain-' + phase).hidden = !selectable;
+            document.getElementById('terrain-' + phase + '-description').textContent = map.description;
+        }
+        document.querySelectorAll('[data-terrain]').forEach(button => {
+            const selected = button.dataset.terrain === terrain;
+            button.classList.toggle('active', selected);
+            button.setAttribute('aria-pressed', String(selected));
+            button.disabled = !selectable || !['ready', 'result'].includes(this.phase) || this.countdown;
+        });
+        const hud = document.getElementById('terrain-hud');
+        hud.hidden = this.phase === 'home';
+        hud.textContent = '⛰ ' + map.name;
+        hud.title = map.description;
     },
 
     showHome() {
@@ -264,7 +309,7 @@ const UI = {
         this.configs = { red: { infantry: reserve ? 150 : 100 }, blue: { pikeman: 100 } };
         this.formations = { red: 'custom', blue: 'square' };
         this.orders = { red: reserve ? 'flank' : order, blue: 'hold' };
-        this.battleOptions = { deathmatch: reserve, reserves: { red: reserve ? 50 : 0, blue: 0 } };
+        this.battleOptions = { deathmatch: reserve, reserves: { red: reserve ? 50 : 0, blue: 0 }, terrain: 'flat' };
         this.deployArmies();
     },
 
@@ -485,7 +530,8 @@ const UI = {
         const deathmatch = this.battleOptions.deathmatch;
         const reserves = Object.fromEntries(['red', 'blue'].map(team => [team,
             Math.min(this.battleOptions.reserves[team] || 0, Math.max(0, (this.configs[team].infantry || 0) - 1))]));
-        this.battleOptions = { deathmatch: this.battleOptions.deathmatch, reserves };
+        const terrain = ['sandbox', 'terrain'].includes(this.mode) ? Terrain.normalize(this.battleOptions.terrain) : 'flat';
+        this.battleOptions = { deathmatch, reserves, terrain };
         this.scene?.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue,
             { ...this.orders }, { ...this.battleOptions, reserves: { ...reserves } });
         this.setPhase('ready');
@@ -578,7 +624,7 @@ const UI = {
         const wonChallenge = this.mode === 'challenge' && winner === 'red';
         if (wonChallenge) this.saveWin();
         document.getElementById('result-eyebrow').textContent = this.challenge ? this.challenge.title + ' · 本局战报'
-            : (report.deathmatch ? '预备队死斗' : this.mode === 'tactics' ? '战阵演练' : '自由对战') + ' · 本局战报';
+            : (report.deathmatch ? '预备队死斗' : this.mode === 'terrain' ? '高地演练' : this.mode === 'tactics' ? '战阵演练' : '自由对战') + ' · 本局战报';
         const title = document.getElementById('result-title');
         title.className = 'result-title ' + winner;
         title.textContent = winner === 'draw' ? '势均力敌 · 平局' : this.challenge ? (wonChallenge ? '挑战成功！' : '再试一种解法') : (winner === 'red' ? '🔴 红方胜利！' : '🔵 蓝方胜利！');
@@ -597,6 +643,11 @@ const UI = {
             <div><small>战斗用时</small><b>${this.formatTime(report.durationMs)}</b></div>
             <div><small>红方在场 / 出战</small><b>${report.red} <em>/ ${report.teams.red.initial}</em></b></div>
             <div><small>红方击杀最多</small><b>${leader && leader[1].kills > 0 ? UNIT_TYPES[leader[0]].name : '暂无击杀'}</b></div>`;
+        const terrainReport = document.getElementById('terrain-report');
+        terrainReport.hidden = !['sandbox', 'terrain'].includes(this.mode);
+        const map = Terrain.maps[Terrain.normalize(report.terrain || this.battleOptions.terrain)];
+        const contact = Number.isFinite(report.firstContactMs) ? (report.firstContactMs / 1000).toFixed(1) + ' 秒' : '未接敌';
+        terrainReport.textContent = '本局地图：' + map.name + ' · 首次交锋：' + contact + '（首次有效伤害，不含倒计时）';
         document.getElementById('report-tables').innerHTML = ['red', 'blue'].map(team => this.renderTeamReport(team, report.teams[team])).join('');
         const events = document.getElementById('battle-events');
         events.replaceChildren();
@@ -610,6 +661,7 @@ const UI = {
         document.getElementById('btn-edit-red').textContent = this.challenge ? '✎ 调整阵容再挑战' : '✎ 调整红方再战';
         document.getElementById('btn-edit-blue').hidden = !!this.challenge;
         document.getElementById('btn-swap').hidden = !!this.challenge;
+        document.getElementById('btn-swap').textContent = this.battleOptions.terrain === 'flat' ? '⇄ 交换双方再战' : '⇄ 交换军队再战（高地不动）';
         const switchTactics = document.getElementById('btn-switch-tactics');
         switchTactics.hidden = this.mode !== 'tactics';
         document.getElementById('btn-reserve-tactics').hidden = this.mode !== 'tactics' || report.deathmatch;
@@ -678,6 +730,10 @@ const UI = {
     bindControls() {
         document.getElementById('btn-home').onclick = () => this.showHome();
         document.getElementById('btn-sandbox').onclick = () => this.resetAll();
+        document.getElementById('btn-terrain').onclick = () => this.startTerrain();
+        document.querySelectorAll('[data-terrain]').forEach(button => {
+            button.onclick = () => this.selectTerrain(button.dataset.terrain);
+        });
         document.querySelectorAll('[data-tactics-entry]').forEach(button => {
             button.onclick = () => { this.startTactics(button.dataset.tacticsEntry); Snd.play('tick'); };
         });

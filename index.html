@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>帝国亲子沙盒 · 统帅试炼</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E🏰%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="css/style.css?v=20260923-morale-flow1">
+    <link rel="stylesheet" href="css/style.css?v=20260924-terrain1">
 </head>
 <body>
     <!-- 战场：铺满整个视口 -->
@@ -15,6 +15,7 @@
     <header id="topbar">
         <h1>🏰 帝国亲子沙盒</h1>
         <span id="phase-hint">观察敌阵，找到你的解法</span>
+        <span id="terrain-hud" class="terrain-hud" hidden></span>
         <div class="counts" title="在场兵力，包含正在溃逃的士兵">
             <span class="red-c">🔴 <span id="red-count">0</span></span>
             <span class="blue-c">🔵 <span id="blue-count">0</span></span>
@@ -83,6 +84,10 @@
                         </div>
                         <span class="campaign-progress" id="campaign-progress">0 / 5 已通过</span>
                     </div>
+                    <div class="terrain-entry">
+                        <div><div class="eyebrow">高地演练 · 新战场</div><h3>同一支军队，换个坡度会怎样？</h3><p>双方各 76 人，四兵种完全相同。先让蓝方据高，再换平地、红方高地，观察仰攻与俯攻。</p></div>
+                        <button class="secondary-btn" id="btn-terrain">⛰ 进入高地演练 →</button>
+                    </div>
                     <div class="tactics-entry">
                         <div class="tactics-entry-copy"><div class="eyebrow">战阵演练 · 新玩法</div><h3>再添五十预备，能否破阵？</h3><p>100 剑士发起进攻，50 剑士在后方接应、分批增援。收拢溃兵，重整后再次出击；也可切回 100 对 100 比较。</p></div>
                         <div class="tactics-entry-actions">
@@ -138,6 +143,17 @@
                 <!-- 第3步前：双方就绪 -->
                 <section id="sec-ready" class="sec">
                     <div class="team-banner both">⚔️ 两军就位，大战一触即发！</div>
+                    <div id="terrain-ready" class="terrain-panel" hidden>
+                        <b>⛰ 战场地形 · 切换即刻预览</b>
+                        <div class="terrain-map-buttons" role="group" aria-label="选择准备战场的地形">
+                            <button class="secondary-btn" data-terrain="flat">平地</button>
+                            <button class="secondary-btn" data-terrain="red_hill">红方高地</button>
+                            <button class="secondary-btn" data-terrain="blue_hill">蓝方高地</button>
+                        </div>
+                        <p id="terrain-ready-description"></p>
+                        <p class="terrain-rules">上坡减速 · 下坡助冲 · 高差影响远射。坡顶恢复正常移速；高地不是永久攻击加成，优势随双方位置变化。</p>
+                        <small>换图保留阵容与战术；开战及倒计时中不能换图。可收起面板查看整座山丘。</small>
+                    </div>
                     <div id="army-summary"></div>
                     <div id="deathmatch-ready-rule" class="deathmatch-rule" hidden>死斗：溃兵可重整，直到一方全灭</div>
                     <div id="tactics-ready-guide" class="tactics-ready-guide" hidden>
@@ -160,6 +176,17 @@
                     <div class="result-title" id="result-title">🎉 胜利！</div>
                     <div id="result-detail"></div>
                     <div id="result-metrics" class="result-metrics"></div>
+                    <p id="terrain-report" class="terrain-report" hidden></p>
+                    <div id="terrain-result" class="terrain-panel" hidden>
+                        <b>⛰ 保留阵容，换张地图再试</b>
+                        <div class="terrain-map-buttons" role="group" aria-label="选择下一局战场的地形">
+                            <button class="secondary-btn" data-terrain="flat">平地</button>
+                            <button class="secondary-btn" data-terrain="red_hill">红方高地</button>
+                            <button class="secondary-btn" data-terrain="blue_hill">蓝方高地</button>
+                        </div>
+                        <p id="terrain-result-description"></p>
+                        <small>点击地图回到准备阶段，不会自动开战。交换双方只交换军队，丘陵位置不动。</small>
+                    </div>
                     <div id="report-tables" class="report-tables"></div>
                     <p class="report-note">在场含当前溃逃；撤离者生还但已退出战场。曾溃逃、重整各按人数记录，同一士兵可能两项都有。</p>
                     <details class="battle-events"><summary>战场纪事 <span>按战斗时间记录</span></summary><ol id="battle-events"></ol></details>
@@ -183,13 +210,14 @@
 
     <script src="assets/manifest.js?v=20260923-death2"></script>
     <script src="js/phaser.min.js"></script>
-    <script src="js/units.js?v=20260923-morale-flow1"></script>
+    <script src="js/terrain.js?v=20260924-terrain1"></script>
+    <script src="js/units.js?v=20260924-terrain1"></script>
     <script src="js/combat.js?v=20260923-reserve1"></script>
     <script src="js/morale.js?v=20260923-morale-flow1"></script>
     <script src="js/tactics.js?v=20260923-morale-flow1"></script>
     <script src="js/challenges.js?v=20260923-tactics1"></script>
-    <script src="js/game.js?v=20260923-morale-flow1"></script>
-    <script src="js/ui.js?v=20260923-morale-flow1"></script>
+    <script src="js/game.js?v=20260924-terrain1"></script>
+    <script src="js/ui.js?v=20260924-terrain1"></script>
     <script>
         const game = new Phaser.Game({
             type: Phaser.AUTO,

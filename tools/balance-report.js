@@ -5,7 +5,7 @@ const { makeScene, UNIT_TYPES } = require('../tests/battle-harness.js');
 
 function runBattle(red, blue, redFormation = 'custom', blueFormation = 'custom', options = {}) {
     const scene = makeScene();
-    scene.deployUnits(red, blue, redFormation, blueFormation);
+    scene.deployUnits(red, blue, redFormation, blueFormation, options.orders || {}, options);
     scene.battleStarted = true;
     const maxSteps = (options.seconds ?? 240) * 60;
     for (let step = 0; step < maxSteps && !scene.battleOver; step++) scene.advanceBattle(1000 / 60);
@@ -29,8 +29,12 @@ function pureArmy(type, budget) {
     return { [type]: count };
 }
 
-function runPair(red, blue, redFormation = 'custom', blueFormation = 'custom') {
-    return [runBattle(red, blue, redFormation, blueFormation), runBattle(blue, red, blueFormation, redFormation)];
+function runPair(red, blue, redFormation = 'custom', blueFormation = 'custom', options = {}) {
+    // 地图位置保持不变：比较军队换边后的攻守表现；镜像公平由独立测试覆盖。
+    const swapped = { ...options, orders: { red: options.orders?.blue, blue: options.orders?.red },
+        reserves: { red: options.reserves?.blue, blue: options.reserves?.red } };
+    return [runBattle(red, blue, redFormation, blueFormation, options),
+        runBattle(blue, red, blueFormation, redFormation, swapped)];
 }
 
 if (require.main === module) {

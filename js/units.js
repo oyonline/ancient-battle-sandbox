@@ -186,7 +186,8 @@ class CavalryAI {
     pathContact(unit, tx, ty, speed, dt) {
         const dx = tx - unit.gx, dy = ty - unit.gy, distance = Math.hypot(dx, dy);
         if (distance < 0.001) return null;
-        const step = Math.min(distance, speed * dt), nx = dx / distance, ny = dy / distance;
+        const step = Math.min(distance, speed * movementSpeedMultiplier(unit, tx, ty) * dt);
+        const nx = dx / distance, ny = dy / distance;
         let contact = null, bestD = Infinity;
         unit.scene.forEachNear(unit.gx, unit.gy, UNIT_TYPES.pikeman.range + step, enemy => {
             if (enemy.team === unit.team || enemy.dead || enemy.withdrawn || unit.pierceHits?.has(enemy.id)) return;
@@ -211,18 +212,20 @@ class CavalryAI {
             unit.scene.morale?.queueCharge(unit, target, braced);
             unit.lastAttack = now;
             unit.chargeImpactId = target.id;
-            unit.chargeMomentum = 1;
             unit.pierceHits = new Set();
-            unit.pierceX = clamp(target.gx + unit.chargeDX * 4, 1.5, GRID_W - 1.5);
-            unit.pierceY = clamp(target.gy + unit.chargeDY * 4, 1.5, GRID_H - 1.5);
+            unit.pierceX = clamp(target.gx + unit.chargeDX * 4 * unit.chargeMomentum, 1.5, GRID_W - 1.5);
+            unit.pierceY = clamp(target.gy + unit.chargeDY * 4 * unit.chargeMomentum, 1.5, GRID_H - 1.5);
             unit.state = 'pierce'; unit.stateTime = 0;
             unit.chargeDistance = 0; unit.chargeLastX = null;
         }
         if (unit.pierceHits.has(target.id)) return;
         unit.pierceHits.add(target.id);
         // 首撞与迎击都入同一批伤害，不能因为受到阻力而吞掉骑兵的首撞。
-        resolveAttack(target, unit, { multiplier: first ? 2 : 0.5 });
-        knockback(target, unit, braced ? 0.14 : first ? 0.8 : 0.4);
+        // 首撞保留已积累的真实动量；后续擦撞只随当前坡向变化，不重复吃阻力衰减。
+        const slopeImpact = first ? unit.chargeMomentum :
+            Terrain.movementMultiplier(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, unit.pierceX, unit.pierceY);
+        resolveAttack(target, unit, { multiplier: (first ? 2 : 0.5) * slopeImpact });
+        knockback(target, unit, (braced ? 0.14 : first ? 0.8 : 0.4) * slopeImpact);
         unit.scene.meleeImpact(unit, target);
         if (first) unit.scene.playAttackAnim(unit, target);
         if (braced && now - target.lastBrace >= 1000) {
@@ -239,7 +242,7 @@ class CavalryAI {
         if (unit.chargeLastX != null) {
             // 只累计上一步实际前进的距离，排斥、受阻和原地等待不能攒出冲锋。
             const forward = (unit.gx - unit.chargeLastX) * unit.chargeDX + (unit.gy - unit.chargeLastY) * unit.chargeDY;
-            unit.chargeDistance += clamp(forward, 0, UNIT_TYPES.cavalry.chargeSpeed * dt);
+            unit.chargeDistance += clamp(forward, 0, unit.chargeLastStep ?? UNIT_TYPES.cavalry.chargeSpeed * dt);
             unit.chargeLastX = null;
         }
         if (!unit.target || unit.target.dead || unit.target.withdrawn || (now - unit.lastRetarget >= 500 && dist(unit, unit.target) > 2)) {
@@ -254,7 +257,8 @@ class CavalryAI {
         // 即使新目标就在身边，也必须先检查助跑方向，不能原地掉头继承冲锋。
         if (distance <= 0.001 || (unit.chargeDX != null && dx * unit.chargeDX + dy * unit.chargeDY < 0.8)) unit.chargeDistance = 0;
         unit.chargeDX = dx; unit.chargeDY = dy;
-        unit.chargeMomentum = clamp(unit.chargeDistance / 3, 0, 1);
+        unit.chargeMomentum = clamp(unit.chargeDistance / 3, 0, 1) *
+            Terrain.movementMultiplier(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, target.gx, target.gy);
         const contact = this.pathContact(unit, target.gx, target.gy, data.chargeSpeed, dt);
         if (contact) {
             // 接触挡路身体就结束助跑，不能顶着前排继续追弓并攒出双倍冲锋。
@@ -274,6 +278,7 @@ class CavalryAI {
             return true;
         }
         unit.chargeLastX = unit.gx; unit.chargeLastY = unit.gy;
+        unit.chargeLastStep = data.chargeSpeed * movementSpeedMultiplier(unit, target.gx, target.gy) * dt;
         moveToward(unit, target.gx, target.gy, data.chargeSpeed, dt, 'charge');
         unit.scene.chargeDust(unit);
         return true;
@@ -358,15 +363,20 @@ function unitRand(unit) {
     return unit.randSeed / 4294967296;
 }
 
+function movementSpeedMultiplier(unit, tx, ty) {
+    const dx = tx - unit.gx, dy = ty - unit.gy;
+    // 动摇时只放缓向前推进；战术后退与溃逃不受这项限制。
+    const advancing = dx * (unit.moraleFacingX || 0) + dy * (unit.moraleFacingY || 0) > 0;
+    const caution = unit.moraleState === 'wavering' && advancing ? 0.85 : 1;
+    return caution * Terrain.movementMultiplier(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, tx, ty);
+}
+
 function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
     const dx = tx - unit.gx, dy = ty - unit.gy;
     const d = Math.hypot(dx, dy);
     if (d < 0.001) return;
-    // 动摇时只放缓向前推进；战术后退与溃逃不受这项限制。
-    const advancing = dx * (unit.moraleFacingX || 0) + dy * (unit.moraleFacingY || 0) > 0;
-    const caution = unit.moraleState === 'wavering' && advancing ? 0.85 : 1;
     if (movement === 'walk') speed = CombatRules.walkingSpeed(unit, speed);
-    const step = Math.min(d, speed * caution * dt);
+    const step = Math.min(d, speed * movementSpeedMultiplier(unit, tx, ty) * dt);
     const intended = { x: dx / d * step, y: dy / d * step };
     const motion = movement === 'walk' ? CombatRules.constrainWalk(unit, intended.x, intended.y) : intended;
     if (unit.scene && unit.scene.planningStep) {
@@ -405,8 +415,9 @@ function resolveAttack(target, from, options = {}) {
     if (target.dead || target.withdrawn || target.hp <= 0) return 0;
     const scene = target.scene;
     const formationMultiplier = scene?.tactics?.incomingMultiplier(from, target) ?? 1;
+    const terrainMultiplier = Terrain.attackMultiplier(scene?.battleOptions?.terrain, from, target, options.sourceHeight);
     const damage = calculateAttackDamage(from, target, {
-        ...options, multiplier: (options.multiplier ?? 1) * formationMultiplier
+        ...options, multiplier: (options.multiplier ?? 1) * formationMultiplier * terrainMultiplier
     });
     const attackStartedAt = options.attackStartedAt ?? scene?.simulationTime;
     if (scene && scene.collectingImpacts) {
