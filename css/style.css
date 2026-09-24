@@ -486,6 +486,8 @@ button:active { transform: scale(0.94); }
 .terrain-entry h3 { margin: 5px 0 7px; color: #e2eabe; font-size: 22px; }
 .terrain-entry p { margin: 0; color: #c8ceaa; font: 12px/1.8 "PingFang SC", sans-serif; }
 .terrain-entry .secondary-btn { flex-shrink: 0; color: #e6eec7; border-color: #a3b47b; background: #465a31; }
+.terrain-entry .terrain-entry-actions { flex: 0 0 310px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.terrain-entry-actions .secondary-btn { padding: 10px 8px; font-size: 12px; }
 .terrain-panel { padding: 12px 14px; border: 1px solid #81915d; border-radius: 10px; background: #273020; color: #d8e0b6; font: 12px/1.7 "PingFang SC", sans-serif; }
 .terrain-panel > b { font-size: 14px; }
 .terrain-map-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
@@ -514,6 +516,7 @@ button:active { transform: scale(0.94); }
 .unit-inspector > b, .unit-inspector > span, .unit-inspector > small { display: block; }
 .unit-inspector > b { margin-bottom: 5px; color: #f1e7bc; font-size: 14px; }
 .unit-inspector > small { margin-top: 6px; }
+.unit-inspector .inspection-warning { margin-top: 4px; color: #f1cd84; }
 .unit-inspector small { color: #a8b497; }
 .challenge-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .challenge-card { position: relative; display: flex; align-items: center; text-align: left; gap: 12px; padding: 17px 14px; color: var(--parchment); background: linear-gradient(115deg, #55432b, #3d3020); border: 1px solid #846638; border-radius: 10px; overflow: hidden; min-height: 146px; }
@@ -597,6 +600,7 @@ summary { cursor: pointer; }
     .tactics-entry { padding: 12px; }
     .terrain-entry { padding: 12px; flex-direction: column; align-items: stretch; gap: 10px; }
     .terrain-entry h3 { font-size: 19px; }
+    .terrain-entry .terrain-entry-actions { flex-basis: auto; }
     .terrain-hud { font-size: 11px; padding: 2px 6px; }
     .commands-grid { grid-template-columns: 1fr; gap: 8px; }
     .commands-panel { padding: 10px; }

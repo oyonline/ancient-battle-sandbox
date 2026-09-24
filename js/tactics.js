@@ -20,6 +20,7 @@ class TacticsSystem {
                 this.deployAttackers(team);
             }
         }
+        if (Terrain.hasBarriers(scene.battleOptions.terrain)) this.legalizeDeployments();
     }
 
     active(unit) { return !unit.dead && !unit.withdrawn && unit.moraleState !== 'routing'; }
@@ -30,10 +31,47 @@ class TacticsSystem {
         Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, velX: 0, velY: 0 });
     }
 
+    legalPoint(unit, point) {
+        if (!point || !Terrain.hasBarriers(this.scene.battleOptions.terrain)) return point;
+        return Terrain.projectPoint(this.scene.battleOptions.terrain, point.gx, point.gy,
+            CombatRules.bodyRadius(unit), unit.team === 'red' ? -1 : 1);
+    }
+
+    legalizeDeployments() {
+        const terrain = this.scene.battleOptions.terrain, placed = [];
+        // 刚性枪阵优先占位，其他兵的局部修正不能破坏枪阵的槽位拓扑。
+        const units = Object.values(this.formations).flatMap(formation => formation.members)
+            .concat(this.scene.units.filter(unit => unit.tacticalRole !== 'guard'));
+        const free = (unit, p) => Terrain.walkable(terrain, p.gx, p.gy, CombatRules.bodyRadius(unit)) &&
+            placed.every(other => dist(p, other) >= CombatRules.contactDistance(unit, other) + 0.005);
+        for (const unit of units) {
+            let point = this.legalPoint(unit, unit);
+            if (!free(unit, point)) {
+                const origin = point, f = this.forward(unit.team);
+                point = null;
+                for (let ring = 1; ring < 90 && !point; ring++) {
+                    for (let x = -ring; x <= ring && !point; x++) for (let y = -ring; y <= ring && !point; y++) {
+                        if (Math.max(Math.abs(x), Math.abs(y)) !== ring) continue;
+                        const candidate = { gx: origin.gx + f * x * 0.8, gy: origin.gy + y * 0.8 };
+                        if (free(unit, candidate)) point = candidate;
+                    }
+                }
+                if (!point) throw new Error('新地形没有合法的不重叠部署位置');
+            }
+            if (point.gx !== unit.gx || point.gy !== unit.gy) {
+                this.place(unit, point.gx, point.gy);
+                if (unit.guardAnchor) unit.guardAnchor = { ...point };
+            }
+            placed.push(unit);
+        }
+    }
+
     deployGroundGuards(team) {
         const members = this.scene.units.filter(unit => unit.team === team);
         if (!members.length) return;
         const terrain = this.scene.battleOptions.terrain;
+        const defense = Terrain.defenseLayout(terrain, team);
+        if (defense) { this.deployPassGuards(team, members, defense); return; }
         const hill = terrain === `${team}_hill` ? Terrain.maps[terrain] : null;
         // 只占己方高地；平地和敌方高地仍守己方出发区，不跨场抢占敌人的山顶。
         const cx = hill?.cx ?? (team === 'red' ? 20 : 50), cy = hill?.cy ?? GRID_H / 2;
@@ -73,6 +111,90 @@ class TacticsSystem {
         this.groundGuards[team] = { team, cx: cx + shiftX, cy: cy + shiftY, members, onHill: !!hill };
     }
 
+    deployPassGuards(team, members, layout) {
+        const terrain = this.scene.battleOptions.terrain, f = this.forward(team), spacing = 0.86;
+        const front = members.filter(u => u.type === 'pikeman').concat(members.filter(u => u.type === 'infantry'));
+        const archers = members.filter(u => u.type === 'archer'), cavalry = members.filter(u => u.type === 'cavalry');
+        const assigned = new Set(members), occupied = new Map();
+        const remember = unit => {
+            const key = `${Math.floor(unit.gx)},${Math.floor(unit.gy)}`;
+            if (!occupied.has(key)) occupied.set(key, []);
+            occupied.get(key).push(unit);
+        };
+        for (const other of this.scene.units) if (!assigned.has(other)) remember(other);
+        const free = (unit, gx, gy) => {
+            if (gx < 1.5 || gx > GRID_W - 1.5 || gy < 1.5 || gy > GRID_H - 1.5 ||
+                !Terrain.walkable(terrain, gx, gy, CombatRules.bodyRadius(unit))) return false;
+            for (let x = Math.floor(gx) - 1; x <= Math.floor(gx) + 1; x++) {
+                for (let y = Math.floor(gy) - 1; y <= Math.floor(gy) + 1; y++) {
+                    for (const other of occupied.get(`${x},${y}`) || []) {
+                        if (Math.hypot(gx - other.gx, gy - other.gy) < CombatRules.contactDistance(unit, other) + 0.02) return false;
+                    }
+                }
+            }
+            return true;
+        };
+        // 后方溢出格共享一个占位表；禁止逐兵投影到同一个河岸/岩壁边缘。
+        const fallback = [];
+        const rearEdge = f > 0 ? layout.archerRect.x1 : layout.archerRect.x2;
+        for (const origin of [rearEdge - f * spacing, layout.center.gx]) {
+            for (let row = 0; row < 40; row++) {
+                const gx = origin - f * row * spacing;
+                for (let lane = 0; lane < 80; lane++) {
+                    const offset = lane ? Math.ceil(lane / 2) * (lane % 2 ? -1 : 1) : 0;
+                    const gy = layout.center.gy + offset * spacing;
+                    if (gx >= 1.5 && gx <= GRID_W - 1.5 && gy >= 1.5 && gy <= GRID_H - 1.5 &&
+                        Terrain.walkable(terrain, gx, gy)) fallback.push({ gx, gy });
+                }
+            }
+        }
+        const assign = (unit, gx, gy, radius, protects = false) => {
+            if (!free(unit, gx, gy)) {
+                const point = fallback.find(point => free(unit, point.gx, point.gy));
+                if (!point) throw new Error('坡口守军没有合法的不重叠部署位置');
+                ({ gx, gy } = point);
+            }
+            this.place(unit, gx, gy);
+            Object.assign(unit, { tacticalRole: 'ground_guard', guardAnchor: { gx, gy }, guardRadius: radius,
+                groundGuardTarget: null, groundGuardReturning: false, protectArchers: protects, guardLocalRadius: 6 });
+            remember(unit);
+        };
+        const rect = layout.archerRect;
+        const columns = Math.max(1, Math.floor((rect.y2 - rect.y1 - 1.2) / spacing) + 1);
+        const archerX = f > 0 ? rect.x2 - 0.6 : rect.x1 + 0.6;
+        // 优先保留弓兵平台，人数过多的前排才向合法后方铺开。
+        archers.forEach((unit, i) => assign(unit, archerX - f * Math.floor(i / columns) * spacing,
+            layout.center.gy + (i % columns - (Math.min(columns, archers.length) - 1) / 2) * spacing, 1.5));
+        front.forEach((unit, i) => {
+            const post = layout.frontPosts[i % layout.frontPosts.length], index = Math.floor(i / layout.frontPosts.length);
+            assign(unit, post.gx - f * Math.floor(index / 4) * spacing, post.gy + (index % 4 - 1.5) * spacing, 4);
+        });
+        cavalry.forEach((unit, i) => {
+            const post = layout.cavalryPosts[i % layout.cavalryPosts.length], index = Math.floor(i / layout.cavalryPosts.length);
+            assign(unit, post.gx - f * Math.floor(index / 3) * 1.08, post.gy + (index % 3 - 1) * 1.08, 20, true);
+        });
+        this.groundGuards[team] = { team, cx: layout.center.gx, cy: layout.center.gy, members,
+            archers, layout, onHill: true, archerThreats: [], threatsAt: -Infinity };
+    }
+
+    passArcherThreats(team) {
+        const group = this.groundGuards[team], now = this.scene.simulationTime;
+        if (!group?.layout) return [];
+        if (now - group.threatsAt >= 250) {
+            const threats = new Set();
+            for (const archer of group.archers) {
+                if (!CombatRules.canBeHit(archer)) continue;
+                this.scene.forEachNear(archer.gx, archer.gy, 4.2, other => {
+                    if (other.team !== team && CombatRules.canAct(other) && dist(archer, other) <= 4.2) threats.add(other);
+                });
+            }
+            group.archerThreats = [...threats]; group.threatsAt = now;
+        }
+        // 死亡与撤离当步生效；缓存仅省去空间查询，不继承已消失的护弓理由。
+        return group.archerThreats.filter(enemy => CombatRules.canAct(enemy) &&
+            group.archers.some(archer => CombatRules.canBeHit(archer) && dist(archer, enemy) <= 4.2));
+    }
+
     isGroundGuard(unit) {
         return unit.tacticalRole === 'ground_guard' && (unit.type !== 'cavalry' ||
             (this.scene.battleOptions.cavalryOrders?.[unit.team] || 'auto') === 'auto');
@@ -80,15 +202,26 @@ class TacticsSystem {
 
     groundThreat(unit) {
         let target = null, nearest = Infinity;
+        if (unit.type === 'cavalry' && unit.protectArchers) {
+            for (const other of this.passArcherThreats(unit.team)) {
+                if (dist(unit.guardAnchor, other) > unit.guardRadius) continue;
+                const distance = dist(unit, other);
+                if (distance < nearest - 1e-9 || (Math.abs(distance - nearest) <= 1e-9 && other.id < target.id)) {
+                    nearest = distance; target = other;
+                }
+            }
+            if (target) return target;
+        }
+        const radius = unit.protectArchers ? unit.guardLocalRadius : unit.guardRadius;
         const consider = other => {
             if (other.team === unit.team || !CombatRules.canBeHit(other)) return;
             const distance = dist(unit, other);
-            if (dist(unit.guardAnchor, other) > unit.guardRadius && distance > unit.typeData.range) return;
+            if (dist(unit.guardAnchor, other) > radius && distance > unit.typeData.range) return;
             if (distance < nearest - 1e-9 || (Math.abs(distance - nearest) <= 1e-9 && other.id < target.id)) {
                 nearest = distance; target = other;
             }
         };
-        this.scene.forEachNear(unit.guardAnchor.gx, unit.guardAnchor.gy, unit.guardRadius, consider);
+        this.scene.forEachNear(unit.guardAnchor.gx, unit.guardAnchor.gy, radius, consider);
         this.scene.forEachNear(unit.gx, unit.gy, unit.typeData.range, consider);
         return target;
     }
@@ -142,7 +275,8 @@ class TacticsSystem {
         const members = this.scene.units.filter(u => u.team === team && u.type === 'pikeman');
         if (!members.length) return;
         const size = Math.ceil(Math.sqrt(members.length)), spacing = 0.86;
-        const cx = team === 'red' ? 22 : 48, cy = GRID_H / 2, f = this.forward(team);
+        let cx = team === 'red' ? 22 : 48;
+        const cy = GRID_H / 2, f = this.forward(team);
         const slots = [];
         // 优先填外围；人数不足一圈时，均匀分到各面，仍会留下真实空隙。
         const cells = [];
@@ -176,6 +310,20 @@ class TacticsSystem {
                 guardFacingX: slot.faceX, guardFacingY: slot.faceY, guardReady: false,
                 guardStableTime: 0, guardSupport: 0 });
         });
+        if (Terrain.hasBarriers(this.scene.battleOptions.terrain)) {
+            let shift = 0;
+            const legal = offset => slots.every(slot => !slot.unit ||
+                Terrain.walkable(this.scene.battleOptions.terrain, slot.gx + offset, slot.gy, CombatRules.bodyRadius(slot.unit)));
+            while (!legal(shift) && Math.abs(shift) < 30) shift -= f * spacing;
+            if (!legal(shift)) throw new Error('枪阵无法整体移到可通行位置');
+            if (shift) {
+                cx += shift;
+                for (const slot of slots) {
+                    slot.gx += shift;
+                    if (slot.unit) this.place(slot.unit, slot.gx, slot.gy);
+                }
+            }
+        }
         const half = (size - 1) * spacing / 2;
         this.formations[team] = { team, cx, cy, half, slots, members, sparse: members.length < perimeter || members.length < 4,
             nextRefill: 0, breaches: 0, breached: new Set() };
@@ -224,6 +372,7 @@ class TacticsSystem {
                 ...this.curve(bend, { gx: bend.gx + f * 4, gy: outsideY },
                     { gx: end.gx - f * 1.8, gy: end.gy - 2 }, end)
             ];
+            if (Terrain.hasBarriers(this.scene.battleOptions.terrain)) unit.route = unit.route.map(point => this.legalPoint(unit, point));
         });
         const reserveCols = Math.max(2, Math.ceil(Math.sqrt(reserve.length)));
         reserve.forEach((unit, i) => {
@@ -231,7 +380,7 @@ class TacticsSystem {
             const lane = (col - (reserveCols - 1) / 2) * 0.82;
             this.place(unit, home - f * (9 + row * 0.82), cy + 2.5 + lane);
             Object.assign(unit, { tacticalRole: 'reserve', reserveCommitted: false,
-                reserveSlot: { gx: group.rallyCenter.gx - f * row * 0.82, gy: group.rallyCenter.gy + lane } });
+                reserveSlot: this.legalPoint(unit, { gx: group.rallyCenter.gx - f * row * 0.82, gy: group.rallyCenter.gy + lane }) });
         });
     }
 
@@ -279,6 +428,7 @@ class TacticsSystem {
     }
 
     outsideRoute(unit, destination, group, padding) {
+        destination = this.legalPoint(unit, destination);
         const formation = this.formations[this.enemies(unit.team)];
         if (!formation || !formation.members.some(other => this.active(other))) return destination;
         const left = formation.cx - formation.half - padding, right = formation.cx + formation.half + padding;
@@ -291,7 +441,7 @@ class TacticsSystem {
             const exits = [{ gx: front, gy: unit.gy }, { gx: rear, gy: unit.gy },
                 { gx: unit.gx, gy: top - 0.1 }, { gx: unit.gx, gy: bottom + 0.1 }];
             exits.sort((a, b) => dist(unit, a) - dist(unit, b) || dist(a, destination) - dist(b, destination));
-            return exits[0];
+            return this.legalPoint(unit, exits[0]);
         }
         const blocked = (a, b) => {
             let enter = 0, leave = 1;
@@ -322,7 +472,7 @@ class TacticsSystem {
         if (!Number.isFinite(costs[1])) return null;
         let first = 1;
         while (previous[first] !== 0 && previous[first] != null) first = previous[first];
-        return nodes[first];
+        return this.legalPoint(unit, nodes[first]);
     }
 
     updateReception(group, routed) {
@@ -339,7 +489,8 @@ class TacticsSystem {
         helpers.forEach((unit, index) => {
             const point = { gx: center.gx + this.forward(group.team) * (index - (helpers.length - 1) / 2) * 0.82,
                 gy: center.gy };
-            if (this.safeAt(group.team, point.gx, point.gy)) unit.receptionSlot = point;
+            const legal = this.legalPoint(unit, point);
+            if (this.safeAt(group.team, legal.gx, legal.gy)) unit.receptionSlot = legal;
         });
     }
 
@@ -716,7 +867,8 @@ class TacticsSystem {
     }
 
     fight(unit, target, now, dt, reach) {
-        if (dist(unit, target) > reach) this.move(unit, target.gx, target.gy, unit.typeData.speed, dt);
+        if (dist(unit, target) > reach || !Terrain.segmentClear(this.scene.battleOptions.terrain,
+            unit.gx, unit.gy, target.gx, target.gy)) this.move(unit, target.gx, target.gy, unit.typeData.speed, dt);
         else this.attack(unit, target, now, reach);
     }
 

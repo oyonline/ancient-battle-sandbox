@@ -13,6 +13,7 @@ Thumbs.db
 # Python
 __pycache__/
 *.pyc
+.omc/
 
 # AI 原始生成图（大文件中间产物，可重新生成）
 tools/ai_raw/

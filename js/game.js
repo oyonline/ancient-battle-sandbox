@@ -307,8 +307,16 @@ class IsoBattleScene extends Phaser.Scene {
 
     setTerrain(key) {
         this.battleOptions.terrain = Terrain.normalize(key);
+        this.navigation?.reset(this.battleOptions.terrain, this.battleId);
         // 只有已创建的真实画布需要重烘焙；无绘图的战斗测试仍用同一高度数据。
         if (this.groundImage && this._groundTerrain !== this.battleOptions.terrain) this.drawGround();
+    }
+
+    ensureNavigation() {
+        if (!this.navigation) this.navigation = new TerrainNavigation(this);
+        if (this.navigation.key !== this.battleOptions.terrain || this.navigation.battleId !== this.battleId)
+            this.navigation.reset(this.battleOptions.terrain, this.battleId);
+        return this.navigation;
     }
 
     // 帝国风地形：杂色草地 + 立体倒角 + 水域环绕 + 海岸黄边
@@ -413,7 +421,7 @@ class IsoBattleScene extends Phaser.Scene {
             }
         }
 
-        if (this.battleOptions.terrain !== 'flat') {
+        if (Terrain.maps[this.battleOptions.terrain].rx) {
             // 连续等高线勾出坡形，不用高台立墙冒充可通行的缓坡。
             const { cx, cy, rx, ry } = Terrain.maps[this.battleOptions.terrain];
             for (const radius of [0.35, 0.55, 0.75, 0.95]) {
@@ -428,19 +436,21 @@ class IsoBattleScene extends Phaser.Scene {
                 g.strokePoints(points, false);
             }
         }
+        this.drawTerrainFeatures(g);
         this.groundImage?.destroy();
         if (this.textures.exists('groundTex')) this.textures.remove('groundTex');
         g.generateTexture('groundTex', VIEW_W, VIEW_H);
         g.destroy();
         this.groundImage = this.add.image(0, 0, 'groundTex').setOrigin(0, 0).setDepth(0);
         this._groundTerrain = this.battleOptions.terrain;
+        this.drawTerrainDecorations();
         this.terrainLabel?.destroy();
         this.terrainLabel = null;
         if (this.battleOptions.terrain !== 'flat') {
-            const { cx, cy } = Terrain.maps[this.battleOptions.terrain];
-            const labelPoint = this.groundPoint(cx, cy - 11);
+            const map = Terrain.maps[this.battleOptions.terrain];
+            const labelPoint = this.groundPoint(map.cx || 35, (map.cy || 35) - 17);
             this.terrainLabel = this.add.text(labelPoint.x, labelPoint.y - 42,
-                Terrain.maps[this.battleOptions.terrain].name + ' · 缓坡', {
+                map.name + (map.rx ? ' · 缓坡' : ''), {
                     fontFamily: 'sans-serif', fontSize: '30px', color: '#fff3c7',
                     stroke: '#394629', strokeThickness: 6
                 }).setOrigin(0.5).setDepth(7);
@@ -469,8 +479,97 @@ class IsoBattleScene extends Phaser.Scene {
 
     }
 
+    drawTerrainFeatures(g) {
+        const key = this.battleOptions.terrain, geometry = Terrain.geometry(key);
+        const polygon = (rect, lift = 0) => [[rect.x1, rect.y1], [rect.x2, rect.y1],
+            [rect.x2, rect.y2], [rect.x1, rect.y2]].map(([x, y]) => {
+                const p = this.groundPoint(x, y); return { x: p.x, y: p.y - lift };
+            });
+        // 一格一片，沿真实高度贴地；边缘完全来自通行矩形，不用视觉近似的半格边界。
+        const paint = (rect, color, alpha = 1) => {
+            g.fillStyle(color, alpha);
+            for (let x = rect.x1; x < rect.x2; x++) for (let y = rect.y1; y < rect.y2; y++)
+                g.fillPoints(polygon({ x1: x, y1: y, x2: Math.min(x + 1, rect.x2), y2: Math.min(y + 1, rect.y2) }), true);
+        };
+        for (const zone of geometry.zones) {
+            if (zone.kind === 'path') {
+                paint(zone, 0xd6bd80, 0.5);
+                g.lineStyle(2, 0xeee0ad, 0.6); g.strokePoints(polygon(zone), true);
+            } else if (zone.kind === 'forest') {
+                paint(zone, 0x315c31, 0.64);
+                g.lineStyle(3, 0x8bad64, 0.65); g.strokePoints(polygon(zone), true);
+            }
+        }
+        for (const block of geometry.blockers) {
+            if (block.kind === 'water') {
+                paint(block, 0x377fac);
+                g.lineStyle(4, 0xe2cf94, 0.85); g.strokePoints(polygon(block), true);
+                for (let y = block.y1 + 0.8; y < block.y2; y += 1.5) for (let x = block.x1 + 1; x < block.x2; x += 2) {
+                    const a = this.groundPoint(x, y), b = this.groundPoint(x + 0.65, y);
+                    g.lineStyle(2, 0xa2d8e3, 0.5); g.lineBetween(a.x, a.y, b.x, b.y);
+                }
+            } else {
+                paint(block, 0x626355);
+                const base = polygon(block), top = polygon(block, 24);
+                g.fillStyle(0x474e47, 1); g.fillPoints([top[1], top[2], base[2], base[1]], true);
+                g.fillStyle(0x343f39, 1); g.fillPoints([top[2], top[3], base[3], base[2]], true);
+                g.fillStyle(0x89917b, 1); g.fillPoints(top, true);
+                g.lineStyle(3, 0xb9bea0, 0.8); g.strokePoints(top, true);
+                for (let y = block.y1 + 1; y < block.y2; y += 1.7) {
+                    const a = this.groundPoint(block.x1 + 0.2, y), b = this.groundPoint(block.x2 - 0.2, y + 0.5);
+                    g.lineStyle(2, 0x535d51, 0.8); g.lineBetween(a.x, a.y - 23, b.x, b.y - 23);
+                }
+            }
+        }
+        for (const bridge of geometry.zones.filter(zone => zone.kind === 'bridge')) {
+            paint(bridge, 0xb38c52);
+            for (let x = bridge.x1; x <= bridge.x2; x += 0.5) {
+                const a = this.groundPoint(x, bridge.y1), b = this.groundPoint(x, bridge.y2);
+                g.lineStyle(2, 0x6e5133, 0.8); g.lineBetween(a.x, a.y, b.x, b.y);
+            }
+            for (const y of [bridge.y1, bridge.y2]) {
+                const a = this.groundPoint(bridge.x1, y), b = this.groundPoint(bridge.x2, y);
+                g.lineStyle(5, 0xe0c38e, 1); g.lineBetween(a.x, a.y - 8, b.x, b.y - 8);
+                for (let x = bridge.x1; x <= bridge.x2; x += 1.5) {
+                    const p = this.groundPoint(x, y);
+                    g.lineStyle(4, 0x735233, 1); g.lineBetween(p.x, p.y, p.x, p.y - 12);
+                }
+            }
+        }
+        const defense = geometry.defense;
+        if (defense) {
+            g.lineStyle(3, 0xf4e4a4, 0.75); g.strokePoints(polygon(defense.archerRect), true);
+        }
+    }
+
+    drawTerrainDecorations() {
+        for (const prop of this.terrainProps || []) prop.destroy();
+        this.terrainProps = [];
+        for (const { sprite, gx, gy } of this.edgeProps || [])
+            sprite.setVisible(!['water', 'rock'].includes(Terrain.surface(this.battleOptions.terrain, gx, gy)));
+        for (const zone of Terrain.geometry(this.battleOptions.terrain).zones.filter(zone => zone.kind === 'forest')) {
+            for (let x = zone.x1 + 1; x < zone.x2 - 0.5; x += 2.6) for (let y = zone.y1 + 1; y < zone.y2 - 0.5; y += 2.6) {
+                const noise = this.terNoise(x * 3, y * 3);
+                const p = this.groundPoint(x + (noise - 0.5) * 0.8, y + (this.terNoise(y * 4, x * 4) - 0.5) * 0.8);
+                // 复用现有像素树素材，放在士兵以下；树只是林区提示，不是逐棵实体障碍。
+                const tree = this.add.image(p.x, p.y, noise > 0.45 ? 'props/tree_big' : 'props/tree_small')
+                    .setOrigin(0.5, 0.92).setScale(0.38).setAlpha(0.87).setDepth(3);
+                this.terrainProps.push(tree);
+            }
+        }
+        for (const block of Terrain.geometry(this.battleOptions.terrain).blockers.filter(block => block.kind === 'rock')) {
+            for (let x = block.x1 + 0.6; x < block.x2; x += 1.6) for (let y = block.y1 + 0.6; y < block.y2; y += 1.7) {
+                const p = this.groundPoint(x, y);
+                const rock = this.add.image(p.x, p.y - 20, 'props/rock')
+                    .setOrigin(0.5, 0.9).setScale(0.38 + this.terNoise(x, y) * 0.12).setDepth(3);
+                this.terrainProps.push(rock);
+            }
+        }
+    }
+
     placeDecorations() {
         const deco = [];
+        this.edgeProps = [];
         // 双方大本营：箭塔沿基地前沿一字排开（要塞感）
         [8, 20, 34, 48, 60].forEach(gy => {
             deco.push(['tower', 2.2, gy]);
@@ -490,6 +589,8 @@ class IsoBattleScene extends Phaser.Scene {
             const spr = this.add.image(x, y, 'props/' + key).setOrigin(0.5, 0.92);
             spr.setScale(key === 'tower' ? 0.48 : 0.5);   // 新像素素材原生更大，按显示高度折算
             spr.setDepth((gx + gy) * 100 + 10);
+            spr.setVisible(!['water', 'rock'].includes(Terrain.surface(this.battleOptions.terrain, gx, gy)));
+            this.edgeProps.push({ sprite: spr, gx, gy });
             // 树随风轻摆
             if (key.indexOf('tree') === 0) {
                 this.tweens.add({
@@ -618,6 +719,7 @@ class IsoBattleScene extends Phaser.Scene {
         this.firstContactMs = null;
         if (this.tacticsGfx) this.tacticsGfx.clear();
         this.battleId = (this.battleId || 0) + 1;
+        this.navigation?.reset('flat', this.battleId);
         this.simulationTime = 0;
         this.simulationAccumulator = 0;
         this.battleQueue = [];
@@ -881,6 +983,12 @@ class IsoBattleScene extends Phaser.Scene {
         const normalize = Math.hypot(dx, dy);
         const closeEnemy = now - (unit.routStartedAt ?? -Infinity) < 900 ? this.nearestEnemy(unit) : null;
         const breaking = closeEnemy && dist(unit, closeEnemy) < 3;
+        if (Terrain.hasBarriers(this.battleOptions.terrain)) {
+            // 隔岸时保留全局接应点；三格的局部躲避点可能落水，不能用它取代回撤路线。
+            moveToward(unit, anchor ? anchor.gx : unit.team === 'red' ? 0.6 : GRID_W - 0.6,
+                anchor ? anchor.gy : unit.gy, unit.typeData.speed * (breaking ? 0.7 : 1), dt);
+            return;
+        }
         moveToward(unit, unit.gx + dx / normalize * 3, unit.gy + dy / normalize * 3,
             unit.typeData.speed * (breaking ? 0.7 : 1), dt);
     }
@@ -934,6 +1042,7 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     resolveBrace(guard, cavalry) {
+        if (!Terrain.segmentClear(this.battleOptions.terrain, guard.gx, guard.gy, cavalry.gx, cavalry.gy)) return;
         // 迎击倍率与反骑倍率各一次；在整批伤害之前登记，同刻将阵亡的枪兵仍能迎击。
         resolveAttack(cavalry, guard, { multiplier: 1.5 });
         guard.lastBrace = this.simulationTime;
@@ -1288,6 +1397,7 @@ class IsoBattleScene extends Phaser.Scene {
         this.rebuildSpatial();
         const units = this._aliveArr;
         this.bodyContactDistance = CombatRules.maxContactDistance(units);
+        if (Terrain.hasBarriers(this.battleOptions.terrain)) this.ensureNavigation().beginStep(now, units);
 
         // 帧首：先用上一帧位移估计速度，再刷新快照（供箭矢预判）
         for (let i = 0; i < units.length; i++) {
@@ -1324,8 +1434,10 @@ class IsoBattleScene extends Phaser.Scene {
         }
         this.planningStep = false;
         for (const unit of units) {
-            unit.gx += unit.moveX + unit.pushX;
-            unit.gy += unit.moveY + unit.pushY;
+            const motion = Terrain.clipMotion(this.battleOptions.terrain, unit.gx, unit.gy,
+                unit.moveX + unit.pushX, unit.moveY + unit.pushY, CombatRules.bodyRadius(unit));
+            unit.gx += motion.x;
+            unit.gy += motion.y;
         }
         this.rebuildSpatial();
         this.separate(dt);
@@ -1509,10 +1621,12 @@ class IsoBattleScene extends Phaser.Scene {
                 } else {
                     moveToward(unit, unit.strafeX, unit.strafeY, unit.typeData.speed * 0.8, dt);
                 }
-            } else if (minD > range) {
+            } else if (minD > range || !Terrain.segmentClear(this.battleOptions.terrain, unit.gx, unit.gy, nearest.gx, nearest.gy)) {
                 // 架枪中的长枪兵钉死原地迎击；其余贴"接战环"逼近——不叠目标中心，多人自然围开。
                 // 守阵哨位是面墙不是点目标：贴正面硬攻不绕位——绕位会把整面墙拆成一个个被围死的哨位。
-                if (unit.type === 'pikeman' && unit.braceHold) {
+                if (!Terrain.segmentClear(this.battleOptions.terrain, unit.gx, unit.gy, nearest.gx, nearest.gy)) {
+                    moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
+                } else if (unit.type === 'pikeman' && unit.braceHold) {
                     // 钉死原地，迎击
                 } else if (nearest.tacticalRole === 'guard') {
                     moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
@@ -1604,8 +1718,10 @@ class IsoBattleScene extends Phaser.Scene {
             const py = l > 1e-6 ? u.pshY * (l > cap ? cap / l : 1) : 0;
             // 对称累计推开，并消除长时间镜像模拟中的浮点方向偏差。
             const beforeX = u.gx, beforeY = u.gy;
-            u.gx = quantizePosition(clamp(u.gx + u.separateX + px, 0.6, GRID_W - 0.6), GRID_W);
-            u.gy = quantizePosition(clamp(u.gy + u.separateY + py, 0.6, GRID_H - 0.6), GRID_H);
+            const correction = Terrain.clipMotion(this.battleOptions.terrain, u.gx, u.gy,
+                u.separateX + px, u.separateY + py, CombatRules.bodyRadius(u));
+            u.gx = quantizePosition(clamp(u.gx + correction.x, 0.6, GRID_W - 0.6), GRID_W);
+            u.gy = quantizePosition(clamp(u.gy + correction.y, 0.6, GRID_H - 0.6), GRID_H);
             // 保存实际纠偏量（含边界截断），供下一步架枪判定扣除。
             u.separateX = u.gx - beforeX; u.separateY = u.gy - beforeY;
         }

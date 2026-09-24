@@ -58,6 +58,8 @@ class UnitInspector {
         // 使用主动行军方向而非击退、身体分离的被动位移。
         const movement = walking ? (Number.isFinite(unit.terrainMoveMultiplier) ? unit.terrainMoveMultiplier :
             Terrain.movementMultiplier(key, unit.gx, unit.gy, unit.gx + dx, unit.gy + dy)) : null;
+        const surface = Terrain.surface(key, unit.gx, unit.gy);
+        const surfaceSpeed = Terrain.surfaceSpeed(key, unit.type, unit.gx, unit.gy);
         const valid = enemy => enemy && enemy.team !== unit.team && !enemy.dead && !enemy.withdrawn;
         const current = !unit.typeData.ranged && valid(unit.groundGuardTarget) ? unit.groundGuardTarget :
             valid(unit.target) && unit.type === 'cavalry' ? unit.target : null;
@@ -85,11 +87,14 @@ class UnitInspector {
         const cavalryOrder = scene.battleOptions.cavalryOrders?.[unit.team] || 'auto';
         const guarded = unit.tacticalRole === 'ground_guard' &&
             (unit.type !== 'cavalry' || cavalryOrder === 'auto');
-        return { height, movement, comparison,
+        const protectingArchers = guarded && unit.type === 'cavalry' && !!Terrain.defenseLayout(key, unit.team);
+        return { height, movement, comparison, surface, surfaceSpeed,
+            surfaceLabel: { grass: '草地 / 道路', forest: '林地', water: '水域（不可通行）', bridge: '桥面', rock: '岩壁（不可通行）' }[surface],
+            chargeRestricted: unit.type === 'cavalry' && surface === 'forest',
             ground: height < 0.01 ? '平地' : height >= 2.99 ? '坡顶' : '缓坡',
             slope: movement == null ? '站定 · 无行军坡向' : movement < 0.999 ? '上坡' : movement > 1.001 ? '下坡' : '平缓行军',
             order: (guarded ? '高地守位' : '') + (unit.type === 'cavalry' ?
-                (guarded ? ' · 就近反击' : commands[cavalryOrder]) : '')
+                (guarded ? protectingArchers ? ' · 就近护弓反击' : ' · 就近反击' : commands[cavalryOrder]) : '')
         };
     }
 
@@ -117,12 +122,14 @@ class UnitInspector {
         const markup = `<b>${unit.team === 'red' ? '🔴 红方' : '🔵 蓝方'} · ${unit.typeData.name}</b>` +
             `<span>生命 ${Math.max(0, Math.ceil(unit.hp))} / ${unit.maxHp}${info.order ? ' · ' + info.order : ''}</span>` +
             `<span>${info.ground} · 高度 ${info.height.toFixed(2)} 层</span>` +
-            `<span>${info.slope}${info.movement == null ? '' : ' · 地形移速 ' + Math.round(info.movement * 100) + '%'}</span>` +
+            `<span>地表：${info.surfaceLabel} · 地表移速 ${Math.round(info.surfaceSpeed * 100)}%</span>` +
+            `<span>${info.slope}${info.movement == null ? '' : ' · 坡速系数 ' + Math.round(info.movement * 100) + '%'}</span>` +
+            (info.chargeRestricted ? '<span class="inspection-warning">林中不能蓄力冲锋；出林后重新助跑。</span>' : '') +
             (comparison ? `<span>${comparison.label}：${comparison.name}</span>` +
                 `<span>${comparison.difference > 0.01 ? '俯攻' : comparison.difference < -0.01 ? '仰攻' : '同高'} · 高差 ${comparison.difference.toFixed(2)} 层 · 地形攻击 ${percent(comparison.attack)}</span>` +
                 (comparison.range == null ? '' : `<span>对该敌人射程 ${comparison.range.toFixed(1)} 格（基础 ${unit.typeData.range}）</span>`) :
                 '<span>无可对照敌人</span>') +
-            '<small>攻击为地形系数，非最终伤害；未含护甲、克制、士气。点击空地关闭。</small>';
+            '<small>坡速与地表移速分开计算，并非最终速度；攻击为地形系数，未含护甲、克制、士气。点击空地关闭。</small>';
         if (markup !== this.lastMarkup) { this.panel.innerHTML = markup; this.lastMarkup = markup; }
         this.panel.hidden = false;
     }

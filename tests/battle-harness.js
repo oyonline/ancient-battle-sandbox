@@ -7,11 +7,11 @@ const context = vm.createContext({
     Snd: null,
     UI: { onBattleEnd() {} }
 });
-for (const name of ['terrain.js', 'units.js', 'combat.js', 'morale.js', 'tactics.js', 'game.js']) {
+for (const name of ['terrain.js', 'navigation.js', 'units.js', 'combat.js', 'morale.js', 'tactics.js', 'game.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', name), 'utf8'), context);
 }
-vm.runInContext('this.engine = { Terrain, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack };', context);
-const { Terrain, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack } = context.engine;
+vm.runInContext('this.engine = { Terrain, TerrainNavigation, CombatRules, knockback, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack };', context);
+const { Terrain, TerrainNavigation, CombatRules, knockback, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack } = context.engine;
 const snapshot = value => JSON.parse(JSON.stringify(value));
 
 function displayObject() {
@@ -19,7 +19,7 @@ function displayObject() {
         destroyed: false,
         x: 0, y: 0, scaleX: 1, scaleY: 1, frame: 0, texture: '',
         setOrigin(x, y) { this.originX = x; this.originY = y; return this; }, setScrollFactor() { return this; },
-        setDepth(depth) { this.depth = depth; return this; },
+        setDepth(depth) { this.depth = depth; return this; }, setVisible(value) { this.visible = value; return this; },
         setScale(x, y = x) { this.scaleX = x; this.scaleY = y; return this; },
         setFlipX(value) { this.flipX = value; return this; },
         setTexture(key, frame = 0) { this.texture = key; this.frame = frame; return this; },
@@ -69,4 +69,4 @@ function addUnit(scene, team, type, gx = 30, gy = 30) {
     return unit;
 }
 
-module.exports = { context, Terrain, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack, snapshot, makeScene, addUnit };
+module.exports = { context, Terrain, TerrainNavigation, CombatRules, knockback, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack, snapshot, makeScene, addUnit };

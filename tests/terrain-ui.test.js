@@ -40,10 +40,12 @@ function setup({ readyScene = true, query = '' } = {}) {
     const elements = new Map([...page.matchAll(/\bid="([^"]+)"/g)].map(([, id]) => [id, new Element()]));
     const terrainButtons = [...page.matchAll(/<button[^>]+data-terrain="([^"]+)"/g)]
         .map(([, terrain]) => new Element({ terrain }));
+    const terrainEntries = [...page.matchAll(/<button[^>]+data-terrain-entry="([^"]+)"/g)]
+        .map(([, terrainEntry]) => new Element({ terrainEntry }));
     const tacticsButtons = [...page.matchAll(/<button[^>]+data-tactics-entry="([^"]+)"/g)]
         .map(([, tacticsEntry]) => new Element({ tacticsEntry }));
     const selectors = new Map([
-        ['[data-terrain]', terrainButtons], ['[data-tactics-entry]', tacticsButtons],
+        ['[data-terrain]', terrainButtons], ['[data-terrain-entry]', terrainEntries], ['[data-tactics-entry]', tacticsButtons],
         ['#tactics-ready-guide [data-tactics-entry]', tacticsButtons],
         ['#steps .step', [1, 2, 3].map(step => new Element({ step }))],
         ['.sheet-body .sec', ['home', 'buy', 'ready', 'result'].map(name => elements.get('sec-' + name))]
@@ -80,7 +82,7 @@ function setup({ readyScene = true, query = '' } = {}) {
     };
     if (readyScene) UI.onSceneReady(scene);
     UI.init();
-    return { UI, scene, el, terrainButtons, challenges: CHALLENGES };
+    return { UI, scene, el, terrainButtons, terrainEntries, challenges: CHALLENGES };
 }
 
 function finishBattle(UI) {
@@ -103,10 +105,10 @@ test('terrain entry deploys identical mixed armies without starting the battle',
     assert.equal(UI.troops('red'), 76);
     assert.deepEqual(snapshot(UI.configs.red), snapshot(UI.configs.blue));
     assert.notEqual(UI.configs.red, UI.configs.blue, 'editing one side cannot modify the other');
-    assert.equal(scene.terrain, 'blue_hill');
+    assert.equal(scene.terrain, 'blue_pass');
     assert.equal(scene.starts, 0);
     assert.equal(el('terrain-ready').hidden, false);
-    assert.match(el('terrain-hud').textContent, /蓝方高地/);
+    assert.match(el('terrain-hud').textContent, /蓝方.*坡口/);
     assert.deepEqual(snapshot(UI.orders), { red: 'advance', blue: 'hold_ground' });
     assert.deepEqual(snapshot(UI.battleOptions.cavalryOrders), { red: 'auto', blue: 'auto' });
     assert.equal(el('ready-blue-army').value, 'hold_ground');
@@ -169,7 +171,7 @@ test('report shows map and first damage time; map selection returns to ready wit
     assert.equal(el('terrain-result').hidden, false);
     assert.match(el('terrain-report').textContent, /蓝方高地.*4\.5 秒/);
     const starts = scene.starts;
-    terrainButtons[3].onclick();
+    terrainButtons.find(button => button.dataset.terrain === 'flat').onclick();
     assert.equal(UI.phase, 'ready');
     assert.equal(scene.terrain, 'flat');
     assert.equal(scene.starts, starts);
@@ -250,7 +252,7 @@ test('unknown terrain deep link is ignored and invalid map input cannot alter a 
     const count = scene.deployments.length;
     UI.selectTerrain('unknown');
     assert.equal(scene.deployments.length, count);
-    assert.equal(scene.terrain, 'blue_hill');
+    assert.equal(scene.terrain, 'blue_pass');
 });
 
 test('terrain code loads before consumers, but reading UI presets does not require scene globals', () => {
@@ -259,8 +261,88 @@ test('terrain code loads before consumers, but reading UI presets does not requi
     for (const file of ['units', 'game', 'ui']) assert.ok(page.indexOf('src="js/' + file + '.js') > terrainScript);
     assert.ok(page.indexOf('src="js/inspection.js') > page.indexOf('src="js/units.js'));
     assert.ok(page.indexOf('src="js/inspection.js') < page.indexOf('src="js/game.js'));
+    assert.ok(page.indexOf('src="js/navigation.js') > terrainScript);
+    assert.ok(page.indexOf('src="js/navigation.js') < page.indexOf('src="js/units.js'));
     const presets = vm.runInNewContext(fs.readFileSync(path.join(root, 'js/ui.js'), 'utf8') + '\nPRESETS;');
     assert.equal(presets.balance.config.infantry, 150);
+});
+
+test('all seven terrain deep links use the map defender and keep neutral terrain symmetric', () => {
+    for (const terrain of ['flat', 'red_hill', 'blue_hill', 'red_pass', 'blue_pass', 'forest', 'river']) {
+        const { UI, scene, el } = setup({ query: '?terrain=' + terrain });
+        assert.equal(UI.mode, 'terrain');
+        assert.equal(UI.phase, 'ready');
+        assert.equal(scene.terrain, terrain);
+        assert.equal(UI.troops('red'), 76);
+        assert.deepEqual(snapshot(UI.configs.red), snapshot(UI.configs.blue));
+        const defender = terrain.startsWith('red_') ? 'red' : terrain.startsWith('blue_') ? 'blue' : null;
+        assert.deepEqual(snapshot(UI.orders), {
+            red: defender === 'red' ? 'hold_ground' : 'advance',
+            blue: defender === 'blue' ? 'hold_ground' : 'advance'
+        });
+        assert.deepEqual(snapshot(UI.battleOptions.cavalryOrders), { red: 'auto', blue: 'auto' });
+        assert.equal(scene.starts, 0);
+        assert.doesNotMatch(el('terrain-ready-description').textContent, /undefined/);
+    }
+});
+
+test('home entries directly open new maps, with both neutral-map armies advancing', () => {
+    const { UI, scene, terrainEntries, el } = setup();
+    for (const terrain of ['red_pass', 'forest', 'river']) {
+        UI.showHome();
+        terrainEntries.find(button => button.dataset.terrainEntry === terrain).onclick();
+        assert.equal(scene.terrain, terrain);
+        assert.equal(UI.phase, 'ready');
+        assert.equal(scene.starts, 0);
+        if (terrain === 'red_pass') assert.equal(UI.orders.red, 'hold_ground');
+        else assert.deepEqual(snapshot(UI.orders), { red: 'advance', blue: 'advance' });
+    }
+    assert.match(el('terrain-ready-rules').textContent, /中央桥.*侧桥.*不可走/);
+});
+
+test('new map switches preserve armies and commands, expose selected state, and keep terrain fixed on exchange', () => {
+    const { UI, scene, terrainButtons, el } = setup({ query: '?terrain=blue_pass' });
+    UI.selectCommand('red', 'cavalry', 'flank_archers');
+    const armies = snapshot(UI.configs), orders = snapshot(UI.orders);
+    for (const terrain of ['forest', 'river', 'red_pass', 'blue_pass']) {
+        const button = terrainButtons.find(item => item.dataset.terrain === terrain);
+        button.onclick();
+        assert.equal(scene.terrain, terrain);
+        assert.equal(UI.phase, 'ready');
+        assert.deepEqual(snapshot(UI.configs), armies);
+        assert.deepEqual(snapshot(UI.orders), orders);
+        assert.equal(UI.cavalryOrder('red'), 'flank_archers');
+        assert.equal(button.attributes['aria-pressed'], 'true');
+        assert.equal(scene.starts, 0);
+    }
+    assert.match(el('ready-blue-command-description').textContent, /中央坡口.*侧路.*支援.*弓兵/);
+    assert.match(el('terrain-ready-rules').textContent, /岩壁不可穿越/);
+    UI.selectTerrain('forest');
+    assert.match(el('terrain-ready-rules').textContent, /55%.*85%.*林中不能蓄力/);
+    assert.doesNotMatch(el('ready-blue-command-description').textContent, /支援存活弓兵/);
+    finishBattle(UI);
+    assert.match(el('terrain-result-rules').textContent, /林中不能蓄力/);
+    UI.rematch(true);
+    assert.equal(scene.terrain, 'forest');
+    assert.equal(UI.cavalryOrder('blue'), 'flank_archers');
+});
+
+test('new terrain remains pending without a scene and cannot change during countdown or battle', () => {
+    const { UI, scene, terrainButtons } = setup({ readyScene: false, query: '?terrain=river' });
+    UI.selectTerrain('red_pass');
+    UI.onSceneReady(scene);
+    assert.equal(scene.terrain, 'red_pass');
+    assert.deepEqual(snapshot(UI.orders), { red: 'advance', blue: 'advance' }, 'changing a pending map still preserves commands');
+    UI.startBattle();
+    for (const terrain of ['forest', 'river', 'blue_pass']) {
+        const button = terrainButtons.find(item => item.dataset.terrain === terrain);
+        assert.equal(button.disabled, true);
+        button.onclick();
+        assert.equal(scene.terrain, 'red_pass');
+    }
+    scene.finishCountdown();
+    UI.selectTerrain('forest');
+    assert.equal(scene.terrain, 'red_pass');
 });
 
 test('ready controls independently change either team, preserve armies, and pass copied cavalry options to the engine', () => {

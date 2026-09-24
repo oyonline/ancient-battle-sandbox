@@ -111,6 +111,7 @@ function updatePikeBrace(unit, dt) {
             support++;
             if (dx * unit.braceFacingX + dy * unit.braceFacingY < -0.25) depth++;
         } else if (other.team !== unit.team && distance <= 6) {
+            if (!Terrain.segmentClear(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, other.gx, other.gy)) return;
             if (distance < nearestDistance - 1e-9 ||
                 (Math.abs(distance - nearestDistance) <= 1e-9 && other.id < nearestEnemy.id)) {
                 nearestEnemy = other; nearestDistance = distance;
@@ -132,6 +133,7 @@ function updatePikeBrace(unit, dt) {
 function isPreparedPike(guard, cavalry, dx, dy) {
     if (guard.withdrawn || guard.moraleState === 'routing') return false;
     if (guard.type !== 'pikeman' || !guard.braceReady || guard.braceSupport < 2) return false;
+    if (!Terrain.segmentClear(guard.scene?.battleOptions?.terrain, guard.gx, guard.gy, cavalry.gx, cavalry.gy)) return false;
     const distance = dist(guard, cavalry);
     if (distance < 0.001) return false;
     const front = ((cavalry.gx - guard.gx) * guard.braceFacingX + (cavalry.gy - guard.gy) * guard.braceFacingY) / distance;
@@ -187,6 +189,11 @@ class CavalryAI {
         unit.flankRoute = null;
         unit.flankTarget = null;
         unit.flankCommitted = false;
+    }
+
+    clearMomentum(unit) {
+        unit.chargeDistance = 0; unit.chargeMomentum = 0;
+        unit.chargeLastX = null; unit.chargeLastY = null; unit.chargeLastStep = 0;
     }
 
     pickTarget(unit) {
@@ -273,8 +280,14 @@ class CavalryAI {
             route.rearX = clamp(unit.team === 'red' ? army.maxX + 3.8 : army.minX - 3.8, 1.8, GRID_W - 1.8);
             route.refreshedAt = now;
         }
-        let tx = route.stage === 0 ? route.startX : route.rearX, ty = route.y;
-        if (Math.hypot(tx - unit.gx, ty - unit.gy) < 0.3) {
+        const stagePoint = () => {
+            const point = { gx: route.stage === 0 ? route.startX : route.rearX, gy: route.y };
+            return Terrain.hasBarriers(unit.scene.battleOptions.terrain)
+                ? Terrain.projectPoint(unit.scene.battleOptions.terrain, point.gx, point.gy,
+                    CombatRules.bodyRadius(unit), unit.team === 'red' ? -1 : 1) : point;
+        };
+        let point = stagePoint();
+        if (Math.hypot(point.gx - unit.gx, point.gy - unit.gy) < 0.3) {
             route.stage++;
             if (route.stage >= 2) {
                 unit.state = 'charge'; unit.flankCommitted = true;
@@ -282,30 +295,40 @@ class CavalryAI {
                 unit.lastRetarget = now;
                 return this.charge(unit, now, dt);
             }
-            tx = route.rearX;
+            point = stagePoint();
         }
+        const tx = point.gx, ty = point.gy;
         const speed = CombatRules.walkingSpeed(unit, UNIT_TYPES.cavalry.speed);
-        const contact = this.pathContact(unit, tx, ty, speed, dt);
+        const plan = planMovement(unit, tx, ty, UNIT_TYPES.cavalry.speed, dt, 'walk', 'flank');
+        const contact = this.pathContact(unit, tx, ty, speed, dt, plan);
         if (contact) {
             this.enterMelee(unit);
             unit.target = contact.enemy;
             return false;
         }
-        moveToward(unit, tx, ty, UNIT_TYPES.cavalry.speed, dt);
+        applyMovementPlan(unit, plan);
         return true;
     }
 
     // 只对实际行进线上的身体或准备好的正面枪尖产生局部阻力。
-    pathContact(unit, tx, ty, speed, dt) {
-        const dx = tx - unit.gx, dy = ty - unit.gy, distance = Math.hypot(dx, dy);
+    pathContact(unit, tx, ty, speed, dt, plan = null) {
+        const terrain = unit.scene?.battleOptions?.terrain;
+        const routed = Terrain.hasBarriers(terrain) || terrain === 'forest';
+        if (routed && !plan) plan = planMovement(unit, tx, ty, speed, dt, 'charge');
+        if (routed && !plan) return null;
+        const motionLength = routed ? Math.hypot(plan.motion.x, plan.motion.y) : 0;
+        const dx = routed ? motionLength > 0.0001 ? plan.motion.x : plan.intentX : tx - unit.gx;
+        const dy = routed ? motionLength > 0.0001 ? plan.motion.y : plan.intentY : ty - unit.gy;
+        const distance = Math.hypot(dx, dy);
         if (distance < 0.001) return null;
-        const step = Math.min(distance, speed * movementSpeedMultiplier(unit, tx, ty) * dt);
+        const step = routed ? motionLength : Math.min(distance, speed * movementSpeedMultiplier(unit, tx, ty) * dt);
         const nx = dx / distance, ny = dy / distance;
         let contact = null, bestD = Infinity;
         unit.scene.forEachNear(unit.gx, unit.gy, UNIT_TYPES.pikeman.range + step, enemy => {
             if (enemy.team === unit.team || enemy.dead || enemy.withdrawn || unit.pierceHits?.has(enemy.id)) return;
+            if (!Terrain.segmentClear(terrain, unit.gx, unit.gy, enemy.gx, enemy.gy)) return;
             const braced = isPreparedPike(enemy, unit, nx, ny);
-            const reach = braced ? UNIT_TYPES.pikeman.range : 0.65;
+            const reach = braced ? UNIT_TYPES.pikeman.range : routed ? CombatRules.contactDistance(unit, enemy) + 0.04 : 0.65;
             const ex = enemy.gx - unit.gx, ey = enemy.gy - unit.gy;
             const along = ex * nx + ey * ny;
             if (along < -0.01) return;
@@ -320,6 +343,12 @@ class CavalryAI {
     }
 
     impact(unit, target, braced, now, first) {
+        const terrain = unit.scene?.battleOptions?.terrain;
+        if (!Terrain.segmentClear(terrain, unit.gx, unit.gy, target.gx, target.gy)) return;
+        if (!Terrain.chargeAllowed(terrain, unit.gx, unit.gy, target.gx, target.gy)) {
+            this.enterMelee(unit);
+            return;
+        }
         if (!first && unit.pierceHits.size >= 4) return;
         if (first) {
             unit.scene.morale?.queueCharge(unit, target, braced);
@@ -352,6 +381,10 @@ class CavalryAI {
     }
 
     charge(unit, now, dt) {
+        const terrain = unit.scene?.battleOptions?.terrain;
+        if (!Terrain.chargeAllowed(terrain, unit.chargeLastX ?? unit.gx, unit.chargeLastY ?? unit.gy, unit.gx, unit.gy)) {
+            this.clearMomentum(unit);
+        }
         if (unit.chargeLastX != null) {
             // 只累计上一步实际前进的距离，排斥、受阻和原地等待不能攒出冲锋。
             const forward = (unit.gx - unit.chargeLastX) * unit.chargeDX + (unit.gy - unit.chargeLastY) * unit.chargeDY;
@@ -365,14 +398,19 @@ class CavalryAI {
         if (!unit.target) return true;
         const target = unit.target, data = UNIT_TYPES.cavalry;
         const distance = dist(unit, target);
-        const dx = distance > 0.001 ? (target.gx - unit.gx) / distance : 0;
-        const dy = distance > 0.001 ? (target.gy - unit.gy) / distance : 0;
+        const plan = planMovement(unit, target.gx, target.gy, data.chargeSpeed, dt, 'charge');
+        const routed = Terrain.hasBarriers(terrain);
+        const dx = routed ? plan?.nx || 0 : distance > 0.001 ? (target.gx - unit.gx) / distance : 0;
+        const dy = routed ? plan?.ny || 0 : distance > 0.001 ? (target.gy - unit.gy) / distance : 0;
         // 即使新目标就在身边，也必须先检查助跑方向，不能原地掉头继承冲锋。
         if (distance <= 0.001 || (unit.chargeDX != null && dx * unit.chargeDX + dy * unit.chargeDY < 0.8)) unit.chargeDistance = 0;
         unit.chargeDX = dx; unit.chargeDY = dy;
         unit.chargeMomentum = clamp(unit.chargeDistance / 3, 0, 1) *
-            Terrain.movementMultiplier(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, target.gx, target.gy);
-        const contact = this.pathContact(unit, target.gx, target.gy, data.chargeSpeed, dt);
+            Terrain.movementMultiplier(terrain, unit.gx, unit.gy, plan?.tx ?? target.gx, plan?.ty ?? target.gy);
+        const canCharge = !!plan && Terrain.chargeAllowed(terrain, unit.gx, unit.gy,
+            unit.gx + plan.motion.x, unit.gy + plan.motion.y);
+        if (!canCharge) this.clearMomentum(unit);
+        const contact = this.pathContact(unit, target.gx, target.gy, data.chargeSpeed, dt, plan);
         if (contact) {
             // 接触挡路身体就结束助跑，不能顶着前排继续追弓并攒出双倍冲锋。
             if (unit.chargeDistance < 3 || now - unit.lastAttack < data.atkSpeed) {
@@ -382,7 +420,7 @@ class CavalryAI {
             this.impact(unit, contact.enemy, contact.braced, now, true);
             return true;
         }
-        if (distance <= data.range + 0.25) {
+        if (distance <= data.range + 0.25 && Terrain.segmentClear(terrain, unit.gx, unit.gy, target.gx, target.gy)) {
             if (unit.chargeDistance < 3 || now - unit.lastAttack < data.atkSpeed) {
                 this.enterMelee(unit);
                 return false;
@@ -390,9 +428,12 @@ class CavalryAI {
             this.impact(unit, target, isPreparedPike(target, unit, dx, dy), now, true);
             return true;
         }
-        unit.chargeLastX = unit.gx; unit.chargeLastY = unit.gy;
-        unit.chargeLastStep = data.chargeSpeed * movementSpeedMultiplier(unit, target.gx, target.gy) * dt;
-        moveToward(unit, target.gx, target.gy, data.chargeSpeed, dt, 'charge');
+        if (canCharge) {
+            unit.chargeLastX = unit.gx; unit.chargeLastY = unit.gy;
+            unit.chargeLastStep = routed ? Math.hypot(plan.motion.x, plan.motion.y)
+                : data.chargeSpeed * movementSpeedMultiplier(unit, target.gx, target.gy) * dt;
+        }
+        applyMovementPlan(unit, plan);
         unit.scene.chargeDust(unit);
         return true;
     }
@@ -405,11 +446,17 @@ class CavalryAI {
         }
         unit.chargeMomentum = Math.max(0, unit.chargeMomentum - dt * 0.12);
         const speed = UNIT_TYPES.cavalry.chargeSpeed * 0.85 * (0.5 + unit.chargeMomentum * 0.5);
-        const contact = this.pathContact(unit, unit.pierceX, unit.pierceY, speed, dt);
+        const plan = planMovement(unit, unit.pierceX, unit.pierceY, speed, dt, 'charge');
+        if (!plan || !Terrain.chargeAllowed(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy,
+            unit.gx + plan.motion.x, unit.gy + plan.motion.y)) {
+            this.enterMelee(unit);
+            return false;
+        }
+        const contact = this.pathContact(unit, unit.pierceX, unit.pierceY, speed, dt, plan);
         if (contact) this.impact(unit, contact.enemy, contact.braced, now, false);
         if (unit.state === 'melee') return true;
         if (unit.chargeMomentum <= 0) { this.enterMelee(unit); return true; }
-        moveToward(unit, unit.pierceX, unit.pierceY, speed, dt, 'charge');
+        applyMovementPlan(unit, plan);
         unit.scene.chargeDust(unit);
         return true;
     }
@@ -482,19 +529,39 @@ function movementSpeedMultiplier(unit, tx, ty,
     // 动摇时只放缓向前推进；战术后退与溃逃不受这项限制。
     const advancing = dx * (unit.moraleFacingX || 0) + dy * (unit.moraleFacingY || 0) > 0;
     const caution = unit.moraleState === 'wavering' && advancing ? 0.85 : 1;
-    return caution * terrainMultiplier;
+    const surface = Terrain.surfaceSpeed(unit.scene?.battleOptions?.terrain, unit.type, unit.gx, unit.gy);
+    return surface === 1 ? caution * terrainMultiplier : caution * terrainMultiplier * surface;
 }
 
-function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
+// 一步只规划一次：骑兵探针、冲锋朝向与落地位移消费同一导航/裁剪结果。
+function planMovement(unit, tx, ty, speed, dt, movement = 'walk', intent = movement) {
+    const terrain = unit.scene?.battleOptions?.terrain;
+    const routed = Terrain.hasBarriers(terrain);
+    if (routed) {
+        const point = unit.scene.ensureNavigation().nextWaypoint(unit, tx, ty,
+            unit.moraleState === 'routing' ? 'retreat' : intent);
+        if (!point.reachable) return null;
+        tx = point.gx; ty = point.gy;
+    }
     const dx = tx - unit.gx, dy = ty - unit.gy;
     const d = Math.hypot(dx, dy);
-    if (d < 0.001) return;
+    if (d < 0.001) return null;
     if (movement === 'walk') speed = CombatRules.walkingSpeed(unit, speed);
-    // 保存这一实际移动尝试使用的坡度倍率；观察面板不从移动后的坐标反推。
-    unit.terrainMoveMultiplier = Terrain.movementMultiplier(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, tx, ty);
-    const step = Math.min(d, speed * movementSpeedMultiplier(unit, tx, ty, unit.terrainMoveMultiplier) * dt);
+    const slope = Terrain.movementMultiplier(terrain, unit.gx, unit.gy, tx, ty);
+    const step = Math.min(d, speed * movementSpeedMultiplier(unit, tx, ty, slope) * dt);
     const intended = { x: dx / d * step, y: dy / d * step };
-    const motion = movement === 'walk' ? CombatRules.constrainWalk(unit, intended.x, intended.y) : intended;
+    let motion = movement === 'walk' ? CombatRules.constrainWalk(unit, intended.x, intended.y) : intended;
+    if (routed) motion = Terrain.clipMotion(terrain, unit.gx, unit.gy, motion.x, motion.y, CombatRules.bodyRadius(unit));
+    const length = Math.hypot(motion.x, motion.y);
+    return { tx, ty, slope, motion, intentX: dx / d, intentY: dy / d, nx: routed ? length ? motion.x / length : 0 : dx / d,
+        ny: routed ? length ? motion.y / length : 0 : dy / d };
+}
+
+function applyMovementPlan(unit, plan) {
+    if (!plan) return;
+    const { motion } = plan;
+    // 该字段仍只保存坡速，不能把林地限速误报成上坡。
+    unit.terrainMoveMultiplier = plan.slope;
     if (unit.scene && unit.scene.planningStep) {
         unit.moveX = motion.x;
         unit.moveY = motion.y;
@@ -503,7 +570,11 @@ function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
         unit.gy += motion.y;
     }
     unit.moving = Math.hypot(motion.x, motion.y) > 0.0001;
-    unit.pressX = dx / d; unit.pressY = dy / d;   // 记录通行意图，供 separate 推挤传导
+    unit.pressX = plan.nx; unit.pressY = plan.ny;
+}
+
+function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
+    applyMovementPlan(unit, planMovement(unit, tx, ty, speed, dt, movement));
 }
 
 function knockback(target, from, amount) {
@@ -517,8 +588,13 @@ function knockback(target, from, amount) {
         target.pushY += Math.sin(a) * amount;
         return;
     }
-    target.gx = clamp(target.gx + Math.cos(a) * amount, 1.45, GRID_W - 1.45);
-    target.gy = clamp(target.gy + Math.sin(a) * amount, 1.45, GRID_H - 1.45);
+    const gx = clamp(target.gx + Math.cos(a) * amount, 1.45, GRID_W - 1.45);
+    const gy = clamp(target.gy + Math.sin(a) * amount, 1.45, GRID_H - 1.45);
+    if (Terrain.hasBarriers(target.scene?.battleOptions?.terrain)) {
+        const motion = Terrain.clipMotion(target.scene.battleOptions.terrain, target.gx, target.gy,
+            gx - target.gx, gy - target.gy, CombatRules.bodyRadius(target));
+        target.gx += motion.x; target.gy += motion.y;
+    } else { target.gx = gx; target.gy = gy; }
 }
 
 // 所有攻击都先由原始攻击力结算一次倍率、一次护甲；applyDamage 只接收最终伤害。
@@ -530,6 +606,8 @@ function calculateAttackDamage(from, target, { multiplier = 1, rawAttack = from.
 function resolveAttack(target, from, options = {}) {
     if (target.dead || target.withdrawn || target.hp <= 0) return 0;
     const scene = target.scene;
+    if (!from.typeData.ranged && !Terrain.segmentClear(scene?.battleOptions?.terrain,
+        from.gx, from.gy, target.gx, target.gy)) return 0;
     const formationMultiplier = scene?.tactics?.incomingMultiplier(from, target) ?? 1;
     const terrainMultiplier = Terrain.attackMultiplier(scene?.battleOptions?.terrain, from, target, options.sourceHeight);
     const damage = calculateAttackDamage(from, target, {

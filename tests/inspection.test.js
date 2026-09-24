@@ -108,3 +108,54 @@ test('explicit cavalry attack overrides guard label, and missing enemies show no
     assert.equal(describe(scene, unit).order, '侧翼袭弓');
     assert.equal(describe(scene, unit).comparison, null);
 });
+
+test('forest readout separates surface slowdown from slope and explains interrupted cavalry charging', () => {
+    const { scene, inspector, panel, describe } = fixture();
+    scene.setTerrain('forest');
+    const zone = Terrain.geometry('forest').zones.find(item => item.kind === 'forest');
+    assert.ok(zone, 'test samples the actual shared geometry, not a duplicate forest map');
+    const gx = (zone.x1 + zone.x2) / 2, gy = (zone.y1 + zone.y2) / 2;
+    const cavalry = addUnit(scene, 'red', 'cavalry', gx, gy);
+    Object.assign(cavalry, { moving: true, moveX: 0.04, moveY: 0, terrainMoveMultiplier: 1 });
+    const info = describe(scene, cavalry);
+    assert.equal(info.surface, 'forest');
+    assert.equal(info.surfaceSpeed, 0.55);
+    assert.equal(info.movement, 1);
+    assert.equal(info.slope, '平缓行军', 'forest slowdown must never masquerade as uphill');
+    assert.equal(info.chargeRestricted, true);
+    inspector.selected = cavalry;
+    inspector.update();
+    assert.match(panel.innerHTML, /地表：林地.*地表移速 55%/);
+    assert.match(panel.innerHTML, /坡速系数 100%/);
+    assert.match(panel.innerHTML, /林中不能蓄力冲锋.*出林后重新助跑/);
+    assert.doesNotMatch(panel.innerHTML, /上坡/);
+    const infantry = addUnit(scene, 'red', 'infantry', gx + 1, gy);
+    const footInfo = describe(scene, infantry);
+    assert.equal(footInfo.surfaceSpeed, 0.85);
+    assert.equal(footInfo.chargeRestricted, false);
+    cavalry.moving = false;
+    assert.equal(describe(scene, cavalry).movement, null);
+    assert.equal(describe(scene, cavalry).surfaceSpeed, 0.55, 'stationary units still disclose their surface rule');
+});
+
+test('bridge surface and pass-only cavalry protection are reported without changing simulation', () => {
+    const { scene, describe } = fixture();
+    scene.setTerrain('river');
+    const zone = Terrain.geometry('river').zones.find(item => item.kind === 'bridge');
+    const unit = addUnit(scene, 'blue', 'cavalry', (zone.x1 + zone.x2) / 2, (zone.y1 + zone.y2) / 2);
+    unit.tacticalRole = 'ground_guard';
+    scene.battleOptions.cavalryOrders = { red: 'auto', blue: 'auto' };
+    assert.equal(describe(scene, unit).surface, 'bridge');
+    assert.equal(describe(scene, unit).surfaceLabel, '桥面');
+    assert.equal(describe(scene, unit).surfaceSpeed, 1);
+    assert.doesNotMatch(describe(scene, unit).order, /护弓/);
+    scene.setTerrain('blue_pass');
+    assert.match(describe(scene, unit).order, /护弓反击/);
+    scene.setTerrain('red_pass');
+    assert.doesNotMatch(describe(scene, unit).order, /护弓/);
+    scene.setTerrain('blue_hill');
+    assert.doesNotMatch(describe(scene, unit).order, /护弓/);
+    scene.setTerrain('blue_pass');
+    scene.battleOptions.cavalryOrders.blue = 'direct';
+    assert.equal(describe(scene, unit).order, '正面强冲');
+});

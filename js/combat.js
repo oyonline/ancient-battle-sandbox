@@ -42,6 +42,8 @@ const CombatRules = {
     },
 
     clearLane(scene, unit, target, spear = unit.type === 'pikeman') {
+        const terrain = scene.battleOptions?.terrain ?? unit.scene?.battleOptions?.terrain;
+        if (!Terrain.segmentClear(terrain, unit.gx, unit.gy, target.gx, target.gy)) return false;
         const dx = target.gx - unit.gx, dy = target.gy - unit.gy, length2 = dx * dx + dy * dy;
         if (length2 < 0.0001) return true;
         let blocked = false, supporting = 0;

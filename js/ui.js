@@ -165,7 +165,7 @@ const UI = {
         const challenge = this.mode === 'challenge';
         document.getElementById('steps').hidden = n === 0;
         document.getElementById('sheet-label').hidden = n !== 0;
-        document.getElementById('sheet-label').textContent = this.phase === 'result' ? '⚑ 战后复盘' : this.mode === 'terrain' ? '⛰ 高地演练' : this.mode === 'tactics' ? '⚑ 战阵演练' : '⚑ 统帅试炼';
+        document.getElementById('sheet-label').textContent = this.phase === 'result' ? '⚑ 战后复盘' : this.mode === 'terrain' ? '⛰ 地形演练' : this.mode === 'tactics' ? '⚑ 战阵演练' : '⚑ 统帅试炼';
         document.querySelectorAll('#steps .step').forEach(el => {
             const k = Number(el.dataset.step);
             el.hidden = challenge && k === 2;
@@ -174,7 +174,7 @@ const UI = {
             el.querySelector('span').textContent = k === 1 ? (challenge ? '我的军队' : '红方配兵') : k === 2 ? '蓝方配兵' : '准备开战';
             el.querySelector('i').textContent = challenge && k === 3 ? '2' : String(k);
         });
-        const hint = n === 0 ? '观察敌阵，找到你的解法' : n === 3 ? (this.mode === 'terrain' ? '高地演练 · 同阵容换图对照' : this.mode === 'tactics' ? '战阵演练 · 观察枪阵与迂回路线' : '两军就位，准备开战') : challenge ? this.challenge.title + ' · 为红方配兵' : (n === 1 ? '红方' : '蓝方') + '队长正在配兵';
+        const hint = n === 0 ? '观察敌阵，找到你的解法' : n === 3 ? (this.mode === 'terrain' ? '地形演练 · 同阵容换图对照' : this.mode === 'tactics' ? '战阵演练 · 观察枪阵与迂回路线' : '两军就位，准备开战') : challenge ? this.challenge.title + ' · 为红方配兵' : (n === 1 ? '红方' : '蓝方') + '队长正在配兵';
         document.getElementById('phase-hint').textContent = hint;
     },
 
@@ -204,7 +204,7 @@ const UI = {
         this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
     },
 
-    startTerrain(terrain = 'blue_hill') {
+    startTerrain(terrain = 'blue_pass') {
         this.clearBattle();
         this.mode = 'terrain';
         this.challenge = null;
@@ -215,9 +215,8 @@ const UI = {
         this.orders = { red: 'advance', blue: 'advance' };
         this.resetBattleOptions();
         this.battleOptions.terrain = Terrain.normalize(terrain);
-        if (this.battleOptions.terrain !== 'flat') {
-            this.orders[this.battleOptions.terrain === 'red_hill' ? 'red' : 'blue'] = 'hold_ground';
-        }
+        const defender = Terrain.maps[this.battleOptions.terrain].defender;
+        if (['red', 'blue'].includes(defender)) this.orders[defender] = 'hold_ground';
         this.deployArmies();
     },
 
@@ -236,6 +235,7 @@ const UI = {
         for (const phase of ['ready', 'result']) {
             document.getElementById('terrain-' + phase).hidden = !selectable;
             document.getElementById('terrain-' + phase + '-description').textContent = map.description;
+            document.getElementById('terrain-' + phase + '-rules').textContent = this.terrainRules(terrain);
         }
         document.querySelectorAll('[data-terrain]').forEach(button => {
             const selected = button.dataset.terrain === terrain;
@@ -247,6 +247,21 @@ const UI = {
         hud.hidden = this.phase === 'home';
         hud.textContent = '⛰ ' + map.name;
         hud.title = map.description;
+    },
+
+    terrainRules(terrain) {
+        if (terrain === 'forest') return '树林可穿行：骑兵地表移速 55%，其他兵种 85%。入林打断冲锋和穿透，林中不能蓄力；出林后重新助跑。道路不受林地限速。';
+        if (terrain === 'river') return '河上有中央桥与两座侧桥；桥外水域不可走，推挤和击退也不能穿水。近战不能隔河打人，箭矢可以跨河；可观察哪座桥更拥堵。';
+        if (['red_pass', 'blue_pass'].includes(terrain)) return '中央窄坡口与两翼侧路通向弓兵平台；岩壁不可穿越，也不能隔墙近战。守位骑兵会支援附近存活弓兵，强冲 / 袭弓仍优先于护弓。';
+        return '上坡减速 · 下坡助冲 · 高差影响远射。坡顶恢复正常移速；高地不是永久攻击加成，优势随双方位置变化。';
+    },
+
+    guardDescription(team) {
+        const terrain = Terrain.normalize(this.battleOptions.terrain);
+        if (Terrain.defenseLayout(terrain, team)) {
+            return '弓兵守高地平台，剑士和长枪兵分守中央坡口与两翼侧路；自由突击的守位骑兵会就近支援存活弓兵，不会无限追敌。';
+        }
+        return UI_TACTIC_OPTIONS.hold_ground.description;
     },
 
     cavalryOrder(team) {
@@ -279,7 +294,8 @@ const UI = {
     commandDescription(team) {
         const { effective, missing } = this.orderAvailability(team);
         const cavalry = this.cavalryOrder(team);
-        return (missing ? `暂无${missing}，全军改用标准推进。` : '') + UI_TACTIC_OPTIONS[effective].description
+        return (missing ? `暂无${missing}，全军改用标准推进。` : '')
+            + (effective === 'hold_ground' ? this.guardDescription(team) : UI_TACTIC_OPTIONS[effective].description)
             + (this.configs[team].cavalry > 0 ? ' 骑兵：' + UI_CAVALRY_OPTIONS[cavalry].description
                 + (effective === 'hold_ground' && cavalry !== 'auto' ? ' 此骑兵指令优先于守位：骑兵离开守区执行，其他兵种继续守位。' : '') : ' 本队暂无骑兵。');
     },
@@ -497,7 +513,8 @@ const UI = {
     updateOrderDescription(team) {
         const order = UI_TACTIC_OPTIONS[this.orders[team]];
         const { missing } = this.orderAvailability(team);
-        document.getElementById('order-description').textContent = (missing ? `本队暂无${missing}，开战时改用标准推进。` : '') + order.description;
+        document.getElementById('order-description').textContent = (missing ? `本队暂无${missing}，开战时改用标准推进。` : '')
+            + (this.orders[team] === 'hold_ground' ? this.guardDescription(team) : order.description);
         const cavalry = this.cavalryOrder(team);
         document.getElementById('cavalry-description').textContent = (this.configs[team].cavalry ? '' : '本队暂无骑兵；招募后才会执行。')
             + UI_CAVALRY_OPTIONS[cavalry].description
@@ -716,7 +733,7 @@ const UI = {
         const wonChallenge = this.mode === 'challenge' && winner === 'red';
         if (wonChallenge) this.saveWin();
         document.getElementById('result-eyebrow').textContent = this.challenge ? this.challenge.title + ' · 本局战报'
-            : (report.deathmatch ? '预备队死斗' : this.mode === 'terrain' ? '高地演练' : this.mode === 'tactics' ? '战阵演练' : '自由对战') + ' · 本局战报';
+            : (report.deathmatch ? '预备队死斗' : this.mode === 'terrain' ? '地形演练' : this.mode === 'tactics' ? '战阵演练' : '自由对战') + ' · 本局战报';
         const title = document.getElementById('result-title');
         title.className = 'result-title ' + winner;
         title.textContent = winner === 'draw' ? '势均力敌 · 平局' : this.challenge ? (wonChallenge ? '挑战成功！' : '再试一种解法') : (winner === 'red' ? '🔴 红方胜利！' : '🔵 蓝方胜利！');
@@ -758,7 +775,7 @@ const UI = {
         document.getElementById('btn-edit-red').textContent = this.challenge ? '✎ 调整阵容再挑战' : '✎ 调整红方再战';
         document.getElementById('btn-edit-blue').hidden = !!this.challenge;
         document.getElementById('btn-swap').hidden = !!this.challenge;
-        document.getElementById('btn-swap').textContent = this.battleOptions.terrain === 'flat' ? '⇄ 交换双方再战' : '⇄ 交换军队再战（高地不动）';
+        document.getElementById('btn-swap').textContent = this.battleOptions.terrain === 'flat' ? '⇄ 交换双方再战' : '⇄ 交换军队再战（地形不动）';
         const switchTactics = document.getElementById('btn-switch-tactics');
         switchTactics.hidden = this.mode !== 'tactics';
         document.getElementById('btn-reserve-tactics').hidden = this.mode !== 'tactics' || report.deathmatch;
@@ -828,6 +845,9 @@ const UI = {
         document.getElementById('btn-home').onclick = () => this.showHome();
         document.getElementById('btn-sandbox').onclick = () => this.resetAll();
         document.getElementById('btn-terrain').onclick = () => this.startTerrain();
+        document.querySelectorAll('[data-terrain-entry]').forEach(button => {
+            button.onclick = () => this.startTerrain(button.dataset.terrainEntry);
+        });
         document.querySelectorAll('[data-terrain]').forEach(button => {
             button.onclick = () => this.selectTerrain(button.dataset.terrain);
         });

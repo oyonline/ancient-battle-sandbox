@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>帝国亲子沙盒 · 统帅试炼</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E🏰%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="css/style.css?v=20260924-terrain2">
+    <link rel="stylesheet" href="css/style.css?v=20260924-terrain3">
 </head>
 <body>
     <!-- 战场：铺满整个视口 -->
@@ -88,8 +88,8 @@
                         <span class="campaign-progress" id="campaign-progress">0 / 5 已通过</span>
                     </div>
                     <div class="terrain-entry">
-                        <div><div class="eyebrow">高地演练 · 守位与骑兵指令</div><h3>守住高地，还是绕后袭弓？</h3><p>双方各 76 人，四兵种完全相同。默认蓝方据高守位，红方进攻；可切换军令、骑兵打法和地图，观察仰攻与俯攻。</p></div>
-                        <button class="secondary-btn" id="btn-terrain">⛰ 进入高地演练 →</button>
+                        <div><div class="eyebrow">地形演练 · 坡口 / 树林 / 河桥</div><h3>抢坡口、绕树林，还是争桥头？</h3><p>双方各 76 人，四兵种完全相同。坡口高地默认据高一方守位；树林、河桥默认双方推进。换地形，也换一种打法。</p></div>
+                        <div class="terrain-entry-actions"><button class="secondary-btn" id="btn-terrain">⛰ 蓝方坡口高地 →</button><button class="secondary-btn" data-terrain-entry="red_pass">⛰ 红方坡口高地</button><button class="secondary-btn" data-terrain-entry="forest">🌲 穿越林地</button><button class="secondary-btn" data-terrain-entry="river">🌉 三桥河谷</button></div>
                     </div>
                     <div class="tactics-entry">
                         <div class="tactics-entry-copy"><div class="eyebrow">战阵演练 · 新玩法</div><h3>再添五十预备，能否破阵？</h3><p>100 剑士发起进攻，50 剑士在后方接应、分批增援。收拢溃兵，重整后再次出击；也可切回 100 对 100 比较。</p></div>
@@ -156,10 +156,14 @@
                             <button class="secondary-btn" data-terrain="flat">平地</button>
                             <button class="secondary-btn" data-terrain="red_hill">红方高地</button>
                             <button class="secondary-btn" data-terrain="blue_hill">蓝方高地</button>
+                            <button class="secondary-btn" data-terrain="red_pass">红方坡口高地</button>
+                            <button class="secondary-btn" data-terrain="blue_pass">蓝方坡口高地</button>
+                            <button class="secondary-btn" data-terrain="forest">林地</button>
+                            <button class="secondary-btn" data-terrain="river">三桥河谷</button>
                         </div>
                         <p id="terrain-ready-description"></p>
-                        <p class="terrain-rules">上坡减速 · 下坡助冲 · 高差影响远射。坡顶恢复正常移速；高地不是永久攻击加成，优势随双方位置变化。</p>
-                        <small>换图保留阵容与指令，不会自动交换守方；请在下方选择谁进攻、谁守位。收起面板，点击士兵查看坡度与高差。</small>
+                        <p id="terrain-ready-rules" class="terrain-rules"></p>
+                        <small>换图保留阵容与指令，不会自动交换守方；切到林地 / 河桥后也保留原指令，请按需要改为推进。收起面板，点击士兵查看地表、坡速与高差。</small>
                     </div>
                     <div id="commands-ready" class="commands-panel" hidden>
                         <b>⚑ 双方军令 · 切换后重新布阵，不自动开战</b>
@@ -199,9 +203,14 @@
                             <button class="secondary-btn" data-terrain="flat">平地</button>
                             <button class="secondary-btn" data-terrain="red_hill">红方高地</button>
                             <button class="secondary-btn" data-terrain="blue_hill">蓝方高地</button>
+                            <button class="secondary-btn" data-terrain="red_pass">红方坡口高地</button>
+                            <button class="secondary-btn" data-terrain="blue_pass">蓝方坡口高地</button>
+                            <button class="secondary-btn" data-terrain="forest">林地</button>
+                            <button class="secondary-btn" data-terrain="river">三桥河谷</button>
                         </div>
                         <p id="terrain-result-description"></p>
-                        <small>点击地图回到准备阶段，不会自动开战。交换双方只交换军队，丘陵位置不动。</small>
+                        <p id="terrain-result-rules" class="terrain-rules"></p>
+                        <small>点击地图回到准备阶段，不会自动开战。交换双方只交换军队，地形位置不动。</small>
                     </div>
                     <div id="commands-result" class="commands-panel" hidden>
                         <b>⚑ 换一种军令再试 · 更改后回到准备阶段</b>
@@ -234,15 +243,16 @@
 
     <script src="assets/manifest.js?v=20260923-death2"></script>
     <script src="js/phaser.min.js"></script>
-    <script src="js/terrain.js?v=20260924-terrain1"></script>
-    <script src="js/units.js?v=20260924-terrain2"></script>
-    <script src="js/combat.js?v=20260923-reserve1"></script>
+    <script src="js/terrain.js?v=20260924-terrain3"></script>
+    <script src="js/navigation.js?v=20260924-terrain3"></script>
+    <script src="js/units.js?v=20260924-terrain3"></script>
+    <script src="js/combat.js?v=20260924-terrain3"></script>
     <script src="js/morale.js?v=20260923-morale-flow1"></script>
-    <script src="js/tactics.js?v=20260924-terrain2"></script>
+    <script src="js/tactics.js?v=20260924-terrain3"></script>
     <script src="js/challenges.js?v=20260923-tactics1"></script>
-    <script src="js/inspection.js?v=20260924-terrain2"></script>
-    <script src="js/game.js?v=20260924-terrain2"></script>
-    <script src="js/ui.js?v=20260924-terrain2"></script>
+    <script src="js/inspection.js?v=20260924-terrain3"></script>
+    <script src="js/game.js?v=20260924-terrain3"></script>
+    <script src="js/ui.js?v=20260924-terrain3"></script>
     <script>
         const game = new Phaser.Game({
             type: Phaser.AUTO,
