@@ -140,7 +140,19 @@ function isPreparedPike(guard, cavalry, dx, dy) {
 
 // ==================== 骑兵 AI（简化状态机，索敌走场景空间哈希） ====================
 class CavalryAI {
+    command(unit) {
+        const order = unit.scene.battleOptions?.cavalryOrders?.[unit.team];
+        return order === 'direct' || order === 'flank_archers' ? order : 'auto';
+    }
+
     update(unit, now, dt) {
+        if (this.command(unit) === 'flank_archers') {
+            if (unit.state === 'flank' || (unit.state === 'charge' &&
+                (!unit.flankCommitted || (unit.flankTarget ? !this.flankTargetAlive(unit.flankTarget) :
+                    now >= (unit.flankRetryAt ?? 0))))) {
+                return this.flank(unit, now, dt);
+            }
+        } else if (unit.state === 'flank') this.beginCharge(unit);
         switch (unit.state) {
             case 'charge': return this.charge(unit, now, dt);
             case 'pierce': return this.pierce(unit, now, dt);
@@ -160,6 +172,10 @@ class CavalryAI {
         unit.pierceHits = null;
         unit.target = null;
         unit.lastRetarget = -Infinity;
+        unit.flankRoute = null;
+        unit.flankTarget = null;
+        unit.flankCommitted = false;
+        unit.flankRetryAt = 0;
     }
 
     enterMelee(unit) {
@@ -168,9 +184,20 @@ class CavalryAI {
         unit.chargeDistance = 0;
         unit.chargeLastX = null;
         unit.chargeMomentum = 0;
+        unit.flankRoute = null;
+        unit.flankTarget = null;
+        unit.flankCommitted = false;
     }
 
     pickTarget(unit) {
+        const command = this.command(unit);
+        if (command === 'direct') return unit.scene.nearestEnemy(unit);
+        if (command === 'flank_archers') {
+            return this.flankTargetAlive(unit.flankTarget) ? unit.flankTarget : unit.scene.nearestEnemy(unit);
+        }
+        if (unit.groundGuardTarget && !unit.groundGuardTarget.dead && !unit.groundGuardTarget.withdrawn) {
+            return unit.groundGuardTarget;
+        }
         let best = null, bestD = Infinity;
         unit.scene.forEachNear(unit.gx, unit.gy, 12, enemy => {
             if (enemy.team === unit.team || enemy.dead || enemy.withdrawn || enemy.type !== 'archer') return;
@@ -180,6 +207,92 @@ class CavalryAI {
             }
         });
         return best || unit.scene.nearestEnemy(unit);
+    }
+
+    flankTargetAlive(target) {
+        return target && !target.dead && !target.withdrawn && target.moraleState !== 'routing';
+    }
+
+    // 一支军队共用低频敌阵快照，不能让每匹马每帧扫全场。游走/溃逃骑兵
+    // 不拉长主阵轮廓；它们仍会在真实行进路线上拦截绕行骑兵。
+    flankSnapshot(unit, now) {
+        const scene = unit.scene;
+        if (this.flankCache?.scene !== scene || this.flankCache.battleId !== scene.battleId ||
+            now < this.flankCache.at || now - this.flankCache.at >= 750) {
+            const empty = () => ({ archers: [], minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
+            const teams = { red: empty(), blue: empty() };
+            for (const other of scene.units) {
+                if (!this.flankTargetAlive(other) || other.type === 'cavalry') continue;
+                const army = teams[other.team];
+                if (other.type === 'archer') army.archers.push(other);
+                army.minX = Math.min(army.minX, other.gx); army.maxX = Math.max(army.maxX, other.gx);
+                army.minY = Math.min(army.minY, other.gy); army.maxY = Math.max(army.maxY, other.gy);
+            }
+            this.flankCache = { scene, battleId: scene.battleId, at: now, teams };
+        }
+        return this.flankCache.teams[unit.team === 'red' ? 'blue' : 'red'];
+    }
+
+    flank(unit, now, dt) {
+        const army = this.flankSnapshot(unit, now);
+        if (!this.flankTargetAlive(unit.flankTarget)) {
+            let target = null, bestD = Infinity;
+            for (const archer of army.archers) {
+                if (!this.flankTargetAlive(archer)) continue;
+                const distance = dist(unit, archer);
+                if (distance < bestD - 1e-9 || (Math.abs(distance - bestD) <= 1e-9 && archer.id < target.id)) {
+                    target = archer; bestD = distance;
+                }
+            }
+            if (!target) {
+                // 无弓兵时回到普通正面推进，下一次缓存更新再检查后排。
+                if (unit.state === 'flank' || unit.flankTarget) this.beginCharge(unit);
+                unit.flankTarget = null;
+                unit.flankCommitted = true;
+                unit.flankRetryAt = now + 750;
+                return this.charge(unit, now, dt);
+            }
+            this.beginCharge(unit);
+            unit.flankTarget = target;
+            const lowerY = clamp(army.minY - 2.8, 1.8, GRID_H - 1.8);
+            const upperY = clamp(army.maxY + 2.8, 1.8, GRID_H - 1.8);
+            const via = y => Math.abs(y - unit.gy) + Math.abs(y - target.gy);
+            const lower = via(lowerY), upper = via(upperY);
+            const side = lower < upper - 1e-9 || (Math.abs(lower - upper) <= 1e-9 &&
+                unit.gy <= (army.minY + army.maxY) / 2) ? -1 : 1;
+            unit.flankRoute = { side, stage: 0, startX: unit.gx, y: side < 0 ? lowerY : upperY,
+                rearX: 0, refreshedAt: -Infinity };
+        }
+        const route = unit.flankRoute;
+        unit.state = 'flank';
+        unit.target = unit.flankTarget;
+        // 绕侧和转弯不储存冲锋动量；最后直线切入才重新积累三格助跑。
+        unit.chargeDistance = 0; unit.chargeLastX = null; unit.chargeMomentum = 0;
+        if (now - route.refreshedAt >= 750) {
+            route.y = clamp(route.side < 0 ? army.minY - 2.8 : army.maxY + 2.8, 1.8, GRID_H - 1.8);
+            route.rearX = clamp(unit.team === 'red' ? army.maxX + 3.8 : army.minX - 3.8, 1.8, GRID_W - 1.8);
+            route.refreshedAt = now;
+        }
+        let tx = route.stage === 0 ? route.startX : route.rearX, ty = route.y;
+        if (Math.hypot(tx - unit.gx, ty - unit.gy) < 0.3) {
+            route.stage++;
+            if (route.stage >= 2) {
+                unit.state = 'charge'; unit.flankCommitted = true;
+                unit.chargeDX = null; unit.chargeDY = null;
+                unit.lastRetarget = now;
+                return this.charge(unit, now, dt);
+            }
+            tx = route.rearX;
+        }
+        const speed = CombatRules.walkingSpeed(unit, UNIT_TYPES.cavalry.speed);
+        const contact = this.pathContact(unit, tx, ty, speed, dt);
+        if (contact) {
+            this.enterMelee(unit);
+            unit.target = contact.enemy;
+            return false;
+        }
+        moveToward(unit, tx, ty, UNIT_TYPES.cavalry.speed, dt);
+        return true;
     }
 
     // 只对实际行进线上的身体或准备好的正面枪尖产生局部阻力。
@@ -363,12 +476,13 @@ function unitRand(unit) {
     return unit.randSeed / 4294967296;
 }
 
-function movementSpeedMultiplier(unit, tx, ty) {
+function movementSpeedMultiplier(unit, tx, ty,
+    terrainMultiplier = Terrain.movementMultiplier(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, tx, ty)) {
     const dx = tx - unit.gx, dy = ty - unit.gy;
     // 动摇时只放缓向前推进；战术后退与溃逃不受这项限制。
     const advancing = dx * (unit.moraleFacingX || 0) + dy * (unit.moraleFacingY || 0) > 0;
     const caution = unit.moraleState === 'wavering' && advancing ? 0.85 : 1;
-    return caution * Terrain.movementMultiplier(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, tx, ty);
+    return caution * terrainMultiplier;
 }
 
 function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
@@ -376,7 +490,9 @@ function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
     const d = Math.hypot(dx, dy);
     if (d < 0.001) return;
     if (movement === 'walk') speed = CombatRules.walkingSpeed(unit, speed);
-    const step = Math.min(d, speed * movementSpeedMultiplier(unit, tx, ty) * dt);
+    // 保存这一实际移动尝试使用的坡度倍率；观察面板不从移动后的坐标反推。
+    unit.terrainMoveMultiplier = Terrain.movementMultiplier(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, tx, ty);
+    const step = Math.min(d, speed * movementSpeedMultiplier(unit, tx, ty, unit.terrainMoveMultiplier) * dt);
     const intended = { x: dx / d * step, y: dy / d * step };
     const motion = movement === 'walk' ? CombatRules.constrainWalk(unit, intended.x, intended.y) : intended;
     if (unit.scene && unit.scene.planningStep) {

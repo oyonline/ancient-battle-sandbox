@@ -32,6 +32,7 @@ function pureArmy(type, budget) {
 function runPair(red, blue, redFormation = 'custom', blueFormation = 'custom', options = {}) {
     // 地图位置保持不变：比较军队换边后的攻守表现；镜像公平由独立测试覆盖。
     const swapped = { ...options, orders: { red: options.orders?.blue, blue: options.orders?.red },
+        cavalryOrders: { red: options.cavalryOrders?.blue, blue: options.cavalryOrders?.red },
         reserves: { red: options.reserves?.blue, blue: options.reserves?.red } };
     return [runBattle(red, blue, redFormation, blueFormation, options),
         runBattle(blue, red, blueFormation, redFormation, swapped)];

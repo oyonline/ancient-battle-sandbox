@@ -346,7 +346,7 @@ button:active { transform: scale(0.94); }
 .f-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .f-label { font-size: 14px; color: #c9b787; flex: none; }
 #formation-row { display: flex; flex-wrap: wrap; gap: 7px; flex: 1; }
-#order-row { display: flex; flex-wrap: wrap; gap: 7px; flex: 1; }
+#order-row, #cavalry-order-row { display: flex; flex-wrap: wrap; gap: 7px; flex: 1; }
 .order-options { padding: 10px 12px; border: 1px solid #80663d; border-radius: 10px; background: rgba(24, 17, 10, 0.3); }
 .order-description { margin: 7px 0 0; color: #cbb893; font: 12px/1.7 "PingFang SC", sans-serif; }
 .chip {
@@ -495,6 +495,26 @@ button:active { transform: scale(0.94); }
 .terrain-panel .terrain-rules { color: #d7c99f; }
 .terrain-panel small { display: block; color: #b5b99b; font-size: 11px; }
 .terrain-report { margin: 0; color: #d2dfab; font: 12px/1.7 "PingFang SC", sans-serif; text-align: center; }
+.commands-panel { padding: 12px 14px; border: 1px solid #927445; border-radius: 10px; background: #302719; font: 12px/1.6 "PingFang SC", sans-serif; }
+.commands-panel > b { font-size: 14px; color: #ead7a8; }
+.commands-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 10px 0 6px; }
+.command-team { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 7px; align-items: center; padding: 10px; border-radius: 7px; border: 1px solid #70583a; background: #211c15; }
+.command-team > strong, .command-team > p { grid-column: 1 / -1; }
+.command-team.red > strong { color: #edb2a0; }
+.command-team.blue > strong { color: #a6c5ea; }
+.command-team label { color: #c4b38e; }
+.command-team select { width: 100%; min-width: 0; padding: 9px 6px; border: 1px solid #927445; border-radius: 5px; color: #f1e1b8; background: #423621; font: inherit; cursor: pointer; }
+.command-team select:focus-visible { outline: 2px solid #f0cf70; outline-offset: 2px; }
+.command-team select:disabled { opacity: 0.5; cursor: not-allowed; }
+.command-team p { margin: 2px 0 0; color: #c0b291; font-size: 11px; }
+.commands-panel > small { display: block; color: #b9a98a; font-size: 11px; }
+.commands-hud { flex: 0 0 100%; color: #d7c89f; font: 11px/1.6 "PingFang SC", sans-serif; }
+.commands-report { margin: 0; color: #d8c496; font: 12px/1.7 "PingFang SC", sans-serif; text-align: center; }
+.unit-inspector { position: fixed; top: 70px; right: 12px; z-index: 14; width: min(290px, calc(100vw - 24px)); max-height: 42vh; overflow-y: auto; padding: 12px 14px; color: #e7dfbd; background: rgba(25, 34, 25, 0.95); border: 1px solid #9ead78; border-radius: 10px; box-shadow: 0 7px 24px #0006; font: 12px/1.65 "PingFang SC", sans-serif; }
+.unit-inspector > b, .unit-inspector > span, .unit-inspector > small { display: block; }
+.unit-inspector > b { margin-bottom: 5px; color: #f1e7bc; font-size: 14px; }
+.unit-inspector > small { margin-top: 6px; }
+.unit-inspector small { color: #a8b497; }
 .challenge-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .challenge-card { position: relative; display: flex; align-items: center; text-align: left; gap: 12px; padding: 17px 14px; color: var(--parchment); background: linear-gradient(115deg, #55432b, #3d3020); border: 1px solid #846638; border-radius: 10px; overflow: hidden; min-height: 146px; }
 .challenge-card:hover { border-color: #d9b969; background: linear-gradient(115deg, #685035, #463623); }
@@ -578,13 +598,16 @@ summary { cursor: pointer; }
     .terrain-entry { padding: 12px; flex-direction: column; align-items: stretch; gap: 10px; }
     .terrain-entry h3 { font-size: 19px; }
     .terrain-hud { font-size: 11px; padding: 2px 6px; }
+    .commands-grid { grid-template-columns: 1fr; gap: 8px; }
+    .commands-panel { padding: 10px; }
+    .unit-inspector { top: 98px; right: 8px; padding: 9px 11px; width: min(255px, calc(100vw - 16px)); max-height: 37vh; font-size: 11px; }
     .tactics-entry h3 { font-size: 19px; letter-spacing: 0; }
     .tactics-entry-actions { gap: 7px; }
     .tactics-entry-actions .secondary-btn { padding: 10px; }
     .tactics-entry-actions b { font-size: 14px; }
     .tactics-hud { gap: 10px; font-size: 10px; }
     .tactics-heading b { font-size: 11px; }
-    #order-row .chip { padding: 7px 10px; font-size: 12px; }
+    #order-row .chip, #cavalry-order-row .chip { padding: 7px 10px; font-size: 12px; }
     .challenge-grid { grid-template-columns: 1fr; }
     .challenge-card, .challenge-card:last-child { min-height: 126px; padding: 12px; }
     .challenge-unit { width: 56px; height: 80px; }

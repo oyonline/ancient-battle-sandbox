@@ -53,7 +53,14 @@ const UI_TACTIC_OPTIONS = {
     advance: { name: '标准推进', description: '所有兵种按原有方式接近敌人并交战。' },
     assault: { name: '正面强攻', requires: 'infantry', description: '剑士集中向敌阵正面推进，争夺突破口；其他兵种照常作战。' },
     flank: { name: '单翼迂回', requires: 'infantry', description: '剑士约一半在正面牵制，一半沿敌阵外缘寻找侧后方的接敌机会；其他兵种照常作战。' },
-    hold: { name: '枪阵守位', requires: 'pikeman', description: '长枪兵布成四面方阵，近敌转身、小步迎击，内排支援缺口；威胁退去后归位架枪。其他兵种照常作战。' }
+    hold: { name: '枪阵守位', requires: 'pikeman', description: '长枪兵布成四面方阵，近敌转身、小步迎击，内排支援缺口；威胁退去后归位架枪。其他兵种照常作战。' },
+    hold_ground: { name: '高地守位', description: '己方高地上，弓兵守山顶、剑士和长枪兵护坡口；没有己方高地时守出发区，不夺取敌方山丘。骑兵就近反击后归位。' }
+};
+
+const UI_CAVALRY_OPTIONS = {
+    auto: { name: '自由突击（原逻辑）', description: '沿用原有突击判断；全军高地守位时，骑兵只在守区附近反击。' },
+    direct: { name: '正面强冲', description: '直接迎击前方敌军，争取助跑冲锋；可能撞上完整枪阵。' },
+    flank_archers: { name: '侧翼袭弓', description: '先沿侧翼绕向敌军弓兵，付出绕行时间；途中被截住仍要正常交战，无弓兵时攻击其他敌军。' }
 };
 
 // ==================== 战役、配兵与战报 ====================
@@ -65,7 +72,7 @@ const UI = {
     configs: { red: {}, blue: {} },
     formations: { red: 'custom', blue: 'custom' },
     orders: { red: 'advance', blue: 'advance' },
-    battleOptions: { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat' },
+    battleOptions: { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } },
     editing: false,
     countdown: false,
     pendingDeploy: false,
@@ -142,6 +149,7 @@ const UI = {
         this.updateMorale();
         this.updateTactics();
         this.updateTerrainControls();
+        this.updateCommandControls();
         document.getElementById('btn-pause').disabled = !fighting || this.countdown;
         document.getElementById('btn-pause').textContent = this.scene?.paused ? '▶ 继续' : '⏸ 暂停';
         document.getElementById('btn-lock').disabled = !this.scene;
@@ -193,7 +201,7 @@ const UI = {
     },
 
     resetBattleOptions() {
-        this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat' };
+        this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
     },
 
     startTerrain(terrain = 'blue_hill') {
@@ -207,6 +215,9 @@ const UI = {
         this.orders = { red: 'advance', blue: 'advance' };
         this.resetBattleOptions();
         this.battleOptions.terrain = Terrain.normalize(terrain);
+        if (this.battleOptions.terrain !== 'flat') {
+            this.orders[this.battleOptions.terrain === 'red_hill' ? 'red' : 'blue'] = 'hold_ground';
+        }
         this.deployArmies();
     },
 
@@ -236,6 +247,62 @@ const UI = {
         hud.hidden = this.phase === 'home';
         hud.textContent = '⛰ ' + map.name;
         hud.title = map.description;
+    },
+
+    cavalryOrder(team) {
+        const selected = this.battleOptions.cavalryOrders?.[team];
+        return Object.hasOwn(UI_CAVALRY_OPTIONS, selected) ? selected : 'auto';
+    },
+
+    selectCommand(team, kind, selected) {
+        if (!['red', 'blue'].includes(team) || !['sandbox', 'terrain'].includes(this.mode) || this.countdown) return;
+        const buying = this.phase === 'buy-' + team;
+        if (!buying && !['ready', 'result'].includes(this.phase)) return;
+        const choices = kind === 'army' ? UI_TACTIC_OPTIONS : kind === 'cavalry' ? UI_CAVALRY_OPTIONS : null;
+        if (!choices || !Object.hasOwn(choices, selected)) return;
+        if (kind === 'army') this.orders[team] = selected;
+        else {
+            this.battleOptions.cavalryOrders ||= { red: 'auto', blue: 'auto' };
+            this.battleOptions.cavalryOrders[team] = selected;
+        }
+        if (buying) this.renderOrders(team);
+        else this.deployArmies();
+        Snd.play('tick');
+    },
+
+    commandSummary(team, orders = this.orders, cavalryOrders = this.battleOptions.cavalryOrders) {
+        const army = UI_TACTIC_OPTIONS[orders?.[team]] || UI_TACTIC_OPTIONS.advance;
+        const cavalry = UI_CAVALRY_OPTIONS[cavalryOrders?.[team]] || UI_CAVALRY_OPTIONS.auto;
+        return `${army.name}${this.configs[team].cavalry ? ' · 骑兵：' + cavalry.name : ''}`;
+    },
+
+    commandDescription(team) {
+        const { effective, missing } = this.orderAvailability(team);
+        const cavalry = this.cavalryOrder(team);
+        return (missing ? `暂无${missing}，全军改用标准推进。` : '') + UI_TACTIC_OPTIONS[effective].description
+            + (this.configs[team].cavalry > 0 ? ' 骑兵：' + UI_CAVALRY_OPTIONS[cavalry].description
+                + (effective === 'hold_ground' && cavalry !== 'auto' ? ' 此骑兵指令优先于守位：骑兵离开守区执行，其他兵种继续守位。' : '') : ' 本队暂无骑兵。');
+    },
+
+    updateCommandControls() {
+        const selectable = ['sandbox', 'terrain'].includes(this.mode);
+        const disabled = !selectable || !['ready', 'result'].includes(this.phase) || this.countdown;
+        for (const phase of ['ready', 'result']) {
+            document.getElementById('commands-' + phase).hidden = !selectable;
+            for (const team of ['red', 'blue']) {
+                for (const [kind, choices] of [['army', UI_TACTIC_OPTIONS], ['cavalry', UI_CAVALRY_OPTIONS]]) {
+                    const control = document.getElementById(`${phase}-${team}-${kind}`);
+                    control.innerHTML = Object.entries(choices).map(([value, choice]) => `<option value="${value}">${choice.name}</option>`).join('');
+                    control.value = kind === 'army' ? this.orders[team] : this.cavalryOrder(team);
+                    control.disabled = disabled || (kind === 'cavalry' && !this.configs[team].cavalry);
+                }
+                document.getElementById(`${phase}-${team}-command-description`).textContent = this.commandDescription(team);
+            }
+        }
+        const hud = document.getElementById('commands-hud');
+        hud.hidden = !selectable || this.phase !== 'battle';
+        hud.textContent = ['red', 'blue'].map(team => (team === 'red' ? '红方：' : '蓝方：')
+            + this.commandSummary(team, { [team]: this.orderAvailability(team).effective })).join(' ｜ ');
     },
 
     showHome() {
@@ -309,7 +376,7 @@ const UI = {
         this.configs = { red: { infantry: reserve ? 150 : 100 }, blue: { pikeman: 100 } };
         this.formations = { red: 'custom', blue: 'square' };
         this.orders = { red: reserve ? 'flank' : order, blue: 'hold' };
-        this.battleOptions = { deathmatch: reserve, reserves: { red: reserve ? 50 : 0, blue: 0 }, terrain: 'flat' };
+        this.battleOptions = { deathmatch: reserve, reserves: { red: reserve ? 50 : 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
         this.deployArmies();
     },
 
@@ -384,6 +451,7 @@ const UI = {
         const row = document.getElementById('order-row');
         row.replaceChildren();
         for (const [key, order] of Object.entries(UI_TACTIC_OPTIONS)) {
+            if (key === 'hold_ground' && !['sandbox', 'terrain'].includes(this.mode)) continue;
             const button = document.createElement('button');
             button.className = 'chip' + (this.orders[team] === key ? ' active' : '');
             button.textContent = order.name;
@@ -401,12 +469,28 @@ const UI = {
             row.appendChild(button);
         }
         this.updateOrderDescription(team);
+        this.renderCavalryOrders(team);
+    },
+
+    renderCavalryOrders(team) {
+        document.getElementById('cavalry-options').hidden = !['sandbox', 'terrain'].includes(this.mode);
+        const row = document.getElementById('cavalry-order-row');
+        row.replaceChildren();
+        for (const [key, order] of Object.entries(UI_CAVALRY_OPTIONS)) {
+            const button = document.createElement('button');
+            button.className = 'chip' + (this.cavalryOrder(team) === key ? ' active' : '');
+            button.textContent = order.name;
+            button.setAttribute('aria-pressed', String(this.cavalryOrder(team) === key));
+            button.onclick = () => this.selectCommand(team, 'cavalry', key);
+            row.appendChild(button);
+        }
     },
 
     orderAvailability(team) {
         const selected = this.orders[team];
         const required = UI_TACTIC_OPTIONS[selected].requires;
-        const missing = required && !(this.configs[team][required] > 0) ? UNIT_TYPES[required].name : null;
+        const missing = selected === 'hold_ground' && !this.troops(team) ? '士兵'
+            : required && !(this.configs[team][required] > 0) ? UNIT_TYPES[required].name : null;
         return { effective: missing ? 'advance' : selected, missing };
     },
 
@@ -414,6 +498,10 @@ const UI = {
         const order = UI_TACTIC_OPTIONS[this.orders[team]];
         const { missing } = this.orderAvailability(team);
         document.getElementById('order-description').textContent = (missing ? `本队暂无${missing}，开战时改用标准推进。` : '') + order.description;
+        const cavalry = this.cavalryOrder(team);
+        document.getElementById('cavalry-description').textContent = (this.configs[team].cavalry ? '' : '本队暂无骑兵；招募后才会执行。')
+            + UI_CAVALRY_OPTIONS[cavalry].description
+            + (this.orders[team] === 'hold_ground' && cavalry !== 'auto' ? ' 此指令允许骑兵离开守区，其他兵种仍守位。' : '');
     },
 
     stopHolds() {
@@ -531,9 +619,11 @@ const UI = {
         const reserves = Object.fromEntries(['red', 'blue'].map(team => [team,
             Math.min(this.battleOptions.reserves[team] || 0, Math.max(0, (this.configs[team].infantry || 0) - 1))]));
         const terrain = ['sandbox', 'terrain'].includes(this.mode) ? Terrain.normalize(this.battleOptions.terrain) : 'flat';
-        this.battleOptions = { deathmatch, reserves, terrain };
+        const cavalryOrders = Object.fromEntries(['red', 'blue'].map(team => [team,
+            ['sandbox', 'terrain'].includes(this.mode) ? this.cavalryOrder(team) : 'auto']));
+        this.battleOptions = { deathmatch, reserves, terrain, cavalryOrders };
         this.scene?.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue,
-            { ...this.orders }, { ...this.battleOptions, reserves: { ...reserves } });
+            { ...this.orders }, { ...this.battleOptions, reserves: { ...reserves }, cavalryOrders: { ...cavalryOrders } });
         this.setPhase('ready');
         this.setStep(3);
         document.getElementById('army-summary').innerHTML = ['red', 'blue'].map(team => {
@@ -543,7 +633,7 @@ const UI = {
                 ? `<small class="reserve-note">剑士 ${this.configs[team].infantry - reserves[team]} 进攻 + ${reserves[team]} 预备${reserves[team] ? ' · 接应溃兵，分批投入' : ''}</small>` : '';
             return `
             <div class="sum ${team}"><b>${team === 'red' ? '🔴 红方' : '🔵 蓝方'}</b> ${this.armyText(this.configs[team])}
-            <span class="sum-f">${FORMATIONS[this.formations[team]].name} · ${UI_TACTIC_OPTIONS[effective].name}</span>${reserveNote}${fallback}</div>`;
+            <span class="sum-f">${FORMATIONS[this.formations[team]].name} · ${this.commandSummary(team, { [team]: effective })}</span>${reserveNote}${fallback}</div>`;
         }).join('');
         document.getElementById('tactics-ready-guide').hidden = this.mode !== 'tactics';
         document.getElementById('tactics-ready-title').textContent = deathmatch
@@ -572,7 +662,7 @@ const UI = {
         this.setPhase('battle');
         document.getElementById('phase-hint').textContent = this.battleOptions.deathmatch
             ? '死斗 · 溃兵可重整，直到一方全灭'
-            : (this.challenge ? this.challenge.title + ' · ' : this.mode === 'tactics' ? '战阵演练 · ' : '') + '拖动画面查看战况';
+            : (this.challenge ? this.challenge.title + ' · ' : this.mode === 'tactics' ? '战阵演练 · ' : '') + '拖动看战况 · 点击士兵看地形';
         this.openSheet(false);
         this.scene.startCountdown(() => { this.countdown = false; this.syncControls(); });
     },
@@ -596,6 +686,8 @@ const UI = {
             [this.orders.red, this.orders.blue] = [this.orders.blue, this.orders.red];
             [this.battleOptions.reserves.red, this.battleOptions.reserves.blue] =
                 [this.battleOptions.reserves.blue, this.battleOptions.reserves.red];
+            const redCavalry = this.cavalryOrder('red'), blueCavalry = this.cavalryOrder('blue');
+            this.battleOptions.cavalryOrders = { red: blueCavalry, blue: redCavalry };
         }
         this.deployArmies();
         this.startBattle();
@@ -648,6 +740,11 @@ const UI = {
         const map = Terrain.maps[Terrain.normalize(report.terrain || this.battleOptions.terrain)];
         const contact = Number.isFinite(report.firstContactMs) ? (report.firstContactMs / 1000).toFixed(1) + ' 秒' : '未接敌';
         terrainReport.textContent = '本局地图：' + map.name + ' · 首次交锋：' + contact + '（首次有效伤害，不含倒计时）';
+        const commandsReport = document.getElementById('commands-report');
+        commandsReport.hidden = !['sandbox', 'terrain'].includes(this.mode);
+        commandsReport.textContent = ['red', 'blue'].map(team => (team === 'red' ? '红方：' : '蓝方：')
+            + this.commandSummary(team, report.orders || { [team]: this.orderAvailability(team).effective },
+                report.cavalryOrders || this.battleOptions.cavalryOrders)).join(' ｜ ');
         document.getElementById('report-tables').innerHTML = ['red', 'blue'].map(team => this.renderTeamReport(team, report.teams[team])).join('');
         const events = document.getElementById('battle-events');
         events.replaceChildren();
@@ -734,6 +831,14 @@ const UI = {
         document.querySelectorAll('[data-terrain]').forEach(button => {
             button.onclick = () => this.selectTerrain(button.dataset.terrain);
         });
+        for (const phase of ['ready', 'result']) {
+            for (const team of ['red', 'blue']) {
+                for (const kind of ['army', 'cavalry']) {
+                    const control = document.getElementById(`${phase}-${team}-${kind}`);
+                    control.onchange = () => this.selectCommand(team, kind, control.value);
+                }
+            }
+        }
         document.querySelectorAll('[data-tactics-entry]').forEach(button => {
             button.onclick = () => { this.startTactics(button.dataset.tacticsEntry); Snd.play('tick'); };
         });

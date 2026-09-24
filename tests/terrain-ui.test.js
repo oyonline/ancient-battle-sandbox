@@ -107,17 +107,22 @@ test('terrain entry deploys identical mixed armies without starting the battle',
     assert.equal(scene.starts, 0);
     assert.equal(el('terrain-ready').hidden, false);
     assert.match(el('terrain-hud').textContent, /蓝方高地/);
+    assert.deepEqual(snapshot(UI.orders), { red: 'advance', blue: 'hold_ground' });
+    assert.deepEqual(snapshot(UI.battleOptions.cavalryOrders), { red: 'auto', blue: 'auto' });
+    assert.equal(el('ready-blue-army').value, 'hold_ground');
 });
 
 test('all three map buttons redeploy immediately, keep armies and update selected controls', () => {
     const { UI, scene, terrainButtons, el } = setup({ query: '?terrain=blue_hill' });
     const armies = snapshot(UI.configs);
+    const orders = snapshot(UI.orders);
     for (const terrain of ['flat', 'red_hill', 'blue_hill']) {
         const before = scene.deployments.length;
         terrainButtons.find(button => button.dataset.terrain === terrain).onclick();
         assert.equal(scene.deployments.length, before + 1);
         assert.equal(scene.terrain, terrain);
         assert.deepEqual(snapshot(UI.configs), armies);
+        assert.deepEqual(snapshot(UI.orders), orders, 'map changes preserve the chosen defender rather than silently swapping tactics');
         assert.equal(UI.phase, 'ready');
         assert.equal(scene.starts, 0);
         for (const button of terrainButtons) {
@@ -171,7 +176,7 @@ test('report shows map and first damage time; map selection returns to ready wit
     assert.deepEqual(snapshot(UI.configs), armies);
 });
 
-test('original rematch preserves terrain and swaps only armies, formations, orders, and reserves', () => {
+test('original rematch preserves terrain and swaps armies, formations, both orders, and reserves', () => {
     const { UI, scene, el } = setup({ query: '?terrain=blue_hill' });
     finishBattle(UI);
     el('btn-rematch').onclick();
@@ -182,11 +187,13 @@ test('original rematch preserves terrain and swaps only armies, formations, orde
     UI.configs = { red: { infantry: 11 }, blue: { infantry: 27 } };
     UI.orders = { red: 'assault', blue: 'flank' };
     UI.battleOptions.reserves = { red: 4, blue: 0 };
+    UI.battleOptions.cavalryOrders = { red: 'direct', blue: 'flank_archers' };
     el('btn-swap').onclick();
     assert.equal(UI.configs.red.infantry, 27);
     assert.equal(UI.configs.blue.infantry, 11);
     assert.equal(UI.orders.red, 'flank');
     assert.equal(UI.battleOptions.reserves.blue, 4);
+    assert.deepEqual(snapshot(UI.battleOptions.cavalryOrders), { red: 'flank_archers', blue: 'direct' });
     assert.equal(scene.terrain, 'blue_hill', 'swapping armies cannot mirror the hill');
 });
 
@@ -209,17 +216,23 @@ test('home, new sandbox, challenge and tactics reset terrain; legacy modes never
     const { UI, scene, el, challenges } = setup();
     for (const reset of [
         () => UI.showHome(), () => UI.resetAll(),
-        () => UI.startChallenge(challenges[0].id), () => UI.startTactics('reserve')
+        () => UI.startChallenge(challenges[0].id), () => UI.startTactics('reserve'), () => UI.autoplay('rush')
     ]) {
         UI.startTerrain();
+        UI.selectCommand('red', 'cavalry', 'flank_archers');
         reset();
         assert.equal(UI.battleOptions.terrain, 'flat');
+        assert.deepEqual(snapshot(UI.battleOptions.cavalryOrders), { red: 'auto', blue: 'auto' });
         assert.equal(scene.terrain, 'flat');
         if (['challenge', 'tactics'].includes(UI.mode)) {
             assert.equal(el('terrain-ready').hidden, true);
             assert.equal(el('terrain-result').hidden, true);
+            assert.equal(el('commands-ready').hidden, true);
+            assert.equal(el('commands-result').hidden, true);
             UI.selectTerrain('red_hill');
+            UI.selectCommand('red', 'cavalry', 'direct');
             assert.equal(UI.battleOptions.terrain, 'flat');
+            assert.equal(UI.cavalryOrder('red'), 'auto');
         }
     }
     UI.resetAll();
@@ -244,8 +257,107 @@ test('terrain code loads before consumers, but reading UI presets does not requi
     const terrainScript = page.indexOf('src="js/terrain.js');
     assert.ok(terrainScript >= 0);
     for (const file of ['units', 'game', 'ui']) assert.ok(page.indexOf('src="js/' + file + '.js') > terrainScript);
+    assert.ok(page.indexOf('src="js/inspection.js') > page.indexOf('src="js/units.js'));
+    assert.ok(page.indexOf('src="js/inspection.js') < page.indexOf('src="js/game.js'));
     const presets = vm.runInNewContext(fs.readFileSync(path.join(root, 'js/ui.js'), 'utf8') + '\nPRESETS;');
     assert.equal(presets.balance.config.infantry, 150);
+});
+
+test('ready controls independently change either team, preserve armies, and pass copied cavalry options to the engine', () => {
+    const { UI, scene, el } = setup({ query: '?terrain=blue_hill' });
+    const armies = snapshot(UI.configs);
+    const choose = (team, kind, value) => {
+        const control = el(`ready-${team}-${kind}`);
+        control.value = value;
+        control.onchange();
+    };
+    choose('red', 'cavalry', 'flank_archers');
+    choose('blue', 'cavalry', 'direct');
+    choose('red', 'army', 'hold_ground');
+    assert.equal(UI.phase, 'ready');
+    assert.equal(scene.starts, 0);
+    assert.deepEqual(snapshot(UI.configs), armies);
+    assert.deepEqual(snapshot(UI.orders), { red: 'hold_ground', blue: 'hold_ground' });
+    assert.deepEqual(snapshot(UI.battleOptions.cavalryOrders), { red: 'flank_archers', blue: 'direct' });
+    assert.deepEqual(scene.deployments.at(-1)[5].cavalryOrders, { red: 'flank_archers', blue: 'direct' });
+    assert.match(el('ready-red-command-description').textContent, /侧翼|绕/);
+    assert.match(el('ready-red-command-description').textContent, /优先于守位.*其他兵种继续守位/);
+    assert.match(el('army-summary').innerHTML, /侧翼袭弓/);
+    assert.match(el('army-summary').innerHTML, /正面强冲/);
+});
+
+test('buying cavalry commands survive army edits, map changes and rematches', () => {
+    const { UI, scene, el } = setup({ query: '?terrain=red_hill' });
+    for (const team of ['red', 'blue']) {
+        UI.editArmy(team);
+        assert.equal(el('cavalry-options').hidden, false);
+        const button = el('cavalry-order-row').children.find(child => child.textContent === '侧翼袭弓');
+        button.onclick();
+        assert.equal(UI.cavalryOrder(team), 'flank_archers');
+        assert.match(el('cavalry-description').textContent, /侧翼/);
+        UI.changeCount(team, 'cavalry', 1);
+        UI.lockTeam();
+        assert.equal(UI.phase, 'ready');
+    }
+    UI.selectTerrain('flat');
+    finishBattle(UI);
+    UI.rematch();
+    assert.deepEqual(snapshot(UI.battleOptions.cavalryOrders), { red: 'flank_archers', blue: 'flank_archers' });
+    assert.deepEqual(scene.deployments.at(-1)[5].cavalryOrders, { red: 'flank_archers', blue: 'flank_archers' });
+});
+
+test('countdown, battle, wrong-team buying and invalid inputs cannot change commands', () => {
+    const { UI, scene, el } = setup({ query: '?terrain=blue_hill' });
+    const orders = snapshot(UI.orders);
+    const cavalry = snapshot(UI.battleOptions.cavalryOrders);
+    for (const [team, kind, value] of [['other', 'army', 'hold_ground'], ['red', 'other', 'direct'], ['red', 'cavalry', 'unknown']]) {
+        UI.selectCommand(team, kind, value);
+    }
+    UI.editArmy('red');
+    UI.selectCommand('blue', 'cavalry', 'direct');
+    UI.lockTeam();
+    UI.startBattle();
+    assert.equal(el('ready-red-cavalry').disabled, true);
+    assert.equal(el('result-blue-army').disabled, true);
+    assert.equal(el('commands-hud').hidden, false);
+    assert.match(el('commands-hud').textContent, /红方.*蓝方.*高地守位/);
+    UI.selectCommand('red', 'army', 'hold_ground');
+    scene.finishCountdown();
+    UI.selectCommand('red', 'cavalry', 'direct');
+    UI.phase = 'ready'; UI.countdown = true;
+    UI.selectCommand('blue', 'cavalry', 'flank_archers');
+    assert.deepEqual(snapshot(UI.orders), orders);
+    assert.deepEqual(snapshot(UI.battleOptions.cavalryOrders), cavalry);
+});
+
+test('result controls show the played commands and changing one returns to ready without autoplay', () => {
+    const { UI, scene, el } = setup({ query: '?terrain=blue_hill' });
+    UI.selectCommand('red', 'cavalry', 'flank_archers');
+    finishBattle(UI);
+    assert.equal(el('commands-hud').hidden, true);
+    assert.equal(el('commands-result').hidden, false);
+    assert.match(el('commands-report').textContent, /侧翼袭弓/);
+    const starts = scene.starts;
+    el('result-red-cavalry').value = 'direct';
+    el('result-red-cavalry').onchange();
+    assert.equal(UI.phase, 'ready');
+    assert.equal(scene.starts, starts);
+    assert.equal(UI.cavalryOrder('red'), 'direct');
+    assert.equal(scene.terrain, 'blue_hill');
+});
+
+test('guard accepts any nonempty army and cavalry controls explain when the army has no cavalry', () => {
+    const { UI, el } = setup({ query: '?terrain=red_hill' });
+    assert.deepEqual(snapshot(UI.orders), { red: 'hold_ground', blue: 'advance' });
+    UI.configs.red = { archer: 5 };
+    UI.deployArmies();
+    assert.equal(UI.orderAvailability('red').effective, 'hold_ground');
+    assert.equal(el('ready-red-cavalry').disabled, true);
+    assert.match(el('ready-red-command-description').textContent, /暂无骑兵/);
+    UI.editArmy('red');
+    UI.clearArmy();
+    assert.equal(UI.orderAvailability('red').effective, 'advance');
+    assert.match(el('order-description').textContent, /暂无士兵/);
 });
 
 test('zero first-contact time renders a valid time while an absent event renders no contact', () => {

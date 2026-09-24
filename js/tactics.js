@@ -1,6 +1,6 @@
 // 战术只在明确选择时启用；所有指令共用 CombatRules 的接触与命中规则。
 // 阵位、路线与命中都使用模拟坐标/时钟，画面与音效不参与胜负。
-const TACTIC_LABELS = { advance: '自由接敌', assault: '正面强攻', flank: '单翼迂回', hold: '枪阵守位' };
+const TACTIC_LABELS = { advance: '自由接敌', assault: '正面强攻', flank: '单翼迂回', hold: '枪阵守位', hold_ground: '高地守位' };
 
 class TacticsSystem {
     constructor(scene, orders) {
@@ -8,13 +8,15 @@ class TacticsSystem {
         this.orders = { red: orders.red || 'advance', blue: orders.blue || 'advance' };
         this.formations = {};
         this.groups = {};
+        this.groundGuards = {};
         this.metrics = { thrusts: 0, blocked: 0, deflections: 0, replacements: 0 };
         // 先布置防阵，再按真实边界规划进攻路线。
         for (const team of ['red', 'blue']) {
             if (this.orders[team] === 'hold') this.deployGuards(team);
+            if (this.orders[team] === 'hold_ground') this.deployGroundGuards(team);
         }
         for (const team of ['red', 'blue']) {
-            if (['assault', 'flank'].includes(this.orders[team]) || this.scene.battleOptions?.reserves?.[team] > 0) {
+            if (this.orders[team] !== 'hold_ground' && (['assault', 'flank'].includes(this.orders[team]) || this.scene.battleOptions?.reserves?.[team] > 0)) {
                 this.deployAttackers(team);
             }
         }
@@ -26,6 +28,114 @@ class TacticsSystem {
 
     place(unit, gx, gy) {
         Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, velX: 0, velY: 0 });
+    }
+
+    deployGroundGuards(team) {
+        const members = this.scene.units.filter(unit => unit.team === team);
+        if (!members.length) return;
+        const terrain = this.scene.battleOptions.terrain;
+        const hill = terrain === `${team}_hill` ? Terrain.maps[terrain] : null;
+        // 只占己方高地；平地和敌方高地仍守己方出发区，不跨场抢占敌人的山顶。
+        const cx = hill?.cx ?? (team === 'red' ? 20 : 50), cy = hill?.cy ?? GRID_H / 2;
+        const f = this.forward(team);
+        const front = members.filter(unit => unit.type === 'pikeman').concat(members.filter(unit => unit.type === 'infantry'));
+        const archers = members.filter(unit => unit.type === 'archer');
+        const cavalry = members.filter(unit => unit.type === 'cavalry');
+        const placements = [];
+        const assign = (unit, gx, gy, radius) => placements.push({ unit, gx, gy, radius });
+        const frontCols = Math.max(1, Math.ceil(Math.sqrt(front.length * 1.8)));
+        front.forEach((unit, index) => assign(unit, cx + f * (5.5 - Math.floor(index / frontCols) * 0.88),
+            cy + (index % frontCols - (Math.min(front.length, frontCols) - 1) / 2) * 0.88, 4));
+        const archerCols = Math.max(1, Math.ceil(Math.sqrt(archers.length * 1.5)));
+        const frontRear = front.length ? 5.5 - (Math.ceil(front.length / frontCols) - 1) * 0.88 : Infinity;
+        const archerFront = Math.min(-0.6, frontRear - 1.2);
+        archers.forEach((unit, index) => assign(unit, cx + f * (archerFront - Math.floor(index / archerCols) * 0.86),
+            cy + (index % archerCols - (Math.min(archers.length, archerCols) - 1) / 2) * 0.86, 1.5));
+        const cavalryCols = Math.max(4, Math.ceil(Math.sqrt(Math.ceil(cavalry.length / 2))));
+        const cavalryWing = Math.max(6, (Math.min(front.length, frontCols) - 1) * 0.44 + 1.2,
+            (Math.min(archers.length, archerCols) - 1) * 0.43 + 1.2);
+        cavalry.forEach((unit, index) => {
+            const wing = index % 2 ? 1 : -1, position = Math.floor(index / 2);
+            assign(unit, cx - f * (2.8 + Math.floor(position / cavalryCols) * 1.08), cy + wing * (cavalryWing + position % cavalryCols * 1.08), 6);
+        });
+        // 整体平移入界，不能逐兵 clamp 把后排压到同一个锚点。
+        const shift = (values, limit) => {
+            const low = Math.min(...values), high = Math.max(...values);
+            return low < 2 ? 2 - low : high > limit - 2 ? limit - 2 - high : 0;
+        };
+        const shiftX = shift(placements.map(point => point.gx), GRID_W);
+        const shiftY = shift(placements.map(point => point.gy), GRID_H);
+        for (const { unit, gx, gy, radius } of placements) {
+            this.place(unit, gx + shiftX, gy + shiftY);
+            Object.assign(unit, { tacticalRole: 'ground_guard', guardAnchor: { gx: unit.gx, gy: unit.gy },
+                guardRadius: radius, groundGuardTarget: null, groundGuardReturning: false });
+        }
+        this.groundGuards[team] = { team, cx: cx + shiftX, cy: cy + shiftY, members, onHill: !!hill };
+    }
+
+    isGroundGuard(unit) {
+        return unit.tacticalRole === 'ground_guard' && (unit.type !== 'cavalry' ||
+            (this.scene.battleOptions.cavalryOrders?.[unit.team] || 'auto') === 'auto');
+    }
+
+    groundThreat(unit) {
+        let target = null, nearest = Infinity;
+        const consider = other => {
+            if (other.team === unit.team || !CombatRules.canBeHit(other)) return;
+            const distance = dist(unit, other);
+            if (dist(unit.guardAnchor, other) > unit.guardRadius && distance > unit.typeData.range) return;
+            if (distance < nearest - 1e-9 || (Math.abs(distance - nearest) <= 1e-9 && other.id < target.id)) {
+                nearest = distance; target = other;
+            }
+        };
+        this.scene.forEachNear(unit.guardAnchor.gx, unit.guardAnchor.gy, unit.guardRadius, consider);
+        this.scene.forEachNear(unit.gx, unit.gy, unit.typeData.range, consider);
+        return target;
+    }
+
+    boundGroundMove(unit) {
+        if (!this.scene.planningStep) return;
+        const anchor = unit.guardAnchor;
+        const dx = unit.gx + unit.moveX - anchor.gx, dy = unit.gy + unit.moveY - anchor.gy;
+        const offset = Math.hypot(dx, dy);
+        if (offset <= unit.guardRadius) return;
+        // 只约束主动移动；击退和身体挤压仍然真实生效，超界后下一步自行走回。
+        unit.moveX = anchor.gx + dx / offset * unit.guardRadius - unit.gx;
+        unit.moveY = anchor.gy + dy / offset * unit.guardRadius - unit.gy;
+        if (unit.type === 'cavalry') this.scene.cavalryAI.enterMelee(unit);
+    }
+
+    updateGroundGuard(unit, now, dt) {
+        if (!this.isGroundGuard(unit)) return false;
+        const anchor = unit.guardAnchor, fromPost = dist(unit, anchor);
+        unit.groundGuardReturning = false;
+        if (unit.typeData.ranged) {
+            this.scene.updateNormalUnit(unit, now, dt, anchor);
+            if (fromPost <= unit.guardRadius) this.boundGroundMove(unit);
+            return true;
+        }
+        const target = this.groundThreat(unit);
+        unit.groundGuardTarget = target;
+        unit.target = target;
+        if (fromPost > unit.guardRadius + 0.02 || !target) {
+            if (unit.type === 'cavalry') {
+                if (!target && fromPost <= 0.2) this.scene.cavalryAI.beginCharge(unit);
+                else this.scene.cavalryAI.enterMelee(unit);
+            }
+            if (target && dist(unit, target) <= unit.typeData.range) this.attack(unit, target, now, unit.typeData.range);
+            if (fromPost > 0.2) {
+                unit.groundGuardReturning = true;
+                this.move(unit, anchor.gx, anchor.gy, unit.typeData.speed, dt);
+            }
+            return true;
+        }
+        if (unit.type === 'cavalry') {
+            if (!this.scene.cavalryAI.update(unit, now, dt)) this.fight(unit, target, now, dt, unit.typeData.range);
+        } else if (unit.type === 'pikeman' && unit.braceHold && dist(unit, target) > unit.typeData.range) {
+            // 与自由接敌共用架枪迎击，不让守位命令放下已备好的长枪。
+        } else this.fight(unit, target, now, dt, unit.typeData.range);
+        this.boundGroundMove(unit);
+        return true;
     }
 
     deployGuards(team) {
@@ -619,13 +729,15 @@ class TacticsSystem {
     summary() {
         const result = {};
         for (const team of ['red', 'blue']) {
-            const formation = this.formations[team], group = this.groups[team];
+            const formation = this.formations[team], group = this.groups[team], ground = this.groundGuards[team];
             const guards = formation?.members.filter(u => this.active(u)) || [];
             const engaging = guards.filter(u => u.guardEngaging).length;
             const repositioning = guards.filter(u => u.moving).length;
             result[team] = {
                 order: this.orders[team], label: TACTIC_LABELS[this.orders[team]],
-                stage: group?.phase || (formation ? (engaging ? '近敌转向 · 局部迎击' :
+                stage: ground ? (ground.members.some(unit => this.active(unit) && unit.groundGuardReturning) ? '威胁退去 · 返回守区' :
+                    ground.members.some(unit => this.active(unit) && unit.groundGuardTarget) ? '近敌入区 · 局部反击' :
+                    ground.onHill ? '弓守山顶 · 剑枪护坡' : '守住出发区 · 等待接敌') : group?.phase || (formation ? (engaging ? '近敌转向 · 局部迎击' :
                     formation.breaches ? '阵线受压 · 就近补位' : repositioning ? '威胁已退 · 归位重架' :
                     formation.sparse ? '小队守位 · 阵线稀疏' : '四面守位 · 等待接敌') : '自由接敌'),
                 main: group ? group.main.filter(u => this.active(u)).length :
@@ -648,7 +760,7 @@ class TacticsSystem {
         const active = this.scene.units.filter(unit => this.active(unit));
         const damage = this.scene.battleStats.red.damage + this.scene.battleStats.blue.damage;
         const waiting = active.some(u => u.team === 'red') && active.some(u => u.team === 'blue') &&
-            active.every(u => u.tacticalRole === 'guard' && !u.moving) &&
+            active.every(u => (u.tacticalRole === 'guard' || this.isGroundGuard(u)) && !u.moving) &&
             !this.scene.arrows.length && !this.scene.battleQueue.length && damage === this.lastDamage;
         this.lastDamage = damage;
         if (!waiting) this.stalemateSince = null;
@@ -657,6 +769,17 @@ class TacticsSystem {
     }
 
     breakStalemate() {
+        for (const [team, ground] of Object.entries(this.groundGuards)) {
+            for (const unit of ground.members) {
+                delete unit.tacticalRole;
+                delete unit.guardAnchor;
+                delete unit.guardRadius;
+                delete unit.groundGuardTarget;
+                delete unit.groundGuardReturning;
+            }
+            delete this.groundGuards[team];
+            this.orders[team] = 'advance';
+        }
         for (const team of Object.keys(this.formations)) {
             for (const unit of this.formations[team].members) {
                 // 溃兵也解除旧阵位，重整后才能与全队一样继续推进。

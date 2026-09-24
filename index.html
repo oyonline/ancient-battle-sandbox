@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>帝国亲子沙盒 · 统帅试炼</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E🏰%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="css/style.css?v=20260924-terrain1">
+    <link rel="stylesheet" href="css/style.css?v=20260924-terrain2">
 </head>
 <body>
     <!-- 战场：铺满整个视口 -->
@@ -26,10 +26,13 @@
         <span id="performance-hud" aria-live="off" title="帧率与存活士兵数"></span>
     </header>
 
+    <aside id="unit-inspector" class="unit-inspector" aria-label="士兵地形与指令" aria-live="off" hidden></aside>
+
     <!-- 底部悬浮控制条（战斗中） -->
     <div id="controlbar" hidden>
         <div id="morale-cue" class="morale-cue" role="status" hidden></div>
         <div id="deathmatch-hud-rule" class="deathmatch-rule" hidden>死斗：溃兵可重整，直到一方全灭</div>
+        <div id="commands-hud" class="commands-hud" aria-label="本局双方指令" hidden></div>
         <div id="tactics-hud" class="tactics-hud" aria-label="两军战术与可战兵力" aria-live="off" hidden>
             <div class="tactics-team red" id="tactics-red">
                 <div class="tactics-heading"><b id="tactics-red-label">红方战术</b><span id="tactics-red-stage"></span></div>
@@ -85,7 +88,7 @@
                         <span class="campaign-progress" id="campaign-progress">0 / 5 已通过</span>
                     </div>
                     <div class="terrain-entry">
-                        <div><div class="eyebrow">高地演练 · 新战场</div><h3>同一支军队，换个坡度会怎样？</h3><p>双方各 76 人，四兵种完全相同。先让蓝方据高，再换平地、红方高地，观察仰攻与俯攻。</p></div>
+                        <div><div class="eyebrow">高地演练 · 守位与骑兵指令</div><h3>守住高地，还是绕后袭弓？</h3><p>双方各 76 人，四兵种完全相同。默认蓝方据高守位，红方进攻；可切换军令、骑兵打法和地图，观察仰攻与俯攻。</p></div>
                         <button class="secondary-btn" id="btn-terrain">⛰ 进入高地演练 →</button>
                     </div>
                     <div class="tactics-entry">
@@ -135,6 +138,10 @@
                         <div class="f-row"><span class="f-label">战术</span><div id="order-row"></div></div>
                         <p id="order-description" class="order-description"></p>
                     </div>
+                    <div id="cavalry-options" class="order-options" hidden>
+                        <div class="f-row"><span class="f-label">骑兵</span><div id="cavalry-order-row"></div></div>
+                        <p id="cavalry-description" class="order-description"></p>
+                    </div>
 
                     <button class="big-btn red" id="btn-lock">🔒 配好了，换蓝方队长！</button>
                     <div id="buy-message" class="hint-small" role="status" aria-live="polite">按住 ＋ 连续加兵 · 挑战中预设会按预算缩减</div>
@@ -152,7 +159,15 @@
                         </div>
                         <p id="terrain-ready-description"></p>
                         <p class="terrain-rules">上坡减速 · 下坡助冲 · 高差影响远射。坡顶恢复正常移速；高地不是永久攻击加成，优势随双方位置变化。</p>
-                        <small>换图保留阵容与战术；开战及倒计时中不能换图。可收起面板查看整座山丘。</small>
+                        <small>换图保留阵容与指令，不会自动交换守方；请在下方选择谁进攻、谁守位。收起面板，点击士兵查看坡度与高差。</small>
+                    </div>
+                    <div id="commands-ready" class="commands-panel" hidden>
+                        <b>⚑ 双方军令 · 切换后重新布阵，不自动开战</b>
+                        <div class="commands-grid">
+                            <div class="command-team red"><strong>🔴 红方</strong><label for="ready-red-army">全军战术</label><select id="ready-red-army"></select><label for="ready-red-cavalry">骑兵打法</label><select id="ready-red-cavalry"></select><p id="ready-red-command-description"></p></div>
+                            <div class="command-team blue"><strong>🔵 蓝方</strong><label for="ready-blue-army">全军战术</label><select id="ready-blue-army"></select><label for="ready-blue-cavalry">骑兵打法</label><select id="ready-blue-cavalry"></select><p id="ready-blue-command-description"></p></div>
+                        </div>
+                        <small>高地守位：弓兵守山顶，剑士、长枪兵护坡；无己方高地时守出发区。正面强冲 / 侧翼袭弓允许骑兵离开守区，其余兵种继续守位；自由突击在守位时只就近反击。</small>
                     </div>
                     <div id="army-summary"></div>
                     <div id="deathmatch-ready-rule" class="deathmatch-rule" hidden>死斗：溃兵可重整，直到一方全灭</div>
@@ -177,6 +192,7 @@
                     <div id="result-detail"></div>
                     <div id="result-metrics" class="result-metrics"></div>
                     <p id="terrain-report" class="terrain-report" hidden></p>
+                    <p id="commands-report" class="commands-report" hidden></p>
                     <div id="terrain-result" class="terrain-panel" hidden>
                         <b>⛰ 保留阵容，换张地图再试</b>
                         <div class="terrain-map-buttons" role="group" aria-label="选择下一局战场的地形">
@@ -186,6 +202,14 @@
                         </div>
                         <p id="terrain-result-description"></p>
                         <small>点击地图回到准备阶段，不会自动开战。交换双方只交换军队，丘陵位置不动。</small>
+                    </div>
+                    <div id="commands-result" class="commands-panel" hidden>
+                        <b>⚑ 换一种军令再试 · 更改后回到准备阶段</b>
+                        <div class="commands-grid">
+                            <div class="command-team red"><strong>🔴 红方</strong><label for="result-red-army">全军战术</label><select id="result-red-army"></select><label for="result-red-cavalry">骑兵打法</label><select id="result-red-cavalry"></select><p id="result-red-command-description"></p></div>
+                            <div class="command-team blue"><strong>🔵 蓝方</strong><label for="result-blue-army">全军战术</label><select id="result-blue-army"></select><label for="result-blue-cavalry">骑兵打法</label><select id="result-blue-cavalry"></select><p id="result-blue-command-description"></p></div>
+                        </div>
+                        <small>更改指令保留双方阵容与地图，不会自动开战。强冲 / 袭弓优先于骑兵守位，其他兵种不受影响。</small>
                     </div>
                     <div id="report-tables" class="report-tables"></div>
                     <p class="report-note">在场含当前溃逃；撤离者生还但已退出战场。曾溃逃、重整各按人数记录，同一士兵可能两项都有。</p>
@@ -211,13 +235,14 @@
     <script src="assets/manifest.js?v=20260923-death2"></script>
     <script src="js/phaser.min.js"></script>
     <script src="js/terrain.js?v=20260924-terrain1"></script>
-    <script src="js/units.js?v=20260924-terrain1"></script>
+    <script src="js/units.js?v=20260924-terrain2"></script>
     <script src="js/combat.js?v=20260923-reserve1"></script>
     <script src="js/morale.js?v=20260923-morale-flow1"></script>
-    <script src="js/tactics.js?v=20260923-morale-flow1"></script>
+    <script src="js/tactics.js?v=20260924-terrain2"></script>
     <script src="js/challenges.js?v=20260923-tactics1"></script>
-    <script src="js/game.js?v=20260924-terrain1"></script>
-    <script src="js/ui.js?v=20260924-terrain1"></script>
+    <script src="js/inspection.js?v=20260924-terrain2"></script>
+    <script src="js/game.js?v=20260924-terrain2"></script>
+    <script src="js/ui.js?v=20260924-terrain2"></script>
     <script>
         const game = new Phaser.Game({
             type: Phaser.AUTO,

@@ -93,11 +93,11 @@ test('deployment copies and clamps reserve options and an ordinary restart clear
     const scene = makeScene();
     const options = { deathmatch: true, reserves: { red: 50, blue: NaN } };
     scene.deployUnits({ infantry: 4 }, { pikeman: 4 }, 'custom', 'custom', {}, options);
-    assert.deepEqual(snapshot(scene.battleOptions), { deathmatch: true, reserves: { red: 3, blue: 0 }, terrain: 'flat' });
+    assert.deepEqual(snapshot(scene.battleOptions), { deathmatch: true, reserves: { red: 3, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } });
     options.reserves.red = 0;
     assert.equal(scene.battleOptions.reserves.red, 3, 'caller state must not mutate an ongoing battle');
     scene.deployUnits({ infantry: 4 }, { pikeman: 4 }, 'custom', 'custom');
-    assert.deepEqual(snapshot(scene.battleOptions), { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat' });
+    assert.deepEqual(snapshot(scene.battleOptions), { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } });
     assert.equal(scene.tactics, null);
     assert.equal(scene.getBattleReport().deathmatch, false);
 });

@@ -239,6 +239,7 @@ class IsoBattleScene extends Phaser.Scene {
         this.airFX.add(this.bloodGfx);
 
         this.setupCamera();
+        if (typeof UnitInspector !== 'undefined') this.unitInspector = new UnitInspector(this);
 
         // FPS 放在顶栏下方的 DOM 层，不受战场镜头的缩放和平移影响。
         this.fpsHud = document.getElementById('performance-hud');
@@ -610,8 +611,10 @@ class IsoBattleScene extends Phaser.Scene {
 
     // ---------------- 部署与开战 ----------------
     resetBattleData() {
+        this.unitInspector?.reset();
         this.tactics = null;
-        this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat' };
+        this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat',
+            cavalryOrders: { red: 'auto', blue: 'auto' } };
         this.firstContactMs = null;
         if (this.tacticsGfx) this.tacticsGfx.clear();
         this.battleId = (this.battleId || 0) + 1;
@@ -718,6 +721,8 @@ class IsoBattleScene extends Phaser.Scene {
             blue: this.battleStats.blue.alive,
             durationMs: Math.round(this.simulationTime),
             terrain: this.battleOptions.terrain,
+            orders: { red: this.tactics?.orders.red || 'advance', blue: this.tactics?.orders.blue || 'advance' },
+            cavalryOrders: { ...this.battleOptions.cavalryOrders },
             firstContactMs: this.firstContactMs,
             teams,
             morale: this.getMoraleSummary(),
@@ -964,6 +969,8 @@ class IsoBattleScene extends Phaser.Scene {
         });
         this.battleOptions.deathmatch = options.deathmatch === true;
         for (const [team] of armies) {
+            const cavalryOrder = options.cavalryOrders?.[team];
+            this.battleOptions.cavalryOrders[team] = ['direct', 'flank_archers'].includes(cavalryOrder) ? cavalryOrder : 'auto';
             const count = this.units.filter(unit => unit.team === team && unit.type === 'infantry').length;
             const requested = options.reserves?.[team];
             this.battleOptions.reserves[team] = Number.isFinite(requested)
@@ -972,7 +979,8 @@ class IsoBattleScene extends Phaser.Scene {
         const effectiveOrders = {};
         for (const [team, config] of armies) {
             const order = orders[team];
-            effectiveOrders[team] = order === 'hold' && config.pikeman > 0 ? order :
+            effectiveOrders[team] = order === 'hold_ground' && Object.values(config).some(count => count > 0) ? order :
+                order === 'hold' && config.pikeman > 0 ? order :
                 ['assault', 'flank'].includes(order) && config.infantry > 0 ? order : 'advance';
         }
         if (Object.values(effectiveOrders).some(order => order !== 'advance') ||
@@ -996,6 +1004,23 @@ class IsoBattleScene extends Phaser.Scene {
         if (!this.tacticsGfx) this.tacticsGfx = this.add.graphics().setDepth(12000);
         const g = this.tacticsGfx;
         g.clear();
+        for (const ground of Object.values(this.tactics.groundGuards)) {
+            if (!ground.members.some(unit => this.tactics.active(unit))) continue;
+            // 一条低透明度守区边界；不为每位士兵叠加追击圈。
+            const points = Array.from({ length: 25 }, (_, index) => {
+                const angle = index / 24 * Math.PI * 2;
+                return this.groundPoint(ground.cx + Math.cos(angle) * 8, ground.cy + Math.sin(angle) * 10);
+            });
+            g.lineStyle(2, ground.team === 'blue' ? 0x6abaff : 0xff8b77, 0.25);
+            points.forEach((point, index) => {
+                if (index) g.lineBetween(points[index - 1].x, points[index - 1].y, point.x, point.y);
+            });
+            const flag = this.groundPoint(ground.cx, ground.cy);
+            g.lineStyle(2, ground.team === 'blue' ? 0x6abaff : 0xff8b77, 0.7);
+            g.lineBetween(flag.x, flag.y, flag.x, flag.y - 35);
+            g.lineBetween(flag.x, flag.y - 35, flag.x + 16, flag.y - 29);
+            g.lineBetween(flag.x + 16, flag.y - 29, flag.x, flag.y - 23);
+        }
         for (const formation of Object.values(this.tactics.formations)) {
             const h = formation.half + 0.42;
             const corners = [[-h, -h], [h, -h], [h, h], [-h, h]].map(([x, y]) => this.groundPoint(formation.cx + x, formation.cy + y));
@@ -1290,6 +1315,7 @@ class IsoBattleScene extends Phaser.Scene {
             if (this.resolvingOutcome) continue;
             if (unit.moraleState === 'routing') { this.updateRoutedUnit(unit, dt); continue; }
             if (this.updateFallingBackUnit(unit, now, dt)) continue;
+            if (this.tactics?.updateGroundGuard(unit, now, dt)) continue;
             if (unit.type === 'cavalry') {
                 if (this.cavalryAI.update(unit, now, dt)) continue;
             }
@@ -1418,10 +1444,16 @@ class IsoBattleScene extends Phaser.Scene {
         return 'assets/units/anim/' + unit.team + '_' + unit.type + direction + '_' + clip;
     }
 
-    updateNormalUnit(unit, now, dt) {
+    updateNormalUnit(unit, now, dt, guardAnchor = null) {
         if (unit.dead || unit.withdrawn || unit.moraleState === 'routing') return;
         const nearest = this.nearestEnemy(unit);
-        if (!nearest) return;
+        if (!nearest) {
+            if (guardAnchor && dist(unit, guardAnchor) > 0.2) {
+                unit.groundGuardReturning = true;
+                moveToward(unit, guardAnchor.gx, guardAnchor.gy, unit.typeData.speed, dt);
+            }
+            return;
+        }
         const range = unit.typeData.range;
         const minD = dist(unit, nearest);
 
@@ -1429,7 +1461,18 @@ class IsoBattleScene extends Phaser.Scene {
             const terrain = this.battleOptions.terrain;
             const targetRange = Terrain.rangedRange(terrain, unit, nearest);
             // 弓箭手：射程内集火同一残血目标（血量主导、id 决胜），保持距离放风筝
-            if (minD > targetRange) {
+            if (guardAnchor) {
+                const fromPost = dist(unit, guardAnchor);
+                unit.groundGuardTarget = minD <= targetRange ? nearest : null;
+                if (fromPost > unit.guardRadius || (minD >= 3.2 && fromPost > 0.2)) {
+                    unit.groundGuardReturning = true;
+                    moveToward(unit, guardAnchor.gx, guardAnchor.gy, unit.typeData.speed * 0.92, dt);
+                } else if (minD < 3.2) {
+                    const angle = Math.atan2(unit.gy - nearest.gy, unit.gx - nearest.gx);
+                    moveToward(unit, unit.gx + Math.cos(angle) * 3, unit.gy + Math.sin(angle) * 3,
+                        unit.typeData.speed * 0.92, dt);
+                }
+            } else if (minD > targetRange) {
                 moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed * 0.55, dt);
             } else if (minD < 3.2) {
                 // 敌人逼近：边退边让队友输出
@@ -1962,6 +2005,7 @@ class IsoBattleScene extends Phaser.Scene {
     // ---------------- 渲染同步 ----------------
     syncRender(time) {
         this.drawTactics();
+        this.unitInspector?.update();
         this.hpGfx.clear();
         const view = this._view;   // 战斗中每帧更新；部署阶段为空 = 全量同步
         const units = this.units;
