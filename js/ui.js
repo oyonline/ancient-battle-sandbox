@@ -252,14 +252,14 @@ const UI = {
     terrainRules(terrain) {
         if (terrain === 'forest') return '树林可穿行：骑兵地表移速 55%，其他兵种 85%。入林打断冲锋和穿透，林中不能蓄力；出林后重新助跑。道路不受林地限速。';
         if (terrain === 'river') return '河上有中央桥与两座侧桥；桥外水域不可走，推挤和击退也不能穿水。近战不能隔河打人，箭矢可以跨河；可观察哪座桥更拥堵。';
-        if (['red_pass', 'blue_pass'].includes(terrain)) return '中央窄坡口与两翼侧路通向弓兵平台；岩壁不可穿越，也不能隔墙近战。守位骑兵会支援附近存活弓兵，强冲 / 袭弓仍优先于护弓。';
+        if (Terrain.isNaturalSlope(terrain)) return '整片草坡都可通行，没有固定入口。步兵沿宽正面仰攻，弓兵据山脊俯射；上坡慢、下坡快。骑兵可选择正面强冲或沿侧坡绕后，守位自由骑兵会就近护弓。';
         return '上坡减速 · 下坡助冲 · 高差影响远射。坡顶恢复正常移速；高地不是永久攻击加成，优势随双方位置变化。';
     },
 
     guardDescription(team) {
         const terrain = Terrain.normalize(this.battleOptions.terrain);
         if (Terrain.defenseLayout(terrain, team)) {
-            return '弓兵守高地平台，剑士和长枪兵分守中央坡口与两翼侧路；自由突击的守位骑兵会就近支援存活弓兵，不会无限追敌。';
+            return '弓兵守山脊后列，剑士和长枪兵沿坡面组成连续宽正面；自由突击的守位骑兵会就近支援存活弓兵，不会无限追敌。';
         }
         return UI_TACTIC_OPTIONS.hold_ground.description;
     },

@@ -88,8 +88,8 @@
                         <span class="campaign-progress" id="campaign-progress">0 / 5 已通过</span>
                     </div>
                     <div class="terrain-entry">
-                        <div><div class="eyebrow">地形演练 · 坡口 / 树林 / 河桥</div><h3>抢坡口、绕树林，还是争桥头？</h3><p>双方各 76 人，四兵种完全相同。坡口高地默认据高一方守位；树林、河桥默认双方推进。换地形，也换一种打法。</p></div>
-                        <div class="terrain-entry-actions"><button class="secondary-btn" id="btn-terrain">⛰ 蓝方坡口高地 →</button><button class="secondary-btn" data-terrain-entry="red_pass">⛰ 红方坡口高地</button><button class="secondary-btn" data-terrain-entry="forest">🌲 穿越林地</button><button class="secondary-btn" data-terrain-entry="river">🌉 三桥河谷</button></div>
+                        <div><div class="eyebrow">地形演练 · 自然坡地 / 树林 / 河桥</div><h3>沿坡仰攻、骑兵绕后，还是争桥头？</h3><p>双方各 76 人，四兵种完全相同。自然坡地整片可走，据高一方沿坡守位；树林、河桥默认双方推进。换地形，也换一种打法。</p></div>
+                        <div class="terrain-entry-actions"><button class="secondary-btn" id="btn-terrain">⛰ 蓝方自然坡地 →</button><button class="secondary-btn" data-terrain-entry="red_pass">⛰ 红方自然坡地</button><button class="secondary-btn" data-terrain-entry="forest">🌲 穿越林地</button><button class="secondary-btn" data-terrain-entry="river">🌉 三桥河谷</button></div>
                     </div>
                     <div class="tactics-entry">
                         <div class="tactics-entry-copy"><div class="eyebrow">战阵演练 · 新玩法</div><h3>再添五十预备，能否破阵？</h3><p>100 剑士发起进攻，50 剑士在后方接应、分批增援。收拢溃兵，重整后再次出击；也可切回 100 对 100 比较。</p></div>
@@ -156,8 +156,8 @@
                             <button class="secondary-btn" data-terrain="flat">平地</button>
                             <button class="secondary-btn" data-terrain="red_hill">红方高地</button>
                             <button class="secondary-btn" data-terrain="blue_hill">蓝方高地</button>
-                            <button class="secondary-btn" data-terrain="red_pass">红方坡口高地</button>
-                            <button class="secondary-btn" data-terrain="blue_pass">蓝方坡口高地</button>
+                            <button class="secondary-btn" data-terrain="red_pass">红方自然坡地</button>
+                            <button class="secondary-btn" data-terrain="blue_pass">蓝方自然坡地</button>
                             <button class="secondary-btn" data-terrain="forest">林地</button>
                             <button class="secondary-btn" data-terrain="river">三桥河谷</button>
                         </div>
@@ -203,8 +203,8 @@
                             <button class="secondary-btn" data-terrain="flat">平地</button>
                             <button class="secondary-btn" data-terrain="red_hill">红方高地</button>
                             <button class="secondary-btn" data-terrain="blue_hill">蓝方高地</button>
-                            <button class="secondary-btn" data-terrain="red_pass">红方坡口高地</button>
-                            <button class="secondary-btn" data-terrain="blue_pass">蓝方坡口高地</button>
+                            <button class="secondary-btn" data-terrain="red_pass">红方自然坡地</button>
+                            <button class="secondary-btn" data-terrain="blue_pass">蓝方自然坡地</button>
                             <button class="secondary-btn" data-terrain="forest">林地</button>
                             <button class="secondary-btn" data-terrain="river">三桥河谷</button>
                         </div>
@@ -243,16 +243,16 @@
 
     <script src="assets/manifest.js?v=20260923-death2"></script>
     <script src="js/phaser.min.js"></script>
-    <script src="js/terrain.js?v=20260924-terrain3"></script>
+    <script src="js/terrain.js?v=20260924-natural-slope"></script>
     <script src="js/navigation.js?v=20260924-terrain3"></script>
-    <script src="js/units.js?v=20260924-terrain3"></script>
+    <script src="js/units.js?v=20260924-natural-slope"></script>
     <script src="js/combat.js?v=20260924-terrain3"></script>
     <script src="js/morale.js?v=20260923-morale-flow1"></script>
-    <script src="js/tactics.js?v=20260924-terrain3"></script>
+    <script src="js/tactics.js?v=20260924-natural-slope"></script>
     <script src="js/challenges.js?v=20260923-tactics1"></script>
     <script src="js/inspection.js?v=20260924-terrain3"></script>
-    <script src="js/game.js?v=20260924-terrain3"></script>
-    <script src="js/ui.js?v=20260924-terrain3"></script>
+    <script src="js/game.js?v=20260924-natural-slope"></script>
+    <script src="js/ui.js?v=20260924-natural-slope"></script>
     <script>
         const game = new Phaser.Game({
             type: Phaser.AUTO,

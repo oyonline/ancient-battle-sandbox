@@ -12,13 +12,17 @@ function deploy(team = 'blue', config = army, cavalry = 'auto') {
 }
 const dist = (a, b) => Math.hypot(a.gx - b.gx, a.gy - b.gy);
 
-test('pass defenders use all three entrances, platform archers, and legal spaced cavalry posts', () => {
+test('natural-slope defenders form one broad contiguous front with ridge archers and spaced cavalry wings', () => {
     const scene = deploy(), layout = Terrain.defenseLayout('blue_pass', 'blue');
     const defenders = scene.units.filter(u => u.team === 'blue');
     const front = defenders.filter(u => ['infantry', 'pikeman'].includes(u.type));
-    for (const post of layout.frontPosts) assert.ok(front.some(u => dist(u, post) < 2));
+    const firstRow = front.filter(u => Math.abs(u.gx - layout.frontLine.gx) < 1e-9).sort((a, b) => a.gy - b.gy);
+    assert.equal(firstRow.length, 24);
+    assert.ok(firstRow.at(-1).gy - firstRow[0].gy > 19);
+    for (let i = 1; i < firstRow.length; i++) assert.ok(Math.abs(firstRow[i].gy - firstRow[i - 1].gy - 0.86) < 1e-9);
+    assert.equal(new Set(front.map(u => u.gx)).size, 2);
     for (const archer of defenders.filter(u => u.type === 'archer')) {
-        assert.ok(Terrain.height('blue_pass', archer.gx, archer.gy) > 2.99);
+        assert.ok(Terrain.height('blue_pass', archer.gx, archer.gy) > 3.8);
         assert.ok(archer.gx >= layout.archerRect.x1 && archer.gx <= layout.archerRect.x2);
     }
     for (const cavalry of defenders.filter(u => u.type === 'cavalry')) assert.equal(cavalry.protectArchers, true);
@@ -71,13 +75,13 @@ test('pass support is bounded, returns to post after threats leave, and is absen
     assert.ok(scene.units.filter(u => u.type === 'cavalry').every(u => !u.protectArchers));
 });
 
-test('legacy 150-pike hold formations translate as a whole outside either pass wall', () => {
+test('legacy 150-pike hold formations retain their rigid slots on unobstructed natural slopes', () => {
     const scenes = ['red', 'blue'].map(team => {
         const scene = makeScene();
         scene.deployUnits({ pikeman: 150 }, { pikeman: 150 }, 'custom', 'custom', { [team]: 'hold' }, { terrain: `${team}_pass` });
         const formation = scene.tactics.formations[team];
         assert.ok(formation);
-        assert.notEqual(formation.cx, team === 'red' ? 22 : 48, 'blocked square is moved as one rigid formation');
+        assert.equal(formation.cx, team === 'red' ? 22 : 48, 'the natural slope does not invent an invisible wall');
         for (const slot of formation.slots) {
             if (!slot.unit) continue;
             assert.ok(Terrain.walkable(`${team}_pass`, slot.gx, slot.gy));

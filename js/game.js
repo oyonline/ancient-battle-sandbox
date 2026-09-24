@@ -305,6 +305,68 @@ class IsoBattleScene extends Phaser.Scene {
             .map(([dx, dy]) => this.groundPoint(gx + dx, gy + dy));
     }
 
+    groundColor(gx, gy, variation = 0.5) {
+        const natural = Terrain.isNaturalSlope(this.battleOptions.terrain);
+        const dry = this.terNoise(gx * 0.16, gy * 0.16) * 0.62;
+        const dirt = Math.max(0, (this.terNoise(gx * 0.42 + 37, gy * 0.42 + 91) - 0.72) / 0.28) * 0.85;
+        const elevation = this.terrainHeight(gx, gy);
+        let r = 98 + 42 * dry, g = 150 - 6 * dry, b = 62 + 18 * dry;
+        r += (152 - r) * dirt; g += (124 - g) * dirt; b += (84 - b) * dirt;
+        const dx = this.terrainHeight(gx + 0.5, gy) - this.terrainHeight(gx - 0.5, gy);
+        const dy = this.terrainHeight(gx, gy + 0.5) - this.terrainHeight(gx, gy - 0.5);
+        const light = natural ? clamp(0.98 + (variation - 0.5) * 0.035 + dx * 0.8 + dy * 0.55, 0.62, 1.3)
+            : clamp(0.9 + variation * 0.16 + dx * 0.4 + dy * 0.25, 0.72, 1.25);
+        r += elevation * (natural ? 3 : 5); b += elevation * 2;
+        if (natural) g += elevation * 2;
+        return [r, g, b].map(value => Math.round(value * light));
+    }
+
+    drawNaturalRelief(g) {
+        // 半格细分坡面，消除整格明暗台阶；所有顶点仍从真实高度采样。
+        const key = this.battleOptions.terrain;
+        for (let x = 1; x < 69; x += 0.5) for (let y = 10; y < 60; y += 0.5) {
+            if (Terrain.height(key, x + 0.25, y + 0.25) <= 0.005) continue;
+            const rgb = this.groundColor(x + 0.25, y + 0.25);
+            g.fillStyle(Phaser.Display.Color.GetColor(...rgb), 1);
+            g.fillPoints([[x, y], [x + 0.5, y], [x + 0.5, y + 0.5], [x, y + 0.5]]
+                .map(([gx, gy]) => this.groundPoint(gx, gy)), true);
+        }
+    }
+
+    drawNaturalGroundTexture(g, hash) {
+        // 最后铺纹理，避免被细分坡面盖掉；只烘焙一次，不参与高度或通行计算。
+        for (let gy = 1; gy < GRID_H - 1; gy++) for (let gx = 1; gx < GRID_W - 1; gx++) {
+            const growth = this.terNoise(gx * 0.37 + 13, gy * 0.37 + 41);
+            for (let i = 0; i < 7; i++) {
+                const seed = gx * 7 + i;
+                const r = hash(seed, gy * 11);
+                const cx = gx - 0.44 + hash(seed + 157, gy * 13) * 0.88;
+                const cy = gy - 0.44 + hash(seed + 307, gy * 17) * 0.88;
+                const p = this.groundPoint(cx, cy);
+                // 碎叶和土粒提供细颗粒，草簇随大片疏密变化，不排成规则点阵。
+                if (i < 5) {
+                    g.fillStyle(r > 0.55 ? 0xc5bf86 : 0x354d28, 0.22 + r * 0.16);
+                    g.fillRect(p.x, p.y, 1.5 + r * 2.5, 1 + r * 1.2);
+                }
+                if (r < 0.12 + growth * 0.7) {
+                    const height = 3 + hash(seed + 509, gy) * 4;
+                    const lean = (hash(seed, gy + 701) - 0.5) * 5;
+                    g.lineStyle(1.4, 0x3b582b, 0.43);
+                    g.lineBetween(p.x - 2, p.y, p.x - 3 + lean, p.y - height * 0.65);
+                    g.lineBetween(p.x, p.y, p.x + lean, p.y - height);
+                    g.lineStyle(1.2, 0xb5bd71, 0.38);
+                    g.lineBetween(p.x + 1, p.y, p.x + 3 + lean, p.y - height * 0.8);
+                } else if (i === 0 && growth < 0.48 && r > 0.72) {
+                    const size = 0.14 + r * 0.15;
+                    g.fillStyle(0x998052, 0.2);
+                    g.fillPoints([[-size, 0], [-size * 0.4, -size], [size, -size * 0.3],
+                        [size * 0.55, size * 0.8], [-size * 0.5, size * 0.55]]
+                        .map(([dx, dy]) => this.groundPoint(cx + dx, cy + dy)), true);
+                }
+            }
+        }
+    }
+
     setTerrain(key) {
         this.battleOptions.terrain = Terrain.normalize(key);
         this.navigation?.reset(this.battleOptions.terrain, this.battleId);
@@ -323,6 +385,7 @@ class IsoBattleScene extends Phaser.Scene {
     // 70×70 = 4900 块、数万条图形指令：一次性烘焙成大贴图，之后每帧只画一张图
     drawGround() {
         const g = this.make.graphics({ add: false });
+        const naturalSlope = Terrain.isNaturalSlope(this.battleOptions.terrain);
         this.terNoise = this.terNoise || makeNoise(7);
         const isWater = (gx, gy) => gx === 0 || gy === 0 || gx === GRID_W - 1 || gy === GRID_H - 1;
         const hash = (a, b) => {
@@ -358,25 +421,8 @@ class IsoBattleScene extends Phaser.Scene {
                     continue;
                 }
 
-                // 草地：AOE2 式大尺度干湿色带（肥沃绿↔干草黄）+ 泥地块 + 明度噪点
-                const n1 = this.terNoise(gx * 0.16, gy * 0.16);           // 宏观：整片草地深浅
-                const n2 = this.terNoise(gx * 0.42 + 37, gy * 0.42 + 91); // 细节：散布泥地
-                const dryMix = n1 * 0.62;
-                let cr = 98 + (140 - 98) * dryMix;
-                let cg = 150 + (144 - 150) * dryMix;
-                let cb = 62 + (80 - 62) * dryMix;
-                const dirt = n2 > 0.72 ? (n2 - 0.72) / 0.28 : 0;
-                if (dirt > 0) {
-                    const k = dirt * 0.85;
-                    cr += (152 - cr) * k; cg += (124 - cg) * k; cb += (84 - cb) * k;
-                }
-                const elevation = this.terrainHeight(gx, gy);
-                // 明暗跟随坡面法向，平台略偏干草色；无需逐帧重绘地形。
-                const slopeLight = (this.terrainHeight(gx + 0.5, gy) - this.terrainHeight(gx - 0.5, gy)) * 0.4
-                    + (this.terrainHeight(gx, gy + 0.5) - this.terrainHeight(gx, gy - 0.5)) * 0.25;
-                cr += elevation * 5; cb += elevation * 2;
-                const lf = clamp(0.9 + r1 * 0.16 + slopeLight, 0.72, 1.25);
-                const base = [Math.round(cr * lf), Math.round(cg * lf), Math.round(cb * lf)];
+                // 明暗随真实坡面法向变化；颜色计算共用，细分时不会出现材质接缝。
+                const base = this.groundColor(gx, gy, r1);
                 const col = Phaser.Display.Color.GetColor(base[0], base[1], base[2]);
                 g.fillStyle(col, 1);
                 g.fillPoints(tile, true);
@@ -393,16 +439,27 @@ class IsoBattleScene extends Phaser.Scene {
                         Math.min(255, Math.round(base[2] * pf)));
                     const px = x + (hash(gx + i * 17, gy) - 0.5) * TW * 0.55;
                     const py = y + (hash(gx, gy + i * 17) - 0.5) * TH * 0.55;
-                    g.fillStyle(pc, 0.45);
-                    g.fillPoints(dia(px, py, 0.28 + pr * 0.22), true);
+                    g.fillStyle(pc, naturalSlope ? 0.16 : 0.45);
+                    if (naturalSlope) {
+                        // 草斑贴在弯曲地面上，不把平面的菱形贴片悬在坡上。
+                        const cx = gx + (hash(gx + i * 17, gy) - 0.5) * 0.6;
+                        const cy = gy + (hash(gx, gy + i * 17) - 0.5) * 0.6;
+                        const size = 0.14 + pr * 0.13;
+                        g.fillPoints([[-size, 0], [0, -size * 0.6], [size, 0], [0, size]]
+                            .map(([dx, dy]) => this.groundPoint(cx + dx, cy + dy)), true);
+                    } else g.fillPoints(dia(px, py, 0.28 + pr * 0.22), true);
                 }
 
                 // 草叶点簇
-                g.fillStyle(0x4c7a34, 0.55);
+                g.fillStyle(0x4c7a34, naturalSlope ? 0.24 : 0.55);
                 for (let i = 0; i < 3; i++) {
                     const sx = x + (hash(gx * 5 + i, gy * 11) - 0.5) * TW * 0.6;
                     const sy = y + (hash(gx * 11, gy * 5 + i) - 0.5) * TH * 0.6;
-                    g.fillCircle(sx, sy, 1.2 + hash(i, gx + gy * 2) * 1.4);
+                    if (naturalSlope) {
+                        const point = this.groundPoint(gx + (hash(gx * 5 + i, gy * 11) - 0.5) * 0.6,
+                            gy + (hash(gx * 11, gy * 5 + i) - 0.5) * 0.6);
+                        g.fillCircle(point.x, point.y, 1.2 + hash(i, gx + gy * 2) * 1.4);
+                    } else g.fillCircle(sx, sy, 1.2 + hash(i, gx + gy * 2) * 1.4);
                 }
 
                 // 海岸：贴水的草地加黄沙边
@@ -411,6 +468,8 @@ class IsoBattleScene extends Phaser.Scene {
                     g.fillPoints(dia(x, y, 0.96), true);
                 }
 
+                // 自然坡面不描每格棋盘边线；其余地图保持原有网格风格。
+                if (naturalSlope) continue;
                 // 立体倒角：上左边缘亮，下右边缘暗
                 g.lineStyle(2, 0xd7e8b0, 0.28);
                 g.lineBetween(tile[3].x, tile[3].y, tile[0].x, tile[0].y);
@@ -421,6 +480,10 @@ class IsoBattleScene extends Phaser.Scene {
             }
         }
 
+        if (naturalSlope) {
+            this.drawNaturalRelief(g);
+            this.drawNaturalGroundTexture(g, hash);
+        }
         if (Terrain.maps[this.battleOptions.terrain].rx) {
             // 连续等高线勾出坡形，不用高台立墙冒充可通行的缓坡。
             const { cx, cy, rx, ry } = Terrain.maps[this.battleOptions.terrain];
@@ -446,7 +509,7 @@ class IsoBattleScene extends Phaser.Scene {
         this.drawTerrainDecorations();
         this.terrainLabel?.destroy();
         this.terrainLabel = null;
-        if (this.battleOptions.terrain !== 'flat') {
+        if (this.battleOptions.terrain !== 'flat' && !naturalSlope) {
             const map = Terrain.maps[this.battleOptions.terrain];
             const labelPoint = this.groundPoint(map.cx || 35, (map.cy || 35) - 17);
             this.terrainLabel = this.add.text(labelPoint.x, labelPoint.y - 42,
@@ -537,7 +600,7 @@ class IsoBattleScene extends Phaser.Scene {
             }
         }
         const defense = geometry.defense;
-        if (defense) {
+        if (defense && !Terrain.isNaturalSlope(key)) {
             g.lineStyle(3, 0xf4e4a4, 0.75); g.strokePoints(polygon(defense.archerRect), true);
         }
     }
@@ -638,6 +701,7 @@ class IsoBattleScene extends Phaser.Scene {
     drawSpawnZones() {
         const g = this.spawnZoneGfx.setDepth(5).setAlpha(0.22);
         g.clear();
+        if (Terrain.isNaturalSlope(this.battleOptions.terrain)) return;
         const zone = (x0, x1, color) => {
             for (let gy = 1; gy < GRID_H - 1; gy++)
                 for (let gx = x0; gx < x1; gx++) {
@@ -1093,7 +1157,8 @@ class IsoBattleScene extends Phaser.Scene {
                 ['assault', 'flank'].includes(order) && config.infantry > 0 ? order : 'advance';
         }
         if (Object.values(effectiveOrders).some(order => order !== 'advance') ||
-            Object.values(this.battleOptions.reserves).some(count => count > 0)) {
+            Object.values(this.battleOptions.reserves).some(count => count > 0) ||
+            Terrain.isNaturalSlope(this.battleOptions.terrain)) {
             this.tactics = new TacticsSystem(this, effectiveOrders);
         }
         this.redAlive = this.units.filter(u => u.team === 'red').length;
@@ -1115,6 +1180,7 @@ class IsoBattleScene extends Phaser.Scene {
         g.clear();
         for (const ground of Object.values(this.tactics.groundGuards)) {
             if (!ground.members.some(unit => this.tactics.active(unit))) continue;
+            if (Terrain.isNaturalSlope(this.battleOptions.terrain)) continue;
             // 一条低透明度守区边界；不为每位士兵叠加追击圈。
             const points = Array.from({ length: 25 }, (_, index) => {
                 const angle = index / 24 * Math.PI * 2;

@@ -148,7 +148,7 @@ class CavalryAI {
     }
 
     update(unit, now, dt) {
-        if (this.command(unit) === 'flank_archers') {
+        if (this.command(unit) === 'flank_archers' && !unit.naturalFlankAbandoned) {
             if (unit.state === 'flank' || (unit.state === 'charge' &&
                 (!unit.flankCommitted || (unit.flankTarget ? !this.flankTargetAlive(unit.flankTarget) :
                     now >= (unit.flankRetryAt ?? 0))))) {
@@ -241,6 +241,7 @@ class CavalryAI {
     }
 
     flank(unit, now, dt) {
+        if (Terrain.isNaturalSlope(unit.scene.battleOptions.terrain)) return this.flankNaturalSlope(unit, now, dt);
         const army = this.flankSnapshot(unit, now);
         if (!this.flankTargetAlive(unit.flankTarget)) {
             let target = null, bestD = Infinity;
@@ -310,10 +311,104 @@ class CavalryAI {
         return true;
     }
 
+    naturalFlankRoute(unit, army, target, now) {
+        const origin = unit.naturalFlankOrigin ||= { gx: unit.gx, gy: unit.gy };
+        const x = value => unit.team === 'red' ? value : GRID_W - value;
+        const startX = x(unit.gx), frontX = x(unit.team === 'red' ? army.minX : army.maxX);
+        const backX = x(unit.team === 'red' ? army.maxX : army.minX);
+        // 相邻骑兵沿出生排深形成平行外圈；不使用全局 id，也不每次重选左右翼。
+        const lane = clamp(Math.abs(x(origin.gx) - 16) * 0.65, 0, 3);
+        const lower = clamp(army.minY - 3.4 - lane, 1.8, GRID_H - 1.8);
+        const upper = clamp(army.maxY + 3.4 + lane, 1.8, GRID_H - 1.8);
+        const via = y => Math.abs(y - origin.gy) + Math.abs(y - target.gy);
+        const side = via(lower) < via(upper) - 1e-9 || (Math.abs(via(lower) - via(upper)) <= 1e-9 &&
+            origin.gy <= (army.minY + army.maxY) / 2) ? -1 : 1;
+        const sideY = side < 0 ? lower : upper;
+        const turnX = Math.min(GRID_W - 12, Math.max(startX + 6, frontX - 4));
+        const rearX = Math.min(GRID_W - 5.2, Math.max(turnX + 6, backX + 4 + lane * 0.3));
+        if (turnX <= startX || rearX < backX + 2) return null;
+        const start = { gx: startX, gy: unit.gy }, sidePoint = { gx: turnX, gy: sideY };
+        const rear = { gx: rearX, gy: sideY }, end = { gx: rearX, gy: target.gy };
+        const points = [{ gx: unit.gx, gy: unit.gy }];
+        const curve = (a, b, c, d) => {
+            const count = Math.max(8, Math.ceil((dist(a, b) + dist(b, c) + dist(c, d)) / 0.45));
+            for (let i = 1; i <= count; i++) {
+                const t = i / count, s = 1 - t;
+                points.push({ gx: x(s * s * s * a.gx + 3 * s * s * t * b.gx + 3 * s * t * t * c.gx + t * t * t * d.gx),
+                    gy: s * s * s * a.gy + 3 * s * s * t * b.gy + 3 * s * t * t * c.gy + t * t * t * d.gy });
+            }
+        };
+        // 三段三次曲线的连接处共享水平切线；末端已朝向敌后，才交给真实助跑。
+        curve(start, { gx: startX + Math.min(3, (turnX - startX) / 3), gy: start.gy },
+            { gx: turnX - 3, gy: sideY }, sidePoint);
+        curve(sidePoint, { gx: turnX + 3, gy: sideY }, { gx: rearX - 3, gy: sideY }, rear);
+        curve(rear, { gx: rearX + 3, gy: sideY }, { gx: rearX + 3, gy: end.gy }, end);
+        return { side, points, index: 1, startedAt: now };
+    }
+
+    flankNaturalSlope(unit, now, dt) {
+        const army = this.flankSnapshot(unit, now);
+        if (!this.flankTargetAlive(unit.flankTarget)) {
+            let target = null, best = Infinity;
+            for (const archer of army.archers) {
+                if (!this.flankTargetAlive(archer)) continue;
+                const distance = dist(unit, archer);
+                if (distance < best - 1e-9 || (Math.abs(distance - best) <= 1e-9 && archer.id < target.id)) {
+                    target = archer; best = distance;
+                }
+            }
+            if (!target) {
+                if (unit.state === 'flank' || unit.flankTarget) this.beginCharge(unit);
+                unit.flankTarget = null; unit.flankCommitted = true; unit.flankRetryAt = now + 750;
+                return this.charge(unit, now, dt);
+            }
+            unit.flankTarget = target;
+        }
+        if (!unit.flankRoute) {
+            unit.flankRoute = this.naturalFlankRoute(unit, army, unit.flankTarget, now);
+        }
+        const route = unit.flankRoute;
+        const abandon = () => {
+            // 敌阵移走或边界没有迂回空间时放弃本次包抄，不重建路线绕无限圈。
+            this.enterMelee(unit);
+            unit.naturalFlankAbandoned = true;
+            unit.target = unit.scene.nearestEnemy(unit);
+            return false;
+        };
+        if (!route || now - route.startedAt > 30000) return abandon();
+        unit.state = 'flank'; unit.target = unit.flankTarget;
+        this.clearMomentum(unit);
+        while (route.index < route.points.length) {
+            const point = route.points[route.index], previous = route.points[route.index - 1];
+            const passed = (unit.gx - point.gx) * (point.gx - previous.gx) +
+                (unit.gy - point.gy) * (point.gy - previous.gy) >= 0;
+            if (dist(unit, point) >= 0.12 && !passed) break;
+            route.index++;
+        }
+        if (route.index === route.points.length) {
+            const f = unit.team === 'red' ? 1 : -1;
+            const rear = unit.team === 'red' ? army.maxX : army.minX;
+            if ((unit.gx - rear) * f < 2 || (unit.gx - unit.flankTarget.gx) * f < 2) return abandon();
+            unit.state = 'charge'; unit.flankCommitted = true;
+            unit.chargeDX = null; unit.chargeDY = null; unit.lastRetarget = now;
+            return this.charge(unit, now, dt);
+        }
+        // 向前看两小段，避免逐个采样点急转；游标只前进，受推挤也不回追旧点。
+        const point = route.points[Math.min(route.index + 2, route.points.length - 1)];
+        const plan = planMovement(unit, point.gx, point.gy, UNIT_TYPES.cavalry.speed, dt, 'walk', 'flank');
+        const contact = this.pathContact(unit, point.gx, point.gy, UNIT_TYPES.cavalry.speed, dt, plan);
+        if (contact) {
+            this.enterMelee(unit); unit.target = contact.enemy;
+            return false;
+        }
+        applyMovementPlan(unit, plan);
+        return true;
+    }
+
     // 只对实际行进线上的身体或准备好的正面枪尖产生局部阻力。
     pathContact(unit, tx, ty, speed, dt, plan = null) {
         const terrain = unit.scene?.battleOptions?.terrain;
-        const routed = Terrain.hasBarriers(terrain) || terrain === 'forest';
+        const routed = Terrain.hasBarriers(terrain) || terrain === 'forest' || Terrain.isNaturalSlope(terrain);
         if (routed && !plan) plan = planMovement(unit, tx, ty, speed, dt, 'charge');
         if (routed && !plan) return null;
         const motionLength = routed ? Math.hypot(plan.motion.x, plan.motion.y) : 0;

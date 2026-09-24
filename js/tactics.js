@@ -20,7 +20,15 @@ class TacticsSystem {
                 this.deployAttackers(team);
             }
         }
-        if (Terrain.hasBarriers(scene.battleOptions.terrain)) this.legalizeDeployments();
+        const naturalSlope = Terrain.isNaturalSlope(scene.battleOptions.terrain);
+        if (Terrain.hasBarriers(scene.battleOptions.terrain) || naturalSlope) this.legalizeDeployments();
+        if (naturalSlope) for (const unit of scene.units) {
+            if (unit.type === 'cavalry') unit.naturalFlankOrigin = { gx: unit.gx, gy: unit.gy };
+            if (this.orders[unit.team] === 'advance' && !unit.tacticalRole &&
+                ['infantry', 'pikeman'].includes(unit.type)) {
+                unit.slopeApproach = { gy: unit.gy, released: false };
+            }
+        }
     }
 
     active(unit) { return !unit.dead && !unit.withdrawn && unit.moraleState !== 'routing'; }
@@ -165,10 +173,10 @@ class TacticsSystem {
         // 优先保留弓兵平台，人数过多的前排才向合法后方铺开。
         archers.forEach((unit, i) => assign(unit, archerX - f * Math.floor(i / columns) * spacing,
             layout.center.gy + (i % columns - (Math.min(columns, archers.length) - 1) / 2) * spacing, 1.5));
-        front.forEach((unit, i) => {
-            const post = layout.frontPosts[i % layout.frontPosts.length], index = Math.floor(i / layout.frontPosts.length);
-            assign(unit, post.gx - f * Math.floor(index / 4) * spacing, post.gy + (index % 4 - 1.5) * spacing, 4);
-        });
+        const line = layout.frontLine;
+        const frontColumns = Math.max(1, Math.floor((line.y2 - line.y1) / spacing) + 1);
+        front.forEach((unit, i) => assign(unit, line.gx - f * Math.floor(i / frontColumns) * spacing,
+            layout.center.gy + (i % frontColumns - (Math.min(frontColumns, front.length) - 1) / 2) * spacing, 4));
         cavalry.forEach((unit, i) => {
             const post = layout.cavalryPosts[i % layout.cavalryPosts.length], index = Math.floor(i / layout.cavalryPosts.length);
             assign(unit, post.gx - f * Math.floor(index / 3) * 1.08, post.gy + (index % 3 - 1) * 1.08, 20, true);
@@ -703,6 +711,7 @@ class TacticsSystem {
 
     updateUnit(unit, now, dt) {
         if (unit.tacticalRole === 'guard') { this.updateGuard(unit, now, dt); return true; }
+        if (this.updateSlopeApproach(unit, dt)) return true;
         if (!['main', 'flank', 'reserve'].includes(unit.tacticalRole)) return false;
         const group = this.groups[unit.team];
         const enemy = this.scene.nearestEnemy(unit);
@@ -768,6 +777,27 @@ class TacticsSystem {
         }
         if (unit.tacticalRole === 'flank' && !group.launched && dist(unit, enemy) > 1.15) return true;
         this.fight(unit, enemy, now, dt, unit.typeData.range);
+        return true;
+    }
+
+    updateSlopeApproach(unit, dt) {
+        const approach = unit.slopeApproach;
+        if (!approach || approach.released || unit.tacticalRole || this.orders[unit.team] !== 'advance' ||
+            !Terrain.isNaturalSlope(this.scene.battleOptions.terrain)) return false;
+        if (!this.active(unit) || unit.everRouted || unit.hp < unit.maxHp) {
+            approach.released = true;
+            return false;
+        }
+        const enemy = this.scene.nearestEnemy(unit);
+        if (!enemy) return false;
+        // 远处保持各自纵向队列，近敌/受击后永久交回普通接战，不来回拉回出生线。
+        // 若敌人已到侧后，也必须解除行军，否则边翼会停在敌人横坐标上等不到接触。
+        if (dist(unit, enemy) <= 5.5 || (enemy.gx - unit.gx) * this.forward(unit.team) <= 1) {
+            approach.released = true;
+            return false;
+        }
+        unit.target = enemy;
+        this.move(unit, enemy.gx, approach.gy, unit.typeData.speed, dt);
         return true;
     }
 

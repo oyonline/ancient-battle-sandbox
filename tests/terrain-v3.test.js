@@ -11,22 +11,22 @@ test('new map geometry, height and surface are mirrored without changing legacy 
         assert.equal(Terrain.surface(key, x, y), Terrain.surface(other, 70 - x, y));
         assert.equal(Terrain.walkable(key, x, y), Terrain.walkable(other, 70 - x, y));
     }
-    assert.equal(Terrain.height('blue_pass', 51, 35), 3);
+    assert.equal(Terrain.height('blue_pass', 51, 35), 5);
     assert.equal(Terrain.defenseLayout('blue_pass', 'red'), null);
     assert.equal(Terrain.defenseLayout('blue_pass', 'blue').team, 'blue');
 });
 
-test('bridges and actual slope entrances are open while river banks and rock walls block the entire segment', () => {
+test('bridges remain constrained while the entire natural slope is open, including former wall locations', () => {
     for (const y of [15.5, 35, 54.5]) assert.ok(Terrain.segmentClear('river', 20, y, 50, y, 0.36));
     for (const y of [0.6, 12, 25, 45, 60, 69.4]) assert.equal(Terrain.segmentClear('river', 20, y, 50, y, 0.36), false);
-    for (const y of [22, 35, 48]) assert.ok(Terrain.segmentClear('blue_pass', 36, y, 49, y, 0.36));
-    for (const y of [28, 42]) assert.equal(Terrain.segmentClear('blue_pass', 36, y, 49, y, 0.36), false);
+    for (let y = 1; y < 70; y++) assert.ok(Terrain.segmentClear('blue_pass', 20, y, 65, y, 0.36));
+    assert.equal(Terrain.geometry('blue_pass').blockers.length, 0);
+    assert.equal(Terrain.geometry('blue_pass').zones.length, 0);
 });
 
-test('swept motion cannot tunnel through water or rock even with long pushes', () => {
+test('swept motion cannot tunnel through river banks even with long pushes', () => {
     for (const [key, x, y, dx, dy] of [
         ['river', 30, 25, 20, 0], ['river', 40, 45, -20, 0],
-        ['blue_pass', 39, 28, 18, 0], ['red_pass', 31, 28, -18, 0],
         ['river', 30, 25, 8, 7], ['river', 35, 35, 0, -20],
         ['river', 31, 69.4, 4, 8], ['river', 30, 69.4, 10, 10], ['river', 30, 0.6, 10, -10]
     ]) {
@@ -43,7 +43,7 @@ test('swept motion cannot tunnel through water or rock even with long pushes', (
 test('deterministic long-motion sweep samples always stay on legal reachable ground', () => {
     let seed = 191;
     const random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
-    for (const key of ['river', 'blue_pass', 'red_pass']) for (let i = 0; i < 2000; i++) {
+    for (const key of ['river']) for (let i = 0; i < 6000; i++) {
         const x = 0.6 + random() * 68.8, y = 0.6 + random() * 68.8;
         if (!Terrain.walkable(key, x, y)) continue;
         const motion = Terrain.clipMotion(key, x, y, random() * 100 - 50, random() * 100 - 50);
@@ -100,7 +100,7 @@ function walk(key, x, y, gx, gy, team = 'red', id = 65) {
     return trail;
 }
 
-test('river and rock routes reach the opposite side and retain exact mirrored paths with different global ids', () => {
+test('river routes and open slope movement reach the opposite side with mirrored paths and different global ids', () => {
     for (const key of ['river', 'blue_pass']) for (const y of [8, 28, 42, 62]) {
         const a = walk(key, 20, y, 55, y);
         const b = walk(Terrain.mirror(key), 50, y, 15, y, 'blue', 141);

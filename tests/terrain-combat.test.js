@@ -93,8 +93,8 @@ test('forest stops piercing, never builds a charge inside, and requires fresh ru
     assert.ok(cavalry.chargeDistance > 0 && cavalry.chargeDistance < 0.2);
 });
 
-test('river and rock block contact, pike brace, direct damage and non-planning knockback', () => {
-    for (const [terrain, x1, x2, y] of [['river', 31.5, 38.5, 25], ['blue_pass', 39.5, 45.5, 28]]) {
+test('river banks block contact, pike brace, direct damage and non-planning knockback', () => {
+    for (const [terrain, x1, x2, y] of [['river', 31.5, 38.5, 25], ['river', 31.5, 38.5, 45]]) {
         const scene = sceneOn(terrain), attacker = addUnit(scene, 'red', 'cavalry', x1, y);
         const enemy = addUnit(scene, 'blue', 'pikeman', x2, y);
         scene.rebuildSpatial();
@@ -148,16 +148,16 @@ test('cavalry flanking commits after reaching a projected rear waypoint instead 
     assert.equal(committed, true, 'rearX can lie in water, but the stage finishes at its legal projected waypoint');
 });
 
-test('tactical melee tries a route when close enough to strike but blocked by a rock corner', () => {
-    const scene = sceneOn('blue_pass');
-    scene.deployUnits({ infantry: 1, pikeman: 1 }, { infantry: 1 }, 'custom', 'custom', { red: 'assault' }, { terrain: 'blue_pass' });
+test('tactical melee tries a route when close enough to strike but blocked by a river-bank corner', () => {
+    const scene = sceneOn('river');
+    scene.deployUnits({ infantry: 1, pikeman: 1 }, { infantry: 1 }, 'custom', 'custom', { red: 'assault' }, { terrain: 'river' });
     const attacker = scene.units.find(u => u.team === 'red' && u.type === 'pikeman'), target = scene.units.find(u => u.team === 'blue');
-    Object.assign(attacker, { gx: 39.63, gy: 24.5 });
-    Object.assign(target, { gx: 40.5, gy: 23.63 });
+    Object.assign(attacker, { gx: 31.63, gy: 18.5 });
+    Object.assign(target, { gx: 32.5, gy: 17.63 });
     scene.rebuildSpatial(); scene.planningStep = true;
     scene.tactics.fight(attacker, target, 2000, 1 / 60, attacker.typeData.range);
     scene.planningStep = false;
-    assert.equal(Terrain.segmentClear('blue_pass', attacker.gx, attacker.gy, target.gx, target.gy), false);
+    assert.equal(Terrain.segmentClear('river', attacker.gx, attacker.gy, target.gx, target.gy), false);
     assert.ok(Math.hypot(attacker.moveX, attacker.moveY) > 0);
     assert.equal(scene.battleQueue.length, 0, 'the obstructed attack is not queued');
 });

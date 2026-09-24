@@ -108,7 +108,7 @@ test('terrain entry deploys identical mixed armies without starting the battle',
     assert.equal(scene.terrain, 'blue_pass');
     assert.equal(scene.starts, 0);
     assert.equal(el('terrain-ready').hidden, false);
-    assert.match(el('terrain-hud').textContent, /蓝方.*坡口/);
+    assert.match(el('terrain-hud').textContent, /蓝方.*自然坡地/);
     assert.deepEqual(snapshot(UI.orders), { red: 'advance', blue: 'hold_ground' });
     assert.deepEqual(snapshot(UI.battleOptions.cavalryOrders), { red: 'auto', blue: 'auto' });
     assert.equal(el('ready-blue-army').value, 'hold_ground');
@@ -315,8 +315,8 @@ test('new map switches preserve armies and commands, expose selected state, and 
         assert.equal(button.attributes['aria-pressed'], 'true');
         assert.equal(scene.starts, 0);
     }
-    assert.match(el('ready-blue-command-description').textContent, /中央坡口.*侧路.*支援.*弓兵/);
-    assert.match(el('terrain-ready-rules').textContent, /岩壁不可穿越/);
+    assert.match(el('ready-blue-command-description').textContent, /山脊.*宽正面.*支援.*弓兵/);
+    assert.match(el('terrain-ready-rules').textContent, /整片草坡都可通行.*没有固定入口/);
     UI.selectTerrain('forest');
     assert.match(el('terrain-ready-rules').textContent, /55%.*85%.*林中不能蓄力/);
     assert.doesNotMatch(el('ready-blue-command-description').textContent, /支援存活弓兵/);
