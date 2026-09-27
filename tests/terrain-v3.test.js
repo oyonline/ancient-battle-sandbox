@@ -52,14 +52,40 @@ test('deterministic long-motion sweep samples always stay on legal reachable gro
     }
 });
 
-test('forest is walkable, reduces cavalry more, and invalidates charging on entry and through a patch', () => {
+test('forest is walkable, reduces cavalry more, and charges only thread the flank notches', () => {
     assert.ok(Terrain.walkable('forest', 35, 25));
     assert.equal(Terrain.surfaceSpeed('forest', 'cavalry', 35, 25), 0.55);
     assert.equal(Terrain.surfaceSpeed('forest', 'infantry', 35, 25), 0.85);
-    assert.equal(Terrain.surfaceSpeed('forest', 'cavalry', 35, 35), 1);
-    assert.equal(Terrain.chargeAllowed('forest', 24, 25, 26, 25), false);
+    assert.equal(Terrain.surfaceSpeed('forest', 'cavalry', 25, 35), 1);
+    assert.equal(Terrain.chargeAllowed('forest', 24, 25, 27, 25), false);
     assert.equal(Terrain.chargeAllowed('forest', 24, 25, 46, 25), false);
-    assert.equal(Terrain.chargeAllowed('forest', 24, 35, 46, 35), true);
+    assert.equal(Terrain.chargeAllowed('forest', 24, 35, 46, 35), false, 'the merged waist closes the old central corridor');
+    assert.equal(Terrain.chargeAllowed('forest', 24, 35, 30, 35), true, 'the notch beside the waist stays chargeable');
+});
+
+test('the noise forest is a single connected mass with a mirrored frontier', () => {
+    const zone = Terrain.geometry('forest').zones.find(item => item.kind === 'forest');
+    const cells = new Map();
+    for (let x = zone.x1; x <= zone.x2; x += 0.5) for (let y = zone.y1; y <= zone.y2; y += 0.5)
+        cells.set(`${x},${y}`, Terrain.forestField(x, y) > Terrain.FOREST_EDGE);
+    let total = 0;
+    for (const inside of cells.values()) if (inside) total++;
+    assert.ok(total > 400, 'the forest covers a comparable footprint');
+    const start = [...cells].find(([, inside]) => inside)[0];
+    const [sx, sy] = start.split(',').map(Number);
+    const seen = new Set([start]), stack = [[sx, sy]];
+    while (stack.length) {
+        const [cx, cy] = stack.pop();
+        for (const [nx, ny] of [[cx + 0.5, cy], [cx - 0.5, cy], [cx, cy + 0.5], [cx, cy - 0.5]]) {
+            const key = `${nx},${ny}`;
+            if (cells.get(key) && !seen.has(key)) { seen.add(key); stack.push([nx, ny]); }
+        }
+    }
+    assert.equal(seen.size, total, 'every forest cell belongs to the one mass');
+    for (const [key, inside] of cells) {
+        const [x, y] = key.split(',').map(Number);
+        assert.equal(cells.get(`${70 - x},${y}`), inside, `mirror mismatch at ${key}`);
+    }
 });
 
 test('legal river-bank boundary points may move outward and along the edge, but not into water', () => {

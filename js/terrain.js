@@ -2,6 +2,7 @@
 const Terrain = {
     HEIGHT_SCALE: 24,
     MAX_RANGE_MULTIPLIER: 1.2,
+    FOREST_EDGE: 0.25,
     maps: {
         flat: { name: '平地', description: '原始平地规则，适合对照战斗结果' },
         red_hill: { name: '红方高地', defender: 'red', description: '红方一侧的缓坡山丘；上坡较慢，下坡冲锋更有力', cx: 19, cy: 35, rx: 23, ry: 26 },
@@ -41,6 +42,36 @@ const Terrain = {
         const edge = Math.max(0, Math.min(1, (edgeDistance - 3.5) / 8.5));
         return 3 * (1 - smooth(slope)) * smooth(edge);
     },
+    _hash2(x, y) {
+        let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0;
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+    },
+    _vnoise(x, y) {
+        const xi = Math.floor(x), yi = Math.floor(y);
+        const fx = x - xi, fy = y - yi;
+        const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+        const a = this._hash2(xi, yi), b = this._hash2(xi + 1, yi);
+        const c = this._hash2(xi, yi + 1), d = this._hash2(xi + 1, yi + 1);
+        return a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v;
+    },
+    // 林地占位场：上下双叶由腰桥连成一片，域扭曲噪声揉出犬牙边缘与豁口。
+    // 坐标先折叠到左半（u），镜像重演天然逐位一致；窗口噪声保证林心不挖洞、林外不掉碎屑。
+    forestField(gx, gy) {
+        if (gx < 21 || gx > 49 || gy < 10 || gy > 60) return -1;
+        const u = (gx <= 35 ? gx : 70 - gx) - 35;
+        const wu = (this._vnoise(u * 0.19 + 7.7, gy * 0.19 - 3.1) - 0.5) * 5.8;
+        const wv = (this._vnoise(u * 0.19 - 12.3, gy * 0.19 + 9.4) - 0.5) * 5.8;
+        const cu = (this._vnoise(u * 0.6 + 31.7, gy * 0.6 + 3.1) - 0.5) * 1.2;
+        const cv = (this._vnoise(u * 0.6 - 8.9, gy * 0.6 + 17.3) - 0.5) * 1.2;
+        const eu = u + wu + cu, ev = gy + wv + cv;
+        const lobe1 = 1 - (eu / 9.6) ** 2 - ((ev - 23.5) / 10) ** 2;
+        const lobe2 = 1 - (eu / 9.6) ** 2 - ((ev - 46.5) / 10) ** 2;
+        const waist = 1 - (eu / 5) ** 2 - ((ev - 35) / 7.2) ** 2;
+        const shape = Math.max(lobe1, lobe2, waist);
+        const band = Math.min(Math.max(0, Math.min(1, (shape + 0.15) / 0.35)), Math.max(0, Math.min(1, (0.75 - shape) / 0.35)));
+        return shape + (this._vnoise(u * 0.24 + 51.3, gy * 0.24 - 21.9) - 0.5) * 0.5 * band;
+    },
     geometry(key) {
         key = this.normalize(key);
         if (!this._geometry) {
@@ -58,7 +89,7 @@ const Terrain = {
                     defense: { team: 'red', center: mirrorPoint(blue.defense.center),
                         frontLine: { ...blue.defense.frontLine, gx: 70 - blue.defense.frontLine.gx }, archerRect: mirrorRect(blue.defense.archerRect),
                         cavalryPosts: blue.defense.cavalryPosts.map(mirrorPoint) } },
-                forest: { blockers: [], zones: [rect(25, 17, 45, 31, 'forest'), rect(25, 39, 45, 53, 'forest')], defense: null },
+                forest: { blockers: [], zones: [{ x1: 25, y1: 12, x2: 45, y2: 58, kind: 'forest', blob: true }], defense: null },
                 river: { blockers: [[0, 13], [18, 32], [38, 52], [57, 70]].map(([a, b]) => rect(32, a, 38, b, 'water')),
                     zones: [[13, 18], [32, 38], [52, 57]].map(([a, b]) => rect(32, a, 38, b, 'bridge')), defense: null }
             };
@@ -71,7 +102,10 @@ const Terrain = {
         return layout?.team === team ? layout : null;
     },
     contains(rect, x, y, radius = 0) {
-        return x > rect.x1 - radius && x < rect.x2 + radius && y > rect.y1 - radius && y < rect.y2 + radius;
+        if (x > rect.x1 - radius && x < rect.x2 + radius && y > rect.y1 - radius && y < rect.y2 + radius) {
+            return rect.blob ? this.forestField(x, y) > this.FOREST_EDGE : true;
+        }
+        return false;
     },
     surface(key, gx, gy) {
         const geometry = this.geometry(key);
@@ -88,6 +122,15 @@ const Terrain = {
     },
     // Slab intersection against an expanded rectangle; endpoints on the boundary are legal.
     sweep(rect, ax, ay, bx, by, radius = 0) {
+        if (rect.blob) {
+            // 林斑没有解析交点，按 0.3 格步长采样；端点归属由调用方的 contains 判定。
+            const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 0.3));
+            for (let i = 1; i < steps; i++) {
+                const t = i / steps;
+                if (this.contains(rect, ax + (bx - ax) * t, ay + (by - ay) * t)) return { t, nx: 0, ny: 0 };
+            }
+            return null;
+        }
         let enter = -Infinity, leave = Infinity, nx = 0, ny = 0;
         for (const [start, delta, lo, hi, axis] of [
             [ax, bx - ax, rect.x1 - radius, rect.x2 + radius, 'x'],

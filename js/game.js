@@ -559,8 +559,14 @@ class IsoBattleScene extends Phaser.Scene {
                 paint(zone, 0xd6bd80, 0.5);
                 g.lineStyle(2, 0xeee0ad, 0.6); g.strokePoints(polygon(zone), true);
             } else if (zone.kind === 'forest') {
-                paint(zone, 0x315c31, 0.64);
-                g.lineStyle(3, 0x8bad64, 0.65); g.strokePoints(polygon(zone), true);
+                // 连片噪声林斑：半格采样贴地铺色，边缘与通行判定共用同一占位场；林缘一圈浅绿过渡。
+                for (let y = zone.y1; y < zone.y2; y += 0.5) for (let x = zone.x1; x < zone.x2; x += 0.5) {
+                    const density = Terrain.forestField(x + 0.25, y + 0.25);
+                    if (density <= Terrain.FOREST_EDGE) continue;
+                    const deep = density > Terrain.FOREST_EDGE + 0.2;
+                    g.fillStyle(deep ? 0x315c31 : 0x47703d, deep ? 0.64 : 0.4);
+                    g.fillPoints(polygon({ x1: x, y1: y, x2: x + 0.5, y2: y + 0.5 }), true);
+                }
             }
         }
         for (const block of geometry.blockers) {
@@ -611,12 +617,16 @@ class IsoBattleScene extends Phaser.Scene {
         for (const { sprite, gx, gy } of this.edgeProps || [])
             sprite.setVisible(!['water', 'rock'].includes(Terrain.surface(this.battleOptions.terrain, gx, gy)));
         for (const zone of Terrain.geometry(this.battleOptions.terrain).zones.filter(zone => zone.kind === 'forest')) {
-            for (let x = zone.x1 + 1; x < zone.x2 - 0.5; x += 2.6) for (let y = zone.y1 + 1; y < zone.y2 - 0.5; y += 2.6) {
-                const noise = this.terNoise(x * 3, y * 3);
-                const p = this.groundPoint(x + (noise - 0.5) * 0.8, y + (this.terNoise(y * 4, x * 4) - 0.5) * 0.8);
-                // 复用现有像素树素材，放在士兵以下；树只是林区提示，不是逐棵实体障碍。
-                const tree = this.add.image(p.x, p.y, noise > 0.45 ? 'props/tree_big' : 'props/tree_small')
-                    .setOrigin(0.5, 0.92).setScale(0.38).setAlpha(0.87).setDepth(3);
+            for (let x = zone.x1 + 1; x < zone.x2 - 0.5; x += 2.2) for (let y = zone.y1 + 1; y < zone.y2 - 0.5; y += 2.2) {
+                const density = Terrain.forestField(x, y);
+                if (density <= Terrain.FOREST_EDGE) continue;
+                // 深林成簇大树、林缘稀疏小树：树只是林区提示，不是逐棵实体障碍。
+                const clump = this.terNoise(x * 0.55 + 9, y * 0.55 + 3);
+                if (clump > 0.25 + (density - Terrain.FOREST_EDGE) * 0.9) continue;
+                const p = this.groundPoint(x + (clump - 0.5) * 1.2, y + (this.terNoise(y * 0.9 + 17, x * 0.9) - 0.5) * 1.2);
+                const big = density > 0.55 && clump > 0.45;
+                const tree = this.add.image(p.x, p.y, big ? 'props/tree_big' : 'props/tree_small')
+                    .setOrigin(0.5, 0.92).setScale((big ? 0.42 : 0.33) + clump * 0.1).setAlpha(0.85).setDepth(3);
                 this.terrainProps.push(tree);
             }
         }

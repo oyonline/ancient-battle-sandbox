@@ -58,8 +58,8 @@ test('forest multiplies surface speed separately and cancels stored momentum bef
         assert.ok(Math.abs(unit.gx - (30 + 0.4 * scale)) < 1e-9);
         assert.equal(unit.terrainMoveMultiplier, 1, 'inspection retains the pure slope multiplier');
     }
-    const scene = sceneOn('forest'), cavalry = addUnit(scene, 'red', 'cavalry', 24.98, 24);
-    const enemy = addUnit(scene, 'blue', 'infantry', 25.7, 24);
+    const scene = sceneOn('forest'), cavalry = addUnit(scene, 'red', 'cavalry', 26.5, 24);
+    const enemy = addUnit(scene, 'blue', 'infantry', 27.5, 24);
     Object.assign(cavalry, { chargeDistance: 3.5, chargeMomentum: 1, chargeDX: 1, chargeDY: 0,
         target: enemy, lastRetarget: 1000, lastAttack: -10000 });
     scene.rebuildSpatial();
