@@ -492,20 +492,23 @@ class CavalryAI {
         }
         if (!unit.target) return true;
         const target = unit.target, data = UNIT_TYPES.cavalry;
+        // 守骑对冲拦截：预计相遇点只改变行进落点，接触与攻击距离仍按真实目标结算。
+        const aim = unit.guardIntercept && unit.guardIntercept.id === target.id ? unit.guardIntercept : target;
         const distance = dist(unit, target);
-        const plan = planMovement(unit, target.gx, target.gy, data.chargeSpeed, dt, 'charge');
+        const plan = planMovement(unit, aim.gx, aim.gy, data.chargeSpeed, dt, 'charge');
         const routed = Terrain.hasBarriers(terrain);
-        const dx = routed ? plan?.nx || 0 : distance > 0.001 ? (target.gx - unit.gx) / distance : 0;
-        const dy = routed ? plan?.ny || 0 : distance > 0.001 ? (target.gy - unit.gy) / distance : 0;
+        const aimDistance = dist(unit, aim);
+        const dx = routed ? plan?.nx || 0 : aimDistance > 0.001 ? (aim.gx - unit.gx) / aimDistance : 0;
+        const dy = routed ? plan?.ny || 0 : aimDistance > 0.001 ? (aim.gy - unit.gy) / aimDistance : 0;
         // 即使新目标就在身边，也必须先检查助跑方向，不能原地掉头继承冲锋。
-        if (distance <= 0.001 || (unit.chargeDX != null && dx * unit.chargeDX + dy * unit.chargeDY < 0.8)) unit.chargeDistance = 0;
+        if (aimDistance <= 0.001 || (unit.chargeDX != null && dx * unit.chargeDX + dy * unit.chargeDY < 0.8)) unit.chargeDistance = 0;
         unit.chargeDX = dx; unit.chargeDY = dy;
         unit.chargeMomentum = clamp(unit.chargeDistance / 3, 0, 1) *
-            Terrain.movementMultiplier(terrain, unit.gx, unit.gy, plan?.tx ?? target.gx, plan?.ty ?? target.gy);
+            Terrain.movementMultiplier(terrain, unit.gx, unit.gy, plan?.tx ?? aim.gx, plan?.ty ?? aim.gy);
         const canCharge = !!plan && Terrain.chargeAllowed(terrain, unit.gx, unit.gy,
             unit.gx + plan.motion.x, unit.gy + plan.motion.y);
         if (!canCharge) this.clearMomentum(unit);
-        const contact = this.pathContact(unit, target.gx, target.gy, data.chargeSpeed, dt, plan);
+        const contact = this.pathContact(unit, aim.gx, aim.gy, data.chargeSpeed, dt, plan);
         if (contact) {
             // 接触挡路身体就结束助跑，不能顶着前排继续追弓并攒出双倍冲锋。
             if (unit.chargeDistance < 3 || now - unit.lastAttack < data.atkSpeed) {
@@ -526,7 +529,7 @@ class CavalryAI {
         if (canCharge) {
             unit.chargeLastX = unit.gx; unit.chargeLastY = unit.gy;
             unit.chargeLastStep = routed ? Math.hypot(plan.motion.x, plan.motion.y)
-                : data.chargeSpeed * movementSpeedMultiplier(unit, target.gx, target.gy) * dt;
+                : data.chargeSpeed * movementSpeedMultiplier(unit, aim.gx, aim.gy) * dt;
         }
         applyMovementPlan(unit, plan);
         unit.scene.chargeDust(unit);

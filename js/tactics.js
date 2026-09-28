@@ -188,19 +188,73 @@ class TacticsSystem {
     passArcherThreats(team) {
         const group = this.groundGuards[team], now = this.scene.simulationTime;
         if (!group?.layout) return [];
-        if (now - group.threatsAt >= 250) {
-            const threats = new Set();
-            for (const archer of group.archers) {
-                if (!CombatRules.canBeHit(archer)) continue;
-                this.scene.forEachNear(archer.gx, archer.gy, 4.2, other => {
-                    if (other.team !== team && CombatRules.canAct(other) && dist(archer, other) <= 4.2) threats.add(other);
+        const living = group.archers.filter(archer => CombatRules.canBeHit(archer));
+        if (!living.length) { group.archerThreats = []; group.threatsAt = now; return []; }
+        if (now - group.threatsAt >= 100) {
+            // 前瞻触发：敌骑在 9.5 格内逼近就入列（步兵只有真正贴到弓手跟前才算），
+            // 威胁带 600ms 粘滞防止边界抖动反复打散守骑的追击。
+            const PROX = 9.5, CLOSE = 3.5, STICKY = 600;
+            const next = new Map();
+            const mark = (enemy, radius) => {
+                const previous = next.get(enemy.id);
+                next.set(enemy.id, { enemy, radius, until: Math.max(previous?.until ?? -Infinity, now + STICKY) });
+            };
+            for (const entry of group.archerThreats || [])
+                if (entry.until > now && CombatRules.canAct(entry.enemy)) next.set(entry.enemy.id, entry);
+            for (const archer of living) {
+                this.scene.forEachNear(archer.gx, archer.gy, PROX, other => {
+                    if (other.team === team || !CombatRules.canAct(other) || dist(archer, other) > PROX) return;
+                    const distance = dist(archer, other);
+                    if (other.type === 'cavalry') {
+                        if (distance > CLOSE && !this.approachingUnit(other, archer)) return;
+                        mark(other, PROX + 1.5);
+                    } else if (distance <= 4.2) mark(other, 5.7);
                 });
             }
-            group.archerThreats = [...threats]; group.threatsAt = now;
+            // 对冲拦截：远处正在冲锋且弹道将扫过弓手集群的敌骑，提前视为威胁迎面拦截。
+            let sx = 0, sy = 0;
+            for (const archer of living) { sx += archer.gx; sy += archer.gy; }
+            const cx = sx / living.length, cy = sy / living.length;
+            let spread = 0;
+            for (const archer of living) spread = Math.max(spread, Math.hypot(archer.gx - cx, archer.gy - cy));
+            const reach = 16 + spread;
+            this.scene.forEachNear(cx, cy, reach, other => {
+                if (other.team === team || other.type !== 'cavalry' || other.state !== 'charge' ||
+                    other.chargeDX == null || !CombatRules.canAct(other)) return;
+                if (Math.hypot(other.gx - cx, other.gy - cy) > reach) return;
+                const ahead = (cx - other.gx) * other.chargeDX + (cy - other.gy) * other.chargeDY;
+                if (ahead <= 0) return;
+                const miss = Math.hypot(cx - (other.gx + other.chargeDX * ahead), cy - (other.gy + other.chargeDY * ahead));
+                if (miss > spread + 2.5) return;
+                mark(other, reach + 2);
+            });
+            // 翼位分工需要知道每翼还剩多少守骑；与威胁表同步刷新。
+            let upper = 0, lower = 0;
+            for (const member of group.members) {
+                if (member.type !== 'cavalry' || !member.protectArchers ||
+                    !this.active(member) || !this.isGroundGuard(member)) continue;
+                if (member.guardAnchor.gy < group.cy - 0.5) upper++;
+                else if (member.guardAnchor.gy > group.cy + 0.5) lower++;
+            }
+            group.upperWingCavalry = upper; group.lowerWingCavalry = lower;
+            group.archerThreats = [...next.values()];
+            group.threatsAt = now;
         }
         // 死亡与撤离当步生效；缓存仅省去空间查询，不继承已消失的护弓理由。
-        return group.archerThreats.filter(enemy => CombatRules.canAct(enemy) &&
-            group.archers.some(archer => CombatRules.canBeHit(archer) && dist(archer, enemy) <= 4.2));
+        return group.archerThreats.filter(entry => entry.until > now && CombatRules.canAct(entry.enemy) &&
+            living.some(archer => dist(archer, entry.enemy) <= entry.radius));
+    }
+
+    // 方向过滤：敌人正在逼近该弓手（速度朝向或冲锋朝向）才算前瞻威胁。
+    approachingUnit(enemy, archer) {
+        const dx = archer.gx - enemy.gx, dy = archer.gy - enemy.gy;
+        const distance = Math.hypot(dx, dy);
+        if (distance <= 0.001) return true;
+        const vx = enemy.velX || 0, vy = enemy.velY || 0, speed = Math.hypot(vx, vy);
+        if (speed > 0.1) return (dx * vx + dy * vy) / (distance * speed) >= 0.2;
+        if (enemy.type === 'cavalry' && enemy.state === 'charge' && enemy.chargeDX != null)
+            return dx * enemy.chargeDX + dy * enemy.chargeDY >= 0.2 * distance;
+        return false;
     }
 
     isGroundGuard(unit) {
@@ -211,8 +265,11 @@ class TacticsSystem {
     groundThreat(unit) {
         let target = null, nearest = Infinity;
         if (unit.type === 'cavalry' && unit.protectArchers) {
-            for (const other of this.passArcherThreats(unit.team)) {
+            const group = this.groundGuards[unit.team];
+            for (const entry of this.passArcherThreats(unit.team)) {
+                const other = entry.enemy;
                 if (dist(unit.guardAnchor, other) > unit.guardRadius) continue;
+                if (group && !this.wingAllows(unit, group, other)) continue;
                 const distance = dist(unit, other);
                 if (distance < nearest - 1e-9 || (Math.abs(distance - nearest) <= 1e-9 && other.id < target.id)) {
                     nearest = distance; target = other;
@@ -234,6 +291,27 @@ class TacticsSystem {
         return target;
     }
 
+    // 翼位分工：守骑优先接本翼与中性带（±4 格）的威胁；
+    // 只有威胁所在翼已无守骑时才越权接对翼威胁，避免两翼全员扑向同一侧。
+    wingAllows(unit, group, other) {
+        const cy = group.cy ?? GRID_H / 2;
+        const side = other.gy < cy - 4 ? -1 : other.gy > cy + 4 ? 1 : 0;
+        if (side === 0) return true;
+        const wing = unit.guardAnchor.gy < cy - 0.5 ? -1 : unit.guardAnchor.gy > cy + 0.5 ? 1 : 0;
+        if (wing === 0 || side === wing) return true;
+        return (side < 0 ? group.upperWingCavalry : group.lowerWingCavalry) === 0;
+    }
+
+    // 对冲拦截的预计相遇点：按双方当前速度外推，守骑迎着弹道对冲而不是原地等。
+    interceptPoint(unit, target) {
+        const vx = target.velX || 0, vy = target.velY || 0;
+        const closing = (unit.typeData.chargeSpeed ?? unit.typeData.speed) + Math.hypot(vx, vy);
+        const lead = clamp(dist(unit, target) / Math.max(closing, 1), 0, 1.2);
+        return { id: target.id,
+            gx: clamp(target.gx + vx * lead, 1.5, GRID_W - 1.5),
+            gy: clamp(target.gy + vy * lead, 1.5, GRID_H - 1.5) };
+    }
+
     boundGroundMove(unit) {
         if (!this.scene.planningStep) return;
         const anchor = unit.guardAnchor;
@@ -247,7 +325,12 @@ class TacticsSystem {
     }
 
     updateGroundGuard(unit, now, dt) {
-        if (!this.isGroundGuard(unit)) return false;
+        if (!this.isGroundGuard(unit)) {
+            if (unit.guardIntercept || unit.guardPursueTarget) {
+                unit.guardIntercept = null; unit.guardPursueTarget = null; unit.guardPursueFor = 0;
+            }
+            return false;
+        }
         const anchor = unit.guardAnchor, fromPost = dist(unit, anchor);
         unit.groundGuardReturning = false;
         if (unit.typeData.ranged) {
@@ -255,7 +338,18 @@ class TacticsSystem {
             if (fromPost <= unit.guardRadius) this.boundGroundMove(unit);
             return true;
         }
-        const target = this.groundThreat(unit);
+        let target = this.groundThreat(unit);
+        let grace = false;
+        if (!target && unit.type === 'cavalry' && fromPost > 1 && (unit.guardPursueFor ?? 0) > 0 &&
+            unit.guardPursueTarget && CombatRules.canBeHit(unit.guardPursueTarget)) {
+            // 时机纪律：威胁刚消失的一小段时间继续追击，不清冲锋动量；
+            // 宽限按步数倒数且自身不续期，只有真实威胁才能重新装满。
+            target = unit.guardPursueTarget;
+            grace = true;
+            unit.guardPursueFor -= dt;
+        }
+        if (target && !grace) { unit.guardPursueTarget = target; unit.guardPursueFor = 0.35; }
+        else if (!target) { unit.guardPursueTarget = null; unit.guardPursueFor = 0; }
         unit.groundGuardTarget = target;
         unit.target = target;
         if (fromPost > unit.guardRadius + 0.02 || !target) {
@@ -271,6 +365,11 @@ class TacticsSystem {
             return true;
         }
         if (unit.type === 'cavalry') {
+            // 对冲拦截：敌骑冲锋中按预计相遇点迎面拦截，命中仍按真实目标结算。
+            unit.guardIntercept = target.type === 'cavalry' && (target.state === 'charge' || target.state === 'pierce')
+                ? this.interceptPoint(unit, target) : null;
+            // 守骑不站桩：目标超出近身距离立即转冲锋，不等 melee 状态自带的 2 秒迟疑。
+            if (unit.state === 'melee' && dist(unit, target) > 2) this.scene.cavalryAI.beginCharge(unit);
             if (!this.scene.cavalryAI.update(unit, now, dt)) this.fight(unit, target, now, dt, unit.typeData.range);
         } else if (unit.type === 'pikeman' && unit.braceHold && dist(unit, target) > unit.typeData.range) {
             // 与自由接敌共用架枪迎击，不让守位命令放下已备好的长枪。
@@ -958,6 +1057,7 @@ class TacticsSystem {
                 delete unit.guardRadius;
                 delete unit.groundGuardTarget;
                 delete unit.groundGuardReturning;
+                unit.guardIntercept = null; unit.guardPursueTarget = null; unit.guardPursueFor = 0;
             }
             delete this.groundGuards[team];
             this.orders[team] = 'advance';
