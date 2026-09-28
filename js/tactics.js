@@ -334,21 +334,33 @@ class TacticsSystem {
         for (const group of Object.values(this.groundGuards)) {
             if (now < (group.nextRaidCheck ?? 0)) continue;
             group.nextRaidCheck = now + 200;
+            const front = group.members.filter(u => this.active(u) && u.type !== 'cavalry' && !u.typeData.ranged);
             if (group.biteAt == null) {
-                const front = group.members.filter(u => this.active(u) && u.type !== 'cavalry' && !u.typeData.ranged);
                 if (front.some(u => { const e = this.scene.nearestEnemy(u); return e && dist(u, e) < 2.5; }))
                     group.biteAt = now;
             }
             if (group.biteAt == null || now - group.biteAt < 4000) continue;      // 咬稳再说：刚接触就出击会被正面缠住
-            if (now - (group.lastRaidAt ?? -Infinity) < 30000) continue;           // 冷却：一击之后守骑回位重整
+            if (now - (group.lastRaidAt ?? -Infinity) < 20000) continue;          // 冷却：出击8s+返锚5s+重整，一波接一波轮换
             if (group.members.some(u => u.counterRaid)) continue;
-            // 软目标仍在才值得冒险：侧后打的就是敌弓手与纵深，无弓可打不出击。
+            // 出击理由：优先敌弓纵深（侧后软单位）；敌弓清光但敌步兵仍压在我前排
+            // 4 格内（战线咬合未解）时，改为冲击压境敌线的侧腰——守骑是预备队，
+            // 不能看着前排被逐排啃光而全程旁观。
             const foe = this.enemies(group.team);
             const archers = this.scene.units.filter(u => u.team === foe && u.type === 'archer' && CombatRules.canBeHit(u));
-            if (!archers.length) continue;
-            let ax = 0, ay = 0;
-            for (const a of archers) { ax += a.gx; ay += a.gy; }
-            ax /= archers.length; ay /= archers.length;
+            let ax = 0, ay = 0, raidFlank = false;
+            if (archers.length) {
+                for (const a of archers) { ax += a.gx; ay += a.gy; }
+                ax /= archers.length; ay /= archers.length;
+            } else {
+                let n = 0;
+                for (const u of front) {
+                    const e = this.scene.nearestEnemy(u);
+                    if (!e || e.type === 'cavalry' || dist(u, e) > 4) continue;   // 只算仍压在前排门口的敌步/矛
+                    ax += e.gx; ay += e.gy; n++;
+                }
+                if (!n) continue;                                                 // 没弓可打也没敌压门：安稳守位
+                ax /= n; ay /= n; raidFlank = true;
+            }
             const riders = group.members.filter(u => this.active(u) && u.type === 'cavalry' &&
                 u.protectArchers && this.isGroundGuard(u) && !u.counterRaid && u.moraleState === 'steady');
             const upper = riders.filter(u => u.guardAnchor.gy < group.cy - 0.5);
@@ -356,7 +368,7 @@ class TacticsSystem {
             const wing = lower.length > upper.length ? lower : upper;
             if (wing.length < 2) continue;                                          // 至少双骑出击：单骑冲阵必被围死
             const side = wing === upper ? -1 : 1, f = this.forward(group.team);
-            const raidX = clamp(ax + f * 1.5, 2, GRID_W - 2), raidY = clamp(ay + side * 3, 2, GRID_H - 2);
+            const raidX = clamp(ax + (raidFlank ? 0 : f * 1.5), 2, GRID_W - 2), raidY = clamp(ay + side * 3, 2, GRID_H - 2);
             wing.sort((a, b) => Math.hypot(a.gx - raidX, a.gy - raidY) - Math.hypot(b.gx - raidX, b.gy - raidY) ||
                 a.guardAnchor.gy - b.guardAnchor.gy);
             for (const rider of wing.slice(0, 2)) {
@@ -365,7 +377,7 @@ class TacticsSystem {
             }
             group.lastRaidAt = now;
             this.scene.addBattleEvent('tactic-raid-' + group.team + '-' + Math.floor(now),
-                `${group.team === 'red' ? '红方' : '蓝方'}守骑自${side < 0 ? '上' : '下'}翼出击，冲击敌线侧后`, group.team);
+                `${group.team === 'red' ? '红方' : '蓝方'}守骑自${side < 0 ? '上' : '下'}翼出击，${raidFlank ? '冲击敌线侧腰' : '冲击敌线侧后'}`, group.team);
         }
     }
 

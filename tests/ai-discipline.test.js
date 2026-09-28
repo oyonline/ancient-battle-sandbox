@@ -235,10 +235,20 @@ test('侧翼反冲：战线未咬合不出击', () => {
     assert.ok(riders.every(u => !u.counterRaid), '敌线未贴上守区前排，守骑不冒险出击');
 });
 
-test('侧翼反冲：敌纵深无弓可打不出击', () => {
-    const { scene, riders } = raidScene({ foeArchers: false });
+test('侧翼反冲：无敌弓且战线未被压不出击', () => {
+    const { scene, riders } = raidScene({ bite: false, foeArchers: false });
     for (let i = 0; i < 60 * 8; i++) scene.advanceBattle(STEP);
-    assert.ok(riders.every(u => !u.counterRaid), '侧后没有软目标，出击无利可图');
+    assert.ok(riders.every(u => !u.counterRaid), '没有软目标也没有敌压门，守骑安稳守位');
+});
+
+test('侧翼反冲：敌弓清光但敌步仍压前排时转为冲击敌线侧腰', () => {
+    const { scene, riders } = raidScene({ foeArchers: false });
+    for (let i = 0; i < 60 * 6; i++) scene.advanceBattle(STEP);
+    const raiding = riders.filter(u => u.counterRaid);
+    assert.ok(raiding.length >= 2, '敌步压门时守骑应作为预备队出击侧腰，不能全程旁观');
+    const foeLineX = 25.3;                                   // 敌步贴我前排的横线
+    assert.ok(raiding.every(u => Math.abs(u.counterRaid.gx - foeLineX) <= 3.5),
+        '侧腰冲击点应落在压境敌线附近（不加纵深后向偏移）');
 });
 
 // ---------- F 战线连贯（轻量）：未接战剑士与脱节邻兵互相收拢，肩并肩推进 ----------
