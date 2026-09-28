@@ -1,0 +1,118 @@
+// 占点征服模式：占领判定 / 争夺冻结 / 积分胜利 / 歼灭仍胜 / AI 向旗开进 / 对称同步
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { makeScene, addUnit } = require('./battle-harness.js');
+
+const STEP = 1000 / 60;
+
+function controlScene(armies) {
+    const scene = makeScene();
+    scene.deployUnits(armies?.red ?? {}, armies?.blue ?? {},
+        'custom', 'custom', {}, { control: true });
+    scene.battleStarted = true;
+    return scene;
+}
+
+test('占点：单方站旗圈 5 秒完成占领，归属方积分开始累计', () => {
+    const scene = controlScene();
+    const flag = scene.flags[1];                       // 中路 (35, 35)
+    addUnit(scene, 'red', 'infantry', flag.gx, flag.gy);
+    scene.rebuildSpatial();
+    // 直测占领状态机（AI 行为另有测试），红兵恒在圈内
+    for (let i = 0; i < 60 * 6; i++) scene.updateFlags(STEP / 1000);
+    assert.equal(flag.owner, 'red', '5 秒应完成占领');
+    assert.ok(flag.progress >= 1);
+    for (let i = 0; i < 60; i++) scene.updateFlags(0.5);   // 30 秒 × 1 分/秒
+    assert.ok(scene.controlScore.red >= 29.5, '归属旗每秒 +1 分');
+});
+
+test('占点：双方同圈争夺冻结，谁也涨不动', () => {
+    const scene = controlScene();
+    const flag = scene.flags[0];
+    addUnit(scene, 'red', 'infantry', flag.gx, flag.gy);
+    addUnit(scene, 'blue', 'infantry', flag.gx + 1, flag.gy);
+    scene.rebuildSpatial();
+    for (let i = 0; i < 60 * 8; i++) scene.advanceBattle(STEP);
+    assert.ok(flag.contested, '双方在场应判定争夺');
+    assert.equal(flag.owner, null, '争夺冻结不应产生归属');
+    assert.ok(Math.abs(scene.controlScore.red - scene.controlScore.blue) < 1e-6, '争夺期双方都不得分');
+});
+
+test('占点：夺旗需先中立再反占（共 10 秒量级）', () => {
+    const scene = controlScene();
+    const flag = scene.flags[2];
+    addUnit(scene, 'red', 'infantry', flag.gx, flag.gy);
+    scene.rebuildSpatial();
+    for (let i = 0; i < 60 * 6; i++) scene.updateFlags(STEP / 1000);
+    assert.equal(flag.owner, 'red');
+    const blue = addUnit(scene, 'blue', 'infantry', flag.gx, flag.gy);
+    scene.units.find(u => u.team === 'red').dead = true;   // 红兵退场（不再计入驻圈）
+    scene.rebuildSpatial();
+    let neutralized = false;
+    for (let i = 0; i < 60 * 12; i++) {
+        scene.updateFlags(STEP / 1000);
+        if (flag.owner === null) neutralized = true;
+        if (flag.owner === 'blue') break;
+    }
+    assert.ok(neutralized, '反占前应先中立化');
+    assert.equal(flag.owner, 'blue', '中立后蓝方完成反占');
+    assert.ok(blue);
+});
+
+test('占点：积分先到 60 判胜，endReason=control', () => {
+    const scene = controlScene({ red: {}, blue: { archer: 4 } });
+    const flag = scene.flags[1];
+    // 守旗人钉在旗心并回满血；蓝方四弓钉死在对角远处（隔离走位/士气/对射，
+    // 只验证"占领→攒分→60 分判胜"这条链路）
+    const keeper = addUnit(scene, 'red', 'archer', flag.gx, flag.gy);
+    const foes = scene.units.filter(u => u.team === 'blue');
+    foes.forEach((u, i) => { u.gx = 2; u.gy = 2 + i; });
+    scene.rebuildSpatial();
+    for (let i = 0; i < 60 * 90 && !scene.battleOver; i++) {
+        keeper.gx = flag.gx; keeper.gy = flag.gy; keeper.hp = keeper.maxHp;
+        foes.forEach((u, j) => { u.gx = 2; u.gy = 2 + j; u.hp = u.maxHp; if (u.moraleState === 'routing') u.moraleState = 'steady'; });
+        scene.advanceBattle(STEP);
+    }
+    assert.ok(scene.battleOver, '应已结束');
+    assert.equal(scene.winner, 'red');
+    assert.equal(scene.endReason, 'control');
+    assert.ok(scene.getBattleReport().events.some(e => e.text.includes('积分获胜')), '应有占点获胜战报');
+});
+
+test('占点：歼灭对手仍直接获胜', () => {
+    const scene = controlScene({ red: { infantry: 10 }, blue: { archer: 1 } });
+    for (let i = 0; i < 60 * 30 && !scene.battleOver; i++) scene.advanceBattle(STEP);
+    assert.ok(scene.battleOver);
+    assert.equal(scene.winner, 'red');
+    assert.notEqual(scene.endReason, 'control', '歼灭路径不被占点积分覆盖');
+});
+
+test('占点 AI：对称军团开进后向旗聚拢', () => {
+    const scene = controlScene({ red: { infantry: 12 }, blue: { infantry: 12 } });
+    let gathered = 0;
+    for (let i = 0; i < 60 * 25 && !scene.battleOver; i++) {
+        scene.advanceBattle(STEP);
+        if (i % 60 === 0) {
+            const near = scene.units.filter(u => !u.dead &&
+                scene.flags.some(f => Math.hypot(f.gx - u.gx, f.gy - u.gy) <= 2.8)).length;
+            gathered = Math.max(gathered, near);
+        }
+    }
+    assert.ok(gathered >= 3, `两军应向旗聚拢（旗圈峰值 ${gathered} 人）`);
+});
+
+test('占点：镜像对称布置同步争夺（换座公平）', () => {
+    const scene = controlScene({ red: { infantry: 1 }, blue: { infantry: 1 } });
+    // 手摆镜像对：关于中路旗 (35,35) 对称（x→70-x, y 不变），相向而行恰在旗心相遇
+    const flag = scene.flags[1];
+    scene.units[0].gx = flag.gx - 4; scene.units[0].gy = flag.gy;
+    scene.units[1].gx = flag.gx + 4; scene.units[1].gy = flag.gy;
+    scene.rebuildSpatial();
+    let contestedSeen = false;
+    for (let i = 0; i < 60 * 4; i++) {
+        scene.advanceBattle(STEP);
+        contestedSeen ||= scene.flags[1].contested;
+    }
+    assert.ok(contestedSeen, '对称双单位应同时入圈形成争夺');
+    assert.ok(Math.abs(scene.controlScore.red - scene.controlScore.blue) < 1e-6, '对称局面双方得分相等');
+});

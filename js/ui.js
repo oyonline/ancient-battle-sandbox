@@ -146,6 +146,7 @@ const UI = {
         const fighting = this.phase === 'battle';
         document.getElementById('controlbar').hidden = !fighting;
         document.getElementById('deathmatch-hud-rule').hidden = !fighting || !this.battleOptions.deathmatch;
+        document.getElementById('control-hud-rule').hidden = !fighting || !this.battleOptions.control;
         this.updateMorale();
         this.updateTactics();
         this.updateTerrainControls();
@@ -201,7 +202,7 @@ const UI = {
     },
 
     resetBattleOptions() {
-        this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
+        this.battleOptions = { deathmatch: false, control: false, reserves: { red: 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
     },
 
     startTerrain(terrain = 'blue_pass') {
@@ -217,6 +218,20 @@ const UI = {
         this.battleOptions.terrain = Terrain.normalize(terrain);
         const defender = Terrain.maps[this.battleOptions.terrain].defender;
         if (['red', 'blue'].includes(defender)) this.orders[defender] = 'hold_ground';
+        this.deployArmies();
+    },
+
+    startControl() {
+        this.clearBattle();
+        this.mode = 'sandbox';
+        this.challenge = null;
+        this.editing = false;
+        const army = { infantry: 24, pikeman: 14, archer: 18, cavalry: 8 };
+        this.configs = { red: { ...army }, blue: { ...army } };
+        this.formations = { red: 'custom', blue: 'custom' };
+        this.orders = { red: 'advance', blue: 'advance' };
+        this.resetBattleOptions();
+        this.battleOptions.control = true;
         this.deployArmies();
     },
 
@@ -392,7 +407,7 @@ const UI = {
         this.configs = { red: { infantry: reserve ? 150 : 100 }, blue: { pikeman: 100 } };
         this.formations = { red: 'custom', blue: 'square' };
         this.orders = { red: reserve ? 'flank' : order, blue: 'hold' };
-        this.battleOptions = { deathmatch: reserve, reserves: { red: reserve ? 50 : 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
+        this.battleOptions = { deathmatch: reserve, control: false, reserves: { red: reserve ? 50 : 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
         this.deployArmies();
     },
 
@@ -633,12 +648,13 @@ const UI = {
         this.countdown = false;
         this.pendingDeploy = !this.scene;
         const deathmatch = this.battleOptions.deathmatch;
+        const control = this.battleOptions.control === true;
         const reserves = Object.fromEntries(['red', 'blue'].map(team => [team,
             Math.min(this.battleOptions.reserves[team] || 0, Math.max(0, (this.configs[team].infantry || 0) - 1))]));
         const terrain = ['sandbox', 'terrain'].includes(this.mode) ? Terrain.normalize(this.battleOptions.terrain) : 'flat';
         const cavalryOrders = Object.fromEntries(['red', 'blue'].map(team => [team,
             ['sandbox', 'terrain'].includes(this.mode) ? this.cavalryOrder(team) : 'auto']));
-        this.battleOptions = { deathmatch, reserves, terrain, cavalryOrders };
+        this.battleOptions = { deathmatch, control, reserves, terrain, cavalryOrders };
         this.scene?.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue,
             { ...this.orders }, { ...this.battleOptions, reserves: { ...reserves }, cavalryOrders: { ...cavalryOrders } });
         this.setPhase('ready');
@@ -679,6 +695,8 @@ const UI = {
         this.setPhase('battle');
         document.getElementById('phase-hint').textContent = this.battleOptions.deathmatch
             ? '死斗 · 溃兵可重整，直到一方全灭'
+            : this.battleOptions.control
+            ? '⚑ 占点征服 · 占旗攒分，先到 60 分者胜（全歼对手同样获胜）'
             : (this.challenge ? this.challenge.title + ' · ' : this.mode === 'tactics' ? '战阵演练 · ' : '') + '拖动看战况 · 点击士兵看地形';
         this.openSheet(false);
         this.scene.startCountdown(() => { this.countdown = false; this.syncControls(); });
@@ -740,6 +758,7 @@ const UI = {
         document.getElementById('phase-hint').textContent = '读一读战报，准备下一次出击';
         const endReason = report.deathmatch && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '已全灭，死斗结束。 '
+            : report.endReason === 'control' ? (winner === 'red' ? '红方' : '蓝方') + '掌控旗帜积分达标，占点获胜。 '
             : report.endReason === 'stalemate' ? '双方持续固守、无人推进，本局相持结束。试着让一方改为进攻。 ' : report.endReason === 'rout' && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '军心瓦解，失去继续作战能力。 '
             : winner === 'draw' && report.red + report.blue > 0 && report.morale &&
@@ -847,6 +866,9 @@ const UI = {
         document.getElementById('btn-terrain').onclick = () => this.startTerrain();
         document.querySelectorAll('[data-terrain-entry]').forEach(button => {
             button.onclick = () => this.startTerrain(button.dataset.terrainEntry);
+        });
+        document.querySelectorAll('[data-control-entry]').forEach(button => {
+            button.onclick = () => { this.startControl(); Snd.play('tick'); };
         });
         document.querySelectorAll('[data-terrain]').forEach(button => {
             button.onclick = () => this.selectTerrain(button.dataset.terrain);

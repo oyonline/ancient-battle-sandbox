@@ -32,6 +32,7 @@
     <div id="controlbar" hidden>
         <div id="morale-cue" class="morale-cue" role="status" hidden></div>
         <div id="deathmatch-hud-rule" class="deathmatch-rule" hidden>死斗：溃兵可重整，直到一方全灭</div>
+        <div id="control-hud-rule" class="deathmatch-rule" hidden>⚑ 占点征服：占住旗帜攒积分，先到 60 分者胜</div>
         <div id="commands-hud" class="commands-hud" aria-label="本局双方指令" hidden></div>
         <div id="tactics-hud" class="tactics-hud" aria-label="两军战术与可战兵力" aria-live="off" hidden>
             <div class="tactics-team red" id="tactics-red">
@@ -90,6 +91,10 @@
                     <div class="terrain-entry">
                         <div><div class="eyebrow">地形演练 · 自然坡地 / 树林 / 河桥</div><h3>沿坡仰攻、骑兵绕后，还是争桥头？</h3><p>双方各 76 人，四兵种完全相同。自然坡地整片可走，据高一方沿坡守位；树林、河桥默认双方推进。换地形，也换一种打法。</p></div>
                         <div class="terrain-entry-actions"><button class="secondary-btn" id="btn-terrain">⛰ 蓝方自然坡地 →</button><button class="secondary-btn" data-terrain-entry="red_pass">⛰ 红方自然坡地</button><button class="secondary-btn" data-terrain-entry="forest">🌲 穿越林地</button><button class="secondary-btn" data-terrain-entry="river">🌉 三桥河谷</button></div>
+                    </div>
+                    <div class="terrain-entry">
+                        <div><div class="eyebrow">占点征服 · 新玩法</div><h3>三面旗立中场，歼灭不再是唯一解。</h3><p>双方各 64 人对称开进。旗圈内站住 5 秒即占领，夺旗要先中立再反占；每面归属旗每秒 +1 分，先到 60 分获胜——分兵抢旗还是集团碾压，全看调度。</p></div>
+                        <div class="terrain-entry-actions"><button class="secondary-btn" data-control-entry="flat"><b>⚑ 平原三旗</b><small>开阔地纯占点博弈</small></button></div>
                     </div>
                     <div class="tactics-entry">
                         <div class="tactics-entry-copy"><div class="eyebrow">战阵演练 · 新玩法</div><h3>再添五十预备，能否破阵？</h3><p>100 剑士发起进攻，50 剑士在后方接应、分批增援。收拢溃兵，重整后再次出击；也可切回 100 对 100 比较。</p></div>

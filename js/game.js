@@ -802,7 +802,7 @@ class IsoBattleScene extends Phaser.Scene {
     resetBattleData() {
         this.unitInspector?.reset();
         this.tactics = null;
-        this.battleOptions = { deathmatch: false, reserves: { red: 0, blue: 0 }, terrain: 'flat',
+        this.battleOptions = { deathmatch: false, control: false, reserves: { red: 0, blue: 0 }, terrain: 'flat',
             cavalryOrders: { red: 'auto', blue: 'auto' } };
         this.firstContactMs = null;
         if (this.tacticsGfx) this.tacticsGfx.clear();
@@ -1165,6 +1165,7 @@ class IsoBattleScene extends Phaser.Scene {
             generateArmyPositions(team, cfg, formation).forEach(p => this.spawnUnit(team, p.type, p.gx, p.gy));
         });
         this.battleOptions.deathmatch = options.deathmatch === true;
+        this.battleOptions.control = options.control === true;
         for (const [team] of armies) {
             const cavalryOrder = options.cavalryOrders?.[team];
             this.battleOptions.cavalryOrders[team] = ['direct', 'flank_archers'].includes(cavalryOrder) ? cavalryOrder : 'auto';
@@ -1192,6 +1193,14 @@ class IsoBattleScene extends Phaser.Scene {
         this.battleStarted = false;
         this.battleOver = false;
         this.userZoom = 1;
+        // 占点征服：三面旗立在中线 x=35（换座镜像 x→70-x 下自对称），
+        // 上翼/中路/下翼纵向分布。旗归属以单位在场数判定，积分先到 60 者胜。
+        this.flags = this.battleOptions.control ? [
+            { gx: 35, gy: GRID_H * 0.24, name: '上翼' },
+            { gx: 35, gy: GRID_H * 0.5, name: '中路' },
+            { gx: 35, gy: GRID_H * 0.76, name: '下翼' }
+        ].map(f => ({ ...f, owner: null, progress: 0, contested: false })) : null;
+        this.controlScore = { red: 0, blue: 0 };
         if (this.cameras.main.setZoom) this.fitCamera();
     }
 
@@ -1546,6 +1555,7 @@ class IsoBattleScene extends Phaser.Scene {
         this.flushBraceCandidates();
         this.flushBattleImpacts();
         this.morale.update(dt);
+        if (this.battleOptions.control) this.updateFlags(dt);
         for (const unit of units) {
             if (!this.battleOptions.deathmatch && !unit.dead && !unit.withdrawn && unit.moraleState === 'routing' &&
                 (unit.gx <= 0.61 || unit.gx >= GRID_W - 0.61 || unit.gy <= 0.61 || unit.gy >= GRID_H - 0.61)) this.withdrawUnit(unit);
@@ -1699,6 +1709,26 @@ class IsoBattleScene extends Phaser.Scene {
         }
         const range = unit.typeData.range;
         const minD = dist(unit, nearest);
+        // 占点征服：自由近战单位在敌尚远(>12格)且不在旗圈内时，向最近的非己方旗行进；
+        // 已在非己方旗圈内的单位站住守旗（见追敌分支），敌近后照常接敌不追出圈。
+        // 敌军残兵(≤3)时全员清场优先——留着几个远程敌站桩，占旗得分也赢不踏实。
+        // 骑兵由冲锋状态机驱动不经过这里；守位与战术组单位走各自入口，不受影响。
+        const foeCount = unit.team === 'red' ? this.blueAlive : this.redAlive;
+        if (this.battleOptions.control && !guardAnchor && !unit.typeData.ranged && minD > 12 && foeCount > 3 &&
+            !this.flags.some(f => f.owner !== unit.team && Math.hypot(f.gx - unit.gx, f.gy - unit.gy) <= 2.8)) {
+            let flag = null, best = Infinity;
+            for (const f of this.flags) {
+                if (f.owner === unit.team) continue;
+                const d = Math.hypot(f.gx - unit.gx, f.gy - unit.gy);
+                // 等距取 y 小者：键为镜像不变量，换座两侧选同一面旗
+                if (d < best - 1e-9 || (Math.abs(d - best) <= 1e-9 && f.gy < flag.gy - 1e-9)) { best = d; flag = f; }
+            }
+            if (flag) {
+                unit.target = nearest;
+                moveToward(unit, flag.gx, flag.gy, unit.typeData.speed, dt);
+                return;
+            }
+        }
 
         if (unit.typeData.ranged) {
             const terrain = this.battleOptions.terrain;
@@ -1802,6 +1832,9 @@ class IsoBattleScene extends Phaser.Scene {
                     // 钉死原地，迎击
                 } else if (nearest.tacticalRole === 'guard') {
                     moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
+                } else if (this.battleOptions.control && !guardAnchor && !unit.typeData.ranged &&
+                    this.flags.some(f => f.owner !== unit.team && Math.hypot(f.gx - unit.gx, f.gy - unit.gy) <= 2.8)) {
+                    // 已在非己方旗圈内：站住守旗不追出圈，敌贴身由攻击分支结算
                 } else {
                     const rr = Math.max(0.5, range * 0.82);
                     const ang = Math.atan2(unit.gy - nearest.gy, unit.gx - nearest.gx);
@@ -2312,6 +2345,7 @@ class IsoBattleScene extends Phaser.Scene {
     // ---------------- 渲染同步 ----------------
     syncRender(time) {
         this.drawTactics();
+        this.drawFlags();
         this.unitInspector?.update();
         this.hpGfx.clear();
         const view = this._view;   // 战斗中每帧更新；部署阶段为空 = 全量同步
@@ -2485,6 +2519,76 @@ class IsoBattleScene extends Phaser.Scene {
         }
     }
 
+    // ---------------- 占点征服 ----------------
+    // 旗圈内只判"有没有人"（数量不比大小）：双方都在=争夺冻结，唯一在场方推进；
+    // progress ∈ [0,1] 表示归属牢固度，中立化(降到0)与再占领各 5 秒——夺旗总 10 秒。
+    // 每面归属旗每秒 +1 分，先到 60 分胜；歼灭/溃散胜利照常生效。
+    updateFlags(dt) {
+        const RADIUS = 2.8;
+        for (const flag of this.flags) {
+            let red = 0, blue = 0;
+            this.forEachNear(flag.gx, flag.gy, RADIUS, u => {
+                if (u.dead || u.withdrawn || u.moraleState === 'routing') return;
+                if (Math.hypot(u.gx - flag.gx, u.gy - flag.gy) > RADIUS) return;
+                if (u.team === 'red') red++; else blue++;
+            });
+            flag.contested = red > 0 && blue > 0;
+            if (flag.contested || (red === 0 && blue === 0)) continue;
+            const capturer = red > 0 ? 'red' : 'blue';
+            if (flag.owner === capturer) {
+                flag.progress = Math.min(1, flag.progress + dt / 5);
+                continue;
+            }
+            if (flag.owner != null) {
+                // 对方归属：先磨掉牢固度，归零即中立化；反占从下一帧开始
+                flag.progress -= dt / 5;
+                if (flag.progress <= 0) { flag.progress = 0; flag.owner = null; }
+                continue;
+            }
+            // 无归属：向唯一在场方推进，满 5 秒占领
+            flag.progress += dt / 5;
+            if (flag.progress >= 1) {
+                flag.progress = 1;
+                flag.owner = capturer;
+                this.addBattleEvent(`flag-${flag.name}-${capturer}-${Math.floor(this.simulationTime)}`,
+                    `${capturer === 'red' ? '红方' : '蓝方'}占领了${flag.name}旗帜`, capturer);
+                this._countsDirty = true;
+            }
+        }
+        for (const team of ['red', 'blue']) {
+            this.controlScore[team] += dt * this.flags.filter(f => f.owner === team).length;
+        }
+    }
+
+    drawFlags() {
+        if (!this.flags) return;
+        if (!this.flagGfx) this.flagGfx = this.add.graphics().setDepth(11990);
+        const g = this.flagGfx;
+        g.clear();
+        for (const flag of this.flags) {
+            const base = this.groundPoint(flag.gx, flag.gy);
+            const poleTop = { x: base.x, y: base.y - 34 };
+            g.lineStyle(3, 0x3a2f1b, 0.9);
+            g.lineBetween(base.x, base.y, poleTop.x, poleTop.y);
+            // 旗面颜色随归属，未占领为灰白；争夺中闪烁提示
+            const color = flag.owner === 'red' ? 0xff5b5b : flag.owner === 'blue' ? 0x57a0ff : 0xd8d2c0;
+            const flicker = flag.contested ? (Math.floor(this.simulationTime * 4) % 2 ? 0.35 : 0.85) : 0.9;
+            g.fillStyle(color, flicker);
+            g.fillTriangle(poleTop.x, poleTop.y, poleTop.x + 20, poleTop.y + 6, poleTop.x, poleTop.y + 13);
+            // 占领进度：旗杆底部的弧形进度环（进攻方色）
+            if (flag.progress > 0 && flag.progress < 1) {
+                const arcColor = flag.owner && flag.progress > 0.5 ? color : 0xffd24a;
+                g.lineStyle(3, arcColor, 0.95);
+                g.beginPath();
+                g.arc(base.x, base.y, 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * flag.progress);
+                g.strokePath();
+            } else if (flag.progress >= 1) {
+                g.lineStyle(3, color, 0.8);
+                g.strokeCircle(base.x, base.y, 9);
+            }
+        }
+    }
+
     // ---------------- 胜负 ----------------
     checkWin() {
         if (this.battleOver) return;
@@ -2505,9 +2609,11 @@ class IsoBattleScene extends Phaser.Scene {
         const standingOff = !defeated.red && !defeated.blue && this.tactics?.isStalemate();
         if (standingOff && this.battleOptions.deathmatch) this.tactics.breakStalemate();
         const stalemate = standingOff && !this.battleOptions.deathmatch;
-        if (!defeated.red && !defeated.blue && !stalemate) return;
+        const controlWon = this.battleOptions.control
+            ? ['red', 'blue'].find(team => this.controlScore[team] >= 60) : null;
+        if (!controlWon && !defeated.red && !defeated.blue && !stalemate) return;
         // 已发出的箭继续落地：最后一名射手阵亡后仍可能双方同归于尽。
-        if (this.arrows.length > 0) {
+        if (!controlWon && this.arrows.length > 0) {
             // 只等待已经离弦的箭；停止生成新攻击，避免密集箭雨无限延后溃败结算。
             this.resolvingOutcome = true;
             this.battleQueue = [];
@@ -2515,12 +2621,16 @@ class IsoBattleScene extends Phaser.Scene {
         }
         this.battleOver = true;
         this.battleQueue = [];
-        const winner = stalemate || (defeated.red && defeated.blue) ? 'draw' : defeated.red ? 'blue' : 'red';
-        this.endReason = stalemate ? 'stalemate' : winner === 'draw' ? 'draw' :
+        const winner = controlWon || (stalemate || (defeated.red && defeated.blue) ? 'draw' : defeated.red ? 'blue' : 'red');
+        this.endReason = controlWon ? 'control' : stalemate ? 'stalemate' : winner === 'draw' ? 'draw' :
             (defeated.red && red > 0) || (defeated.blue && blue > 0) ? 'rout' : 'elimination';
         if (this.endReason === 'rout') {
             const loser = winner === 'red' ? 'blue' : 'red';
             this.addBattleEvent(`collapse-${loser}`, `${loser === 'red' ? '红方' : '蓝方'}全军持续溃散，失去战斗意愿`, loser);
+        }
+        if (this.endReason === 'control') {
+            const loser = winner === 'red' ? 'blue' : 'red';
+            this.addBattleEvent(`control-${winner}`, `${winner === 'red' ? '红方' : '蓝方'}掌控旗帜积分获胜`, loser);
         }
         if (stalemate) this.addBattleEvent('tactic-stalemate', '双方持续固守，未再接战，本局相持结束', null);
         this.showVictory(winner);
