@@ -1721,6 +1721,13 @@ class IsoBattleScene extends Phaser.Scene {
                 // 敌人逼近：边退边让队友输出
                 const a = Math.atan2(unit.gy - nearest.gy, unit.gx - nearest.gx);
                 moveToward(unit, unit.gx + Math.cos(a) * 3, unit.gy + Math.sin(a) * 3, unit.typeData.speed * 0.92, dt);
+            } else if (unit.strafeUntil > now) {
+                // 射程内横向拉扯走位中：站桩对射是木桩，箭有散布、走位让敌方瞄准陈旧化
+                if (Math.hypot(unit.strafeX - unit.gx, unit.strafeY - unit.gy) < 0.12) {
+                    unit.strafeUntil = 0;
+                } else {
+                    moveToward(unit, unit.strafeX, unit.strafeY, unit.typeData.speed * 0.8, dt);
+                }
             }
             if (now - unit.lastAttack > unit.typeData.atkSpeed) {
                 let shootTarget = null, bestScore = Infinity;
@@ -1738,6 +1745,28 @@ class IsoBattleScene extends Phaser.Scene {
                 if (shootTarget) {
                     unit.lastAttack = now;
                     this.playAttackAnim(unit, shootTarget);
+                    // 攻击间隙横向拉扯（仅自由弓手、敌在 3.2~射程的站桩区）：
+                    // 复用近战 strafe 的占位检查与确定性随机（unitRand 按镜像对称位置
+                    // 播种、方向 mir 取反），换座配对弓手走位严格镜像；守位弓手
+                    // 以锚为令不走位，敌近后退/超界回锚的优先级都不受影响。
+                    if (!guardAnchor && minD >= 3.2 && minD <= targetRange && now > (unit.nextShift ?? 0)) {
+                        unit.nextShift = now + 1400 + unitRand(unit) * 2600;
+                        const mir = unit.team === 'red' ? 1 : -1;   // 蓝方角度取反：与红方配对单位行为严格镜像
+                        const side = unitRand(unit) < 0.5 ? 1 : -1;
+                        const perp = Math.atan2(unit.gy - nearest.gy, unit.gx - nearest.gx) + mir * side * Math.PI / 2;
+                        const step = 0.8 + unitRand(unit) * 0.8;
+                        const sx = clamp(unit.gx + Math.cos(perp) * step, 1.2, GRID_W - 1.2);
+                        const sy = clamp(unit.gy + Math.sin(perp) * step, 1.2, GRID_H - 1.2);
+                        let taken = false;
+                        this.forEachNear(sx, sy, 0.42, o => {
+                            if (o !== unit && o.team === unit.team && !o.dead && !o.withdrawn &&
+                                Math.hypot(o.gx - sx, o.gy - sy) < 0.42) taken = true;
+                        });
+                        if (!taken) {
+                            unit.strafeX = sx; unit.strafeY = sy;
+                            unit.strafeUntil = now + 500 + unitRand(unit) * 400;
+                        }
+                    }
                     const victim = shootTarget;
                     const actionEpoch = unit.actionEpoch;
                     // 拉弓 → 松弦放箭（与动画同步）
