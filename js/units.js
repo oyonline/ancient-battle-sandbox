@@ -673,12 +673,17 @@ class CavalryAI {
             return true;
         }
         if (unit.stateTime >= 3) {
-            let nearby = 0, spears = false;
+            let nearby = 0, spears = false, soft = false;
             unit.scene.forEachNear(unit.gx, unit.gy, 2.2, other => {
                 if (other.team === unit.team || other.dead || other.withdrawn || other.moraleState === 'routing' || dist(unit, other) > 2.2) return;
-                nearby++; spears ||= other.type === 'pikeman';
+                nearby++; spears ||= other.type === 'pikeman'; soft ||= other.type === 'archer';
             });
-            if (nearby <= 2 && !spears) {
+            // 失血脱离纪律（hit-and-run）：被矛围攻磨血过 55% 且刀口上已无软目标可收割
+            // 才突围重整——矛对骑加成是真威胁，但身边还有弓手时继续砍（撤了就白挨射）；
+            // 阈值取 0.45：撤得太早输出真空期反噬战局（矛海靠骑撤离循环白赚）；
+            // 失血过 70% 无论被谁围都撤（兜底，防被慢慢磨死）。
+            if (nearby <= 2 && !spears || spears && !soft && unit.hp < unit.maxHp * 0.45 ||
+                unit.hp < unit.maxHp * 0.3) {
                 unit.state = 'reform'; unit.stateTime = 0; unit.reformX = null;
                 return true;
             }
