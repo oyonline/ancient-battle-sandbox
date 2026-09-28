@@ -1499,6 +1499,13 @@ class IsoBattleScene extends Phaser.Scene {
             unit.pgx = unit.gx; unit.pgy = unit.gy;
             unit.moveX = 0; unit.moveY = 0;
             unit.pushX = 0; unit.pushY = 0;
+            // 冲锋视图快照：规划循环内单位按数组顺序更新，后手会读到先手刚写的新值——
+            // 红蓝座位数组顺序相反，读"新鲜/陈旧"不一致即破坏换座对称。统一读帧首快照。
+            if (unit.type === 'cavalry') {
+                unit.chargeViewX = unit.chargeDX;
+                unit.chargeViewY = unit.chargeDY;
+                unit.chargeViewState = unit.state;
+            }
         }
         for (const unit of units) if (unit.type === 'pikeman' && unit.tacticalRole !== 'guard') updatePikeBrace(unit, dt);
         if (this.tactics) this.tactics.beginStep(dt);
@@ -1609,6 +1616,37 @@ class IsoBattleScene extends Phaser.Scene {
         }
     }
 
+    // 目标粘滞：换目标需要新目标显著更优（近 20%+）或当前目标倒下，消除等距敌人间的来回抖动。
+    // 溃逃中的敌人仍是合法目标（追击规则维持现状），只治"选谁"，不改"打不打"。
+    stickyTarget(unit) {
+        const nearest = this.nearestEnemy(unit);
+        const current = unit.meleeTarget;
+        if (!current || current.dead || current.withdrawn || current === nearest) {
+            unit.meleeTarget = nearest;
+            return nearest;
+        }
+        if (!nearest) return current;
+        const dc = dist(unit, current), dn = dist(unit, nearest);
+        if (dn < dc * 0.8) { unit.meleeTarget = nearest; return nearest; }
+        return current;
+    }
+
+    // 遇骑结阵的探测器：半径内朝本队冲锋（含穿刺）且弹道指向 ±60° 扇区内的敌骑，取 id 最小者决胜。
+    // 读帧首冲锋视图快照（chargeView*），保证换座对称——见 advanceBattle 帧首注释。
+    incomingCharge(unit, radius) {
+        let threat = null;
+        this.forEachNear(unit.gx, unit.gy, radius, e => {
+            if (e.team === unit.team || e.dead || e.withdrawn || e.type !== 'cavalry') return;
+            const view = e.chargeViewState;
+            if (view !== 'charge' && view !== 'pierce') return;
+            const dx = unit.gx - e.gx, dy = unit.gy - e.gy, d = Math.hypot(dx, dy);
+            if (d > radius || d < 0.05) return;
+            if ((e.chargeViewX ?? 0) * dx + (e.chargeViewY ?? 0) * dy < d * 0.5) return;
+            if (!threat || e.id < threat.id) threat = e;
+        });
+        return threat;
+    }
+
     // 攻击时朝向实际目标，出手期间锁定画面朝向。
     // 伤害在挥砍帧上结算（见 updateNormalUnit）。
     playAttackAnim(unit, target = null) {
@@ -1648,7 +1686,7 @@ class IsoBattleScene extends Phaser.Scene {
 
     updateNormalUnit(unit, now, dt, guardAnchor = null) {
         if (unit.dead || unit.withdrawn || unit.moraleState === 'routing') return;
-        const nearest = this.nearestEnemy(unit);
+        const nearest = this.stickyTarget(unit);
         if (!nearest) {
             if (guardAnchor && dist(unit, guardAnchor) > 0.2) {
                 unit.groundGuardReturning = true;
@@ -1686,7 +1724,12 @@ class IsoBattleScene extends Phaser.Scene {
                 this.forEachNear(unit.gx, unit.gy, range * Terrain.MAX_RANGE_MULTIPLIER, e => {
                     if (e.team === unit.team || e.dead || e.withdrawn) return;
                     if (dist(unit, e) > Terrain.rangedRange(terrain, unit, e)) return;
-                    const score = e.hp * 1000 + e.id;
+                    // 火力纪律：正在冲锋且朝己方逼近的敌骑压过残血集火——等它贴脸不如现在就射。
+                    // 冲锋朝向读帧首快照，保证换座对称（见 advanceBattle 帧首注释）。
+                    const incoming = e.type === 'cavalry' &&
+                        (e.chargeViewState === 'charge' || e.chargeViewState === 'pierce') &&
+                        (unit.gx - e.gx) * (e.chargeViewX ?? 0) + (unit.gy - e.gy) * (e.chargeViewY ?? 0) > 0;
+                    const score = e.hp * 1000 + e.id - (incoming ? 1e7 : 0);
                     if (score < bestScore) { bestScore = score; shootTarget = e; }
                 });
                 if (shootTarget) {
@@ -1712,9 +1755,16 @@ class IsoBattleScene extends Phaser.Scene {
                     moveToward(unit, unit.strafeX, unit.strafeY, unit.typeData.speed * 0.8, dt);
                 }
             } else if (minD > range || !Terrain.segmentClear(this.battleOptions.terrain, unit.gx, unit.gy, nearest.gx, nearest.gy)) {
+                // 遇骑结阵：矛邻成排且来骑弹道朝本队压来（±60°）时停步——
+                // 停稳半秒即触发现有架枪快照，行军矛兵就地变临时枪墙。
+                // 只停步不转向：行军矛枪口本来就朝着敌线，正面来骑正好迎击；
+                // 侧后突袭照常行军——转向有代价，不能瞬间变正面屏障（见 battle-engine 侧后测试）。
                 // 架枪中的长枪兵钉死原地迎击；其余贴"接战环"逼近——不叠目标中心，多人自然围开。
                 // 守阵哨位是面墙不是点目标：贴正面硬攻不绕位——绕位会把整面墙拆成一个个被围死的哨位。
-                if (!Terrain.segmentClear(this.battleOptions.terrain, unit.gx, unit.gy, nearest.gx, nearest.gy)) {
+                const rider = unit.type === 'pikeman' && unit.braceSupport >= 2 ? this.incomingCharge(unit, 7) : null;
+                if (rider) {
+                    // 钉死原地，保持行进朝向迎击
+                } else if (!Terrain.segmentClear(this.battleOptions.terrain, unit.gx, unit.gy, nearest.gx, nearest.gy)) {
                     moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
                 } else if (unit.type === 'pikeman' && unit.braceHold) {
                     // 钉死原地，迎击
