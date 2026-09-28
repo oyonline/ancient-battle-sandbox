@@ -559,14 +559,26 @@ class IsoBattleScene extends Phaser.Scene {
                 paint(zone, 0xd6bd80, 0.5);
                 g.lineStyle(2, 0xeee0ad, 0.6); g.strokePoints(polygon(zone), true);
             } else if (zone.kind === 'forest') {
-                // 连片噪声林斑：半格采样贴地铺色，边缘与通行判定共用同一占位场；林缘一圈浅绿过渡。
+                // 连片噪声林斑：半格采样贴地铺色，边缘与通行判定共用同一占位场；四档由草色渐入深绿。
+                const ramp = [[0x537f47, 0.26], [0x47703d, 0.38], [0x3d6637, 0.52], [0x315c31, 0.64]];
                 for (let y = zone.y1; y < zone.y2; y += 0.5) for (let x = zone.x1; x < zone.x2; x += 0.5) {
-                    const density = Terrain.forestField(x + 0.25, y + 0.25);
-                    if (density <= Terrain.FOREST_EDGE) continue;
-                    const deep = density > Terrain.FOREST_EDGE + 0.2;
-                    g.fillStyle(deep ? 0x315c31 : 0x47703d, deep ? 0.64 : 0.4);
+                    const depth = Terrain.forestField(x + 0.25, y + 0.25) - Terrain.FOREST_EDGE;
+                    if (depth <= 0) continue;
+                    const tier = depth > 0.55 ? 3 : depth > 0.32 ? 2 : depth > 0.16 ? 1 : 0;
+                    g.fillStyle(ramp[tier][0], ramp[tier][1]);
                     g.fillPoints(polygon({ x1: x, y1: y, x2: x + 0.5, y2: y + 0.5 }), true);
                 }
+            }
+        }
+        if (key === 'forest') {
+            // 林隙小径：腰桥两侧的豁口撒浅色草斑，向玩家提示可穿插的路线；只落在空地上，不压林斑。
+            for (const dir of [-1, 1]) for (let i = 0; i < 7; i++) {
+                const px = 35 + dir * (5.5 + i * 1.05);
+                const py = 35 + (this.terNoise(px * 0.9 + dir * 17, 5) - 0.5) * 4.2;
+                if (this.terNoise(px * 1.3 + 3, py * 1.3) < 0.3) continue;
+                if (Terrain.forestField(px, py) > Terrain.FOREST_EDGE - 0.06) continue;
+                g.fillStyle(0x9db36a, 0.45);
+                g.fillPoints(polygon({ x1: px - 0.55, y1: py - 0.55, x2: px + 0.55, y2: py + 0.55 }), true);
             }
         }
         for (const block of geometry.blockers) {
@@ -627,6 +639,8 @@ class IsoBattleScene extends Phaser.Scene {
                 const big = density > 0.55 && clump > 0.45;
                 const tree = this.add.image(p.x, p.y, big ? 'props/tree_big' : 'props/tree_small')
                     .setOrigin(0.5, 0.92).setScale((big ? 0.42 : 0.33) + clump * 0.1).setAlpha(0.85).setDepth(3);
+                const shade = this.terNoise(x * 1.7 + 31, y * 1.7 + 7);
+                tree.setTint(shade > 0.62 ? 0xf2f6e4 : shade < 0.34 ? 0xd4e0d0 : 0xe7eeda);
                 this.terrainProps.push(tree);
             }
         }
