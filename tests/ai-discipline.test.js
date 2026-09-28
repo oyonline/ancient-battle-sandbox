@@ -240,3 +240,29 @@ test('侧翼反冲：敌纵深无弓可打不出击', () => {
     for (let i = 0; i < 60 * 8; i++) scene.advanceBattle(STEP);
     assert.ok(riders.every(u => !u.counterRaid), '侧后没有软目标，出击无利可图');
 });
+
+// ---------- F 战线连贯（轻量）：未接战剑士与脱节邻兵互相收拢，肩并肩推进 ----------
+test('战线连贯：脱节剑士推进中向邻兵收拢', () => {
+    const scene = makeScene();
+    const a = addUnit(scene, 'red', 'infantry', 30, 28);
+    const b = addUnit(scene, 'red', 'infantry', 34, 32);
+    const foe = addUnit(scene, 'blue', 'infantry', 48, 30);
+    scene.rebuildSpatial();
+    const gap0 = Math.hypot(a.gx - b.gx, a.gy - b.gy);
+    for (let i = 0; i < 120 && !foe.dead; i++) scene.advanceBattle(STEP);
+    const gap = Math.hypot(a.gx - b.gx, a.gy - b.gy);
+    assert.ok(gap < gap0 - 0.6, `横向脱节的邻兵应在推进中收拢（${gap0.toFixed(2)} → ${gap.toFixed(2)}）`);
+    assert.ok(!a.dead && !b.dead, '凝聚不应带来伤亡');
+});
+
+test('战线连贯：邻兵未脱节时不干预正常追敌', () => {
+    const scene = makeScene();
+    const a = addUnit(scene, 'red', 'infantry', 30, 30);
+    const b = addUnit(scene, 'red', 'infantry', 31.2, 30);
+    const foe = addUnit(scene, 'blue', 'infantry', 38, 31.5);
+    scene.rebuildSpatial();
+    for (let i = 0; i < 240 && !foe.dead; i++) scene.advanceBattle(STEP);
+    const gap = Math.hypot(a.gx - b.gx, a.gy - b.gy);
+    assert.ok(gap <= 2.2, `并肩的邻兵不应被拉开成散兵线（间距 ${gap.toFixed(2)}）`);
+    assert.ok(foe.dead || foe.hp < foe.maxHp, '两人应正常接敌输出');
+});

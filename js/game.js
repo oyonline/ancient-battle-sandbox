@@ -1776,7 +1776,26 @@ class IsoBattleScene extends Phaser.Scene {
                 } else {
                     const rr = Math.max(0.5, range * 0.82);
                     const ang = Math.atan2(unit.gy - nearest.gy, unit.gx - nearest.gx);
-                    moveToward(unit, nearest.gx + Math.cos(ang) * rr, nearest.gy + Math.sin(ang) * rr, unit.typeData.speed, dt);
+                    let tx = nearest.gx + Math.cos(ang) * rr, ty = nearest.gy + Math.sin(ang) * rr;
+                    // F 战线连贯（轻量起步）：未接战的剑士与最近同队剑士脱节时向邻兵收拢——
+                    // 各自直奔最近敌会把正面拉成散兵线，肩并肩推进才有局部人数优势；
+                    // 落点取"接敌环位与邻兵位的中点"，保住前向分量不停步互等，
+                    // 近于阈值即恢复正常追敌。前排溃口由同机制覆盖：缺口两侧脱节自然靠拢。
+                    // 邻兵查询过滤界=查询界(4.5)，桶毛边不泄漏，无需镜像量化。
+                    if (unit.type === 'infantry' && minD > 2.2) {
+                        let neighbor = null, nd = Infinity;
+                        this.forEachNear(unit.gx, unit.gy, 4.5, o => {
+                            if (o === unit || o.team !== unit.team || o.type !== 'infantry' ||
+                                o.dead || o.withdrawn || o.moraleState === 'routing') return;
+                            const d = Math.hypot(o.gx - unit.gx, o.gy - unit.gy);
+                            if (d > 4.5) return;
+                            if (d < nd - 1e-9 || (Math.abs(d - nd) <= 1e-9 && o.id < neighbor.id)) { nd = d; neighbor = o; }
+                        });
+                        if (neighbor && nd > 2.0) {
+                            tx = (tx + neighbor.gx) / 2; ty = (ty + neighbor.gy) / 2;
+                        }
+                    }
+                    moveToward(unit, tx, ty, unit.typeData.speed, dt);
                 }
             } else {
                 const lastAttackBefore = unit.lastAttack;
