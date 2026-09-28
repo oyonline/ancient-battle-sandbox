@@ -2520,38 +2520,33 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     // ---------------- 占点征服 ----------------
-    // 旗圈内只判"有没有人"（数量不比大小）：双方都在=争夺冻结，唯一在场方推进；
-    // progress ∈ [0,1] 表示归属牢固度，中立化(降到0)与再占领各 5 秒——夺旗总 10 秒。
-    // 每面归属旗每秒 +1 分，先到 60 分胜；歼灭/溃散胜利照常生效。
+    // 英雄连式兵力拔河：圈内双方单位的占领力互相抵消，净差拉进度条——
+    // 人多的一方能从对方手里硬拔，兵力相当才是真僵持。占领力按兵种不同
+    // （×10 取整做计数：求和顺序无关、零浮点噪声，换座镜像天然同步）。
+    // progress ∈ [-1,+1]：+1 红完全占领、-1 蓝完全占领、0 中立；归属只在
+    // 拉满端点时获得，被拉过中线才失去（防守惯性，同英雄连的中立化两段）；
+    // 单位离开进度保持不清零。每面归属旗每秒 +1 分，先到 60 分胜。
     updateFlags(dt) {
-        const RADIUS = 2.8;
+        const RADIUS = 2.8, RATE = 0.1 / 10;           // 净占领力 10（约一队剑士）10 秒拉满
+        const POWER = { infantry: 10, pikeman: 7, archer: 4, cavalry: 12 };
         for (const flag of this.flags) {
             let red = 0, blue = 0;
             this.forEachNear(flag.gx, flag.gy, RADIUS, u => {
                 if (u.dead || u.withdrawn || u.moraleState === 'routing') return;
                 if (Math.hypot(u.gx - flag.gx, u.gy - flag.gy) > RADIUS) return;
-                if (u.team === 'red') red++; else blue++;
+                if (u.team === 'red') red += POWER[u.type] ?? 5; else blue += POWER[u.type] ?? 5;
             });
             flag.contested = red > 0 && blue > 0;
-            if (flag.contested || (red === 0 && blue === 0)) continue;
-            const capturer = red > 0 ? 'red' : 'blue';
-            if (flag.owner === capturer) {
-                flag.progress = Math.min(1, flag.progress + dt / 5);
-                continue;
-            }
-            if (flag.owner != null) {
-                // 对方归属：先磨掉牢固度，归零即中立化；反占从下一帧开始
-                flag.progress -= dt / 5;
-                if (flag.progress <= 0) { flag.progress = 0; flag.owner = null; }
-                continue;
-            }
-            // 无归属：向唯一在场方推进，满 5 秒占领
-            flag.progress += dt / 5;
-            if (flag.progress >= 1) {
-                flag.progress = 1;
-                flag.owner = capturer;
-                this.addBattleEvent(`flag-${flag.name}-${capturer}-${Math.floor(this.simulationTime)}`,
-                    `${capturer === 'red' ? '红方' : '蓝方'}占领了${flag.name}旗帜`, capturer);
+            const net = red - blue;                     // 正=红方向拉，负=蓝方向拉
+            if (net !== 0) flag.progress = Math.max(-1, Math.min(1, flag.progress + net * RATE * dt));
+            const had = flag.owner;
+            if (flag.progress >= 1) flag.owner = 'red';
+            else if (flag.progress <= -1) flag.owner = 'blue';
+            else if (had === 'red' && flag.progress < 0) flag.owner = null;   // 被拉过中线：失去归属
+            else if (had === 'blue' && flag.progress > 0) flag.owner = null;
+            if (flag.owner !== had && flag.owner != null) {
+                this.addBattleEvent(`flag-${flag.name}-${flag.owner}-${Math.floor(this.simulationTime)}`,
+                    `${flag.owner === 'red' ? '红方' : '蓝方'}占领了${flag.name}旗帜`, flag.owner);
                 this._countsDirty = true;
             }
         }
@@ -2575,16 +2570,18 @@ class IsoBattleScene extends Phaser.Scene {
             const flicker = flag.contested ? (Math.floor(this.simulationTime * 4) % 2 ? 0.35 : 0.85) : 0.9;
             g.fillStyle(color, flicker);
             g.fillTriangle(poleTop.x, poleTop.y, poleTop.x + 20, poleTop.y + 6, poleTop.x, poleTop.y + 13);
-            // 占领进度：旗杆底部的弧形进度环（进攻方色）
-            if (flag.progress > 0 && flag.progress < 1) {
-                const arcColor = flag.owner && flag.progress > 0.5 ? color : 0xffd24a;
-                g.lineStyle(3, arcColor, 0.95);
+            // 占领进度：旗杆底部的弧形进度环——拔河方向着色（正=红方拉、负=蓝方拉），
+            // 环长为 |progress|；已归属（端点）画满环
+            if (flag.progress > 0) {
+                g.lineStyle(3, 0xff5b5b, 0.95);
                 g.beginPath();
                 g.arc(base.x, base.y, 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * flag.progress);
                 g.strokePath();
-            } else if (flag.progress >= 1) {
-                g.lineStyle(3, color, 0.8);
-                g.strokeCircle(base.x, base.y, 9);
+            } else if (flag.progress < 0) {
+                g.lineStyle(3, 0x57a0ff, 0.95);
+                g.beginPath();
+                g.arc(base.x, base.y, 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * -flag.progress);
+                g.strokePath();
             }
         }
     }
