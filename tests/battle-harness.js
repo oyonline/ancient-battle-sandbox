@@ -29,7 +29,8 @@ function displayObject() {
         setTint() { return this; }, clearTint() { return this; }, anims: { stop() {} },
         destroy() { this.destroyed = true; },
         clear() {}, lineStyle() {}, lineBetween() {}, fillStyle() {}, fillCircle() {}, fillRect() {},
-        fillTriangle() {}, beginPath() {}, arc() {}, strokePath() {}, strokeCircle() {}
+        fillTriangle() {}, strokeTriangle() {}, fillPoints() {}, strokePoints() {}, fillEllipse() {},
+        beginPath() {}, arc() {}, strokePath() {}, strokeCircle() {}
     };
 }
 

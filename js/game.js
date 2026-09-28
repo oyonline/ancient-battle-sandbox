@@ -21,6 +21,24 @@ function gridToScreen(gx, gy) {
     return { x: (gx - gy) * TW / 2 + OX, y: (gx + gy) * TH / 2 + OY };
 }
 
+// 地面圆的等距投影采样（等距视角下圆呈椭圆，不能直接 fillCircle）
+function sampleGroundRing(scene, gx, gy, radius, segments) {
+    const points = [];
+    for (let i = 0; i <= segments; i++) {
+        const a = i / segments * Math.PI * 2;
+        points.push(scene.groundPoint(gx + Math.cos(a) * radius, gy + Math.sin(a) * radius));
+    }
+    return points;
+}
+
+// 0xRRGGBB 颜色线性插值（渲染平滑过渡用，不影响模拟）
+function lerpColor(from, to, k) {
+    const fr = from >> 16 & 255, fg = from >> 8 & 255, fb = from & 255;
+    const tr = to >> 16 & 255, tg = to >> 8 & 255, tb = to & 255;
+    return (Math.round(fr + (tr - fr) * k) << 16) |
+        (Math.round(fg + (tg - fg) * k) << 8) | Math.round(fb + (tb - fb) * k);
+}
+
 // ==================== 接地基准表（素材源图像素，源图高 156） ====================
 // AI 出图的底部留白每张都不一样（10~34px），若直接以贴图底边当脚底，
 // 角色就会悬在影子上面 → 飘。这里把每个兵种的脚底位置量出来，统一压到地面线。
@@ -2544,6 +2562,7 @@ class IsoBattleScene extends Phaser.Scene {
             else if (flag.progress <= -1) flag.owner = 'blue';
             else if (had === 'red' && flag.progress < 0) flag.owner = null;   // 被拉过中线：失去归属
             else if (had === 'blue' && flag.progress > 0) flag.owner = null;
+            if (flag.owner !== had) flag.pulseAt = this.simulationTime;       // 归属变化：扩散脉冲
             if (flag.owner !== had && flag.owner != null) {
                 this.addBattleEvent(`flag-${flag.name}-${flag.owner}-${Math.floor(this.simulationTime)}`,
                     `${flag.owner === 'red' ? '红方' : '蓝方'}占领了${flag.name}旗帜`, flag.owner);
@@ -2560,27 +2579,62 @@ class IsoBattleScene extends Phaser.Scene {
         if (!this.flagGfx) this.flagGfx = this.add.graphics().setDepth(11990);
         const g = this.flagGfx;
         g.clear();
+        const t = this.simulationTime;
         for (const flag of this.flags) {
             const base = this.groundPoint(flag.gx, flag.gy);
-            const poleTop = { x: base.x, y: base.y - 34 };
-            g.lineStyle(3, 0x3a2f1b, 0.9);
-            g.lineBetween(base.x, base.y, poleTop.x, poleTop.y);
-            // 旗面颜色随归属，未占领为灰白；争夺中闪烁提示
-            const color = flag.owner === 'red' ? 0xff5b5b : flag.owner === 'blue' ? 0x57a0ff : 0xd8d2c0;
-            const flicker = flag.contested ? (Math.floor(this.simulationTime * 4) % 2 ? 0.35 : 0.85) : 0.9;
-            g.fillStyle(color, flicker);
-            g.fillTriangle(poleTop.x, poleTop.y, poleTop.x + 20, poleTop.y + 6, poleTop.x, poleTop.y + 13);
-            // 占领进度：旗杆底部的弧形进度环——拔河方向着色（正=红方拉、负=蓝方拉），
-            // 环长为 |progress|；已归属（端点）画满环
+            const RED = 0xff5b5b, BLUE = 0x57a0ff, NEUTRAL = 0xd8d2c0;
+            const targetColor = flag.owner === 'red' ? RED : flag.owner === 'blue' ? BLUE : NEUTRAL;
+            // 旗面显示色向目标色平滑过渡（归属切换不再是瞬变）
+            if (flag.displayColor == null) flag.displayColor = targetColor;
+            flag.displayColor = lerpColor(flag.displayColor, targetColor, 0.10);
+            const color = flag.displayColor;
+
+            // ---- 地面争夺圈：等距椭圆（groundPoint 采样），归属染色，争夺时呼吸 ----
+            const breathe = flag.contested ? 0.5 + 0.5 * Math.sin(t * 5) : 0;
+            const ringPts = sampleGroundRing(this, flag.gx, flag.gy, 2.8, 26);
+            g.fillStyle(color, flag.contested ? 0.10 + 0.08 * breathe : 0.13);
+            g.fillPoints(ringPts, true);
+            g.lineStyle(2, color, flag.contested ? 0.5 + 0.35 * breathe : 0.45);
+            g.strokePoints(ringPts, true, true);
+
+            // ---- 占领/易主的扩散脉冲（1.2 秒）----
+            if (flag.pulseAt != null && t - flag.pulseAt < 1.2) {
+                const k = (t - flag.pulseAt) / 1.2;
+                const pulsePts = sampleGroundRing(this, flag.gx, flag.gy, 2.8 + k * 5, 26);
+                g.lineStyle(4, color, 0.75 * (1 - k));
+                g.strokePoints(pulsePts, true, true);
+            }
+
+            // ---- 旗杆底座 + 加高旗杆 + 杆顶色球 ----
+            const POLE = 46;
+            g.fillStyle(0x2c2418, 0.85);
+            g.fillEllipse(base.x, base.y + 2, 15, 7);
+            g.lineStyle(3, 0x3a2f1b, 0.95);
+            g.lineBetween(base.x, base.y, base.x, base.y - POLE);
+            g.fillStyle(color, 0.95);
+            g.fillCircle(base.x, base.y - POLE - 3, 3.5);
+
+            // ---- 旗面（加大）：波浪飘动 + 争夺高频抖动 + 描边 ----
+            const wave = Math.sin(t * 3 + flag.gy) * 3;
+            const jitter = flag.contested ? Math.sin(t * 22) * 1.6 : 0;
+            const tipX = base.x + 27 + wave + jitter;
+            const tipY = base.y - POLE - 1 + Math.sin(t * 3 + flag.gy + 1) * 1.2;
+            const tailY = base.y - POLE + 18 + wave * 0.3;
+            g.fillStyle(color, flag.contested ? 0.75 + 0.2 * breathe : 0.95);
+            g.fillTriangle(base.x, base.y - POLE, tipX, tipY, base.x, tailY);
+            g.lineStyle(2, 0x1c1812, 0.35);
+            g.strokeTriangle(base.x, base.y - POLE, tipX, tipY, base.x, tailY);
+
+            // ---- 拔河进度环（杆底，方向着色：红环向红涨、蓝环向蓝涨）----
             if (flag.progress > 0) {
-                g.lineStyle(3, 0xff5b5b, 0.95);
+                g.lineStyle(4, RED, 0.95);
                 g.beginPath();
-                g.arc(base.x, base.y, 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * flag.progress);
+                g.arc(base.x, base.y, 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * flag.progress);
                 g.strokePath();
             } else if (flag.progress < 0) {
-                g.lineStyle(3, 0x57a0ff, 0.95);
+                g.lineStyle(4, BLUE, 0.95);
                 g.beginPath();
-                g.arc(base.x, base.y, 9, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * -flag.progress);
+                g.arc(base.x, base.y, 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * -flag.progress);
                 g.strokePath();
             }
         }
