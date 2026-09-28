@@ -88,7 +88,7 @@ class TacticsSystem {
         const archers = members.filter(unit => unit.type === 'archer');
         const cavalry = members.filter(unit => unit.type === 'cavalry');
         const placements = [];
-        const assign = (unit, gx, gy, radius) => placements.push({ unit, gx, gy, radius });
+        const assign = (unit, gx, gy, radius, protects = false) => placements.push({ unit, gx, gy, radius, protects });
         const frontCols = Math.max(1, Math.ceil(Math.sqrt(front.length * 1.8)));
         front.forEach((unit, index) => assign(unit, cx + f * (5.5 - Math.floor(index / frontCols) * 0.88),
             cy + (index % frontCols - (Math.min(front.length, frontCols) - 1) / 2) * 0.88, 4));
@@ -102,7 +102,9 @@ class TacticsSystem {
             (Math.min(archers.length, archerCols) - 1) * 0.43 + 1.2);
         cavalry.forEach((unit, index) => {
             const wing = index % 2 ? 1 : -1, position = Math.floor(index / 2);
-            assign(unit, cx - f * (2.8 + Math.floor(position / cavalryCols) * 1.08), cy + wing * (cavalryWing + position % cavalryCols * 1.08), 6);
+            // 守骑同样带护弓标志：侧翼反冲与威胁拦截的筛选都认这个标志——
+            // 没有它，平地守区的骑兵再好的出击机会也只能全程站桩。
+            assign(unit, cx - f * (2.8 + Math.floor(position / cavalryCols) * 1.08), cy + wing * (cavalryWing + position % cavalryCols * 1.08), 6, true);
         });
         // 整体平移入界，不能逐兵 clamp 把后排压到同一个锚点。
         const shift = (values, limit) => {
@@ -111,10 +113,11 @@ class TacticsSystem {
         };
         const shiftX = shift(placements.map(point => point.gx), GRID_W);
         const shiftY = shift(placements.map(point => point.gy), GRID_H);
-        for (const { unit, gx, gy, radius } of placements) {
+        for (const { unit, gx, gy, radius, protects } of placements) {
             this.place(unit, gx + shiftX, gy + shiftY);
             Object.assign(unit, { tacticalRole: 'ground_guard', guardAnchor: { gx: unit.gx, gy: unit.gy },
-                guardRadius: radius, groundGuardTarget: null, groundGuardReturning: false });
+                guardRadius: radius, groundGuardTarget: null, groundGuardReturning: false,
+                ...(protects ? { protectArchers: true, guardLocalRadius: 6 } : {}) });
         }
         this.groundGuards[team] = { team, cx: cx + shiftX, cy: cy + shiftY, members, onHill: !!hill };
     }

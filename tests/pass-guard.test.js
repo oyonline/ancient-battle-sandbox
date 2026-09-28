@@ -72,7 +72,10 @@ test('pass support is bounded, returns to post after threats leave, and is absen
     assert.ok(cavalry.moveX > 0);
     scene.planningStep = false;
     scene.deployUnits(army, army, 'custom', 'custom', { blue: 'hold_ground' }, { terrain: 'blue_hill' });
-    assert.ok(scene.units.filter(u => u.type === 'cavalry').every(u => !u.protectArchers));
+    // 护弓标志不再专属坡口：普通守区守骑同样参与侧翼反冲与威胁拦截；
+    // legacy hills 与坡口的分界是组级威胁表(layout)，不是单位级标志。
+    assert.ok(scene.units.filter(u => u.team === 'blue' && u.type === 'cavalry').every(u => u.protectArchers));
+    assert.ok(!scene.tactics.groundGuards.blue.layout, 'legacy hills 不享受坡口威胁表驱动的拦截');
 });
 
 test('legacy 150-pike hold formations retain their rigid slots on unobstructed natural slopes', () => {
