@@ -141,6 +141,13 @@ function isPreparedPike(guard, cavalry, dx, dy) {
 }
 
 // ==================== 骑兵 AI（简化状态机，索敌走场景空间哈希） ====================
+// 镜像对称量化：把坐标/比较值钉到 0.05 粗格点（70/35/1.1/0.7 均为其倍数）。
+// 换座镜像（x→70-x，y 不变）下两侧算术路径不同，坐标带 ~1e-15 噪声；噪声恰落在
+// 空间桶边界（SP_CELL=3）或离散阈值上时，forEachNear 扫到不同桶集、分支翻转，
+// 单帧决策分岔后被混沌放大成宏观不对称。噪声 << 量子 0.05，量化后两侧喂给
+// forEachNear 与阈值比较的都是同一格点（0.05 倍数的镜像仍是 0.05 倍数）。
+function snapMirror(v) { return Math.round(v * 20) / 20; }
+
 class CavalryAI {
     command(unit) {
         const order = unit.scene.battleOptions?.cavalryOrders?.[unit.team];
@@ -493,7 +500,9 @@ class CavalryAI {
         if (!unit.target) return true;
         const target = unit.target, data = UNIT_TYPES.cavalry;
         // 守骑对冲拦截：预计相遇点只改变行进落点，接触与攻击距离仍按真实目标结算。
-        const aim = unit.guardIntercept && unit.guardIntercept.id === target.id ? unit.guardIntercept : target;
+        // 普通冲锋绕开正面枪墙：不硬怼架好的矛簇（双倍伤害+动量折损），从侧面迂回。
+        const aim = unit.guardIntercept && unit.guardIntercept.id === target.id ? unit.guardIntercept
+            : this.detourPikes(unit, target);
         const distance = dist(unit, target);
         const plan = planMovement(unit, aim.gx, aim.gy, data.chargeSpeed, dt, 'charge');
         const routed = Terrain.hasBarriers(terrain);
@@ -534,6 +543,102 @@ class CavalryAI {
         applyMovementPlan(unit, plan);
         unit.scene.chargeDust(unit);
         return true;
+    }
+
+    // 冲锋绕枪墙：沿冲锋线逐格采样探到 6 格外，命中枪口朝来路的停步矛簇时，
+    // 把冲锋落点垂直偏移出墙缘——正面怼架好的矛簇吃双倍伤害还折动量。
+    // 采样用绝对间距而非比例（比例探点随骑兵前扫，矛兵停稳架枪的半秒里探点已扫过墙位）；
+    // 墙判定看"停步成排"而非"已架好"——停稳半秒即成墙，等架好再绕来不及；
+    // 矛兵 moving 读帧首快照 pikeViewMoving（见 game.js 帧首注释）保换座读序一致。
+    // 偏移量按最近墙位留提前量；偏移方向沿世界锚定的墙轴（垂直于墙簇平均枪口朝向）——
+    // 不用冲锋 bearing 的垂线：bearing 随骑兵偏转旋转，落点跟着骑兵横移，骑手追着落点跑
+    // 是正反馈（浮点噪声被指数放大、换座必然发散）；墙轴钉在世界里，骑兵偏了会被
+    // 固定落点拉回来（负反馈稳定）。选边走自己这一侧的墙缘（骑手在墙轴上的投影），
+    // 带宽滞回防抖；骑线过墙心时定向走 y=0 翼（红蓝同侧）——随机决胜的种子惰性播种
+    // 在战场中途，换座配对单位位置漂移会跨越量化边界拿到不同种子，定向决胜才稳。
+    detourPikes(unit, aim) {
+        if (aim.type === 'pikeman') return aim;   // 目标就是矛兵：直接打它，没有"绕到墙背后"可言
+        const scene = unit.scene;
+        const dx = aim.gx - unit.gx, dy = aim.gy - unit.gy;
+        const distance = Math.hypot(dx, dy);
+        if (snapMirror(distance) < 3.5) return aim;   // 太近来不及绕，硬着头皮上
+        const nx = dx / distance, ny = dy / distance;
+        // reach 用量化距离推出（0.6/6 均为格点倍数）：s 整数步进与 reach 的比较才不会
+        // 因两侧距离噪声恰压在整数上而多探/少探一格。
+        const reach = Math.min(snapMirror(distance) - 0.6, 6);
+        const walls = [];
+        for (let s = 1; s <= reach; s += 1) {
+            // 采样点钉到镜像格点再查桶：带噪声的采样点恰落桶边界时，((gx-r)/SP_CELL)|0
+            // 两侧会扫到不同桶集、探到不同的墙——镜像决策从这里分岔（步长 1 恰为格点倍数）。
+            const px = snapMirror(unit.gx + nx * s), py = snapMirror(unit.gy + ny * s);
+            scene.forEachNear(px, py, 1.1, p => {
+                if (p.team === unit.team || p.dead || p.withdrawn || p.type !== 'pikeman') return;
+                if ((p.pikeViewMoving ?? p.moving) || p.braceSupport < 2 || p.moraleState === 'routing') return;
+                if (walls.includes(p)) return;
+                // 桶毛边裁回精确查询方形：走廊阈值(lateral±1.5)比查询方形(±1.1)宽，
+                // 毛边里的矛恰落走廊内时会被一侧收入 walls、另一侧不会——墙集合分岔。
+                if (Math.abs(p.gx - px) > 1.1 || Math.abs(p.gy - py) > 1.1) return;
+                const rx = p.gx - unit.gx, ry = p.gy - unit.gy;
+                // 走廊/枪口判定的比较值同样量化：矛兵位置噪声恰压在阈值上时两侧会翻转。
+                const along = snapMirror(rx * nx + ry * ny), lateral = snapMirror(rx * ny - ry * nx);
+                if (along < 0.3 || along > reach + 0.8) return;      // 只看来路上的墙
+                if (Math.abs(lateral) > 1.5) return;                 // 枪尖够不到冲锋线，绕它没有意义
+                // 枪口须朝骑兵来向（与 isPreparedPike 的 front 判定同构）：枪口背对/垂直不构成正面威胁
+                const fx = unit.gx - p.gx, fy = unit.gy - p.gy, fd = Math.hypot(fx, fy);
+                if (fd < 0.001 || snapMirror((fx * p.braceFacingX + fy * p.braceFacingY) / fd) < 0.5) return;
+                walls.push(p);
+            });
+        }
+        if (!walls.length) { unit.detourSign = null; return aim; }
+        let nearestAlong = Infinity, faceX = 0, faceY = 0, centerX = 0, centerY = 0;
+        for (const w of walls) {
+            const rx = w.gx - unit.gx, ry = w.gy - unit.gy;
+            nearestAlong = Math.min(nearestAlong, rx * nx + ry * ny);
+            faceX += w.braceFacingX; faceY += w.braceFacingY;
+            centerX += w.gx; centerY += w.gy;
+        }
+        if (snapMirror(nearestAlong) < 2.5 && unit.detourSign == null) return aim;   // 墙已贴脸且尚未绕行：冲锋committed；已在绕行途中则保持（墙侧通过时 along 也会缩到 2.5 内）
+        centerX /= walls.length; centerY /= walls.length;
+        const faceLen = Math.hypot(faceX, faceY) || 1;
+        const axisX = -faceY / faceLen, axisY = faceX / faceLen;    // 墙轴：沿墙排布方向
+        // 选边：走自己这侧的墙缘（投影出带宽→保持原侧，自锁不反侧）；
+        // 骑线过墙心时定向走 y=0 翼（红 +1 / 蓝 -1，落点天然换座镜像）。
+        // riderAxis 在镜像下取反，带宽比较前量化，噪声才不会翻转选边。
+        const wasSwinging = unit.detourSign != null;
+        const riderAxis = (unit.gx - centerX) * axisX + (unit.gy - centerY) * axisY;
+        if (snapMirror(riderAxis) > 0.25) unit.detourSign = 1;
+        else if (snapMirror(riderAxis) < -0.25) unit.detourSign = -1;
+        else if (unit.detourSign == null) unit.detourSign = unit.team === 'red' ? 1 : -1;
+        // 探绕行侧的簇缘：墙判定只收冲锋线±1.5格内的矛，宽墙的缘在视野外——
+        // 按视野内的矛算偏移会把落点钳在6格，骑手贴着墙滑进没架好的矛丛被白刃绞死
+        // （combat-balance 矛阵对冲全歼即此回归）。从冲锋线过墙点沿墙轴步进量出真实边宽，
+        // 边宽清不出钳制时不绕：正面硬冲吃拦截本就是矛墙的 counter 本职。
+        // 只对未起绕的骑手生效，已在绕行途中的保持 swing（同 committed 规则，墙中途变宽不弃）。
+        const crossX = unit.gx + nx * nearestAlong, crossY = unit.gy + ny * nearestAlong;
+        const sideX = axisX * unit.detourSign, sideY = axisY * unit.detourSign;
+        let wallEdge = 0, gap = 0;
+        for (let s = 0.7; s <= 8; s += 0.7) {
+            // 步长 0.7 是 0.05 格点倍数：量化把采样点钉到镜像格点，两侧查桶参数一致。
+            const qx = snapMirror(crossX + sideX * s), qy = snapMirror(crossY + sideY * s);
+            let hit = false;
+            scene.forEachNear(qx, qy, 1.1, p => {
+                if (p.team === unit.team || p.dead || p.withdrawn || p.type !== 'pikeman') return;
+                if ((p.pikeViewMoving ?? p.moving) || p.braceSupport < 2 || p.moraleState === 'routing') return;
+                // 桶覆盖是查询方形的保守超集，毛边随桶相位走（SP_CELL=3 与地图宽 70 不对齐，
+                // 两侧毛边宽不同）——按量化查询点裁回精确方形 ±1.1，命中只依赖几何而非桶相位。
+                if (Math.abs(p.gx - qx) > 1.1 || Math.abs(p.gy - qy) > 1.1) return;
+                hit = true;
+                wallEdge = Math.max(wallEdge, (p.gx - crossX) * sideX + (p.gy - crossY) * sideY);
+            });
+            gap = hit ? 0 : gap + 0.7;
+            if (!hit && gap >= 2.2) break;
+        }
+        // 绕行线在墙位处的横向偏移须盖过墙缘：偏移量 = (墙缘+余量) × 全程 / 墩前剩余路程。
+        // 余量 1.6：骑体半径+接触距离≈1.1，留 0.9 会被墙缘黏进近战。
+        const rawOffset = (wallEdge + 1.6) * distance / Math.max(nearestAlong, 1.5);
+        if (snapMirror(rawOffset) > 6 && !wasSwinging) { unit.detourSign = null; return aim; }
+        const offset = clamp(rawOffset, 2.4, 6);
+        return { gx: aim.gx + axisX * offset * unit.detourSign, gy: aim.gy + axisY * offset * unit.detourSign };
     }
 
     pierce(unit, now, dt) {

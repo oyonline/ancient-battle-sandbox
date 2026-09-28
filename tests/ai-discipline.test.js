@@ -1,9 +1,16 @@
-// AI 纪律批次1：目标粘滞（A） / 弓手火力纪律（B） / 矛兵遇骑结阵（E）。
+// AI 纪律：目标粘滞（A） / 弓手火力纪律（B） / 骑兵绕枪墙（C） / 矛兵遇骑结阵（E）。
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { makeScene, addUnit } = require('./battle-harness.js');
 
 const STEP = 1000 / 60;
+
+function wallPike(scene, x, y, facingX = -1) {
+    const p = addUnit(scene, 'blue', 'pikeman', x, y);
+    p.moving = false; p.braceSupport = 2;
+    p.braceFacingX = facingX; p.braceFacingY = 0;
+    return p;
+}
 
 test('目标粘滞：换目标需显著更优（近20%+）', () => {
     const scene = makeScene();
@@ -88,4 +95,97 @@ test('遇骑结阵：非冲锋威胁不触发停步', () => {
     scene.rebuildSpatial();
     scene.advanceBattle(STEP);
     assert.equal(pikes[1].moving, true, '站立敌骑不触发停步，照常逼近接战');
+});
+
+test('绕枪墙：正面停步矛簇迫使冲锋落点垂直偏移', () => {
+    const scene = makeScene();
+    const rider = addUnit(scene, 'red', 'cavalry', 20, 30);
+    const archer = addUnit(scene, 'blue', 'archer', 30, 30);
+    [29.3, 30, 30.7].forEach(gy => wallPike(scene, 26, gy));
+    scene.rebuildSpatial();
+    const aim = scene.cavalryAI.detourPikes(rider, archer);
+    assert.ok(Math.abs(aim.gx - archer.gx) < 0.01, `偏移应垂直于冲锋线，实际 x=${aim.gx.toFixed(2)}`);
+    const offset = Math.abs(aim.gy - archer.gy);
+    assert.ok(offset >= 2.4 && offset <= 6, `偏移量应在2.4~6格，实际 ${offset.toFixed(2)}`);
+});
+
+test('绕枪墙：躲开墙簇重心所在的一侧', () => {
+    const scene = makeScene();
+    const rider = addUnit(scene, 'red', 'cavalry', 20, 30);
+    const archer = addUnit(scene, 'blue', 'archer', 30, 30);
+    [30, 30.7, 31.4].forEach(gy => wallPike(scene, 26, gy));   // 墙整体在冲锋线上侧
+    scene.rebuildSpatial();
+    const aim = scene.cavalryAI.detourPikes(rider, archer);
+    assert.ok(aim.gy < archer.gy - 2, `墙在上侧应从下侧绕行，实际落点 y=${aim.gy.toFixed(2)}`);
+});
+
+test('绕枪墙：行军中的矛簇不是墙', () => {
+    const scene = makeScene();
+    const rider = addUnit(scene, 'red', 'cavalry', 20, 30);
+    const archer = addUnit(scene, 'blue', 'archer', 30, 30);
+    const pikes = [29.3, 30, 30.7].map(gy => wallPike(scene, 26, gy));
+    pikes.forEach(p => { p.moving = true; });
+    scene.rebuildSpatial();
+    const aim = scene.cavalryAI.detourPikes(rider, archer);
+    assert.equal(aim, archer, '矛簇在行军应直冲，骑踏散兵');
+});
+
+test('绕枪墙：不成排的散矛不算墙', () => {
+    const scene = makeScene();
+    const rider = addUnit(scene, 'red', 'cavalry', 20, 30);
+    const archer = addUnit(scene, 'blue', 'archer', 30, 30);
+    const lone = wallPike(scene, 26, 30);
+    lone.braceSupport = 0;   // 孤矛无邻兵支持
+    scene.rebuildSpatial();
+    const aim = scene.cavalryAI.detourPikes(rider, archer);
+    assert.equal(aim, archer, '单支长枪无成阵支持，不触发绕行');
+});
+
+test('绕枪墙：枪口背对来路不构成正面威胁', () => {
+    const scene = makeScene();
+    const rider = addUnit(scene, 'red', 'cavalry', 20, 30);
+    const archer = addUnit(scene, 'blue', 'archer', 30, 30);
+    [29.3, 30, 30.7].forEach(gy => wallPike(scene, 26, gy, 1));   // 枪口朝 +x（背对骑兵）
+    scene.rebuildSpatial();
+    const aim = scene.cavalryAI.detourPikes(rider, archer);
+    assert.equal(aim, archer, '枪口背对来路的矛兵迎面骑踏即可');
+});
+
+test('绕枪墙：侧翼远墙枪尖够不到冲锋线不绕', () => {
+    const scene = makeScene();
+    const rider = addUnit(scene, 'red', 'cavalry', 20, 30);
+    const archer = addUnit(scene, 'blue', 'archer', 30, 30);
+    [26.5, 27, 27.5].forEach(gy => wallPike(scene, 26, gy));   // 离冲锋线约3格
+    scene.rebuildSpatial();
+    const aim = scene.cavalryAI.detourPikes(rider, archer);
+    assert.equal(aim, archer, '3格外侧翼矛簇够不到冲锋线，无需绕行');
+});
+
+test('绕枪墙：距离太近来不及绕', () => {
+    const scene = makeScene();
+    const rider = addUnit(scene, 'red', 'cavalry', 26.9, 30);
+    const archer = addUnit(scene, 'blue', 'archer', 30, 30);
+    [29.3, 30, 30.7].forEach(gy => wallPike(scene, 28.3, gy));
+    scene.rebuildSpatial();
+    const aim = scene.cavalryAI.detourPikes(rider, archer);
+    assert.equal(aim, archer, '目标3.1格内硬着头皮直冲');
+});
+
+test('绕枪墙（行为级）：冲锋骑兵绕开架枪矛墙命中墙后弓手', () => {
+    const scene = makeScene();
+    const rider = addUnit(scene, 'red', 'cavalry', 19, 30);
+    const archer = addUnit(scene, 'blue', 'archer', 30, 30);
+    [29.3, 30, 30.7].forEach(gy => addUnit(scene, 'blue', 'pikeman', 24, gy));
+    scene.rebuildSpatial();
+    let swung = false;
+    for (let i = 0; i < 240; i++) {
+        scene.advanceBattle(STEP);
+        swung ||= Math.abs(rider.gy - 30) >= 1;
+        if (rider.dead || archer.dead) break;
+    }
+    assert.ok(!rider.dead, '骑兵应活着绕过枪墙');
+    assert.ok(swung, '骑兵应侧向绕行而非正面撞墙');
+    assert.ok(archer.dead || archer.hp < archer.maxHp, '骑兵应冲到墙后弓手');
+    assert.ok(!scene.getBattleReport().events.some(e => e.text.includes('枪阵迎击')),
+        '不应触发枪阵迎击（正面撞架好的枪墙）');
 });

@@ -1506,6 +1506,9 @@ class IsoBattleScene extends Phaser.Scene {
                 unit.chargeViewY = unit.chargeDY;
                 unit.chargeViewState = unit.state;
             }
+            // 矛兵 moving 同理：该标记在规划循环内按各单位自己的回合刷新，
+            // 骑兵读矛簇 moving 判墙时先手读旧值、后手读新值——统一读帧首快照。
+            if (unit.type === 'pikeman') unit.pikeViewMoving = unit.moving;
         }
         for (const unit of units) if (unit.type === 'pikeman' && unit.tacticalRole !== 'guard') updatePikeBrace(unit, dt);
         if (this.tactics) this.tactics.beginStep(dt);
