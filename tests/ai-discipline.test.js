@@ -216,7 +216,7 @@ test('侧翼反冲：战线咬稳后守骑自多的一翼出击敌线侧后', ()
     const { scene, riders } = raidScene();
     for (let i = 0; i < 60 * 6; i++) scene.advanceBattle(STEP);
     const raiding = riders.filter(u => u.counterRaid);
-    assert.equal(raiding.length, 2, '恰双骑出击（上翼3>下翼1，取上翼前2）');
+    assert.equal(raiding.length, 3, '无敌骑威胁时弓纵深突击成波出击（3骑）');
     assert.ok(raiding.every(u => u.guardAnchor.gy < 33), '出击的应全是上翼守骑');
     assert.ok(raiding.every(u => u.counterRaid.gx > 30), '冲击点应在敌半场侧后（敌弓纵深）');
 });

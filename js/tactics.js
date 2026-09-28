@@ -347,19 +347,18 @@ class TacticsSystem {
             // 不能看着前排被逐排啃光而全程旁观。
             const foe = this.enemies(group.team);
             const archers = this.scene.units.filter(u => u.team === foe && u.type === 'archer' && CombatRules.canBeHit(u));
-            let ax = 0, ay = 0, raidFlank = false;
+            let ax = 0, ay = 0, raidFlank = false, pressing = 0;
             if (archers.length) {
                 for (const a of archers) { ax += a.gx; ay += a.gy; }
                 ax /= archers.length; ay /= archers.length;
             } else {
-                let n = 0;
                 for (const u of front) {
                     const e = this.scene.nearestEnemy(u);
                     if (!e || e.type === 'cavalry' || dist(u, e) > 4) continue;   // 只算仍压在前排门口的敌步/矛
-                    ax += e.gx; ay += e.gy; n++;
+                    ax += e.gx; ay += e.gy; pressing++;
                 }
-                if (!n) continue;                                                 // 没弓可打也没敌压门：安稳守位
-                ax /= n; ay /= n; raidFlank = true;
+                if (!pressing) continue;                                           // 没弓可打也没敌压门：安稳守位
+                ax /= pressing; ay /= pressing; raidFlank = true;
             }
             const riders = group.members.filter(u => this.active(u) && u.type === 'cavalry' &&
                 u.protectArchers && this.isGroundGuard(u) && !u.counterRaid && u.moraleState === 'steady');
@@ -371,21 +370,28 @@ class TacticsSystem {
             const raidX = clamp(ax + (raidFlank ? 0 : f * 1.5), 2, GRID_W - 2), raidY = clamp(ay + side * 3, 2, GRID_H - 2);
             wing.sort((a, b) => Math.hypot(a.gx - raidX, a.gy - raidY) - Math.hypot(b.gx - raidX, b.gy - raidY) ||
                 a.guardAnchor.gy - b.guardAnchor.gy);
-            for (const rider of wing.slice(0, 2)) {
+            // 出击规模：侧腰冲击按压境敌规模成波压上（约每 5 敌出 1 骑，2~全翼）——
+            // 零散 2 骑撞大阵是排队送死；敌骑仍有存活时压回 2 骑快速袭击（留人护弓）。
+            const foeCavalry = this.scene.units.filter(u => u.team === foe && u.type === 'cavalry' && CombatRules.canBeHit(u)).length;
+            const count = foeCavalry >= 1 ? Math.min(2, wing.length)
+                : raidFlank ? Math.min(wing.length, Math.max(2, Math.ceil(pressing / 5)))
+                : Math.min(3, wing.length);
+            for (const rider of wing.slice(0, count)) {
                 rider.counterRaid = { until: now + 8000, hpAtStart: rider.hp, gx: raidX, gy: raidY };
                 this.scene.cavalryAI.beginCharge(rider);
             }
             group.lastRaidAt = now;
             this.scene.addBattleEvent('tactic-raid-' + group.team + '-' + Math.floor(now),
-                `${group.team === 'red' ? '红方' : '蓝方'}守骑自${side < 0 ? '上' : '下'}翼出击，${raidFlank ? '冲击敌线侧腰' : '冲击敌线侧后'}`, group.team);
+                `${group.team === 'red' ? '红方' : '蓝方'}守骑${count}骑自${side < 0 ? '上' : '下'}翼出击，${raidFlank ? '冲击敌线侧腰' : '冲击敌线侧后'}`, group.team);
         }
     }
 
     updateGroundGuard(unit, now, dt) {
         if (!this.isGroundGuard(unit)) {
-            if (unit.guardIntercept || unit.guardPursueTarget || unit.counterRaid) {
+            if (unit.guardIntercept || unit.guardPursueTarget || unit.counterRaid || unit.raidRecall) {
                 unit.guardIntercept = null; unit.guardPursueTarget = null; unit.guardPursueFor = 0;
                 delete unit.counterRaid;
+                unit.raidRecall = false;
             }
             return false;
         }
@@ -395,6 +401,9 @@ class TacticsSystem {
             if (now > raid.until || unit.hp < raid.hpAtStart * 0.55 || unit.moraleState !== 'steady') {
                 delete unit.counterRaid;
                 unit.guardIntercept = null; unit.guardPursueTarget = null; unit.guardPursueFor = 0;
+                // 收手即召回：突击窗结束的骑手深处敌阵，fromPost<guardRadius 时
+                // 常规返锚分支不触发——不召回就会就地恋战被围殴（送死的观感来源）。
+                unit.raidRecall = true;
             } else {
                 // 冲击点附近选最近敌（过滤界=查询界，桶毛边不泄漏）；落点与矛墙由
                 // detourPikes 自行处理。无目标可打=纵深软单位已清，得手收手。
@@ -407,7 +416,7 @@ class TacticsSystem {
                         best = d2; target = other;
                     }
                 });
-                if (!target) delete unit.counterRaid;
+                if (!target) { delete unit.counterRaid; unit.raidRecall = true; }
                 else {
                     unit.groundGuardTarget = target; unit.target = target;
                     unit.guardIntercept = null;
@@ -421,6 +430,17 @@ class TacticsSystem {
             }
         }
         const anchor = unit.guardAnchor, fromPost = dist(unit, anchor);
+        // 召回中：敌逼弓的拦截永远优先（护弓是本职），否则脱离敌群直奔锚点，
+        // 到家(≤2.5)才解除——召回期不恋战，骑速 4.0 步兵追不上，短暂挨打可接受。
+        if (unit.raidRecall && !this.groundThreat(unit)) {
+            unit.groundGuardReturning = true;
+            unit.groundGuardTarget = null; unit.target = null;
+            if (unit.state !== 'melee') this.scene.cavalryAI.enterMelee(unit);
+            this.move(unit, anchor.gx, anchor.gy, unit.typeData.speed, dt);
+            if (fromPost <= 2.5) unit.raidRecall = false;
+            return true;
+        }
+        if (unit.raidRecall) unit.raidRecall = false;   // 有真威胁拦截优先，召回作废
         unit.groundGuardReturning = false;
         if (unit.typeData.ranged) {
             this.scene.updateNormalUnit(unit, now, dt, anchor);
@@ -1150,6 +1170,7 @@ class TacticsSystem {
                 delete unit.groundGuardReturning;
                 unit.guardIntercept = null; unit.guardPursueTarget = null; unit.guardPursueFor = 0;
                 delete unit.counterRaid;
+                unit.raidRecall = false;
             }
             delete this.groundGuards[team];
             this.orders[team] = 'advance';
