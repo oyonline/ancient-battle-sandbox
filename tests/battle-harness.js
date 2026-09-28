@@ -10,8 +10,8 @@ const context = vm.createContext({
 for (const name of ['terrain.js', 'navigation.js', 'units.js', 'combat.js', 'morale.js', 'tactics.js', 'game.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', name), 'utf8'), context);
 }
-vm.runInContext('this.engine = { Terrain, TerrainNavigation, CombatRules, knockback, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack };', context);
-const { Terrain, TerrainNavigation, CombatRules, knockback, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack } = context.engine;
+vm.runInContext('this.engine = { Terrain, TerrainNavigation, CombatRules, TacticsSystem, knockback, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack };', context);
+const { Terrain, TerrainNavigation, CombatRules, TacticsSystem, knockback, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack } = context.engine;
 const snapshot = value => JSON.parse(JSON.stringify(value));
 
 function displayObject() {
@@ -69,4 +69,4 @@ function addUnit(scene, team, type, gx = 30, gy = 30) {
     return unit;
 }
 
-module.exports = { context, Terrain, TerrainNavigation, CombatRules, knockback, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack, snapshot, makeScene, addUnit };
+module.exports = { context, Terrain, TerrainNavigation, CombatRules, TacticsSystem, knockback, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack, snapshot, makeScene, addUnit };

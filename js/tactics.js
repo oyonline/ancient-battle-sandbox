@@ -324,12 +324,89 @@ class TacticsSystem {
         if (unit.type === 'cavalry') this.scene.cavalryAI.enterMelee(unit);
     }
 
+    // 侧翼反冲（D 防守补强）：敌步兵线咬住我守区前排后，护弓守骑抽一翼出击敌线侧后
+    // （弓手/纵深软单位），得手或失血都按计时收手返锚——守骑本职仍是护弓，
+    // 反冲只是打乱敌推进节奏的短促突击。咬合=敌我地面单位首次贴身（<2.5），
+    // 一次性计时（与预备队 engagedAt 同口径）；200ms 节流做组级扫描。
+    // 镜像安全：时间/数量比较确定；选翼按存活守骑数（平局取上翼），换座两侧
+    // 选的是同一世界翼；出击骑按 (距冲击点, gy) 排序，键均为镜像不变量。
+    updateCounterRaids(now) {
+        for (const group of Object.values(this.groundGuards)) {
+            if (now < (group.nextRaidCheck ?? 0)) continue;
+            group.nextRaidCheck = now + 200;
+            if (group.biteAt == null) {
+                const front = group.members.filter(u => this.active(u) && u.type !== 'cavalry' && !u.typeData.ranged);
+                if (front.some(u => { const e = this.scene.nearestEnemy(u); return e && dist(u, e) < 2.5; }))
+                    group.biteAt = now;
+            }
+            if (group.biteAt == null || now - group.biteAt < 4000) continue;      // 咬稳再说：刚接触就出击会被正面缠住
+            if (now - (group.lastRaidAt ?? -Infinity) < 30000) continue;           // 冷却：一击之后守骑回位重整
+            if (group.members.some(u => u.counterRaid)) continue;
+            // 软目标仍在才值得冒险：侧后打的就是敌弓手与纵深，无弓可打不出击。
+            const foe = this.enemies(group.team);
+            const archers = this.scene.units.filter(u => u.team === foe && u.type === 'archer' && CombatRules.canBeHit(u));
+            if (!archers.length) continue;
+            let ax = 0, ay = 0;
+            for (const a of archers) { ax += a.gx; ay += a.gy; }
+            ax /= archers.length; ay /= archers.length;
+            const riders = group.members.filter(u => this.active(u) && u.type === 'cavalry' &&
+                u.protectArchers && this.isGroundGuard(u) && !u.counterRaid && u.moraleState === 'steady');
+            const upper = riders.filter(u => u.guardAnchor.gy < group.cy - 0.5);
+            const lower = riders.filter(u => u.guardAnchor.gy > group.cy + 0.5);
+            const wing = lower.length > upper.length ? lower : upper;
+            if (wing.length < 2) continue;                                          // 至少双骑出击：单骑冲阵必被围死
+            const side = wing === upper ? -1 : 1, f = this.forward(group.team);
+            const raidX = clamp(ax + f * 1.5, 2, GRID_W - 2), raidY = clamp(ay + side * 3, 2, GRID_H - 2);
+            wing.sort((a, b) => Math.hypot(a.gx - raidX, a.gy - raidY) - Math.hypot(b.gx - raidX, b.gy - raidY) ||
+                a.guardAnchor.gy - b.guardAnchor.gy);
+            for (const rider of wing.slice(0, 2)) {
+                rider.counterRaid = { until: now + 8000, hpAtStart: rider.hp, gx: raidX, gy: raidY };
+                this.scene.cavalryAI.beginCharge(rider);
+            }
+            group.lastRaidAt = now;
+            this.scene.addBattleEvent('tactic-raid-' + group.team + '-' + Math.floor(now),
+                `${group.team === 'red' ? '红方' : '蓝方'}守骑自${side < 0 ? '上' : '下'}翼出击，冲击敌线侧后`, group.team);
+        }
+    }
+
     updateGroundGuard(unit, now, dt) {
         if (!this.isGroundGuard(unit)) {
-            if (unit.guardIntercept || unit.guardPursueTarget) {
+            if (unit.guardIntercept || unit.guardPursueTarget || unit.counterRaid) {
                 unit.guardIntercept = null; unit.guardPursueTarget = null; unit.guardPursueFor = 0;
+                delete unit.counterRaid;
             }
             return false;
+        }
+        // 侧翼反冲执行：冲击敌线侧后的短促突击，得手/失败均按计时收手返锚。
+        if (unit.counterRaid) {
+            const raid = unit.counterRaid;
+            if (now > raid.until || unit.hp < raid.hpAtStart * 0.55 || unit.moraleState !== 'steady') {
+                delete unit.counterRaid;
+                unit.guardIntercept = null; unit.guardPursueTarget = null; unit.guardPursueFor = 0;
+            } else {
+                // 冲击点附近选最近敌（过滤界=查询界，桶毛边不泄漏）；落点与矛墙由
+                // detourPikes 自行处理。无目标可打=纵深软单位已清，得手收手。
+                let target = null, best = Infinity;
+                this.scene.forEachNear(raid.gx, raid.gy, 6, other => {
+                    if (other.team === unit.team || !CombatRules.canBeHit(other)) return;
+                    const dx = other.gx - raid.gx, dy = other.gy - raid.gy, d2 = dx * dx + dy * dy;
+                    if (d2 > 36) return;
+                    if (d2 < best - 1e-9 || (Math.abs(d2 - best) <= 1e-9 && other.id < target.id)) {
+                        best = d2; target = other;
+                    }
+                });
+                if (!target) delete unit.counterRaid;
+                else {
+                    unit.groundGuardTarget = target; unit.target = target;
+                    unit.guardIntercept = null;
+                    // 反冲目标由守卫逻辑独占：压制 charge 内部的 500ms 重选，
+                    // 否则最近的正面敌（常是矛兵）会把出击骑从侧后线上拽走。
+                    unit.lastRetarget = now;
+                    if (!this.scene.cavalryAI.update(unit, now, dt))
+                        this.fight(unit, target, now, dt, unit.typeData.range);
+                    return true;
+                }
+            }
         }
         const anchor = unit.guardAnchor, fromPost = dist(unit, anchor);
         unit.groundGuardReturning = false;
@@ -740,6 +817,7 @@ class TacticsSystem {
             }
             if (group.launched && group.flank.length && group.flank.every(u => !this.active(u))) group.phase = '迂回队失去战力 · 正面继续接战';
         }
+        this.updateCounterRaids(now);
     }
 
     refill(formation, guards) {
@@ -1016,7 +1094,8 @@ class TacticsSystem {
             const repositioning = guards.filter(u => u.moving).length;
             result[team] = {
                 order: this.orders[team], label: TACTIC_LABELS[this.orders[team]],
-                stage: ground ? (ground.members.some(unit => this.active(unit) && unit.groundGuardReturning) ? '威胁退去 · 返回守区' :
+                stage: ground ? (ground.members.some(unit => this.active(unit) && unit.counterRaid) ? '守骑出击 · 冲击敌线侧后' :
+                    ground.members.some(unit => this.active(unit) && unit.groundGuardReturning) ? '威胁退去 · 返回守区' :
                     ground.members.some(unit => this.active(unit) && unit.groundGuardTarget) ? '近敌入区 · 局部反击' :
                     ground.onHill ? '弓守山顶 · 剑枪护坡' : '守住出发区 · 等待接敌') : group?.phase || (formation ? (engaging ? '近敌转向 · 局部迎击' :
                     formation.breaches ? '阵线受压 · 就近补位' : repositioning ? '威胁已退 · 归位重架' :
@@ -1058,6 +1137,7 @@ class TacticsSystem {
                 delete unit.groundGuardTarget;
                 delete unit.groundGuardReturning;
                 unit.guardIntercept = null; unit.guardPursueTarget = null; unit.guardPursueFor = 0;
+                delete unit.counterRaid;
             }
             delete this.groundGuards[team];
             this.orders[team] = 'advance';

@@ -1,7 +1,7 @@
-// AI 纪律：目标粘滞（A） / 弓手火力纪律（B） / 骑兵绕枪墙（C） / 矛兵遇骑结阵（E）。
+// AI 纪律：目标粘滞（A） / 弓手火力纪律（B） / 骑兵绕枪墙（C） / 守骑侧翼反冲（D） / 矛兵遇骑结阵（E）。
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { makeScene, addUnit } = require('./battle-harness.js');
+const { makeScene, addUnit, TacticsSystem } = require('./battle-harness.js');
 
 const STEP = 1000 / 60;
 
@@ -188,4 +188,55 @@ test('绕枪墙（行为级）：冲锋骑兵绕开架枪矛墙命中墙后弓�
     assert.ok(archer.dead || archer.hp < archer.maxHp, '骑兵应冲到墙后弓手');
     assert.ok(!scene.getBattleReport().events.some(e => e.text.includes('枪阵迎击')),
         '不应触发枪阵迎击（正面撞架好的枪墙）');
+});
+
+// ---------- D 守骑侧翼反冲：敌线咬合后一翼守骑冲击敌线侧后，得手/失败均返锚 ----------
+// 手工构造守区组：上翼3骑+下翼1骑（选翼应取上翼）、前排矛与敌步兵贴身（咬合）、敌弓在敌后。
+function raidScene({ bite = true, foeArchers = true } = {}) {
+    const scene = makeScene();
+    scene.tactics = new TacticsSystem(scene, { red: 'advance', blue: 'advance' });   // 空壳：不触发任何布阵
+    const riders = [[20, 27], [20, 28.5], [20, 30], [20, 39]].map(([x, y]) => {
+        const u = addUnit(scene, 'red', 'cavalry', x, y);
+        Object.assign(u, { tacticalRole: 'ground_guard', guardAnchor: { gx: x, gy: y },
+            guardRadius: 20, protectArchers: true, guardLocalRadius: 6,
+            groundGuardTarget: null, groundGuardReturning: false });
+        return u;
+    });
+    const front = [32, 33, 34].map(y => addUnit(scene, 'red', 'pikeman', 24, y));
+    [32, 34].forEach(y => addUnit(scene, 'red', 'archer', 16, y));
+    const foes = [32, 33, 34].map(y => addUnit(scene, 'blue', 'infantry', bite ? 25.3 : 50, y));
+    if (foeArchers) [29, 31].forEach(y => addUnit(scene, 'blue', 'archer', 45, y));
+    scene.tactics.groundGuards.red = { team: 'red', cx: 20, cy: 33,
+        members: [...riders, ...front], nextRaidCheck: 0 };
+    scene.rebuildSpatial();
+    return { scene, riders };
+}
+
+test('侧翼反冲：战线咬稳后守骑自多的一翼出击敌线侧后', () => {
+    const { scene, riders } = raidScene();
+    for (let i = 0; i < 60 * 6; i++) scene.advanceBattle(STEP);
+    const raiding = riders.filter(u => u.counterRaid);
+    assert.equal(raiding.length, 2, '恰双骑出击（上翼3>下翼1，取上翼前2）');
+    assert.ok(raiding.every(u => u.guardAnchor.gy < 33), '出击的应全是上翼守骑');
+    assert.ok(raiding.every(u => u.counterRaid.gx > 30), '冲击点应在敌半场侧后（敌弓纵深）');
+});
+
+test('侧翼反冲：得手/失败均按计时收手返锚', () => {
+    const { scene, riders } = raidScene();
+    for (let i = 0; i < 60 * 14; i++) scene.advanceBattle(STEP);
+    assert.ok(riders.every(u => !u.counterRaid), '8秒突击窗结束（或失血过半/无目标）后收手');
+    assert.ok(riders.some(u => !u.dead && Math.hypot(u.gx - u.guardAnchor.gx, u.gy - u.guardAnchor.gy) < 20.5),
+        '存活的出击骑应回到锚区（守骑本职是护弓）');
+});
+
+test('侧翼反冲：战线未咬合不出击', () => {
+    const { scene, riders } = raidScene({ bite: false });
+    for (let i = 0; i < 60 * 8; i++) scene.advanceBattle(STEP);
+    assert.ok(riders.every(u => !u.counterRaid), '敌线未贴上守区前排，守骑不冒险出击');
+});
+
+test('侧翼反冲：敌纵深无弓可打不出击', () => {
+    const { scene, riders } = raidScene({ foeArchers: false });
+    for (let i = 0; i < 60 * 8; i++) scene.advanceBattle(STEP);
+    assert.ok(riders.every(u => !u.counterRaid), '侧后没有软目标，出击无利可图');
 });
