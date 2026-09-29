@@ -249,13 +249,50 @@ const UI = {
         // 护送军偏步矛弓（护得住），劫掠军带机动骑兵（截得住）；护送更难，红方预算略厚
         this.configs = {
             red: { infantry: 20, pikeman: 14, archer: 14 },
-            blue: { cavalry: 8, infantry: 14, archer: 6 }
+            blue: { cavalry: 9, infantry: 16, archer: 8 }
         };
         this.formations = { red: 'custom', blue: 'custom' };
         this.orders = { red: 'advance', blue: 'advance' };
         this.resetBattleOptions();
         this.battleOptions.convoy = true;
         this.deployArmies();
+    },
+
+    // 占点/护送的自定义配兵：预填推荐阵容进配兵界面，兵数阵容随意改
+    startControlCustom() {
+        this.clearBattle();
+        this.mode = 'sandbox';
+        this.challenge = null;
+        this.editing = true;
+        this.configs = {
+            red: { infantry: 24, pikeman: 14, archer: 18, cavalry: 8 },
+            blue: { infantry: 24, pikeman: 14, archer: 18, cavalry: 8 }
+        };
+        this.formations = { red: 'custom', blue: 'custom' };
+        this.orders = { red: 'advance', blue: 'advance' };
+        this.resetBattleOptions();
+        this.battleOptions.control = true;
+        this.buildBuy('red');
+        this.setStep(1);
+        this.showSection('buy');
+    },
+
+    startConvoyCustom() {
+        this.clearBattle();
+        this.mode = 'sandbox';
+        this.challenge = null;
+        this.editing = true;
+        this.configs = {
+            red: { infantry: 20, pikeman: 14, archer: 14 },
+            blue: { cavalry: 9, infantry: 16, archer: 8 }
+        };
+        this.formations = { red: 'custom', blue: 'custom' };
+        this.orders = { red: 'advance', blue: 'advance' };
+        this.resetBattleOptions();
+        this.battleOptions.convoy = true;
+        this.buildBuy('red');
+        this.setStep(1);
+        this.showSection('buy');
     },
 
     selectTerrain(terrain) {
@@ -462,7 +499,13 @@ const UI = {
                 <p>敌阵：${this.armyText(this.challenge.enemy)}</p>
                 <details><summary>需要一点战术提示？</summary><p>${this.challenge.hint}</p></details>`;
         }
-        document.getElementById('buy-message').textContent = '按住 ＋ 连续加兵 · 挑战中预设会按预算缩减';
+        document.getElementById('buy-message').textContent = this.battleOptions.convoy
+            ? '🛒 护送模式 · 部署后红方自动获得 4 辆辎重车（不可购买），送抵 3 辆获胜'
+            : this.battleOptions.control
+            ? '⚑ 占点征服 · 部署后中场自动立三面旗，占旗积分先到 60 获胜'
+            : this.battleOptions.deathmatch
+            ? '💀 死斗 · 溃兵可重整，直到一方全灭'
+            : '按住 ＋ 连续加兵 · 挑战中预设会按预算缩减';
         const wrap = document.getElementById('unit-cards');
         wrap.innerHTML = '';
         for (const [key, t] of Object.entries(UNIT_TYPES)) {
@@ -900,6 +943,12 @@ const UI = {
         });
         document.querySelectorAll('[data-convoy-entry]').forEach(button => {
             button.onclick = () => { this.startConvoy(); Snd.play('tick'); };
+        });
+        document.querySelectorAll('[data-control-custom]').forEach(button => {
+            button.onclick = () => { this.startControlCustom(); Snd.play('tick'); };
+        });
+        document.querySelectorAll('[data-convoy-custom]').forEach(button => {
+            button.onclick = () => { this.startConvoyCustom(); Snd.play('tick'); };
         });
         document.querySelectorAll('[data-terrain]').forEach(button => {
             button.onclick = () => this.selectTerrain(button.dataset.terrain);
