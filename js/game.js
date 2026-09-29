@@ -1773,18 +1773,20 @@ class IsoBattleScene extends Phaser.Scene {
 
     updateNormalUnit(unit, now, dt, guardAnchor = null) {
         if (unit.dead || unit.withdrawn || unit.moraleState === 'routing') return;
-        // 辎重车：附近 3.5 格内有护送方部队才沿中线推进——无保护停下等待，
-        // 护送节奏由护送军自己掌握；车不还手（atk 0），挨打走通用结算。
+        // 辎重车：有护卫在侧(4格内)且无敌情(3.2格内无敌)才沿路线推进——
+        // 逼近的敌人没清完就停车列队，不会自己往敌阵里拱；车不还手（atk 0）。
+        // 敌情闸门只挡贴脸威胁：远处胶着的战团不该让车队无限期趴窝。
         // 邻兵查询过滤界=查询界，桶毛边不泄漏。
         if (unit.type === 'wagon') {
-            let escort = false;
-            this.forEachNear(unit.gx, unit.gy, 3.5, u => {
-                if (u === unit || u.team !== unit.team || u.type === 'wagon' ||
-                    u.dead || u.withdrawn || u.moraleState === 'routing') return;
-                if (Math.hypot(u.gx - unit.gx, u.gy - unit.gy) > 3.5) return;
-                escort = true;
+            let escort = false, danger = false;
+            this.forEachNear(unit.gx, unit.gy, 4, u => {
+                if (u === unit || u.dead || u.withdrawn || u.type === 'wagon') return;
+                const d = Math.hypot(u.gx - unit.gx, u.gy - unit.gy);
+                if (u.team === unit.team) {
+                    if (d <= 4 && u.moraleState !== 'routing') escort = true;
+                } else if (d <= 3.2) danger = true;
             });
-            if (escort && unit.gx < this.convoy.goalX) {
+            if (escort && !danger && unit.gx < this.convoy.goalX) {
                 moveToward(unit, this.convoy.goalX + 1, unit.gy, unit.typeData.speed, dt);
             }
             return;

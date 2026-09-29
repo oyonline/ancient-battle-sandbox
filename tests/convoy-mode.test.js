@@ -40,6 +40,22 @@ test('护送：车队只在护卫 3.5 格内才前进，无保护停下等待', 
     assert.ok(Math.abs(tail.gx - x1) < 0.05, '无护卫时车队原地等待');
 });
 
+test('护送：敌情未清时车队停车列队，清完威胁恢复前进', () => {
+    const scene = convoyScene({ red: {}, blue: { infantry: 1 } });
+    const tail = scene.convoy.wagons.reduce((a, b) => (b.gx < a.gx ? b : a));
+    const guard = addUnit(scene, 'red', 'infantry', tail.gx, tail.gy + 1);   // 护卫随行
+    const raider = scene.units.find(u => u.team === 'blue');                 // 劫掠兵压到 6 格外
+    raider.gx = tail.gx + 6.2; raider.gy = tail.gy;
+    scene.rebuildSpatial();
+    const x0 = tail.gx;
+    for (let i = 0; i < 60 * 3; i++) scene.advanceBattle(STEP);
+    assert.ok(Math.abs(tail.gx - x0) < 0.05, '敌情在 7 格内：车队应停车列队');
+    raider.dead = true; guard.gx = tail.gx; guard.gy = tail.gy + 1;          // 威胁清除
+    scene.rebuildSpatial();
+    for (let i = 0; i < 60 * 3; i++) scene.advanceBattle(STEP);
+    assert.ok(tail.gx > x0 + 0.5, '敌情解除后车队恢复前进');
+});
+
 test('护送：送抵 3 辆判红胜（endReason=convoy）', () => {
     const scene = convoyScene();
     for (const w of scene.convoy.wagons.slice(0, 3)) w.gx = scene.convoy.goalX + 0.5;
