@@ -1278,6 +1278,40 @@ export const UI = {
     },
 
     // ---------------- 营队指挥条：选中营后出现，点旗下令/回防 ----------------
+    renderBattalionPicker() {
+        const row = document.getElementById('battalion-orders');
+        const label = document.getElementById('battalion-label');
+        const list = this.myBattalions();
+        label.textContent = '👆 选择营队下令（或直接点战场上的士兵 · 数字键 1-9）';
+        if (!row.querySelector('.battalion-chip')) row.replaceChildren();
+        if (row.querySelector('.battalion-chip') && row.childElementCount === list.length &&
+            [...row.children].every((chip, i) => chip.dataset.bid === String(list[i]?.id))) {
+            // 只刷新数字，不重建（保持点击稳定）
+            [...row.children].forEach((chip, i) => {
+                const b = list[i];
+                const state = b.gathering ? '集结中' : b.retreat ? '回防' : b.orderPoint ? '驻守'
+                    : b.orderFlag != null ? '进军' : '作战';
+                chip.querySelector('.bc-count').textContent = `${b.aliveMembers().length}人·${state}`;
+            });
+            return;
+        }
+        row.replaceChildren();
+        for (const battalion of list) {
+            const chip = document.createElement('button');
+            chip.className = 'order-btn battalion-chip';
+            chip.dataset.bid = String(battalion.id);
+            const state = battalion.gathering ? '集结中' : battalion.retreat ? '回防' : battalion.orderPoint ? '驻守'
+                : battalion.orderFlag != null ? '进军' : '作战';
+            chip.innerHTML = `<b>${battalion.id}营</b> <span class="bc-count">${battalion.aliveMembers().length}人·${state}</span>`;
+            chip.onclick = () => {
+                this.scene.selectedBattalion = battalion;
+                Snd.play('tick');
+                this.updateBattalionBar();
+            };
+            row.appendChild(chip);
+        }
+    },
+
     buildBattalionBar() {
         const row = document.getElementById('battalion-orders');
         row.replaceChildren();
@@ -1517,9 +1551,9 @@ export const UI = {
     updateBattalionBar() {
         const bar = document.getElementById('battalion-bar');
         const selected = this.phase === 'battle' && this.battleOptions.territory ? this.scene?.selectedBattalion : null;
-        bar.hidden = !selected;
-        if (!selected) return;
-        if (!document.querySelector('#battalion-orders .order-btn')) this.buildBattalionBar();
+        bar.hidden = !(this.phase === 'battle' && this.battleOptions.territory);
+        if (!selected) { this.renderBattalionPicker(); return; }   // 未选营：常驻营队选择条（入口可发现）
+        if (!document.querySelector('#order-hold')) this.buildBattalionBar();   // 以驻守按钮为准（营选择 chip 同类名会误判）
         const flags = this.scene.flags || [];
         const own = selected.team === (this.mySide || 'red');
         const now = this.scene.simulationTime || 0;

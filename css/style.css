@@ -766,3 +766,6 @@ body.targeting #game-container { cursor: crosshair; }
     color: #cfe8c2; font: 700 12px/1 "PingFang SC", sans-serif; cursor: pointer; }
 .rally-btn:hover { background: #2f4227; }
 .rally-btn.active { border-color: #9de3af; color: #9de3af; }
+
+.battalion-chip b { color: #ffd76e; margin-right: 4px; }
+.battalion-chip .bc-count { font-weight: 600; }
