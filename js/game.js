@@ -17,6 +17,8 @@ import { MANIFEST } from './manifest.js';
 import { BattleSpatialIndex } from './battle/spatial.js';
 import * as targeting from './battle/targeting.js';
 import { BattleLedger } from './battle/report.js';
+import * as core from './battle/core.js';
+import { BraceQueue } from './battle/core.js';
 
 const TW = 64, TH = 32;                       // 菱形块宽高
 const OX = GRID_H * TW / 2, OY = 120;         // 屏幕原点偏移
@@ -24,7 +26,7 @@ const VIEW_W = (GRID_W + GRID_H) * TW / 2;    // 4480
 const VIEW_H = OY + (GRID_W + GRID_H) * TH / 2 + 60;
 
 // 空间哈希单元格移至 js/battle/spatial.js（SP_CELL = 3）
-const SIMULATION_STEP_MS = 1000 / 60;
+// 战斗核（定步长/编排/动作队列/迎击队列）移至 js/battle/core.js（SIMULATION_STEP_MS = 1000/60）
 
 function quantizePosition(value, extent) {
     const center = extent / 2, offset = value - center;
@@ -845,7 +847,7 @@ export class IsoBattleScene extends Phaser.Scene {
         this.simulationAccumulator = 0;
         this.battleQueue = [];
         this.battleImpacts = [];
-        this.braceCandidates = new Map();
+        this.braceQueue = new BraceQueue();
         this.collectingImpacts = false;
         this.planningStep = false;
         // 战报台账移至 js/battle/report.js（第 0 批 4/4）；battleStats 保持同一对象，外部契约不变
@@ -1086,52 +1088,29 @@ export class IsoBattleScene extends Phaser.Scene {
         this.addBattleEvent(`withdraw-${unit.team}`, `${unit.team === 'red' ? '红方' : '蓝方'}溃兵开始撤离战场`, unit.team);
     }
 
+    // ---------------- 战斗核编排（实现在 js/battle/core.js，场景只做委托与渲染钩子） ----------------
     scheduleBattleAction(delayMs, callback) {
-        this.battleQueue.push({ atMs: this.simulationTime + delayMs, battleId: this.battleId, callback });
+        core.scheduleBattleAction(this, delayMs, callback);
     }
 
     flushBattleActions() {
-        const ready = [], pending = [];
-        for (const action of this.battleQueue) {
-            (action.atMs <= this.simulationTime + 1e-7 ? ready : pending).push(action);
-        }
-        this.battleQueue = pending;
-        ready.sort((a, b) => a.atMs - b.atMs);
-        for (const action of ready) {
-            if (action.battleId === this.battleId) action.callback();
-        }
+        core.flushBattleActions(this);
     }
 
     flushBattleImpacts() {
-        this.collectingImpacts = false;
-        const impacts = this.battleImpacts;
-        this.battleImpacts = [];
-        // 同一步已成立的命中全部生效，攻击者在此批中阵亡也不会抹掉其攻击。
-        for (const { target, damage, from, attackStartedAt } of impacts) applyDamage(target, damage, from, attackStartedAt);
+        core.flushBattleImpacts(this);
     }
 
     queueBrace(guard, cavalry) {
-        const distance = Math.hypot(guard.gx - cavalry.gx, guard.gy - cavalry.gy);
-        const current = this.braceCandidates.get(guard);
-        if (!current || distance < current.distance - 1e-9 ||
-            (Math.abs(distance - current.distance) <= 1e-9 && cavalry.id < current.cavalry.id)) {
-            this.braceCandidates.set(guard, { cavalry, distance });
-        }
+        this.braceQueue.queue(guard, cavalry);
     }
 
     resolveBrace(guard, cavalry) {
-        if (!Terrain.segmentClear(this.battleOptions.terrain, guard.gx, guard.gy, cavalry.gx, cavalry.gy)) return;
-        // 迎击倍率与反骑倍率各一次；在整批伤害之前登记，同刻将阵亡的枪兵仍能迎击。
-        resolveAttack(cavalry, guard, { multiplier: 1.5 });
-        guard.lastBrace = this.simulationTime;
-        this.playAttackAnim(guard, cavalry);
-        this.meleeImpact(guard, cavalry);
-        this.addBattleEvent(`brace-${guard.team}`, `${guard.team === 'red' ? '红方' : '蓝方'}正面枪阵迎击骑兵冲锋`, guard.team);
+        core.resolveBrace(this, guard, cavalry);
     }
 
     flushBraceCandidates() {
-        for (const [guard, { cavalry }] of this.braceCandidates) this.resolveBrace(guard, cavalry);
-        this.braceCandidates.clear();
+        this.braceQueue.flush((guard, cavalry) => this.resolveBrace(guard, cavalry));
     }
 
     cancelCountdown() {
@@ -1520,98 +1499,11 @@ export class IsoBattleScene extends Phaser.Scene {
     }
 
     advanceBattle(delta) {
-        if (!this.battleStarted || this.paused || this.battleOver) return;
-        // 固定步长使相同阵容在 1x/2x 下执行相同的战斗步骤。
-        this.simulationAccumulator += Math.max(0, Math.min(delta, 50)) * this.gameSpeed;
-        while (this.simulationAccumulator + 1e-7 >= SIMULATION_STEP_MS && !this.battleOver) {
-            this.simulationAccumulator = Math.max(0, this.simulationAccumulator - SIMULATION_STEP_MS);
-            this.simulationTime += SIMULATION_STEP_MS;
-            this.stepBattle(SIMULATION_STEP_MS / 1000);
-        }
+        core.advanceBattle(this, delta);
     }
 
     stepBattle(dt) {
-        const now = this.simulationTime;
-        this.braceCandidates.clear();
-        // 所有人先读取同一份位置和生命状态；先选行动，再统一移动、结算命中。
-        this.rebuildSpatial();
-        const units = this._aliveArr;
-        this.bodyContactDistance = CombatRules.maxContactDistance(units);
-        if (Terrain.hasBarriers(this.battleOptions.terrain)) this.ensureNavigation().beginStep(now, units);
-
-        // 帧首：先用上一帧位移估计速度，再刷新快照（供箭矢预判）
-        for (let i = 0; i < units.length; i++) {
-            const unit = units[i];
-            if (unit.pgx !== undefined) {
-                unit.velX = (unit.gx - unit.pgx) / dt;
-                unit.velY = (unit.gy - unit.pgy) / dt;
-            }
-            unit.pgx = unit.gx; unit.pgy = unit.gy;
-            unit.moveX = 0; unit.moveY = 0;
-            unit.pushX = 0; unit.pushY = 0;
-            // 冲锋视图快照：规划循环内单位按数组顺序更新，后手会读到先手刚写的新值——
-            // 红蓝座位数组顺序相反，读"新鲜/陈旧"不一致即破坏换座对称。统一读帧首快照。
-            if (unit.type === 'cavalry') {
-                unit.chargeViewX = unit.chargeDX;
-                unit.chargeViewY = unit.chargeDY;
-                unit.chargeViewState = unit.state;
-            }
-            // 矛兵 moving 同理：该标记在规划循环内按各单位自己的回合刷新，
-            // 骑兵读矛簇 moving 判墙时先手读旧值、后手读新值——统一读帧首快照。
-            if (unit.type === 'pikeman') unit.pikeViewMoving = unit.moving;
-        }
-        for (const unit of units) if (unit.type === 'pikeman' && unit.tacticalRole !== 'guard') updatePikeBrace(unit, dt);
-        if (this.tactics) this.tactics.beginStep(dt);
-        this.morale.beginStep(dt);
-        this.collectingImpacts = true;
-        this.planningStep = true;
-        if (!this.resolvingOutcome) this.flushBattleActions();
-
-        for (let i = 0; i < units.length; i++) {
-            const unit = units[i];
-            if (unit.dead || unit.withdrawn) continue;
-            unit.moving = false;
-            unit.pressX = 0; unit.pressY = 0;
-            if (this.resolvingOutcome) continue;
-            if (unit.moraleState === 'routing') { this.updateRoutedUnit(unit, dt); continue; }
-            if (this.updateFallingBackUnit(unit, now, dt)) continue;
-            if (this.tactics?.updateGroundGuard(unit, now, dt)) continue;
-            if (unit.type === 'cavalry') {
-                if (this.cavalryAI.update(unit, now, dt)) continue;
-            }
-            if (this.tactics && this.tactics.updateUnit(unit, now, dt)) continue;
-            this.updateNormalUnit(unit, now, dt);
-        }
-        this.planningStep = false;
-        for (const unit of units) {
-            const motion = Terrain.clipMotion(this.battleOptions.terrain, unit.gx, unit.gy,
-                unit.moveX + unit.pushX, unit.moveY + unit.pushY, CombatRules.bodyRadius(unit));
-            unit.gx += motion.x;
-            unit.gy += motion.y;
-        }
-        this.rebuildSpatial();
-        this.separate(dt);
-        this.rebuildSpatial();
-        this.updateArrows(dt, now);
-        this.flushBraceCandidates();
-        this.flushBattleImpacts();
-        this.morale.update(dt);
-        if (this.battleOptions.control) this.updateFlags(dt);
-        if (this.battleOptions.convoy) this.updateConvoy(dt);
-        for (const unit of units) {
-            if (!this.battleOptions.deathmatch && !unit.dead && !unit.withdrawn && unit.moraleState === 'routing' &&
-                (unit.gx <= 0.61 || unit.gx >= GRID_W - 0.61 || unit.gy <= 0.61 || unit.gy >= GRID_H - 0.61)) this.withdrawUnit(unit);
-        }
-        if (this.simulationTime - (this._lastMoraleUI || 0) >= 250) {
-            this._lastMoraleUI = this.simulationTime; this._countsDirty = true;
-        }
-        this.checkWin();
-
-        // 阵亡单位周期压实，数组不无限膨胀
-        this._compactTick = (this._compactTick || 0) + 1;
-        if (this._compactTick % 240 === 0) {
-            this.units = this.units.filter(u => !u.dead && !u.withdrawn);
-        }
+        core.stepBattle(this, dt);
     }
 
     // 空间索引惰性单例：布防/inspection 阶段先于首帧 rebuildSpatial 也会被索敌调用
