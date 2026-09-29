@@ -50,13 +50,21 @@ test('山河图通行：河面 walkable=false，桥与浅滩可通过；林带�
     board.W = 70; board.H = 70;
 });
 
-test('中央高地：坡顶 3 层，坡脚归零，弓兵居高射程增益', () => {
+test('中央高地：仍是制高点，全图缓丘镜像对称，弓兵居高射程增益', () => {
     board.W = 104; board.H = 72;
-    assert.ok(Math.abs(Terrain.height('territory', 52, 36) - 3) < 0.35, '坡顶约 3 层');
-    assert.equal(Terrain.height('territory', 52, 52), 0, '坡脚以南平地');
-    assert.equal(Terrain.height('territory', 52, 12), 0, '河界以北平地');
+    // 坡顶（椭圆核心）显著高于远处平地（缓丘 ±1 层内）
+    assert.ok(Terrain.height('territory', 52, 36) - Terrain.height('territory', 52, 52) > 1.2, '坡顶高于坡脚以南');
+    // 全图缓丘：既非全平（远处也有起伏），又左右镜像逐位一致
+    let rollingSeen = false;
+    for (let x = 4; x < 100; x += 3.7) for (let y = 24; y < 68; y += 2.9) {
+        const h = Terrain.height('territory', x, y);
+        if (h > 0.25) rollingSeen = true;
+        assert.ok(Math.abs(h - Terrain.height('territory', 104 - x, y)) < 1e-9, `镜像对称 @(${x.toFixed(1)},${y.toFixed(1)})`);
+    }
+    assert.ok(rollingSeen, '中央高地之外也存在缓丘（"没有一寸平地"）');
+    // 居高射程增益（通用坡度规则自动生效）
     const highArcher = { typeData: { range: 9.5 }, gx: 52, gy: 36 };
-    const lowTarget = { gx: 52, gy: 50 };
+    const lowTarget = { gx: 52, gy: 52 };
     assert.ok(Terrain.rangedRange('territory', highArcher, lowTarget) > 9.5, '居高俯射射程增益');
     board.W = 70; board.H = 70;
 });
@@ -119,4 +127,20 @@ test('山河图全局对局：营队+山河地形同构两局镜像一致，且�
     assert.equal(a, b, '山河图同构对局应逐位一致');
     const result = JSON.parse(a);
     assert.ok(result.over || result.tickets[0] < 900 || result.tickets[1] < 900, '对局应有实质进展');
+});
+
+test('山河图2.0：悬崖脊不可通行，浅滩可通行减速，旗点与出兵线仍可达', () => {
+    board.W = 104; board.H = 72;
+    assert.equal(Terrain.surface('territory', 40, 68), 'rock', '下翼悬崖脊');
+    assert.equal(Terrain.walkable('territory', 40, 68), false, '悬崖不可站');
+    assert.equal(Terrain.surface('territory', 64, 68), 'rock', '镜像悬崖脊');
+    assert.equal(Terrain.surface('territory', 15, 16), 'shallow', '西端浅滩');
+    assert.equal(Terrain.surface('territory', 89, 16), 'shallow', '东端浅滩');
+    assert.equal(Terrain.walkable('territory', 15, 16), true, '浅滩可通行');
+    assert.ok(Terrain.surfaceSpeed('territory', 'cavalry', 15, 16) < 1, '浅滩减速');
+    // 关键可达点不被新地形堵死
+    for (const [x, y] of [[8, 36], [96, 36], [25, 24], [79, 24], [34, 58], [70, 58], [52, 36]]) {
+        assert.equal(Terrain.walkable('territory', x, y), true, `(${x},${y}) 应可站`);
+    }
+    board.W = 70; board.H = 70;
 });

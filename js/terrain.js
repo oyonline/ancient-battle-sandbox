@@ -30,16 +30,23 @@ export const Terrain = {
         if (key === 'flat' || !Number.isFinite(gx) || !Number.isFinite(gy) ||
             gx <= 0 || gx >= board.W || gy <= 0 || gy >= board.H) return 0;
         if (key === 'territory') {
-            // 中央高地：椭圆缓坡，坡顶 3 层；弓兵据顶俯射（rangedRange），
-            // 仰攻减速 / 下坡加速共用 movementMultiplier 的通用坡度规则。
+            // 中央高地（椭圆缓坡，坡顶 3 层）+ 全图缓丘（帝国时代式"没有一寸平地"）。
+            // 缓丘用 |x-中心| 折叠采样值噪声——左右镜像逐位一致（联机锁步约定）；
+            // 大本营邻域阻尼保持出兵区平坦，坡顶附近压制丘幅保高地制高点地位。
+            // 居高射程/俯攻/坡速全部经通用规则自动生效。
             const cx = board.W / 2, cy = board.H / 2;
-            const q = Math.hypot((gx - cx) / 9, (gy - cy) / 6.5);
-            if (q >= 1) return 0;
             const smooth = value => value * value * (3 - 2 * value);
-            const slope = Math.max(0, (q - 0.35) / 0.65);
             const edgeDistance = Math.min(gx, board.W - gx, gy, board.H - gy);
             const edge = Math.max(0, Math.min(1, (edgeDistance - 3.5) / 8.5));
-            return 3 * (1 - smooth(slope)) * smooth(edge);
+            const q = Math.hypot((gx - cx) / 9, (gy - cy) / 6.5);
+            const slope = Math.max(0, (q - 0.35) / 0.65);
+            const hill = q < 1 ? 3 * (1 - smooth(slope)) * smooth(edge) : 0;   // 椭圆外无高地（smooth 定义域 [0,1]）
+            const ax = Math.abs(gx - cx);
+            const homeDamp = Math.max(0.25, Math.min(1, (Math.min(gx, board.W - gx) - 9) / 9));
+            const n1 = this._vnoise(ax * 0.065 + 7.3, gy * 0.065 - 4.1) - 0.5;
+            const n2 = this._vnoise(ax * 0.16 + 21.7, gy * 0.16 + 13.9) - 0.5;
+            const rolling = (n1 * 1.6 + n2 * 0.5) * homeDamp * smooth(edge) * (1 - Math.min(1, hill / 3) * 0.6);
+            return Math.max(-0.5, Math.min(3.4, hill + rolling));
         }
         if (key === 'forest' || key === 'river') return 0;
         if (this.isNaturalSlope(key)) {
@@ -145,12 +152,21 @@ export const Terrain = {
                 river: { blockers: [[0, 13], [18, 32], [38, 52], [57, 70]].map(([a, b]) => rect(32, a, 38, b, 'water')),
                     zones: [[13, 18], [32, 38], [52, 57]].map(([a, b]) => rect(32, a, 38, b, 'bridge')), defense: null },
                 territory: {
-                    blockers: spans.map(([x1, x2, lift]) => {
-                        const y1 = riverY1 + Math.round(lift * 2) / 2;
-                        return rect(x1, y1, x2, y1 + riverThick, 'water');
-                    }),
+                    blockers: [
+                        ...spans.map(([x1, x2, lift]) => {
+                            const y1 = riverY1 + Math.round(lift * 2) / 2;
+                            return rect(x1, y1, x2, y1 + riverThick, 'water');
+                        }),
+                        // 下翼对称双悬崖脊（贴南边）：逼出绕行的"守口"地形；
+                        // 不压旗点/林带/出兵线（旗在 y58，脊在 y90% 以南）
+                        rect(Math.round(W * 0.33), Math.round(H * 0.90), Math.round(W * 0.44), H - 1, 'rock'),
+                        rect(Math.round(W * 0.56), Math.round(H * 0.90), Math.round(W * 0.67), H - 1, 'rock')
+                    ],
                     zones: [
                         rect(W / 2 - 3, riverY1, W / 2 + 3, riverY1 + riverThick, 'bridge'),
+                        // 河流两端浅滩：可通行、蹚水减速（替代"河到头就没了"的生硬）
+                        rect(riverX1 - 6, riverY1 - 1, riverX1, riverY1 + riverThick + 1, 'shallow'),
+                        rect(W - riverX1, riverY1 - 1, W - riverX1 + 6, riverY1 + riverThick + 1, 'shallow'),
                         forest(Math.round(W * 0.31), Math.round(W * 0.44)),
                         forest(Math.round(W * 0.56), Math.round(W * 0.69))
                     ],
@@ -181,7 +197,10 @@ export const Terrain = {
         return geometry.zones.find(r => r.kind !== 'path' && this.contains(r, gx, gy))?.kind || 'grass';
     },
     surfaceSpeed(key, type, gx, gy) {
-        return this.surface(key, gx, gy) === 'forest' ? (type === 'cavalry' ? 0.55 : 0.85) : 1;
+        const surface = this.surface(key, gx, gy);
+        if (surface === 'forest') return type === 'cavalry' ? 0.55 : 0.85;
+        if (surface === 'shallow') return 0.7;    // 浅滩可通行但蹚水减速
+        return 1;
     },
     walkable(key, gx, gy, radius = 0.36) {
         return Number.isFinite(gx) && Number.isFinite(gy) && gx >= radius && gx <= board.W - radius &&

@@ -365,6 +365,11 @@ export class IsoBattleScene extends Phaser.Scene {
             : clamp(0.9 + variation * 0.16 + dx * 0.4 + dy * 0.25, 0.72, 1.25);
         r += elevation * (natural ? 3 : 5); b += elevation * 2;
         if (natural) g += elevation * 2;
+        if (this.battleOptions.terrain === 'territory') {
+            // 山河图 2.0：按高度分层提亮偏暖——山头向阳、谷地沉绿
+            const tier = Math.max(0, Math.min(1, elevation / 3.2));
+            r += tier * 22; g += tier * 8; b -= tier * 6;
+        }
         return [r, g, b].map(value => Math.round(value * light));
     }
 
@@ -570,6 +575,7 @@ export class IsoBattleScene extends Phaser.Scene {
                 g.strokePoints(points, false);
             }
         }
+        if (this.battleOptions.terrain === 'territory') this.bakeTerritoryDressing(g);
         this.drawTerrainFeatures(g);
         this.groundImage?.destroy();
         if (this.textures.exists('groundTex')) this.textures.remove('groundTex');
@@ -615,6 +621,78 @@ export class IsoBattleScene extends Phaser.Scene {
 
     }
 
+    // 山河图 2.0 皮肤烘焙：土路 / 灌木花草 / 老家营寨（纯视觉，一次烘焙进地面贴图；
+    // 噪声一律 |x-中心| 折叠采样，左右镜像一致——视觉公平且风格对称）
+    bakeTerritoryDressing(g) {
+        const W = board.W, H = board.H, cx = W / 2;
+        const quad = (x, y, color, alpha) => {
+            g.fillStyle(color, alpha);
+            g.fillPoints(this.groundTile(x, y), true);
+        };
+        const openGround = (x, y) =>
+            !['water', 'rock', 'bridge', 'shallow', 'forest'].includes(Terrain.surface('territory', x, y));
+        // ---- 土路：老家 → 本方两旗 → 高地脚下（被踩出来的行军线）----
+        const road = (x1, y1, x2, y2) => {
+            const steps = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 0.45);
+            const nx = -(y2 - y1), ny = x2 - x1;
+            const len = Math.hypot(nx, ny) || 1;
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t;
+                const wob = (this.terNoise(Math.abs(x - cx) * 0.35 + 9, y * 0.35 - 6) - 0.5) * 1.4;
+                for (const side of [-0.45, 0.45]) {
+                    const px = x + nx / len * (side + wob * 0.3);
+                    const py = y + ny / len * (side + wob * 0.3);
+                    if (Terrain.surface('territory', px, py) === 'water') continue;
+                    quad(Math.round(px), Math.round(py), 0xc9b07c, 0.5);
+                }
+            }
+        };
+        road(8, 36, 25, 24); road(8, 36, 34, 58);
+        road(W - 8, 36, W - 25, 24); road(W - 8, 36, W - 34, 58);
+        road(25, 24, 50, 34); road(34, 58, 49, 39);
+        road(W - 25, 24, W - 50, 34); road(W - 34, 58, W - 49, 39);
+        // ---- 灌木与花草：哈希散点 + 镜像，只落开阔地 ----
+        for (let i = 0; i < 90; i++) {
+            const ax = 4 + (i * 37.13) % (cx - 6);
+            const y = 6 + (i * 53.7) % (H - 12);
+            for (const x of [ax, W - ax]) {
+                if (!openGround(x, y)) continue;
+                const p = this.groundPoint(x, y);
+                g.fillStyle(0x3f6b36, 0.85); g.fillEllipse(p.x, p.y, 9, 5);
+                g.fillStyle(0x537f47, 0.9); g.fillEllipse(p.x - 1, p.y - 1, 5, 3);
+            }
+        }
+        for (let i = 0; i < 70; i++) {
+            const ax = 5 + (i * 29.7) % (cx - 7);
+            const y = 8 + (i * 61.3) % (H - 14);
+            for (const x of [ax, W - ax]) {
+                if (!openGround(x, y)) continue;
+                const p = this.groundPoint(x, y);
+                g.fillStyle([0xfff3b0, 0xffffff, 0xffd1dc][i % 3], 0.95);
+                g.fillCircle(p.x, p.y, 1.6);
+            }
+        }
+        // ---- 老家营寨：栏栅（带门洞）+ 双帐篷 ----
+        for (const home of [{ x: 15.5, side: 'red' }, { x: W - 15.5, side: 'blue' }]) {
+            for (let y = 24; y <= 48; y += 1.1) {
+                if (Math.abs(y - 36) < 2.6) continue;   // 门洞朝战场
+                const x = home.x + (this.terNoise(Math.abs(home.x - cx) * 0.3 + y * 0.2, y) - 0.5) * 0.5;
+                const p = this.groundPoint(x, y);
+                g.fillStyle(0x6e4f2e, 1); g.fillRect(p.x - 2, p.y - 13, 4, 13);
+                g.fillStyle(0x8a6a3f, 1); g.fillRect(p.x - 2, p.y - 13, 4, 3);
+            }
+            const tentX = home.side === 'red' ? 6.5 : W - 6.5;
+            for (const ty of [27, 45]) {
+                const p = this.groundPoint(tentX, ty);
+                g.fillStyle(home.side === 'red' ? 0xb0524a : 0x4a6fb0, 0.95);
+                g.fillTriangle(p.x - 14, p.y, p.x + 14, p.y, p.x, p.y - 22);
+                g.fillStyle(0x2c2418, 0.9);
+                g.fillTriangle(p.x - 3, p.y, p.x + 3, p.y, p.x, p.y - 8);
+            }
+        }
+    }
+
     drawTerrainFeatures(g) {
         const key = this.battleOptions.terrain, geometry = Terrain.geometry(key);
         const polygon = (rect, lift = 0) => [[rect.x1, rect.y1], [rect.x2, rect.y1],
@@ -628,7 +706,15 @@ export class IsoBattleScene extends Phaser.Scene {
                 g.fillPoints(polygon({ x1: x, y1: y, x2: Math.min(x + 1, rect.x2), y2: Math.min(y + 1, rect.y2) }), true);
         };
         for (const zone of geometry.zones) {
-            if (zone.kind === 'path') {
+            if (zone.kind === 'shallow') {
+                // 浅滩：浅蓝可通行水域 + 沙色描边 + 波纹点
+                paint(zone, 0x7fc0dd, 0.9);
+                g.lineStyle(3, 0xd8c48a, 0.8); g.strokePoints(polygon(zone), true);
+                for (let y = zone.y1 + 0.6; y < zone.y2; y += 1.4) for (let x = zone.x1 + 0.7; x < zone.x2; x += 1.8) {
+                    const a = this.groundPoint(x, y);
+                    g.lineStyle(2, 0xbfe4f7, 0.45); g.lineBetween(a.x - 4, a.y, a.x + 4, a.y);
+                }
+            } else if (zone.kind === 'path') {
                 paint(zone, 0xd6bd80, 0.5);
                 g.lineStyle(2, 0xeee0ad, 0.6); g.strokePoints(polygon(zone), true);
             } else if (zone.kind === 'forest') {
@@ -670,12 +756,22 @@ export class IsoBattleScene extends Phaser.Scene {
         }
         for (const block of geometry.blockers) {
             if (block.kind === 'water') {
-                paint(block, 0x377fac);
-                g.lineStyle(4, 0xe2cf94, 0.85); g.strokePoints(polygon(block), true);
-                for (let y = block.y1 + 0.8; y < block.y2; y += 1.5) for (let x = block.x1 + 1; x < block.x2; x += 2) {
-                    const a = this.groundPoint(x, y), b = this.groundPoint(x + 0.65, y);
-                    g.lineStyle(2, 0xa2d8e3, 0.5); g.lineBetween(a.x, a.y, b.x, b.y);
+                // 三段渐变：贴边沙色 → 浅水 → 深水；波纹只画深水
+                const DEEP = 0x377fac, LIGHT = 0x63a7d6, SAND = 0xd8c48a;
+                for (let x = Math.floor(block.x1); x < block.x2; x++) {
+                    for (let y = Math.floor(block.y1); y < block.y2; y++) {
+                        const edge = Math.min(x + 1 - block.x1, block.x2 - x, y + 1 - block.y1, block.y2 - y);
+                        if (edge <= 0) continue;
+                        const color = edge < 0.6 ? SAND : edge < 1.6 ? LIGHT : DEEP;
+                        g.fillStyle(color, edge < 0.6 ? 0.9 : 1);
+                        g.fillPoints(polygon({ x1: x, y1: y, x2: x + 1, y2: y + 1 }), true);
+                        if (edge >= 2 && (x + y) % 2 === 0) {
+                            const a = this.groundPoint(x + 0.3, y + 0.5), b = this.groundPoint(x + 0.95, y + 0.5);
+                            g.lineStyle(2, 0xa2d8e3, 0.5); g.lineBetween(a.x, a.y, b.x, b.y);
+                        }
+                    }
                 }
+                g.lineStyle(4, 0xe2cf94, 0.85); g.strokePoints(polygon(block), true);
             } else {
                 paint(block, 0x626355);
                 const base = polygon(block), top = polygon(block, 24);
@@ -723,6 +819,8 @@ export class IsoBattleScene extends Phaser.Scene {
                 else if (zone.blob === 'generic') density = Terrain.blobField(zone, x, y);
                 else density = this.terNoise(x * 0.7 + 3, y * 0.7 + 9) > 0.18 ? 0.28 + this.terNoise(x * 0.7 + 3, y * 0.7 + 9) * 0.55 : 0;
                 if (density <= Terrain.FOREST_EDGE) continue;
+                // 山河图 2.0：成丛生长——簇噪声不过阈值的点位留空，林子有了疏密
+                if (zone.blob === 'generic' && this.terNoise(x * 0.33 + 7, y * 0.33 - 5) < 0.45) continue;
                 // 深林成簇大树、林缘稀疏小树：树只是林区提示，不是逐棵实体障碍。
                 const clump = this.terNoise(x * 0.55 + 9, y * 0.55 + 3);
                 if (clump > 0.25 + (density - Terrain.FOREST_EDGE) * 0.9) continue;
@@ -741,6 +839,23 @@ export class IsoBattleScene extends Phaser.Scene {
                 const rock = this.add.image(p.x, p.y - 20, 'props/rock')
                     .setOrigin(0.5, 0.9).setScale(0.38 + this.terNoise(x, y) * 0.12).setDepth(3);
                 this.terrainProps.push(rock);
+            }
+        }
+        // 山河图 2.0：坡地散树——林带之外的疏林点缀（哈希折叠镜像，避开一切非草地）
+        if (this.battleOptions.terrain === 'territory') {
+            for (let i = 0; i < 60; i++) {
+                const ax = 6 + (i * 41.3) % (board.W / 2 - 8);
+                const y = 22 + (i * 47.9) % (board.H - 30);
+                for (const x of [ax, board.W - ax]) {
+                    if (['water', 'rock', 'bridge', 'shallow', 'forest'].includes(Terrain.surface('territory', x, y))) continue;
+                    if (this.terNoise(x * 0.5 + 3, y * 0.5) < 0.52) continue;
+                    const p = this.groundPoint(x, y);
+                    const tree = this.add.image(p.x, p.y, 'props/tree_small')
+                        .setOrigin(0.5, 0.92).setScale(0.28 + this.terNoise(x * 1.3, y * 1.7) * 0.1)
+                        .setAlpha(0.92).setDepth(3);
+                    tree.setTint(this.terNoise(x * 1.7 + 31, y * 2.3) > 0.6 ? 0xe7eeda : 0xd4e0d0);
+                    this.terrainProps.push(tree);
+                }
             }
         }
     }

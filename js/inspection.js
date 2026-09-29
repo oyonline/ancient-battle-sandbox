@@ -98,7 +98,7 @@ export class UnitInspector {
             (unit.type !== 'cavalry' || cavalryOrder === 'auto');
         const protectingArchers = guarded && unit.type === 'cavalry' && !!Terrain.defenseLayout(key, unit.team);
         return { height, movement, comparison, surface, surfaceSpeed,
-            surfaceLabel: { grass: '草地 / 道路', forest: '林地', water: '水域（不可通行）', bridge: '桥面', rock: '岩壁（不可通行）' }[surface],
+            surfaceLabel: { grass: '草地 / 道路', forest: '林地', water: '水域（不可通行）', bridge: '桥面', rock: '岩壁（不可通行）', shallow: '浅滩（蹚水减速）' }[surface],
             chargeRestricted: unit.type === 'cavalry' && surface === 'forest',
             ground: height < 0.01 ? '平地' : height >= 2.99 ? '坡顶' : '缓坡',
             slope: movement == null ? '站定 · 无行军坡向' : movement < 0.999 ? '上坡' : movement > 1.001 ? '下坡' : '平缓行军',
