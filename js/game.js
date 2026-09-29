@@ -14,14 +14,14 @@ import { MoraleSystem } from './morale.js';
 import { TacticsSystem } from './tactics.js';
 import { UnitInspector } from './inspection.js';
 import { MANIFEST } from './manifest.js';
+import { BattleSpatialIndex } from './battle/spatial.js';
 
 const TW = 64, TH = 32;                       // 菱形块宽高
 const OX = GRID_H * TW / 2, OY = 120;         // 屏幕原点偏移
 const VIEW_W = (GRID_W + GRID_H) * TW / 2;    // 4480
 const VIEW_H = OY + (GRID_W + GRID_H) * TH / 2 + 60;
 
-// 空间哈希：每 3×3 格一个桶，索敌/碰撞只查附近桶，千人规模避免 O(n²)
-const SP_CELL = 3;
+// 空间哈希单元格移至 js/battle/spatial.js（SP_CELL = 3）
 const SIMULATION_STEP_MS = 1000 / 60;
 
 function quantizePosition(value, extent) {
@@ -1656,44 +1656,21 @@ export class IsoBattleScene extends Phaser.Scene {
         }
     }
 
-    // ---------------- 空间哈希 ----------------
-    // 桶数组复用（length=0 清空），每帧零分配；顺带聚合存活数与双方重心
+    // ---------------- 空间哈希（实现在 js/battle/spatial.js，场景只做委托） ----------------
     rebuildSpatial() {
-        for (const arr of this.sgrid.values()) arr.length = 0;
-        const alive = this._aliveArr;
-        alive.length = 0;
-        let rN = 0, bN = 0, rX = 0, rY = 0, bX = 0, bY = 0;
-        const units = this.units;
-        for (let i = 0; i < units.length; i++) {
-            const u = units[i];
-            if (u.dead || u.withdrawn) continue;
-            alive.push(u);
-            const k = ((u.gx / SP_CELL) | 0) * 512 + ((u.gy / SP_CELL) | 0);
-            let bucket = this.sgrid.get(k);
-            if (!bucket) { bucket = []; this.sgrid.set(k, bucket); }
-            bucket.push(u);
-            if (u.team === 'red') { rN++; rX += u.gx; rY += u.gy; }
-            else { bN++; bX += u.gx; bY += u.gy; }
-        }
-        this.redAlive = rN;
-        this.blueAlive = bN;
-        this.centroid.red.x = rN ? rX / rN : GRID_W / 2;
-        this.centroid.red.y = rN ? rY / rN : GRID_H / 2;
-        this.centroid.blue.x = bN ? bX / bN : GRID_W / 2;
-        this.centroid.blue.y = bN ? bY / bN : GRID_H / 2;
+        if (!this._spatial) this._spatial = new BattleSpatialIndex();
+        this._spatial.rebuild(this.units);
+        // 兼容旧字段：harness/测试直接读 sgrid/_aliveArr/redAlive/centroid
+        this.sgrid = this._spatial.grid;
+        this._aliveArr = this._spatial.alive;
+        this.redAlive = this._spatial.redAlive;
+        this.blueAlive = this._spatial.blueAlive;
+        this.centroid = this._spatial.centroid;
     }
 
-    // 遍历 (gx,gy) 半径 r 覆盖的所有桶内单位（方形覆盖 ⊇ 圆形，距离由调用方判定）
     forEachNear(gx, gy, r, fn) {
-        const c0x = ((gx - r) / SP_CELL) | 0, c1x = ((gx + r) / SP_CELL) | 0;
-        const c0y = ((gy - r) / SP_CELL) | 0, c1y = ((gy + r) / SP_CELL) | 0;
-        for (let cx = c0x; cx <= c1x; cx++) {
-            for (let cy = c0y; cy <= c1y; cy++) {
-                const bucket = this.sgrid.get(cx * 512 + cy);
-                if (!bucket) continue;
-                for (let i = 0; i < bucket.length; i++) fn(bucket[i]);
-            }
-        }
+        if (!this._spatial) this._spatial = new BattleSpatialIndex();
+        this._spatial.forEachNear(gx, gy, r, fn);
     }
 
     // 最近敌人：环形扩张搜索；查到半径 r 内的最佳解即全局最近（圆内 ⊆ 查询方形）。
