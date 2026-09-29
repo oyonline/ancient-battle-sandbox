@@ -64,6 +64,7 @@ function newCode() {
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', ws => {
+    send(ws, { t: 'welcome', arena: true, time: Date.now() });   // 身份包：区分对战服务器与开发页
     ws.on('message', raw => {
         let message;
         try { message = JSON.parse(raw); } catch (_) { return; }
@@ -138,6 +139,7 @@ return { server, wss };
 // ---------------- 启动横幅（仅直接运行时；测试 import 不监听） ----------------
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
+    createArenaServer();   // 挂接 WebSocket（独立启动路径曾漏掉这一步：页面能开、房间按钮无响应的元凶）
     server.listen(PORT, () => {
         const nets = Object.values(os.networkInterfaces()).flat()
             .filter(n => n?.family === 'IPv4' && !n.internal).map(n => n.address);

@@ -5,6 +5,7 @@
 export class ArenaClient {
     constructor(onEvent) {
         this.ws = null;
+        this.isArena = false;      // 收到服务器 welcome 才为真（区分 vite 开发页等假端口）
         this.onEvent = onEvent || (() => {});
     }
 
@@ -28,6 +29,7 @@ export class ArenaClient {
             this.ws.onmessage = event => {
                 let message;
                 try { message = JSON.parse(event.data); } catch (_) { return; }
+                if (message.t === 'welcome') this.isArena = message.arena === true;
                 this.onEvent(message);
             };
         });

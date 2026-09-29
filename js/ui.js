@@ -500,23 +500,44 @@ export const UI = {
         }
         if (!this.net.client.connected) {
             this.net.client.connect()
-                .then(() => this.netStatus('已连接。创建房间，或输入房间码加入。'))
-                .catch(() => this.netStatus('连不上对战服务器——请先在房主电脑运行 npm run arena（并确认本页来自对战服务器地址）。'));
-        } else this.netStatus('已连接。创建房间，或输入房间码加入。');
+                .then(() => this.netStatus(this.net.client.isArena
+                    ? '已连接对战服务器。创建房间，或输入房间码加入。'
+                    : '已连接，但对方不像对战服务器（若是 vite 开发页请改用 arena 地址 :5300）。'))
+                .catch(() => this.netStatus('连不上对战服务器——请先在房主电脑运行 npm run arena（并确认本页来自对战服务器地址 :5300）。'));
+        } else this.netStatus(this.net.client.isArena
+            ? '已连接对战服务器。创建房间，或输入房间码加入。'
+            : '已连接，但对方不像对战服务器（若是 vite 开发页请改用 arena 地址 :5300）。');
     },
 
     netStatus(text) { document.getElementById('net-status').textContent = text; },
 
+    // 发房间请求并带超时守望：没连上/连的不是对战服务器/服务器不应答，都给出明确提示
+    netRequest(action, label) {
+        const client = this.net.client;
+        if (!client?.connected) {
+            this.netStatus('⚠ 尚未连上对战服务器——请确认页面地址是 npm run arena 打印的那个（通常端口 5300），刷新后重试。');
+            return;
+        }
+        if (!client.isArena) {
+            this.netStatus('⚠ 当前页面连的不是对战服务器（可能开着 vite 开发页 5173）。请改用房主 arena 地址后再试。');
+            return;
+        }
+        this.netStatus(label + '…');
+        action();
+        clearTimeout(this.net.expectTimer);
+        this.net.expectTimer = setTimeout(() => {
+            if (!this.net.code) this.netStatus('⚠ 服务器没有响应' + label + '——请确认两端打开的都是对战服务器地址，或重启 npm run arena。');
+        }, 4000);
+    },
+
     netCreate() {
-        if (!this.net.client?.connected) return;
-        this.net.client.createRoom();
+        this.netRequest(() => this.net.client.createRoom(), '正在创建房间');
     },
 
     netJoin() {
-        if (!this.net.client?.connected) return;
         const code = document.getElementById('net-code-input').value.trim().toUpperCase();
         if (code.length !== 4) { this.netStatus('请输入 4 位房间码。'); return; }
-        this.net.client.joinRoom(code);
+        this.netRequest(() => this.net.client.joinRoom(code), '正在加入房间 ' + code);
     },
 
     netReady() {
