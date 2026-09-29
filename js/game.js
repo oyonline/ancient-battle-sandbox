@@ -1,7 +1,7 @@
 // ==================== 等距视角战斗场景 ====================
 // 帝国时代2 风格：斜45°菱形地块 + Kenney 兵种贴图 + y轴深度排序
 // UI/Snd 是 ui.js 运行时挂到全局的（模块加载序 game→ui），此处只做运行时引用。
-import { GRID_W, GRID_H } from './board.js';
+import { board, setBoardSize, resetBoardSize } from './board.js';
 import { Terrain } from './terrain.js';
 import { TerrainNavigation } from './navigation.js';
 import {
@@ -19,11 +19,20 @@ import * as targeting from './battle/targeting.js';
 import { BattleLedger } from './battle/report.js';
 import * as core from './battle/core.js';
 import { BraceQueue } from './battle/core.js';
+import { TERRITORY, makeTerritoryFlags, TerritoryEconomy, TicketSystem } from './battle/economy.js';
+import { RecruitSystem, TerritoryAI } from './battle/recruit.js';
 
 const TW = 64, TH = 32;                       // 菱形块宽高
-const OX = GRID_H * TW / 2, OY = 120;         // 屏幕原点偏移
-const VIEW_W = (GRID_W + GRID_H) * TW / 2;    // 4480
-const VIEW_H = OY + (GRID_W + GRID_H) * TH / 2 + 60;
+// 世界度量随棋盘尺寸走（默认 70×70 时 VIEW_W=4480）；大地图模式经 setBoardSize
+// 改尺寸后由 refreshWorldMetrics() 重算，渲染各层读当前值，不缓存旧尺寸。
+let OX = board.H * TW / 2, OY = 120;         // 屏幕原点偏移
+let VIEW_W = (board.W + board.H) * TW / 2;
+let VIEW_H = OY + (board.W + board.H) * TH / 2 + 60;
+function refreshWorldMetrics() {
+    OX = board.H * TW / 2;
+    VIEW_W = (board.W + board.H) * TW / 2;
+    VIEW_H = OY + (board.W + board.H) * TH / 2 + 60;
+}
 
 // 空间哈希单元格移至 js/battle/spatial.js（SP_CELL = 3）
 // 战斗核（定步长/编排/动作队列/迎击队列）移至 js/battle/core.js（SIMULATION_STEP_MS = 1000/60）
@@ -242,8 +251,8 @@ export class IsoBattleScene extends Phaser.Scene {
         this.redAlive = 0;
         this.blueAlive = 0;
         this.centroid = {
-            red: { x: GRID_W / 2, y: GRID_H / 2 },
-            blue: { x: GRID_W / 2, y: GRID_H / 2 }
+            red: { x: board.W / 2, y: board.H / 2 },
+            blue: { x: board.W / 2, y: board.H / 2 }
         };
         this.deadCount = 0;
         this._countsDirty = false;
@@ -371,7 +380,7 @@ export class IsoBattleScene extends Phaser.Scene {
 
     drawNaturalGroundTexture(g, hash) {
         // 最后铺纹理，避免被细分坡面盖掉；只烘焙一次，不参与高度或通行计算。
-        for (let gy = 1; gy < GRID_H - 1; gy++) for (let gx = 1; gx < GRID_W - 1; gx++) {
+        for (let gy = 1; gy < board.H - 1; gy++) for (let gx = 1; gx < board.W - 1; gx++) {
             const growth = this.terNoise(gx * 0.37 + 13, gy * 0.37 + 41);
             for (let i = 0; i < 7; i++) {
                 const seed = gx * 7 + i;
@@ -410,6 +419,30 @@ export class IsoBattleScene extends Phaser.Scene {
         if (this.groundImage && this._groundTerrain !== this.battleOptions.terrain) this.drawGround();
     }
 
+    // 棋盘尺寸变更（进入/退出领土征服大地图）：重算世界度量并重建依赖尺寸的渲染层。
+    // 无真实画布的战斗测试（无 groundImage/scarRT）只刷新度量，跳过重建。
+    applyBoardSize() {
+        refreshWorldMetrics();
+        this._boardW = board.W;
+        this._boardH = board.H;
+        this.mapCenter = { x: VIEW_W / 2, y: OY + (board.W + board.H) * TH / 4 };
+        if (this.groundImage) this.drawGround();                 // 重烘焙地面大贴图（内含销毁重建）
+        if (this.edgeProps?.length) {                            // 大本营箭塔/边缘树林按新尺寸重摆
+            for (const { sprite } of this.edgeProps) {
+                this.tweens.killTweensOf(sprite);
+                sprite.destroy();
+            }
+            this.edgeProps = [];
+            this.placeDecorations();
+        }
+        if (this.scarRT && this.add?.renderTexture) {            // 战场留痕层按新尺寸重建
+            this.scarRT.destroy();
+            this.scarRT = this.add.renderTexture(0, 0, VIEW_W, VIEW_H).setOrigin(0, 0).setDepth(6);
+        }
+        if (this._minimap) { this._minimap.gfx.destroy(); this._minimap.zone.destroy(); this._minimap = null; }
+        if (this.ocean) this.redrawOcean();
+    }
+
     ensureNavigation() {
         if (!this.navigation) this.navigation = new TerrainNavigation(this);
         if (this.navigation.key !== this.battleOptions.terrain || this.navigation.battleId !== this.battleId)
@@ -423,7 +456,7 @@ export class IsoBattleScene extends Phaser.Scene {
         const g = this.make.graphics({ add: false });
         const naturalSlope = Terrain.isNaturalSlope(this.battleOptions.terrain);
         this.terNoise = this.terNoise || makeNoise(7);
-        const isWater = (gx, gy) => gx === 0 || gy === 0 || gx === GRID_W - 1 || gy === GRID_H - 1;
+        const isWater = (gx, gy) => gx === 0 || gy === 0 || gx === board.W - 1 || gy === board.H - 1;
         const hash = (a, b) => {
             let h = (a * 374761393 + b * 668265263) ^ 0x5bf03635;
             h = (h ^ (h >> 13)) * 1274126177;
@@ -434,8 +467,8 @@ export class IsoBattleScene extends Phaser.Scene {
             { x: x, y: y + TH / 2 * s }, { x: x - TW / 2 * s, y: y }
         ];
 
-        for (let gy = 0; gy < GRID_H; gy++) {
-            for (let gx = 0; gx < GRID_W; gx++) {
+        for (let gy = 0; gy < board.H; gy++) {
+            for (let gx = 0; gx < board.W; gx++) {
                 const { x, y } = this.groundPoint(gx, gy);
                 const tile = this.groundTile(gx, gy);
                 const r1 = hash(gx, gy), r2 = hash(gx + 97, gy + 31);
@@ -529,7 +562,7 @@ export class IsoBattleScene extends Phaser.Scene {
                     const a = i / 100 * TWO_PI;
                     const gx = cx + Math.cos(a) * rx * radius;
                     const gy = cy + Math.sin(a) * ry * radius;
-                    if (gx >= 1 && gx <= GRID_W - 1) points.push(this.groundPoint(gx, gy));
+                    if (gx >= 1 && gx <= board.W - 1) points.push(this.groundPoint(gx, gy));
                 }
                 g.lineStyle(radius === 0.35 ? 3 : 2, 0xe9ddac, radius === 0.35 ? 0.7 : 0.4);
                 g.strokePoints(points, false);
@@ -562,10 +595,10 @@ export class IsoBattleScene extends Phaser.Scene {
             const side = i % 4;
             const t = hash(i, 777);
             let wx, wy;
-            if (side === 0) { const { x, y } = gridToScreen(1 + t * (GRID_W - 2), 0); wx = x; wy = y; }
-            else if (side === 1) { const { x, y } = gridToScreen(1 + t * (GRID_W - 2), GRID_H - 1); wx = x; wy = y; }
-            else if (side === 2) { const { x, y } = gridToScreen(0, 1 + t * (GRID_H - 2)); wx = x; wy = y; }
-            else { const { x, y } = gridToScreen(GRID_W - 1, 1 + t * (GRID_H - 2)); wx = x; wy = y; }
+            if (side === 0) { const { x, y } = gridToScreen(1 + t * (board.W - 2), 0); wx = x; wy = y; }
+            else if (side === 1) { const { x, y } = gridToScreen(1 + t * (board.W - 2), board.H - 1); wx = x; wy = y; }
+            else if (side === 2) { const { x, y } = gridToScreen(0, 1 + t * (board.H - 2)); wx = x; wy = y; }
+            else { const { x, y } = gridToScreen(board.W - 1, 1 + t * (board.H - 2)); wx = x; wy = y; }
             const spark = this.add.graphics().setDepth(2);
             spark.fillStyle(0xffffff, 0.5);
             spark.fillEllipse(wx, wy, 10, 3);
@@ -696,16 +729,16 @@ export class IsoBattleScene extends Phaser.Scene {
         // 双方大本营：箭塔沿基地前沿一字排开（要塞感）
         [8, 20, 34, 48, 60].forEach(gy => {
             deco.push(['tower', 2.2, gy]);
-            deco.push(['tower', GRID_W - 3.2, gy]);
+            deco.push(['tower', board.W - 3.2, gy]);
         });
         // 上下边缘树林带 + 零散岩石（不挡主战场）
         const jit = (a, b) => a + Math.random() * (b - a);
-        for (let gx = 4; gx < GRID_W - 5; gx += 3) {
+        for (let gx = 4; gx < board.W - 5; gx += 3) {
             deco.push([Math.random() < 0.5 ? 'tree_big' : 'tree_small', jit(gx, gx + 2), jit(1.2, 2.6)]);
-            deco.push([Math.random() < 0.5 ? 'tree_big' : 'tree_small', jit(gx, gx + 2), jit(GRID_H - 2.8, GRID_H - 1.4)]);
+            deco.push([Math.random() < 0.5 ? 'tree_big' : 'tree_small', jit(gx, gx + 2), jit(board.H - 2.8, board.H - 1.4)]);
         }
         for (let i = 0; i < 8; i++) {
-            deco.push(['rock', jit(6, GRID_W - 7), Math.random() < 0.5 ? jit(1.6, 2.4) : jit(GRID_H - 2.6, GRID_H - 1.8)]);
+            deco.push(['rock', jit(6, board.W - 7), Math.random() < 0.5 ? jit(1.6, 2.4) : jit(board.H - 2.6, board.H - 1.8)]);
         }
         deco.forEach(([key, gx, gy]) => {
             const { x, y } = gridToScreen(gx, gy);
@@ -763,20 +796,20 @@ export class IsoBattleScene extends Phaser.Scene {
         g.clear();
         if (Terrain.isNaturalSlope(this.battleOptions.terrain)) return;
         const zone = (x0, x1, color) => {
-            for (let gy = 1; gy < GRID_H - 1; gy++)
+            for (let gy = 1; gy < board.H - 1; gy++)
                 for (let gx = x0; gx < x1; gx++) {
                     g.fillStyle(color, 1);
                     g.fillPoints(this.groundTile(gx, gy), true);
                 }
         };
         zone(2, 14, 0xff5555);
-        zone(GRID_W - 14, GRID_W - 2, 0x5599ff);
+        zone(board.W - 14, board.W - 2, 0x5599ff);
     }
 
     setupCamera() {
         const cam = this.cameras.main;
         this.userZoom = 1;
-        this.mapCenter = { x: VIEW_W / 2, y: OY + (GRID_W + GRID_H) * TH / 4 };
+        this.mapCenter = { x: VIEW_W / 2, y: OY + (board.W + board.H) * TH / 4 };
 
         // 相机铺满策略：以地图对角线为基准计算缩放，窗口比例不同则多露水面
         this.fitCamera();
@@ -802,6 +835,22 @@ export class IsoBattleScene extends Phaser.Scene {
         const cam = this.cameras.main;
         const w = this.scale.gameSize.width;
         const h = this.scale.gameSize.height;
+        // 领土征服大地图：默认不整图铺满（千人单位会小到看不清）——取整图缩放与
+        // "约 55% 地图宽"两者的较大值作舒适基准；镜头初始对准红方大本营与中央
+        // 高地之间，全局定位交给小地图（resize 只重设缩放，不抢已平移的镜头）。
+        if (this.battleOptions.territory) {
+            const mw = VIEW_W + 260, mh = VIEW_H + 320;
+            this.baseZoom = Math.max(Math.max(w / mw, h / mh) * 1.06, w / (VIEW_W * 0.55));
+            cam.setBounds(-320, -40, VIEW_W + 640, VIEW_H + 200);
+            this.applyZoom();
+            if (!this._territoryCamInit && this.units.length) {
+                this._territoryCamInit = true;
+                const home = this.groundPoint(board.W * 0.3, board.H / 2);
+                cam.centerOn((home.x + this.mapCenter.x) / 2, (home.y + this.mapCenter.y) / 2);
+            }
+            if (this.ocean) this.redrawOcean();
+            return;
+        }
         // 地图的世界包围盒（含装饰余量）
         const mw = VIEW_W + 260, mh = VIEW_H + 320;
         this.baseZoom = Math.max(w / mw, h / mh) * 1.06;
@@ -838,8 +887,11 @@ export class IsoBattleScene extends Phaser.Scene {
     resetBattleData() {
         this.unitInspector?.reset();
         this.tactics = null;
-        this.battleOptions = { deathmatch: false, control: false, reserves: { red: 0, blue: 0 }, terrain: 'flat',
+        this.battleOptions = { deathmatch: false, control: false, convoy: false, territory: false,
+            reserves: { red: 0, blue: 0 }, terrain: 'flat',
             cavalryOrders: { red: 'auto', blue: 'auto' } };
+        this.territory = null;
+        this._territoryCamInit = false;
         if (this.tacticsGfx) this.tacticsGfx.clear();
         this.battleId = (this.battleId || 0) + 1;
         this.navigation?.reset('flat', this.battleId);
@@ -909,6 +961,13 @@ export class IsoBattleScene extends Phaser.Scene {
             teams,
             morale: this.getMoraleSummary(),
             deathmatch: this.battleOptions.deathmatch,
+            territory: this.battleOptions.territory && this.territory ? {
+                tickets: { red: Math.round(this.territory.tickets.tickets.red), blue: Math.round(this.territory.tickets.tickets.blue) },
+                flags: this.flags.map(f => ({ name: f.name, owner: f.owner })),
+                earned: { red: Math.round(this.territory.econ.earned.red), blue: Math.round(this.territory.econ.earned.blue) },
+                spent: { red: Math.round(this.territory.econ.spent.red), blue: Math.round(this.territory.econ.spent.blue) },
+                recruited: { red: this.territory.recruit.spawned.red, blue: this.territory.recruit.spawned.blue }
+            } : null,
             tactics: this.getTacticsSummary(),
             endReason: this.endReason,
             events: this.ledger.events.map(event => ({ ...event }))
@@ -985,7 +1044,7 @@ export class IsoBattleScene extends Phaser.Scene {
     }
 
     moraleSector(unit) {
-        const middle = this.tactics?.formations[unit.team]?.cy ?? GRID_H / 2;
+        const middle = this.tactics?.formations[unit.team]?.cy ?? board.H / 2;
         return unit.gy < middle - 3 ? '上翼' : unit.gy > middle + 3 ? '下翼' : '中路';
     }
 
@@ -1046,7 +1105,7 @@ export class IsoBattleScene extends Phaser.Scene {
             }
         }
         const anchor = this.tactics?.rallyPoint(unit) || unit.rallyTarget;
-        let dx = (anchor ? anchor.gx : unit.team === 'red' ? 0 : GRID_W) - unit.gx;
+        let dx = (anchor ? anchor.gx : unit.team === 'red' ? 0 : board.W) - unit.gx;
         let dy = anchor ? anchor.gy - unit.gy : 0;
         const length = Math.hypot(dx, dy) || 1;
         dx /= length; dy /= length;
@@ -1065,7 +1124,7 @@ export class IsoBattleScene extends Phaser.Scene {
         const breaking = closeEnemy && dist(unit, closeEnemy) < 3;
         if (Terrain.hasBarriers(this.battleOptions.terrain)) {
             // 隔岸时保留全局接应点；三格的局部躲避点可能落水，不能用它取代回撤路线。
-            moveToward(unit, anchor ? anchor.gx : unit.team === 'red' ? 0.6 : GRID_W - 0.6,
+            moveToward(unit, anchor ? anchor.gx : unit.team === 'red' ? 0.6 : board.W - 0.6,
                 anchor ? anchor.gy : unit.gy, unit.typeData.speed * (breaking ? 0.7 : 1), dt);
             return;
         }
@@ -1124,6 +1183,9 @@ export class IsoBattleScene extends Phaser.Scene {
     }
 
     deployUnits(redConfig, blueConfig, redFormation, blueFormation, orders = {}, options = {}) {
+        // 棋盘尺寸：领土征服用大地图，其余模式回默认；尺寸变化时重建依赖尺寸的渲染层。
+        if (options.territory) setBoardSize(TERRITORY.W, TERRITORY.H); else resetBoardSize();
+        if (this._boardW !== board.W || this._boardH !== board.H) this.applyBoardSize();
         this.clearUnits(options.terrain);
         this.drawSpawnZones();
         const armies = [
@@ -1136,6 +1198,7 @@ export class IsoBattleScene extends Phaser.Scene {
         this.battleOptions.deathmatch = options.deathmatch === true;
         this.battleOptions.control = options.control === true;
         this.battleOptions.convoy = options.convoy === true;
+        this.battleOptions.territory = options.territory === true;
         for (const [team] of armies) {
             const cavalryOrder = options.cavalryOrders?.[team];
             this.battleOptions.cavalryOrders[team] = ['direct', 'flank_archers'].includes(cavalryOrder) ? cavalryOrder : 'auto';
@@ -1165,24 +1228,35 @@ export class IsoBattleScene extends Phaser.Scene {
         this.userZoom = 1;
         // 占点征服：三面旗立在中线 x=35（换座镜像 x→70-x 下自对称），
         // 上翼/中路/下翼纵向分布。旗归属以单位在场数判定，积分先到 60 者胜。
-        this.flags = this.battleOptions.control ? [
-            { gx: 35, gy: GRID_H * 0.24, name: '上翼' },
-            { gx: 35, gy: GRID_H * 0.5, name: '中路' },
-            { gx: 35, gy: GRID_H * 0.76, name: '下翼' }
-        ].map(f => ({ ...f, owner: null, progress: 0, contested: false })) : null;
+        this.flags = this.battleOptions.territory ? makeTerritoryFlags()
+            : this.battleOptions.control ? [
+                { gx: 35, gy: board.H * 0.24, name: '上翼' },
+                { gx: 35, gy: board.H * 0.5, name: '中路' },
+                { gx: 35, gy: board.H * 0.76, name: '下翼' }
+            ].map(f => ({ ...f, owner: null, progress: 0, contested: false })) : null;
         this.controlScore = { red: 0, blue: 0 };
+        // 领土征服运行态：经济 / 征兵队列 / 票数 / 战略 AI。五面旗布局见 battle/economy.js。
+        // 蓝方默认自动征兵（红方玩家手动大按钮）；territoryAI:true 双方自动（观战/测试），
+        // territoryAI:false 双方停手（隔离变量测经济/票数）。
+        this.territory = this.battleOptions.territory ? {
+            econ: new TerritoryEconomy(),
+            recruit: new RecruitSystem(this),
+            tickets: new TicketSystem(),
+            ai: { red: new TerritoryAI(this, 'red'), blue: new TerritoryAI(this, 'blue') },
+            autoBuy: { red: options.territoryAI === true, blue: options.territoryAI !== false }
+        } : null;
         // 护送模式：红方 4 辆辎重车从出发区沿中线穿越战场，送抵 3 辆红胜、
         // 被毁 3 辆蓝胜；车附近有护送部队才前进（无保护停下等待）。
         this.convoy = null;
         if (this.battleOptions.convoy) {
             this.ensureWagonTextures();
-            const wagons = [[13, GRID_H / 2 - 3], [12, GRID_H / 2], [13, GRID_H / 2 + 3], [10.5, GRID_H / 2]]
+            const wagons = [[13, board.H / 2 - 3], [12, board.H / 2], [13, board.H / 2 + 3], [10.5, board.H / 2]]
                 .map(([x, y]) => {
                     const wagon = this.spawnUnit('red', 'wagon', x, y);
                     wagon.tacticalRole = 'convoy_wagon';
                     return wagon;
                 });
-            this.convoy = { team: 'red', goalX: GRID_W - 6, wagons, need: 3, delivered: 0, destroyed: 0 };
+            this.convoy = { team: 'red', goalX: board.W - 6, wagons, need: 3, delivered: 0, destroyed: 0 };
         }
         if (this.cameras.main.setZoom) this.fitCamera();
     }
@@ -1485,6 +1559,9 @@ export class IsoBattleScene extends Phaser.Scene {
             this._countsDirty = false;
             if (typeof UI !== 'undefined') UI.updateCounts();
         }
+        // 领土征服小地图（常驻屏幕空间；退出该模式即销毁）
+        if (this.battleOptions.territory) this.updateTerritoryOverlay();
+        else if (this._minimap) this.destroyMinimap();
         if (!this.battleStarted || this.paused || this.battleOver) { this.syncRender(time); return; }
         // 本帧视口（世界坐标）+ LOD 开关：拉远看全局时砍掉小特效
         const cam = this.cameras.main;
@@ -1615,7 +1692,14 @@ export class IsoBattleScene extends Phaser.Scene {
         // 敌军残兵(≤3)时全员清场优先——留着几个远程敌站桩，占旗得分也赢不踏实。
         // 骑兵由冲锋状态机驱动不经过这里；守位与战术组单位走各自入口，不受影响。
         const foeCount = unit.team === 'red' ? this.blueAlive : this.redAlive;
-        if (this.battleOptions.control && !guardAnchor && !unit.typeData.ranged && minD > 12 && foeCount > 3 &&
+        // 占点/领土：自由单位在敌尚远(>12格)且不在旗圈内时，向最近的非己方旗行进；
+        // 已在非己方旗圈内的单位站住守旗（见追敌分支），敌近后照常接敌不追出圈。
+        // 领土模式额外允许远程兵种随队行军，但停在旗圈外沿（5.5格）standoff 放箭。
+        // 敌军残兵(≤3)时全员清场优先——留着几个远程敌站桩，占旗得分也赢不踏实。
+        // 骑兵由冲锋状态机驱动不经过这里；守位与战术组单位走各自入口，不受影响。
+        const flagMarch = this.battleOptions.control || this.battleOptions.territory;
+        if (flagMarch && !guardAnchor && minD > 12 && foeCount > 3 &&
+            (!unit.typeData.ranged || this.battleOptions.territory) &&
             !this.flags.some(f => f.owner !== unit.team && Math.hypot(f.gx - unit.gx, f.gy - unit.gy) <= 2.8)) {
             let flag = null, best = Infinity;
             for (const f of this.flags) {
@@ -1624,9 +1708,9 @@ export class IsoBattleScene extends Phaser.Scene {
                 // 等距取 y 小者：键为镜像不变量，换座两侧选同一面旗
                 if (d < best - 1e-9 || (Math.abs(d - best) <= 1e-9 && f.gy < flag.gy - 1e-9)) { best = d; flag = f; }
             }
-            if (flag) {
+            if (flag && (!unit.typeData.ranged || Math.hypot(flag.gx - unit.gx, flag.gy - unit.gy) > 5.5)) {
                 unit.target = nearest;
-                moveToward(unit, flag.gx, flag.gy, unit.typeData.speed, dt);
+                moveToward(unit, flag.gx, flag.gy, unit.typeData.speed * (unit.typeData.ranged ? 0.9 : 1), dt);
                 return;
             }
         }
@@ -1729,8 +1813,8 @@ export class IsoBattleScene extends Phaser.Scene {
                         const side = unitRand(unit) < 0.5 ? 1 : -1;
                         const perp = Math.atan2(unit.gy - nearest.gy, unit.gx - nearest.gx) + mir * side * Math.PI / 2;
                         const step = 0.8 + unitRand(unit) * 0.8;
-                        const sx = clamp(unit.gx + Math.cos(perp) * step, 1.2, GRID_W - 1.2);
-                        const sy = clamp(unit.gy + Math.sin(perp) * step, 1.2, GRID_H - 1.2);
+                        const sx = clamp(unit.gx + Math.cos(perp) * step, 1.2, board.W - 1.2);
+                        const sy = clamp(unit.gy + Math.sin(perp) * step, 1.2, board.H - 1.2);
                         let taken = false;
                         this.forEachNear(sx, sy, 0.42, o => {
                             if (o !== unit && o.team === unit.team && !o.dead && !o.withdrawn &&
@@ -1818,8 +1902,8 @@ export class IsoBattleScene extends Phaser.Scene {
                         const nr = Math.max(0.55, range * 0.85);
                         let pickAng = cur + mir * (unitRand(unit) < 0.5 ? 1 : -1) * (0.7 + unitRand(unit) * 0.7);
                         for (let t = 0; t < 4; t++) {
-                            const sx = clamp(nearest.gx + Math.cos(pickAng) * nr, 1.2, GRID_W - 1.2);
-                            const sy = clamp(nearest.gy + Math.sin(pickAng) * nr, 1.2, GRID_H - 1.2);
+                            const sx = clamp(nearest.gx + Math.cos(pickAng) * nr, 1.2, board.W - 1.2);
+                            const sy = clamp(nearest.gy + Math.sin(pickAng) * nr, 1.2, board.H - 1.2);
                             let taken = false;
                             this.forEachNear(sx, sy, 0.42, o => {
                                 if (o !== unit && o.team === unit.team && !o.dead
@@ -1888,8 +1972,8 @@ export class IsoBattleScene extends Phaser.Scene {
             const beforeX = u.gx, beforeY = u.gy;
             const correction = Terrain.clipMotion(this.battleOptions.terrain, u.gx, u.gy,
                 u.separateX + px, u.separateY + py, CombatRules.bodyRadius(u));
-            u.gx = quantizePosition(clamp(u.gx + correction.x, 0.6, GRID_W - 0.6), GRID_W);
-            u.gy = quantizePosition(clamp(u.gy + correction.y, 0.6, GRID_H - 0.6), GRID_H);
+            u.gx = quantizePosition(clamp(u.gx + correction.x, 0.6, board.W - 0.6), board.W);
+            u.gy = quantizePosition(clamp(u.gy + correction.y, 0.6, board.H - 0.6), board.H);
             // 保存实际纠偏量（含边界截断），供下一步架枪判定扣除。
             u.separateX = u.gx - beforeX; u.separateY = u.gy - beforeY;
         }
@@ -1901,8 +1985,8 @@ export class IsoBattleScene extends Phaser.Scene {
         const flightT = clamp(d / 12, 0.3, 0.75);
         // 预判提前量：瞄目标飞行期间的预估位置
         const lead = (v) => v ? clamp(v * flightT, -1.5, 1.5) : 0;
-        const tx = clamp(target.gx + lead(target.velX), 0.5, GRID_W - 0.5);
-        const ty = clamp(target.gy + lead(target.velY), 0.5, GRID_H - 0.5);
+        const tx = clamp(target.gx + lead(target.velX), 0.5, board.W - 0.5);
+        const ty = clamp(target.gy + lead(target.velY), 0.5, board.H - 0.5);
         this.arrows.push({
             sx: from.gx, sy: from.gy,
             tx, ty,
@@ -2502,6 +2586,141 @@ export class IsoBattleScene extends Phaser.Scene {
         }
     }
 
+    // ---------------- 领土征服 ----------------
+    // 每步推进：旗帜拔河（复用 updateFlags）→ 军费收入 → 征兵出兵 → 战略 AI 采购 → 票数流失。
+    updateTerritory(dt) {
+        this.updateFlags(dt);
+        const owned = { red: 0, blue: 0 };
+        for (const flag of this.flags) if (flag.owner) owned[flag.owner]++;
+        const state = this.territory;
+        state.econ.tick(dt, owned);
+        state.recruit.update();
+        for (const team of ['red', 'blue']) {
+            if (state.autoBuy[team]) state.ai[team].update(this.simulationTime);
+        }
+        const before = { red: state.tickets.tickets.red, blue: state.tickets.tickets.blue };
+        state.tickets.tick(dt, owned);
+        for (const team of ['red', 'blue']) {
+            if (before[team] > TERRITORY.TICKETS / 2 && state.tickets.tickets[team] <= TERRITORY.TICKETS / 2) {
+                this.addBattleEvent(`tickets-half-${team}`,
+                    `${team === 'red' ? '红方' : '蓝方'}票数已流失过半，领土告急`, team);
+            }
+        }
+    }
+
+    aliveCount(team, type) {
+        let count = 0;
+        for (const unit of this._aliveArr) {
+            if (unit.team === team && (!type || unit.type === type)) count++;
+        }
+        return count;
+    }
+
+    spotFree(x, y) {
+        let free = true;
+        this.forEachNear(x, y, 0.62, u => {
+            if (!u.dead && !u.withdrawn && Math.hypot(u.gx - x, u.gy - y) < 0.62) free = false;
+        });
+        return free;
+    }
+
+    // 老家出兵：在己方出兵线（红 x≈5.5 / 蓝 x≈W-5.5）附近按确定性螺旋序列找空位，
+    // 找到的第一格即为落点（不掷随机数，换座镜像/锁步重放一致）。
+    spawnTerritoryUnit(team, type) {
+        const cx = team === 'red' ? 5.5 : board.W - 5.5;
+        const cy = board.H / 2;
+        let gx = cx + (team === 'red' ? 1 : -1), gy = cy;
+        outer:
+        for (let ring = 0; ring < 8; ring++) {
+            const radius = ring * 1.1;
+            for (let i = 0; i < 10; i++) {
+                const angle = i / 10 * Math.PI * 2 + (ring % 2) * Math.PI / 10;
+                const x = Math.round((cx + Math.cos(angle) * radius) * 8) / 8;
+                const y = Math.round((cy + Math.sin(angle) * radius * 0.8) * 8) / 8;
+                if (x < 1.5 || x > board.W - 1.5 || y < 1.5 || y > board.H - 1.5) continue;
+                if (this.spotFree(x, y)) { gx = x; gy = y; break outer; }
+            }
+        }
+        return this.spawnUnit(team, type, gx, gy);
+    }
+
+    // ---------------- 领土小地图（屏幕空间，点击/拖动直接跳镜头） ----------------
+    buildMinimap() {
+        const cam = this.cameras.main;
+        const h = 108, w = Math.round(h * board.W / board.H);
+        const x = cam.width - w - 14, y = 74;
+        const gfx = this.add.graphics().setScrollFactor(0).setDepth(150010);
+        const zone = this.add.rectangle(x + w / 2, y + h / 2, w, h, 0x000000, 0.01)
+            .setOrigin(0.5).setScrollFactor(0).setInteractive();
+        const jump = pointer => {
+            const gx = clamp((pointer.x - x) / w * board.W, 0, board.W);
+            const gy = clamp((pointer.y - y) / h * board.H, 0, board.H);
+            const world = gridToScreen(gx, gy);
+            cam.centerOn(world.x, world.y);
+        };
+        zone.on('pointerdown', jump);
+        zone.on('pointermove', pointer => { if (pointer.isDown) jump(pointer); });
+        this._minimap = { gfx, zone, x, y, w, h };
+    }
+
+    destroyMinimap() {
+        if (!this._minimap) return;
+        this._minimap.gfx.destroy();
+        this._minimap.zone.destroy();
+        this._minimap = null;
+    }
+
+    updateTerritoryOverlay() {
+        if (!this._minimap) this.buildMinimap();
+        const now = this.time?.now || this.simulationTime;
+        if (now - (this._minimapAt || 0) < 120) return;
+        this._minimapAt = now;
+        const { gfx: g, x, y, w, h } = this._minimap;
+        const RED = 0xff5b5b, BLUE = 0x57a0ff, NEUTRAL = 0xd8d2c0;
+        g.clear();
+        // 底板与边框
+        g.fillStyle(0x10202e, 0.82);
+        g.fillRect(x - 4, y - 4, w + 8, h + 8);
+        g.lineStyle(2, 0x2f4a5e, 0.95);
+        g.strokeRect(x - 4, y - 4, w + 8, h + 8);
+        // 双方出兵线提示带
+        g.fillStyle(0xff5555, 0.10);
+        g.fillRect(x, y, w * (12 / board.W), h);
+        g.fillStyle(0x5599ff, 0.10);
+        g.fillRect(x + w * (1 - 12 / board.W), y, w * (12 / board.W), h);
+        // 单位点（超采样抽稀，保持小地图常 60fps）
+        const step = this._aliveArr.length > 700 ? 2 : 1;
+        for (let i = 0; i < this._aliveArr.length; i += step) {
+            const u = this._aliveArr[i];
+            g.fillStyle(u.team === 'red' ? RED : BLUE, 0.9);
+            g.fillRect(x + u.gx / board.W * w - 0.8, y + u.gy / board.H * h - 0.8, 1.8, 1.8);
+        }
+        // 旗帜（争夺时呼吸闪烁）
+        for (const flag of this.flags) {
+            const color = flag.owner === 'red' ? RED : flag.owner === 'blue' ? BLUE : NEUTRAL;
+            const fx = x + flag.gx / board.W * w, fy = y + flag.gy / board.H * h;
+            g.fillStyle(color, flag.contested ? 0.6 + 0.4 * Math.sin(this.simulationTime * 0.02) : 1);
+            g.fillCircle(fx, fy, 2.6);
+            g.lineStyle(1, 0x0c141c, 0.8);
+            g.strokeCircle(fx, fy, 2.6);
+        }
+        // 镜头视口（世界四角逆投影成网格四边形）
+        const v = this.cameras.main.worldView;
+        const inv = (sx, sy) => {
+            const dx = (sx - OX) / (TW / 2), dy = (sy - OY) / (TH / 2);
+            return { gx: (dx + dy) / 2, gy: (dy - dx) / 2 };
+        };
+        const corners = [inv(v.x, v.y), inv(v.right, v.y), inv(v.right, v.bottom), inv(v.x, v.bottom)];
+        g.lineStyle(1.5, 0xf6e6b0, 0.9);
+        g.beginPath();
+        corners.forEach((c, i) => {
+            const px = x + c.gx / board.W * w, py = y + c.gy / board.H * h;
+            if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+        });
+        g.closePath();
+        g.strokePath();
+    }
+
     drawFlags() {
         if (!this.flags) return;
         if (!this.flagGfx) this.flagGfx = this.add.graphics().setDepth(11990);
@@ -2629,7 +2848,7 @@ export class IsoBattleScene extends Phaser.Scene {
         g.clear();
         const c = this.convoy;
         // 路线虚线：出发区沿中线到安全区
-        const from = this.groundPoint(9, GRID_H / 2), to = this.groundPoint(c.goalX + 1.5, GRID_H / 2);
+        const from = this.groundPoint(9, board.H / 2), to = this.groundPoint(c.goalX + 1.5, board.H / 2);
         g.lineStyle(2.5, 0xf6e6b0, 0.35);
         for (let i = 0; i < 24; i++) {
             const a = i / 24, b = (i + 0.55) / 24;
@@ -2637,7 +2856,7 @@ export class IsoBattleScene extends Phaser.Scene {
                 from.x + (to.x - from.x) * b, from.y + (to.y - from.y) * b);
         }
         // 终点安全区：绿色半透椭圆 + 框
-        const zone = sampleGroundRing(this, c.goalX + 1.5, GRID_H / 2, 4.5, 26);
+        const zone = sampleGroundRing(this, c.goalX + 1.5, board.H / 2, 4.5, 26);
         g.fillStyle(0x6fdc7f, 0.14);
         g.fillPoints(zone, true);
         g.lineStyle(2.5, 0x6fdc7f, 0.65);
@@ -2667,17 +2886,23 @@ export class IsoBattleScene extends Phaser.Scene {
         const defeated = {};
         for (const team of ['red', 'blue']) {
             const alive = team === 'red' ? red : blue;
+            // 领土征服：钱还能买兵或队列里还有人时， momentarily 全灭不算败——
+            // 增援随时抵达，歼灭判定必须等经济枯竭（英雄连式"还能打"语义）。
+            const canRebuild = this.battleOptions.territory && this.territory &&
+                (this.territory.recruit.queues[team].length > 0 ||
+                    this.territory.econ.treasury[team] >= this.territory.econ.costOf('infantry'));
             if (!this.battleOptions.deathmatch && alive > 0 && !ready[team]) {
                 if (this.collapseSince[team] == null) this.collapseSince[team] = this.simulationTime;
             } else this.collapseSince[team] = null;
-            defeated[team] = !alive || (this.collapseSince[team] != null &&
-                this.simulationTime - this.collapseSince[team] >= 5000 - 1e-7);
+            defeated[team] = !canRebuild && (!alive || (this.collapseSince[team] != null &&
+                this.simulationTime - this.collapseSince[team] >= 5000 - 1e-7));
         }
         const standingOff = !defeated.red && !defeated.blue && this.tactics?.isStalemate();
         if (standingOff && this.battleOptions.deathmatch) this.tactics.breakStalemate();
         const stalemate = standingOff && !this.battleOptions.deathmatch;
         const controlWon = this.battleOptions.control
             ? ['red', 'blue'].find(team => this.controlScore[team] >= 60) : null;
+        const ticketsWon = this.battleOptions.territory ? this.territory.tickets.winner() : null;
         const convoyWon = this.battleOptions.convoy ? this.convoyOutcome() : null;
         // 护送模式下劫掠方已全灭但车队还在路上：胜利只是时间问题，
         // 压下歼灭结算等车队进站（上限 40 秒），让"护送成功"的叙事走完
@@ -2686,9 +2911,9 @@ export class IsoBattleScene extends Phaser.Scene {
             const pending = c.wagons.filter(w => !w.dead && !w.withdrawn).length;
             if (pending + c.delivered >= c.need && this.simulationTime - (c.lastFoeAt ?? this.simulationTime) < 40000) return;
         }
-        if (!controlWon && !convoyWon && !defeated.red && !defeated.blue && !stalemate) return;
+        if (!ticketsWon && !controlWon && !convoyWon && !defeated.red && !defeated.blue && !stalemate) return;
         // 已发出的箭继续落地：最后一名射手阵亡后仍可能双方同归于尽。
-        if (!controlWon && !convoyWon && this.arrows.length > 0) {
+        if (!ticketsWon && !controlWon && !convoyWon && this.arrows.length > 0) {
             // 只等待已经离弦的箭；停止生成新攻击，避免密集箭雨无限延后溃败结算。
             this.resolvingOutcome = true;
             this.battleQueue = [];
@@ -2696,9 +2921,14 @@ export class IsoBattleScene extends Phaser.Scene {
         }
         this.battleOver = true;
         this.battleQueue = [];
-        const winner = controlWon || convoyWon || (stalemate || (defeated.red && defeated.blue) ? 'draw' : defeated.red ? 'blue' : 'red');
-        this.endReason = controlWon ? 'control' : convoyWon ? 'convoy' : stalemate ? 'stalemate' : winner === 'draw' ? 'draw' :
+        const winner = ticketsWon || controlWon || convoyWon || (stalemate || (defeated.red && defeated.blue) ? 'draw' : defeated.red ? 'blue' : 'red');
+        this.endReason = ticketsWon ? 'tickets' : controlWon ? 'control' : convoyWon ? 'convoy' : stalemate ? 'stalemate' : winner === 'draw' ? 'draw' :
             (defeated.red && red > 0) || (defeated.blue && blue > 0) ? 'rout' : 'elimination';
+        if (this.endReason === 'tickets') {
+            const loser = winner === 'red' ? 'blue' : 'red';
+            this.addBattleEvent(`tickets-${winner}`,
+                `${winner === 'red' ? '红方' : '蓝方'}掌控多数领土，${loser === 'red' ? '红方' : '蓝方'}票数耗尽，领土征服获胜`, loser);
+        }
         if (this.endReason === 'rout') {
             const loser = winner === 'red' ? 'blue' : 'red';
             this.addBattleEvent(`collapse-${loser}`, `${loser === 'red' ? '红方' : '蓝方'}全军持续溃散，失去战斗意愿`, loser);

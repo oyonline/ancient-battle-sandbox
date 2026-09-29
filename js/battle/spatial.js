@@ -3,7 +3,7 @@
 // 从 game.js IsoBattleScene 抽出（第 0 批地基 2/4）；桶坐标按确定性约定量化
 // （docs/DETERMINISM.md）：格边上的采样点两座位查同一组桶，镜像不发散。
 
-import { GRID_W, GRID_H } from '../board.js';
+import { board } from '../board.js';
 import { quantizeBucketCoord } from './determinism.js';
 
 export const SP_CELL = 3;
@@ -36,10 +36,10 @@ export class BattleSpatialIndex {
         }
         this.redAlive = rN;
         this.blueAlive = bN;
-        this.centroid.red.x = rN ? rX / rN : GRID_W / 2;
-        this.centroid.red.y = rN ? rY / rN : GRID_H / 2;
-        this.centroid.blue.x = bN ? bX / bN : GRID_W / 2;
-        this.centroid.blue.y = bN ? bY / bN : GRID_H / 2;
+        this.centroid.red.x = rN ? rX / rN : board.W / 2;
+        this.centroid.red.y = rN ? rY / rN : board.H / 2;
+        this.centroid.blue.x = bN ? bX / bN : board.W / 2;
+        this.centroid.blue.y = bN ? bY / bN : board.H / 2;
     }
 
     // 遍历 (gx,gy) 半径 r 覆盖的所有桶内单位（方形覆盖 ⊇ 圆形，距离由调用方判定）

@@ -1,6 +1,6 @@
 // 战术只在明确选择时启用；所有指令共用 CombatRules 的接触与命中规则。
 // 阵位、路线与命中都使用模拟坐标/时钟，画面与音效不参与胜负。
-import { GRID_W, GRID_H } from './board.js';
+import { board } from './board.js';
 import { Terrain } from './terrain.js';
 import { CombatRules } from './combat.js';
 import { dist, clamp, moveToward } from './units.js';
@@ -87,7 +87,7 @@ export class TacticsSystem {
         if (defense) { this.deployPassGuards(team, members, defense); return; }
         const hill = terrain === `${team}_hill` ? Terrain.maps[terrain] : null;
         // 只占己方高地；平地和敌方高地仍守己方出发区，不跨场抢占敌人的山顶。
-        const cx = hill?.cx ?? (team === 'red' ? 20 : 50), cy = hill?.cy ?? GRID_H / 2;
+        const cx = hill?.cx ?? (team === 'red' ? 20 : 50), cy = hill?.cy ?? board.H / 2;
         const f = this.forward(team);
         const front = members.filter(unit => unit.type === 'pikeman').concat(members.filter(unit => unit.type === 'infantry'));
         const archers = members.filter(unit => unit.type === 'archer');
@@ -116,8 +116,8 @@ export class TacticsSystem {
             const low = Math.min(...values), high = Math.max(...values);
             return low < 2 ? 2 - low : high > limit - 2 ? limit - 2 - high : 0;
         };
-        const shiftX = shift(placements.map(point => point.gx), GRID_W);
-        const shiftY = shift(placements.map(point => point.gy), GRID_H);
+        const shiftX = shift(placements.map(point => point.gx), board.W);
+        const shiftY = shift(placements.map(point => point.gy), board.H);
         for (const { unit, gx, gy, radius, protects } of placements) {
             this.place(unit, gx + shiftX, gy + shiftY);
             Object.assign(unit, { tacticalRole: 'ground_guard', guardAnchor: { gx: unit.gx, gy: unit.gy },
@@ -139,7 +139,7 @@ export class TacticsSystem {
         };
         for (const other of this.scene.units) if (!assigned.has(other)) remember(other);
         const free = (unit, gx, gy) => {
-            if (gx < 1.5 || gx > GRID_W - 1.5 || gy < 1.5 || gy > GRID_H - 1.5 ||
+            if (gx < 1.5 || gx > board.W - 1.5 || gy < 1.5 || gy > board.H - 1.5 ||
                 !Terrain.walkable(terrain, gx, gy, CombatRules.bodyRadius(unit))) return false;
             for (let x = Math.floor(gx) - 1; x <= Math.floor(gx) + 1; x++) {
                 for (let y = Math.floor(gy) - 1; y <= Math.floor(gy) + 1; y++) {
@@ -159,7 +159,7 @@ export class TacticsSystem {
                 for (let lane = 0; lane < 80; lane++) {
                     const offset = lane ? Math.ceil(lane / 2) * (lane % 2 ? -1 : 1) : 0;
                     const gy = layout.center.gy + offset * spacing;
-                    if (gx >= 1.5 && gx <= GRID_W - 1.5 && gy >= 1.5 && gy <= GRID_H - 1.5 &&
+                    if (gx >= 1.5 && gx <= board.W - 1.5 && gy >= 1.5 && gy <= board.H - 1.5 &&
                         Terrain.walkable(terrain, gx, gy)) fallback.push({ gx, gy });
                 }
             }
@@ -302,7 +302,7 @@ export class TacticsSystem {
     // 翼位分工：守骑优先接本翼与中性带（±4 格）的威胁；
     // 只有威胁所在翼已无守骑时才越权接对翼威胁，避免两翼全员扑向同一侧。
     wingAllows(unit, group, other) {
-        const cy = group.cy ?? GRID_H / 2;
+        const cy = group.cy ?? board.H / 2;
         const side = other.gy < cy - 4 ? -1 : other.gy > cy + 4 ? 1 : 0;
         if (side === 0) return true;
         const wing = unit.guardAnchor.gy < cy - 0.5 ? -1 : unit.guardAnchor.gy > cy + 0.5 ? 1 : 0;
@@ -316,8 +316,8 @@ export class TacticsSystem {
         const closing = (unit.typeData.chargeSpeed ?? unit.typeData.speed) + Math.hypot(vx, vy);
         const lead = clamp(dist(unit, target) / Math.max(closing, 1), 0, 1.2);
         return { id: target.id,
-            gx: clamp(target.gx + vx * lead, 1.5, GRID_W - 1.5),
-            gy: clamp(target.gy + vy * lead, 1.5, GRID_H - 1.5) };
+            gx: clamp(target.gx + vx * lead, 1.5, board.W - 1.5),
+            gy: clamp(target.gy + vy * lead, 1.5, board.H - 1.5) };
     }
 
     boundGroundMove(unit) {
@@ -375,7 +375,7 @@ export class TacticsSystem {
             const wing = lower.length > upper.length ? lower : upper;
             if (wing.length < 2) continue;                                          // 至少双骑出击：单骑冲阵必被围死
             const side = wing === upper ? -1 : 1, f = this.forward(group.team);
-            const raidX = clamp(ax + (raidFlank ? 0 : f * 1.5), 2, GRID_W - 2), raidY = clamp(ay + side * 3, 2, GRID_H - 2);
+            const raidX = clamp(ax + (raidFlank ? 0 : f * 1.5), 2, board.W - 2), raidY = clamp(ay + side * 3, 2, board.H - 2);
             wing.sort((a, b) => Math.hypot(a.gx - raidX, a.gy - raidY) - Math.hypot(b.gx - raidX, b.gy - raidY) ||
                 a.guardAnchor.gy - b.guardAnchor.gy);
             // 出击规模：侧腰冲击按压境敌规模成波压上（约每 5 敌出 1 骑，2~全翼）——
@@ -500,7 +500,7 @@ export class TacticsSystem {
         if (!members.length) return;
         const size = Math.ceil(Math.sqrt(members.length)), spacing = 0.86;
         let cx = team === 'red' ? 22 : 48;
-        const cy = GRID_H / 2, f = this.forward(team);
+        const cy = board.H / 2, f = this.forward(team);
         const slots = [];
         // 优先填外围；人数不足一圈时，均匀分到各面，仍会留下真实空隙。
         const cells = [];
@@ -558,7 +558,7 @@ export class TacticsSystem {
         if (!members.length) return;
         const order = this.orders[team], f = this.forward(team);
         const target = this.formations[this.enemies(team)];
-        const cx = target?.cx ?? (team === 'red' ? 48 : 22), cy = target?.cy ?? GRID_H / 2;
+        const cx = target?.cx ?? (team === 'red' ? 48 : 22), cy = target?.cy ?? board.H / 2;
         const half = target?.half ?? 4;
         const home = team === 'red' ? 20 : 50;
         const reserveCount = Math.min(Math.max(0, this.scene.battleOptions?.reserves?.[team] || 0), members.length - 1);

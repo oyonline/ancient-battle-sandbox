@@ -8,7 +8,7 @@
 import { Terrain } from '../terrain.js';
 import { CombatRules } from '../combat.js';
 import { updatePikeBrace, applyDamage, resolveAttack } from '../units.js';
-import { GRID_W, GRID_H } from '../board.js';
+import { board } from '../board.js';
 
 export const SIMULATION_STEP_MS = 1000 / 60;
 
@@ -136,10 +136,11 @@ export function stepBattle(scene, dt) {
     scene.flushBattleImpacts();
     scene.morale.update(dt);
     if (scene.battleOptions.control) scene.updateFlags(dt);
+    else if (scene.battleOptions.territory) scene.updateTerritory(dt);
     if (scene.battleOptions.convoy) scene.updateConvoy(dt);
     for (const unit of units) {
         if (!scene.battleOptions.deathmatch && !unit.dead && !unit.withdrawn && unit.moraleState === 'routing' &&
-            (unit.gx <= 0.61 || unit.gx >= GRID_W - 0.61 || unit.gy <= 0.61 || unit.gy >= GRID_H - 0.61)) scene.withdrawUnit(unit);
+            (unit.gx <= 0.61 || unit.gx >= board.W - 0.61 || unit.gy <= 0.61 || unit.gy >= board.H - 0.61)) scene.withdrawUnit(unit);
     }
     if (scene.simulationTime - (scene._lastMoraleUI || 0) >= 250) {
         scene._lastMoraleUI = scene.simulationTime; scene._countsDirty = true;

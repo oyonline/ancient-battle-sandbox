@@ -1,6 +1,6 @@
 // ==================== 兵种定义（网格坐标系：1格=1个菱形块） ====================
 // 70×70 大地图：上限与预算支持 500 vs 500，行军速度按地图尺度上调
-import { GRID_W, GRID_H } from './board.js';
+import { board } from './board.js';
 import { Terrain } from './terrain.js';
 import { CombatRules } from './combat.js';
 
@@ -60,10 +60,10 @@ export function generateArmyPositions(team, config, formationKey) {
 
     const COLS = clamp(Math.ceil(Math.sqrt(total * 1.6)), 8, 42);
     const gySpan = 1.35;
-    const gyCenter = GRID_H / 2;
-    const frontGX = team === 'red' ? 16 : GRID_W - 16;   // 前排线，中间留开阔地
+    const gyCenter = board.H / 2;
+    const frontGX = team === 'red' ? 16 : board.W - 16;   // 前排线，中间留开阔地
     const dir = team === 'red' ? -1 : 1;                 // 后排延伸方向
-    const depthAvail = team === 'red' ? frontGX - 2.5 : (GRID_W - 2.5) - frontGX;
+    const depthAvail = team === 'red' ? frontGX - 2.5 : (board.W - 2.5) - frontGX;
     const rowsEst = Math.ceil(total / COLS);
     const rowStep = Math.min(0.8, depthAvail / Math.max(rowsEst - 1, 1));
     const maxRows = rowsEst + 2;
@@ -279,8 +279,8 @@ export class CavalryAI {
             }
             this.beginCharge(unit);
             unit.flankTarget = target;
-            const lowerY = clamp(army.minY - 2.8, 1.8, GRID_H - 1.8);
-            const upperY = clamp(army.maxY + 2.8, 1.8, GRID_H - 1.8);
+            const lowerY = clamp(army.minY - 2.8, 1.8, board.H - 1.8);
+            const upperY = clamp(army.maxY + 2.8, 1.8, board.H - 1.8);
             const via = y => Math.abs(y - unit.gy) + Math.abs(y - target.gy);
             const lower = via(lowerY), upper = via(upperY);
             const side = lower < upper - 1e-9 || (Math.abs(lower - upper) <= 1e-9 &&
@@ -294,8 +294,8 @@ export class CavalryAI {
         // 绕侧和转弯不储存冲锋动量；最后直线切入才重新积累三格助跑。
         unit.chargeDistance = 0; unit.chargeLastX = null; unit.chargeMomentum = 0;
         if (now - route.refreshedAt >= 750) {
-            route.y = clamp(route.side < 0 ? army.minY - 2.8 : army.maxY + 2.8, 1.8, GRID_H - 1.8);
-            route.rearX = clamp(unit.team === 'red' ? army.maxX + 3.8 : army.minX - 3.8, 1.8, GRID_W - 1.8);
+            route.y = clamp(route.side < 0 ? army.minY - 2.8 : army.maxY + 2.8, 1.8, board.H - 1.8);
+            route.rearX = clamp(unit.team === 'red' ? army.maxX + 3.8 : army.minX - 3.8, 1.8, board.W - 1.8);
             route.refreshedAt = now;
         }
         const stagePoint = () => {
@@ -330,19 +330,19 @@ export class CavalryAI {
 
     naturalFlankRoute(unit, army, target, now) {
         const origin = unit.naturalFlankOrigin ||= { gx: unit.gx, gy: unit.gy };
-        const x = value => unit.team === 'red' ? value : GRID_W - value;
+        const x = value => unit.team === 'red' ? value : board.W - value;
         const startX = x(unit.gx), frontX = x(unit.team === 'red' ? army.minX : army.maxX);
         const backX = x(unit.team === 'red' ? army.maxX : army.minX);
         // 相邻骑兵沿出生排深形成平行外圈；不使用全局 id，也不每次重选左右翼。
         const lane = clamp(Math.abs(x(origin.gx) - 16) * 0.65, 0, 3);
-        const lower = clamp(army.minY - 3.4 - lane, 1.8, GRID_H - 1.8);
-        const upper = clamp(army.maxY + 3.4 + lane, 1.8, GRID_H - 1.8);
+        const lower = clamp(army.minY - 3.4 - lane, 1.8, board.H - 1.8);
+        const upper = clamp(army.maxY + 3.4 + lane, 1.8, board.H - 1.8);
         const via = y => Math.abs(y - origin.gy) + Math.abs(y - target.gy);
         const side = via(lower) < via(upper) - 1e-9 || (Math.abs(via(lower) - via(upper)) <= 1e-9 &&
             origin.gy <= (army.minY + army.maxY) / 2) ? -1 : 1;
         const sideY = side < 0 ? lower : upper;
-        const turnX = Math.min(GRID_W - 12, Math.max(startX + 6, frontX - 4));
-        const rearX = Math.min(GRID_W - 5.2, Math.max(turnX + 6, backX + 4 + lane * 0.3));
+        const turnX = Math.min(board.W - 12, Math.max(startX + 6, frontX - 4));
+        const rearX = Math.min(board.W - 5.2, Math.max(turnX + 6, backX + 4 + lane * 0.3));
         if (turnX <= startX || rearX < backX + 2) return null;
         const start = { gx: startX, gy: unit.gy }, sidePoint = { gx: turnX, gy: sideY };
         const rear = { gx: rearX, gy: sideY }, end = { gx: rearX, gy: target.gy };
@@ -467,8 +467,8 @@ export class CavalryAI {
             unit.lastAttack = now;
             unit.chargeImpactId = target.id;
             unit.pierceHits = new Set();
-            unit.pierceX = clamp(target.gx + unit.chargeDX * 4 * unit.chargeMomentum, 1.5, GRID_W - 1.5);
-            unit.pierceY = clamp(target.gy + unit.chargeDY * 4 * unit.chargeMomentum, 1.5, GRID_H - 1.5);
+            unit.pierceX = clamp(target.gx + unit.chargeDX * 4 * unit.chargeMomentum, 1.5, board.W - 1.5);
+            unit.pierceY = clamp(target.gy + unit.chargeDY * 4 * unit.chargeMomentum, 1.5, board.H - 1.5);
             unit.state = 'pierce'; unit.stateTime = 0;
             unit.chargeDistance = 0; unit.chargeLastX = null;
         }
@@ -706,8 +706,8 @@ export class CavalryAI {
         if (unit.reformX == null) {
             const center = unit.scene.centroid[unit.team === 'red' ? 'blue' : 'red'];
             const angle = Math.atan2(unit.gy - center.y, unit.gx - center.x);
-            unit.reformX = clamp(unit.gx + Math.cos(angle) * 4.5, 1.6, GRID_W - 1.6);
-            unit.reformY = clamp(unit.gy + Math.sin(angle) * 4.5, 1.5, GRID_H - 1.5);
+            unit.reformX = clamp(unit.gx + Math.cos(angle) * 4.5, 1.6, board.W - 1.6);
+            unit.reformY = clamp(unit.gy + Math.sin(angle) * 4.5, 1.5, board.H - 1.5);
         }
         const enemy = unit.scene.nearestEnemy(unit);
         if (!enemy) return true;
@@ -732,7 +732,7 @@ export function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 // 且不受部署指令造成的出生站位差异影响（同一逻辑单位换指令序列不变）。
 export function unitRand(unit) {
     if (unit.randSeed == null) {
-        const mxq = Math.round(Math.min(unit.gx, GRID_W - unit.gx) * 256);
+        const mxq = Math.round(Math.min(unit.gx, board.W - unit.gx) * 256);
         const myq = Math.round(unit.gy * 256);
         let tc = 0; for (let i = 0; i < unit.type.length; i++) tc = (tc * 31 + unit.type.charCodeAt(i)) | 0;
         unit.randSeed = ((mxq * 73856093) ^ (myq * 19349663) ^ tc) >>> 0;
@@ -806,8 +806,8 @@ export function knockback(target, from, amount) {
         target.pushY += Math.sin(a) * amount;
         return;
     }
-    const gx = clamp(target.gx + Math.cos(a) * amount, 1.45, GRID_W - 1.45);
-    const gy = clamp(target.gy + Math.sin(a) * amount, 1.45, GRID_H - 1.45);
+    const gx = clamp(target.gx + Math.cos(a) * amount, 1.45, board.W - 1.45);
+    const gy = clamp(target.gy + Math.sin(a) * amount, 1.45, board.H - 1.45);
     if (Terrain.hasBarriers(target.scene?.battleOptions?.terrain)) {
         const motion = Terrain.clipMotion(target.scene.battleOptions.terrain, target.gx, target.gy,
             gx - target.gx, gy - target.gy, CombatRules.bodyRadius(target));

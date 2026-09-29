@@ -2,7 +2,7 @@
 // 从 game.js IsoBattleScene 抽出（第 0 批地基 3/4）。
 // 全部为纯函数：输入空间索引与单位状态，输出目标；不改单位字段以外的任何场景状态。
 
-import { GRID_W, GRID_H } from '../board.js';
+import { board } from '../board.js';
 import { dist } from '../units.js';
 
 // 最近敌人：环形扩张搜索；查到半径 r 内的最佳解即全局最近（圆内 ⊆ 查询方形）。
@@ -11,7 +11,7 @@ import { dist } from '../units.js';
 // 平局按 id 最小决胜，保证两座位选择一致（docs/DETERMINISM.md）。
 export function nearestEnemy(spatial, unit) {
     let best = null, bestD2 = Infinity, r = 6;
-    const maxR = GRID_W + GRID_H;
+    const maxR = board.W + board.H;
     while (true) {
         spatial.forEachNear(unit.gx, unit.gy, r, e => {
             if (e.team === unit.team || e.dead || e.withdrawn || e.type === 'wagon') return;
