@@ -1378,7 +1378,8 @@ export const UI = {
         const scene = this.scene;
         if (!scene || !scene.board_W) return;
         const W = scene.board_W(), H = scene.board_H();
-        const TW = 64, TH = 32, OX = H * TW / 2, OY = 120;
+        const origin = scene.worldOrigin ? scene.worldOrigin() : { ox: H * 32, oy: 120, tw: 64, th: 32 };
+        const TW = origin.tw, TH = origin.th, OX = origin.ox, OY = origin.oy;
         const key = scene.battleOptions.terrain;
         let gx = W / 2, gy = H / 2;
         for (let pass = 0; pass < 2; pass++) {

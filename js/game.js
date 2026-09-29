@@ -31,9 +31,11 @@ let OX = board.H * TW / 2, OY = 120;         // 屏幕原点偏移
 let VIEW_W = (board.W + board.H) * TW / 2;
 let VIEW_H = OY + (board.W + board.H) * TH / 2 + 60;
 function refreshWorldMetrics() {
-    OX = board.H * TW / 2;
-    VIEW_W = (board.W + board.H) * TW / 2;
-    VIEW_H = OY + (board.W + board.H) * TH / 2 + 60;
+    const m = board.MARGIN || 0;
+    OX = board.H * TW / 2 + m * TW;             // 画外余量：整个世界画布外扩，陆地长到画面边缘外
+    OY = 120 + m * TH;
+    VIEW_W = (board.W + board.H) * TW / 2 + 2 * m * TW;
+    VIEW_H = OY + (board.W + board.H) * TH / 2 + 60 + m * TH;
 }
 
 // 空间哈希单元格移至 js/battle/spatial.js（SP_CELL = 3）
@@ -465,7 +467,7 @@ export class IsoBattleScene extends Phaser.Scene {
         this.terNoise = this.terNoise || makeNoise(7);
         // 领土图：向外扩一圈草地（不可进入的画外景深），海岸线带噪声犬牙——
         // 战场像一块更大的大陆的中部，而不是悬在方框海中央的完整菱形
-        const margin = this.battleOptions.terrain === 'territory' ? 5 : 0;
+        const margin = board.MARGIN || 0;
         const isWater = (gx, gy) => {
             if (!margin) return gx === 0 || gy === 0 || gx === board.W - 1 || gy === board.H - 1;
             const edge = Math.min(gx + margin, gy + margin, board.W + margin - 1 - gx, board.H + margin - 1 - gy);
@@ -1345,7 +1347,7 @@ export class IsoBattleScene extends Phaser.Scene {
 
     deployUnits(redConfig, blueConfig, redFormation, blueFormation, orders = {}, options = {}) {
         // 棋盘尺寸：领土征服用大地图，其余模式回默认；尺寸变化时重建依赖尺寸的渲染层。
-        if (options.territory) setBoardSize(TERRITORY.W, TERRITORY.H); else resetBoardSize();
+        if (options.territory) setBoardSize(TERRITORY.W, TERRITORY.H, 5); else resetBoardSize();
         if (this._boardW !== board.W || this._boardH !== board.H) this.applyBoardSize();
         this.clearUnits(options.terrain);
         this.drawSpawnZones();
@@ -2972,6 +2974,9 @@ export class IsoBattleScene extends Phaser.Scene {
     // 营队系统棋盘钩子（battle/battalion.js 经此读当前尺寸，不直接 import game.js）
     board_W() { return board.W; }
     board_H() { return board.H; }
+
+    // 等距投影原点（UI 层逆变换用；随画外余量移动）
+    worldOrigin() { return { ox: OX, oy: OY, tw: TW, th: TH }; }
 
     // 点兵选营：观察层（UnitInspector）点击士兵时联动选中整营；点空地清除。
     selectBattalionByUnit(unit) {
