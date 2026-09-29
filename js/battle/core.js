@@ -116,10 +116,11 @@ export function stepBattle(scene, dt) {
         if (scene.updateFallingBackUnit(unit, now, dt)) continue;
         if (scene.tactics?.updateGroundGuard(unit, now, dt)) continue;
         if (unit.type === 'cavalry') {
-            // 营队缰绳（可选场景钩子，仅领土征服）：骑兵孤军冒进超缰绳且无敌情 → 归队
-            if (scene.battalionHoldCavalry?.(unit)) {
-                const center = unit.battalion.center();
-                moveToward(unit, center.gx, center.gy, unit.typeData.speed, dt);
+            // 营队接管（可选场景钩子，仅领土征服）：集结/回防/有令时骑兵与全营
+            // 同目标行军，不再单骑冲阵；贴脸有敌（钩子返回 null）才交还冲锋状态机。
+            const rally = scene.battalionDirectCavalry?.(unit);
+            if (rally) {
+                moveToward(unit, rally.gx, rally.gy, unit.typeData.speed, dt);
                 continue;
             }
             if (scene.cavalryAI.update(unit, now, dt)) continue;

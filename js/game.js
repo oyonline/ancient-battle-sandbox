@@ -632,10 +632,12 @@ export class IsoBattleScene extends Phaser.Scene {
                 g.lineStyle(2, 0xeee0ad, 0.6); g.strokePoints(polygon(zone), true);
             } else if (zone.kind === 'forest') {
                 if (zone.blob) {
-                    // 连片噪声林斑：半格采样贴地铺色，边缘与通行判定共用同一占位场；四档由草色渐入深绿。
+                    // 连片噪声林斑（70 图 legacy / 领土 generic 共用此形态）：
+                    // 半格采样贴地铺色，边缘与通行判定共用同一占位场；四档由草色渐入深绿。
+                    const field = (x, y) => zone.blob === true ? Terrain.forestField(x, y) : Terrain.blobField(zone, x, y);
                     const ramp = [[0x537f47, 0.26], [0x47703d, 0.38], [0x3d6637, 0.52], [0x315c31, 0.64]];
                     for (let y = zone.y1; y < zone.y2; y += 0.5) for (let x = zone.x1; x < zone.x2; x += 0.5) {
-                        const depth = Terrain.forestField(x + 0.25, y + 0.25) - Terrain.FOREST_EDGE;
+                        const depth = field(x + 0.25, y + 0.25) - Terrain.FOREST_EDGE;
                         if (depth <= 0) continue;
                         const tier = depth > 0.55 ? 3 : depth > 0.32 ? 2 : depth > 0.16 ? 1 : 0;
                         g.fillStyle(ramp[tier][0], ramp[tier][1]);
@@ -714,10 +716,11 @@ export class IsoBattleScene extends Phaser.Scene {
             sprite.setVisible(!['water', 'rock'].includes(Terrain.surface(this.battleOptions.terrain, gx, gy)));
         for (const zone of Terrain.geometry(this.battleOptions.terrain).zones.filter(zone => zone.kind === 'forest')) {
             for (let x = zone.x1 + 1; x < zone.x2 - 0.5; x += 2.2) for (let y = zone.y1 + 1; y < zone.y2 - 0.5; y += 2.2) {
-                // 矩形林带（领土征服）没有噪声占位场：terNoise 控制疏密（约 8 成点位成树）
-                // 并映射到与噪声林斑同尺度的 density，让下方大小/明暗分档逻辑复用。
-                const noise = this.terNoise(x * 0.7 + 3, y * 0.7 + 9);
-                const density = zone.blob ? Terrain.forestField(x, y) : (noise > 0.18 ? 0.28 + noise * 0.55 : 0);
+                // 林斑占位：legacy 噪声场 / 领土通用噪声场 / 矩形兜底三形态
+                let density;
+                if (zone.blob === true) density = Terrain.forestField(x, y);
+                else if (zone.blob === 'generic') density = Terrain.blobField(zone, x, y);
+                else density = this.terNoise(x * 0.7 + 3, y * 0.7 + 9) > 0.18 ? 0.28 + this.terNoise(x * 0.7 + 3, y * 0.7 + 9) * 0.55 : 0;
                 if (density <= Terrain.FOREST_EDGE) continue;
                 // 深林成簇大树、林缘稀疏小树：树只是林区提示，不是逐棵实体障碍。
                 const clump = this.terNoise(x * 0.55 + 9, y * 0.55 + 3);
@@ -1742,7 +1745,11 @@ export class IsoBattleScene extends Phaser.Scene {
             return;
         }
         const flagMarch = this.battleOptions.control || this.battleOptions.territory;
-        if (flagMarch && !guardAnchor && minD > 12 && foeCount > 3 &&
+        // 有令近战的接敌阈值降为 6 格：半路遇敌不停下对砍，顶着远程火力把旗圈
+        // 推过去——夺旗优先；弓手仍按 12 格正常接敌（远程本就该边走边射）。
+        const orderedMarch = battalion && !battalion.gathering && battalion.orderFlag != null;
+        const engageRange = orderedMarch && !unit.typeData.ranged ? 6 : 12;
+        if (flagMarch && !guardAnchor && minD > engageRange && foeCount > 3 &&
             (!unit.typeData.ranged || this.battleOptions.territory) &&
             !this.flags.some(f => f.owner !== unit.team && Math.hypot(f.gx - unit.gx, f.gy - unit.gy) <= 2.8)) {
             let flag = battalion && !battalion.gathering && battalion.orderFlag != null ? this.flags[battalion.orderFlag] : null;
@@ -2714,20 +2721,39 @@ export class IsoBattleScene extends Phaser.Scene {
         return this.battalions.orderSelected(flagIndex, this);
     }
 
-    // 骑兵缰绳：营开进途中骑兵孤军冒进（离营心超缰绳且无敌情）→ 本步由缰绳接管归队。
-    battalionHoldCavalry(unit) {
-        if (!this.battleOptions.territory || !this.battalions) return false;
+    // 营队接管骑兵（仅领土征服）：集结跟集结点、回防跟老家、有令跟旗——骑兵与
+    // 全营同目标行军，不再单骑冲阵，也不再来回"冲锋出去-缰绳拉回"造成贴图闪烁。
+    // 贴脸有敌（≤6格）时交还冲锋状态机就近作战；守已占旗时贴旗游弋待命。
+    battalionDirectCavalry(unit) {
+        if (!this.battleOptions.territory || !this.battalions) return null;
         const battalion = unit.battalion;
-        if (!battalion || battalion.gathering) return false;
-        const center = battalion.center();
-        if (!center) return false;
-        if (Math.hypot(center.gx - unit.gx, center.gy - unit.gy) <= BATTALION.CAVALRY_LEASH) return false;
+        if (!battalion) return null;
+        let target = null;
+        if (battalion.gathering) target = battalion.gatherPoint;
+        else if (battalion.retreat) target = this.battalions.homeRally(unit.team);
+        else if (battalion.orderFlag != null && this.flags[battalion.orderFlag]) {
+            const flag = this.flags[battalion.orderFlag];
+            if (Math.hypot(flag.gx - unit.gx, flag.gy - unit.gy) <= 4.5) {
+                // 旗已在手：贴旗待命（按 id 定角度散开，确定性且不抖动）
+                const angle = (unit.id % 12) / 12 * Math.PI * 2;
+                return { gx: flag.gx + Math.cos(angle) * 2.2, gy: flag.gy + Math.sin(angle) * 1.6 };
+            }
+            target = flag;
+            // 不超前主力 10 格：骑兵腿快，别撇下大队单骑先到旗点送死；
+            // 追赶目标与行军目标同向，不存在来回拉扯（阈值带 10 格）。
+            const center = battalion.center();
+            if (center) {
+                const mine = Math.hypot(flag.gx - unit.gx, flag.gy - unit.gy);
+                const column = Math.hypot(flag.gx - center.gx, flag.gy - center.gy);
+                if (mine < column - 10) target = center;
+            }
+        } else return null;    // 无令无集结：自由作战
         let enemyNear = false;
-        this.forEachNear(unit.gx, unit.gy, BATTALION.LEASH_ENEMY_CLEAR, u => {
+        this.forEachNear(unit.gx, unit.gy, 6, u => {
             if (u.team !== unit.team && !u.dead && !u.withdrawn && u.moraleState !== 'routing' &&
-                Math.hypot(u.gx - unit.gx, u.gy - unit.gy) <= BATTALION.LEASH_ENEMY_CLEAR) enemyNear = true;
+                Math.hypot(u.gx - unit.gx, u.gy - unit.gy) <= 6) enemyNear = true;
         });
-        return !enemyNear;
+        return enemyNear ? null : target;
     }
 
     // ---------------- 领土小地图（屏幕空间，点击/拖动直接跳镜头） ----------------

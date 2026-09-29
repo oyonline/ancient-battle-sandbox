@@ -1,4 +1,4 @@
-// 营队系统：开局分编 / 集结波次 / 步速同步 / AI 不送死与家防回援 / 玩家指令 / 骑兵缰绳
+// 营队系统：开局分编 / 集结波次 / 步速同步 / AI 不送死与家防回援 / 玩家指令 / 骑兵随营 / 推旗优先
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeScene, addUnit } from './battle-harness.js';
@@ -140,27 +140,42 @@ test('玩家指令：点旗下令优先于 AI，夺旗后自动交还；敌营�
     assert.equal(battalion.retreat, true);
 });
 
-test('骑兵缰绳：离营心超缰绳且无敌情时接管归队', () => {
+test('骑兵随营：集结蹲集结点、有令随旗推进、贴脸有敌才交还冲锋、守旗贴旗待命', () => {
     const scene = territoryScene({ territoryAI: false });
     scene.rebuildSpatial();
-    const battalion = redBattalions(scene)[0];
-    const cavalry = addUnit(scene, 'red', 'cavalry', 50, 36);
-    cavalry.battalion = battalion;
-    battalion.members.push(cavalry);
+    // 1) 集结营骑兵：不单骑出击，目标=集结点
+    const pool = new Battalion('red', 'gathering');
+    pool.gatherPoint = { gx: 8, gy: 36 };
+    const cav1 = addUnit(scene, 'red', 'cavalry', 30, 36);
+    cav1.battalion = pool; pool.members.push(cav1);
     scene.rebuildSpatial();
-    const center = battalion.center();
-    cavalry.gx = center.gx + BATTALION.CAVALRY_LEASH + 6;
-    cavalry.gy = center.gy;
+    const hold = scene.battalionDirectCavalry(cav1);
+    assert.ok(hold && hold.gx === 8, '集结骑兵应回集结点');
+    // 2) 有令营骑兵：目标=旗（或等大队）
+    const line = new Battalion('red', 'line');
+    for (let i = 0; i < 6; i++) line.members.push(addUnit(scene, 'red', 'infantry', 20, 34 + i));
+    const cav2 = addUnit(scene, 'red', 'cavalry', 22, 36);
+    cav2.battalion = line; line.members.push(cav2);
+    line.orderFlag = 2;
     scene.rebuildSpatial();
-    assert.equal(scene.battalionHoldCavalry(cavalry), true, '超缰绳且无敌情 → 接管');
-    cavalry.gx = center.gx + 3;
+    const march = scene.battalionDirectCavalry(cav2);
+    assert.ok(march, '有令骑兵应有行军目标');
+    const flag = scene.flags[2], center = line.center();
+    assert.ok(Math.hypot(flag.gx - march.gx, flag.gy - march.gy) < 1e-9 ||
+        Math.hypot(center.gx - march.gx, center.gy - march.gy) < 1e-9, '目标为旗或营心（不超前主力）');
+    // 3) 贴脸有敌：交还冲锋状态机
+    const foe = addUnit(scene, 'blue', 'infantry', cav2.gx + 3, cav2.gy);
     scene.rebuildSpatial();
-    assert.equal(scene.battalionHoldCavalry(cavalry), false, '缰绳内不管');
-    cavalry.gx = center.gx + BATTALION.CAVALRY_LEASH + 6;
-    const foe = addUnit(scene, 'blue', 'infantry', cavalry.gx - 4, cavalry.gy);
+    assert.equal(scene.battalionDirectCavalry(cav2), null, '6 格内有敌应交还作战');
+    foe.dead = true;
     scene.rebuildSpatial();
-    assert.equal(scene.battalionHoldCavalry(cavalry), false, '有敌情时不硬拉（就近作战）');
-    assert.ok(foe);
+    // 4) 已占旗：贴旗待命点
+    line.orderFlag = 0;
+    scene.flags[0].owner = 'red';
+    cav2.gx = scene.flags[0].gx + 1; cav2.gy = scene.flags[0].gy;
+    scene.rebuildSpatial();
+    const orbit = scene.battalionDirectCavalry(cav2);
+    assert.ok(orbit && Math.hypot(orbit.gx - scene.flags[0].gx, orbit.gy - scene.flags[0].gy) < 3, '守旗骑兵贴旗游弋');
 });
 
 test('镜像确定性：营队系统参与下同构两局逐位一致', () => {
@@ -176,4 +191,28 @@ test('镜像确定性：营队系统参与下同构两局逐位一致', () => {
         });
     };
     assert.equal(play(), play());
+});
+
+test('推旗优先：有令近战在 6~12 格遇敌不停步，继续向目标旗推进', () => {
+    const scene = territoryScene({ territoryAI: false }, {}, { infantry: 2 });
+    scene.rebuildSpatial();
+    const foes = scene.units.filter(u => u.team === 'blue');
+    const pin = () => foes.forEach((u, i) => { u.gx = 40; u.gy = 4 + i; u.hp = u.maxHp; });
+    pin();
+    const battalion = new Battalion('red', 'line');
+    const troop = addUnit(scene, 'red', 'infantry', 24, 36);
+    troop.battalion = battalion; battalion.members.push(troop);
+    battalion.orderFlag = 2;                      // 中央高地
+    scene.rebuildSpatial();
+    const foe = foes[0];
+    foe.gx = troop.gx + 9; foe.gy = troop.gy;     // 9 格外正东有敌（在旧 12 格接敌圈内）
+    pin.push = null;
+    const pinnedFoe = () => { foe.gx = 33; foe.gy = 36; foe.hp = foe.maxHp; };
+    const startFlagDist = Math.hypot(scene.flags[2].gx - troop.gx, scene.flags[2].gy - troop.gy);
+    for (let i = 0; i < 60 * 4 && !troop.dead; i++) {
+        pinnedFoe();
+        scene.advanceBattle(STEP);
+    }
+    const endFlagDist = Math.hypot(scene.flags[2].gx - troop.gx, scene.flags[2].gy - troop.gy);
+    assert.ok(endFlagDist < startFlagDist - 8, '有令部队应穿过 9 格外的敌人继续推旗');
 });

@@ -23,15 +23,18 @@ function run(scene, seconds) {
 test('山河图几何：上翼横河+中央独桥+两端浅滩，下翼双林带夹走廊（104×72）', () => {
     board.W = TERRITORY.W; board.H = TERRITORY.H;
     const W = TERRITORY.W, H = TERRITORY.H;
-    assert.equal(Terrain.surface('territory', 40, 16), 'water', '河面不可通行');
+    assert.equal(Terrain.surface('territory', 44, 16), 'water', '河面不可通行');
     assert.equal(Terrain.surface('territory', 20, 16), 'water', '河西段');
     assert.equal(Terrain.surface('territory', 80, 16), 'water', '河东段');
     assert.equal(Terrain.surface('territory', 52, 16), 'bridge', '中央独桥');
     assert.equal(Terrain.surface('territory', 10, 16), 'grass', '西端浅滩可绕');
     assert.equal(Terrain.surface('territory', 92, 16), 'grass', '东端浅滩可绕');
-    assert.equal(Terrain.surface('territory', 38, 57), 'forest', '西林带');
-    assert.equal(Terrain.surface('territory', 65, 57), 'forest', '东林带');
+    assert.equal(Terrain.surface('territory', 39, 56), 'forest', '西林斑核心');
+    assert.equal(Terrain.surface('territory', 65, 56), 'forest', '东林斑核心');
     assert.equal(Terrain.surface('territory', 52, 57), 'grass', '下翼中央走廊开阔');
+    // 蜿蜒河段：中央段平直、外侧段南北起伏（不再是一条笔直矩形带）
+    assert.equal(Terrain.surface('territory', 34, 13), 'grass', '河段南弓处的北岸草地');
+    assert.equal(Terrain.surface('territory', 24, 17.5), 'grass', '河段北弓处的南岸草地');
     board.W = 70; board.H = 70;
     assert.ok(W === 104 && H === 72);
 });

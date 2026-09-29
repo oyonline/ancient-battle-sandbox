@@ -28,17 +28,17 @@ export const TERRITORY = {
 export const BATTALION_POWER = { infantry: 10, pikeman: 7, archer: 4, cavalry: 12 };
 
 // 五面旗布局（山河领土图）：双方半场各两面（起始归属各自方）+ 中场高地争夺点。
-// 上翼旗立在横河南岸（中央独桥+两端浅滩可绕），下翼旗立在林带边缘，中场旗在
-// 高地坡顶。坐标按棋盘比例给出，换座镜像（x→W-x）下自对称。
+// 旗点贴地形特征摆放——上翼旗在蜿蜒河段的南岸渡口，下翼旗嵌在林斑边缘，中场
+// 旗立高地坡顶；比例坐标，换座镜像（x→W-x）下自对称。
 export function makeTerritoryFlags() {
     const W = board.W, H = board.H;
-    const home = Math.round(W * 0.28), away = W - home;
+    const ford = Math.round(W * 0.24), wood = Math.round(W * 0.33);
     return [
-        { gx: home, gy: Math.round(H * 0.33), name: '红方河岸·上', owner: 'red', progress: 1 },
-        { gx: home, gy: Math.round(H * 0.79), name: '红方林缘·下', owner: 'red', progress: 1 },
+        { gx: ford, gy: Math.round(H * 0.335), name: '红方渡口·上', owner: 'red', progress: 1 },
+        { gx: wood, gy: Math.round(H * 0.80), name: '红方林缘·下', owner: 'red', progress: 1 },
         { gx: W / 2, gy: H / 2, name: '中央高地', owner: null, progress: 0 },
-        { gx: away, gy: Math.round(H * 0.33), name: '蓝方河岸·上', owner: 'blue', progress: -1 },
-        { gx: away, gy: Math.round(H * 0.79), name: '蓝方林缘·下', owner: 'blue', progress: -1 }
+        { gx: W - ford, gy: Math.round(H * 0.335), name: '蓝方渡口·上', owner: 'blue', progress: -1 },
+        { gx: W - wood, gy: Math.round(H * 0.80), name: '蓝方林缘·下', owner: 'blue', progress: -1 }
     ].map(f => ({ ...f, contested: false }));
 }
 

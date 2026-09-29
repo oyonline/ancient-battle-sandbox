@@ -91,6 +91,20 @@ export const Terrain = {
         const band = Math.min(Math.max(0, Math.min(1, (shape + 0.15) / 0.35)), Math.max(0, Math.min(1, (0.75 - shape) / 0.35)));
         return shape + (this._vnoise(u * 0.24 + 51.3, gy * 0.24 - 21.9) - 0.5) * 0.5 * band;
     },
+    // 矩形域上的通用噪声斑（blob:'generic'，领土林带等）：中心超椭圆衰减叠双八度
+    // 值噪声揉出犬牙边缘。噪声采样用 |x-中心| 折叠 + 区域内相对坐标——每个斑
+    // 左右自对称且换座镜像下两斑逐位一致（确定性约定不受影响）。
+    blobField(zone, x, y) {
+        const cx = (zone.x1 + zone.x2) / 2, cy = (zone.y1 + zone.y2) / 2;
+        const rx = (zone.x2 - zone.x1) / 2, ry = (zone.y2 - zone.y1) / 2;
+        const u = (x - cx) / rx, v = (y - cy) / ry;
+        const base = 1 - u * u - v * v;
+        if (base < -0.6) return base;
+        const ax = Math.abs(x - cx), ly = y - zone.y1;
+        const n1 = this._vnoise(ax * 0.21, ly * 0.21) - 0.5;
+        const n2 = this._vnoise(ax * 0.45 + 31, ly * 0.45 - 17) - 0.5;
+        return base + n1 * 0.75 + n2 * 0.35;
+    },
     geometry(key) {
         key = this.normalize(key);
         const boardKey = board.W + 'x' + board.H;
@@ -103,10 +117,23 @@ export const Terrain = {
             const mirrorRect = r => ({ ...r, x1: 70 - r.x2, x2: 70 - r.x1 });
             const mirrorPoint = p => ({ gx: 70 - p.gx, gy: p.gy });
             const W = board.W, H = board.H;
-            // 领土征服山河图：上翼横河 y≈13-19，中央独桥 x=W/2±3，两端浅滩可绕行；
-            // 下翼双林带（x 30%~44% / 56%~70%，y 70%~88%）夹中央开阔走廊。
-            const riverY1 = Math.round(H * 0.18), riverY2 = riverY1 + 6;
+            // 领土征服山河图：上翼横河按段蜿蜒（中央桥段平直对齐，越靠两端越
+            // 往北弓；分界点按比例取，任意棋盘宽度下左右镜像对称）；下翼双噪声
+            // 林斑带（blob:'generic'）夹中央开阔走廊。
+            const riverY1 = Math.round(H * 0.18), riverThick = 6;
             const riverX1 = Math.round(W * 0.17), riverX2 = W - Math.round(W * 0.17);
+            const bridgeL = W / 2 - 3, bridgeR = W / 2 + 3;
+            const span = bridgeL - riverX1;
+            const t1 = riverX1 + Math.round(span * 0.4), t2 = riverX1 + Math.round(span * 0.75);
+            // [x起, x止, 河岸纵偏移]：桥两侧留平直护岸段
+            const spans = [
+                [riverX1, t1, -2.5], [t1, t2, 1.5], [t2, bridgeL, 0],
+                [bridgeR, W - t2, 0], [W - t2, W - t1, 1.5], [W - t1, riverX2, -2.5]
+            ];
+            const forest = (x1, x2) => ({
+                x1, x2, y1: Math.round(H * 0.70), y2: Math.round(H * 0.88),
+                kind: 'forest', blob: 'generic'
+            });
             this._geometry = {
                 flat: { blockers: [], zones: [], defense: null },
                 blue_pass: blue,
@@ -118,14 +145,14 @@ export const Terrain = {
                 river: { blockers: [[0, 13], [18, 32], [38, 52], [57, 70]].map(([a, b]) => rect(32, a, 38, b, 'water')),
                     zones: [[13, 18], [32, 38], [52, 57]].map(([a, b]) => rect(32, a, 38, b, 'bridge')), defense: null },
                 territory: {
-                    blockers: [
-                        rect(riverX1, riverY1, W / 2 - 3, riverY2, 'water'),
-                        rect(W / 2 + 3, riverY1, riverX2, riverY2, 'water')
-                    ],
+                    blockers: spans.map(([x1, x2, lift]) => {
+                        const y1 = riverY1 + Math.round(lift * 2) / 2;
+                        return rect(x1, y1, x2, y1 + riverThick, 'water');
+                    }),
                     zones: [
-                        rect(W / 2 - 3, riverY1, W / 2 + 3, riverY2, 'bridge'),
-                        rect(Math.round(W * 0.31), Math.round(H * 0.70), Math.round(W * 0.44), Math.round(H * 0.88), 'forest'),
-                        rect(Math.round(W * 0.56), Math.round(H * 0.70), Math.round(W * 0.69), Math.round(H * 0.88), 'forest')
+                        rect(W / 2 - 3, riverY1, W / 2 + 3, riverY1 + riverThick, 'bridge'),
+                        forest(Math.round(W * 0.31), Math.round(W * 0.44)),
+                        forest(Math.round(W * 0.56), Math.round(W * 0.69))
                     ],
                     defense: null
                 }
@@ -141,7 +168,9 @@ export const Terrain = {
     },
     contains(rect, x, y, radius = 0) {
         if (x > rect.x1 - radius && x < rect.x2 + radius && y > rect.y1 - radius && y < rect.y2 + radius) {
-            return rect.blob ? this.forestField(x, y) > this.FOREST_EDGE : true;
+            if (rect.blob === true) return this.forestField(x, y) > this.FOREST_EDGE;
+            if (rect.blob === 'generic') return this.blobField(rect, x, y) > this.FOREST_EDGE;
+            return true;
         }
         return false;
     },

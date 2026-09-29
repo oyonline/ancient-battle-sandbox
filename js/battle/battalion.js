@@ -16,8 +16,6 @@ export const BATTALION = {
     WAVE_MIN_SIZE: 5,          // 超时激活的最低人数
     AI_INTERVAL_MS: 2000,      // 营级 AI 评估间隔
     ASSESS_RADIUS: 9,          // 旗附近敌我实力评估半径（格）
-    CAVALRY_LEASH: 16,         // 骑兵离营心缰绳距离（行军中超且无敌情则回撤归队）
-    LEASH_ENEMY_CLEAR: 10,     // 缰绳生效的"无敌情"判定半径
     GATHER_HOLD_RADIUS: 3,     // 集结营成员围绕集结点的驻留半径
     PACE_SLACK: 1.08           // 行军步速同步的宽容系数（略高于最慢兵种）
 };
