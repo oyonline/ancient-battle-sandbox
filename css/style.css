@@ -138,6 +138,26 @@ button:active { transform: scale(0.94); }
 .deathmatch-rule { flex: 0 0 100%; color: #f1cc80; font: 12px/1.6 "PingFang SC", sans-serif; }
 .reserve-note { display: block; color: #e7c67e; margin-top: 5px; font: 12px/1.6 "PingFang SC", sans-serif; }
 
+/* ==================== 领土征服 HUD（经济 + 征兵大按钮） ==================== */
+.territory-hud { flex: 0 0 100%; display: flex; flex-direction: column; gap: 6px; }
+.territory-econ { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline;
+    font: 12px/1.6 "PingFang SC", sans-serif; color: #e8f0f6; font-variant-numeric: tabular-nums; }
+.territory-econ b { font-size: 16px; }
+.territory-econ small { color: #9fd6a8; margin-left: 3px; }
+.territory-econ .red-c { color: #ff8b7b; }
+.territory-econ .blue-c { color: #8bc3ff; }
+.recruit-bar { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.recruit-btn { display: flex; align-items: center; gap: 7px; padding: 9px 16px;
+    border-radius: 12px; border: 2px solid #c0503c; background: #35201a;
+    color: #ffe9d8; font: 700 15px/1 "PingFang SC", sans-serif; cursor: pointer;
+    transition: transform 0.06s ease, opacity 0.15s ease; }
+.recruit-btn:not(:disabled):hover { background: #462a20; }
+.recruit-btn:not(:disabled):active { transform: translateY(2px); }
+.recruit-btn:disabled { opacity: 0.35; cursor: not-allowed; border-color: #6b5648; }
+.recruit-btn .rc-icon { font-size: 19px; }
+.recruit-btn .rc-cost { color: #ffd76e; font-size: 13px; font-weight: 600; }
+.recruit-btn .rc-name { font-size: 14px; }
+
 /* ==================== 底部抽屉面板 ==================== */
 #sheet {
     position: fixed;

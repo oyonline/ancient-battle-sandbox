@@ -34,6 +34,16 @@
         <div id="deathmatch-hud-rule" class="deathmatch-rule" hidden>死斗：溃兵可重整，直到一方全灭</div>
         <div id="control-hud-rule" class="deathmatch-rule" hidden>⚑ 占点征服：占住旗帜攒积分，先到 60 分者胜</div>
         <div id="convoy-hud-rule" class="deathmatch-rule" hidden>🛒 护送：送抵 3 辆辎重车获胜；车身被蓝方独占约 6 秒即遭劫走（人越多越快），劫走 3 辆蓝胜</div>
+        <div id="territory-hud-rule" class="deathmatch-rule" hidden>🚩 领土征服：占旗产军费、老家征兵；对方占多数旗时你的票数流失，票尽判负（全歼对手同样获胜）</div>
+        <div id="territory-hud" class="territory-hud" aria-label="领土征服经济与征兵" hidden>
+            <div class="territory-econ">
+                <span>🔴 军费 <b id="territory-treasury">150</b><small id="territory-income">+13/秒</small></span>
+                <span>🎫 票数 <b class="red-c" id="territory-tickets-red">900</b> : <b class="blue-c" id="territory-tickets-blue">900</b></span>
+                <span>🚩 归属旗 <b class="red-c" id="territory-flags-red">2</b> : <b class="blue-c" id="territory-flags-blue">2</b></span>
+                <span>🪖 在场 <b class="red-c" id="territory-army-red">0</b> : <b class="blue-c" id="territory-army-blue">0</b><small id="territory-queue"></small></span>
+            </div>
+            <div class="recruit-bar" id="recruit-bar" aria-label="征兵按钮"></div>
+        </div>
         <div id="commands-hud" class="commands-hud" aria-label="本局双方指令" hidden></div>
         <div id="tactics-hud" class="tactics-hud" aria-label="两军战术与可战兵力" aria-live="off" hidden>
             <div class="tactics-team red" id="tactics-red">
@@ -100,6 +110,10 @@
                     <div class="terrain-entry">
                         <div><div class="eyebrow">辎重护送 · 新玩法</div><h3>四辆辎重车，穿越整个战场。</h3><p>红方步弓军护送车队开进，蓝方骑兵领衔截杀。车队只在护卫身边才前进——护得太紧走得慢，护得太散被各个击破；车不可被摧毁，车身被蓝方独占约 6 秒即遭劫走（人越多越快），送抵 3 辆护送获胜、劫走 3 辆劫掠得手。</p></div>
                         <div class="terrain-entry-actions"><button class="secondary-btn" data-convoy-entry="flat"><b>🛒 平原护送线</b><small>护送 vs 劫掠的不对称博弈</small></button><button class="secondary-btn" data-convoy-custom="flat"><b>🛒 自定义护送</b><small>兵数阵容自己定</small></button></div>
+                    </div>
+                    <div class="terrain-entry">
+                        <div><div class="eyebrow">领土征服 · 大地图新玩法</div><h3>夺旗生财，就地征兵。</h3><p>五面旗撒满大地图：旗归谁，军费就流向谁。用军费在老家持续征兵增援，占多数领土还能抽干对方票数——抢旗、爆兵、反推，打一场有起有落的会战。双方各带一支常备军和一笔启动军费开局，拖动地图查看各条战线，右上小地图点击跳转。</p></div>
+                        <div class="terrain-entry-actions"><button class="secondary-btn" data-territory-entry><b>🚩 开赴领土战场</b><small>红方手动征兵指挥 · 蓝方AI自动运营</small></button></div>
                     </div>
                     <div class="tactics-entry">
                         <div class="tactics-entry-copy"><div class="eyebrow">战阵演练 · 新玩法</div><h3>再添五十预备，能否破阵？</h3><p>100 剑士发起进攻，50 剑士在后方接应、分批增援。收拢溃兵，重整后再次出击；也可切回 100 对 100 比较。</p></div>

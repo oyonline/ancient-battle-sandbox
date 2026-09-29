@@ -2,6 +2,7 @@
 import { Terrain } from './terrain.js';
 import { UNIT_TYPES, FORMATIONS, BUDGET } from './units.js';
 import { CHALLENGES, armyCost, fitArmyToBudget } from './challenges.js';
+import { TERRITORY } from './battle/economy.js';
 
 export const Snd = {
     ctx: null, muted: false, _last: {},
@@ -157,6 +158,8 @@ export const UI = {
             const c = this.scene.convoy;
             convoyHud.textContent = `🛒 护送：送抵 ${c.delivered}/${c.need} · 被劫 ${c.hijacked || 0}/${c.need} —— 车队需要护卫随行才前进；车身被蓝方独占约 6 秒即遭劫走（人越多越快），护卫在场即冻结`;
         }
+        document.getElementById('territory-hud-rule').hidden = !fighting || !this.battleOptions.territory;
+        this.updateTerritoryHUD();
         this.updateMorale();
         this.updateTactics();
         this.updateTerrainControls();
@@ -212,7 +215,8 @@ export const UI = {
     },
 
     resetBattleOptions() {
-        this.battleOptions = { deathmatch: false, control: false, convoy: false, reserves: { red: 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
+        this.battleOptions = { deathmatch: false, control: false, convoy: false, territory: false,
+            reserves: { red: 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
     },
 
     startTerrain(terrain = 'blue_pass') {
@@ -259,6 +263,21 @@ export const UI = {
         this.orders = { red: 'advance', blue: 'advance' };
         this.resetBattleOptions();
         this.battleOptions.convoy = true;
+        this.deployArmies();
+    },
+
+    // 领土征服：大地图 + 五旗经济 + 老家征兵。双方各带 TERRITORY.OPENING 常备军
+    // 与启动军费开局（不进配兵界面）；红方手动征兵（战斗中大按钮），蓝方 AI 自动运营。
+    startTerritory() {
+        this.clearBattle();
+        this.mode = 'territory';
+        this.challenge = null;
+        this.editing = false;
+        this.configs = { red: { ...TERRITORY.OPENING }, blue: { ...TERRITORY.OPENING } };
+        this.formations = { red: 'custom', blue: 'custom' };
+        this.orders = { red: 'advance', blue: 'advance' };
+        this.resetBattleOptions();
+        this.battleOptions.territory = true;
         this.deployArmies();
     },
 
@@ -471,7 +490,7 @@ export const UI = {
         this.configs = { red: { infantry: reserve ? 150 : 100 }, blue: { pikeman: 100 } };
         this.formations = { red: 'custom', blue: 'square' };
         this.orders = { red: reserve ? 'flank' : order, blue: 'hold' };
-        this.battleOptions = { deathmatch: reserve, control: false, convoy: false, reserves: { red: reserve ? 50 : 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
+        this.battleOptions = { deathmatch: reserve, control: false, convoy: false, territory: false, reserves: { red: reserve ? 50 : 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
         this.deployArmies();
     },
 
@@ -721,12 +740,13 @@ export const UI = {
         const deathmatch = this.battleOptions.deathmatch;
         const control = this.battleOptions.control === true;
         const convoy = this.battleOptions.convoy === true;
+        const territory = this.battleOptions.territory === true;
         const reserves = Object.fromEntries(['red', 'blue'].map(team => [team,
             Math.min(this.battleOptions.reserves[team] || 0, Math.max(0, (this.configs[team].infantry || 0) - 1))]));
         const terrain = ['sandbox', 'terrain'].includes(this.mode) ? Terrain.normalize(this.battleOptions.terrain) : 'flat';
         const cavalryOrders = Object.fromEntries(['red', 'blue'].map(team => [team,
             ['sandbox', 'terrain'].includes(this.mode) ? this.cavalryOrder(team) : 'auto']));
-        this.battleOptions = { deathmatch, control, convoy, reserves, terrain, cavalryOrders };
+        this.battleOptions = { deathmatch, control, convoy, territory, reserves, terrain, cavalryOrders };
         this.scene?.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue,
             { ...this.orders }, { ...this.battleOptions, reserves: { ...reserves }, cavalryOrders: { ...cavalryOrders } });
         this.setPhase('ready');
@@ -771,6 +791,8 @@ export const UI = {
             ? '⚑ 占点征服 · 占旗攒分，先到 60 分者胜（全歼对手同样获胜）'
             : this.battleOptions.convoy
             ? '🛒 护送 · 送抵 3 辆辎重车获胜；蓝方劫走 3 辆即得手'
+            : this.battleOptions.territory
+            ? '🚩 领土征服 · 占旗生财、征兵增援；票数耗尽即负（全歼对手同样获胜）'
             : (this.challenge ? this.challenge.title + ' · ' : this.mode === 'tactics' ? '战阵演练 · ' : '') + '拖动看战况 · 点击士兵看地形';
         this.openSheet(false);
         this.scene.startCountdown(() => { this.countdown = false; this.syncControls(); });
@@ -779,6 +801,7 @@ export const UI = {
     editArmy(team) {
         if (!['result', 'ready', 'battle'].includes(this.phase)) return;
         if (this.mode === 'challenge' && team !== 'red') return;
+        if (this.mode === 'territory') return;   // 常备军固定，无配兵环节
         this.clearBattle();
         this.editing = true;
         this.buildBuy(team);
@@ -825,6 +848,7 @@ export const UI = {
         const wonChallenge = this.mode === 'challenge' && winner === 'red';
         if (wonChallenge) this.saveWin();
         document.getElementById('result-eyebrow').textContent = this.challenge ? this.challenge.title + ' · 本局战报'
+            : this.battleOptions.territory ? '领土征服 · 本局战报'
             : (report.deathmatch ? '预备队死斗' : this.mode === 'terrain' ? '地形演练' : this.mode === 'tactics' ? '战阵演练' : '自由对战') + ' · 本局战报';
         const title = document.getElementById('result-title');
         title.className = 'result-title ' + winner;
@@ -833,13 +857,17 @@ export const UI = {
         const endReason = report.deathmatch && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '已全灭，死斗结束。 '
             : report.endReason === 'control' ? (winner === 'red' ? '红方' : '蓝方') + '掌控旗帜积分达标，占点获胜。 '
+            : report.endReason === 'tickets' ? (winner === 'red' ? '红方' : '蓝方') + '掌控多数领土，对方票数耗尽，领土征服获胜。 '
             : report.endReason === 'convoy' ? (winner === 'red' ? '红方辎重车队突破封锁，护送获胜。' : '蓝方劫掠得手，辎重车队尽数被劫。')
             : report.endReason === 'stalemate' ? '双方持续固守、无人推进，本局相持结束。试着让一方改为进攻。 ' : report.endReason === 'rout' && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '军心瓦解，失去继续作战能力。 '
             : winner === 'draw' && report.red + report.blue > 0 && report.morale &&
                 report.morale.red.steady + report.morale.red.wavering + report.morale.blue.steady + report.morale.blue.wavering === 0
                 ? '双方均已失去继续作战能力。 ' : '';
-        document.getElementById('result-detail').textContent = endReason + '在场兵力：红方 ' + report.red + ' 人 · 蓝方 ' + report.blue + ' 人';
+        const territoryLine = report.territory
+            ? ` 终局票数 ${report.territory.tickets.red}:${report.territory.tickets.blue} · 征兵 红${report.territory.recruited.red}/蓝${report.territory.recruited.blue} · 军费入账 红${report.territory.earned.red}/蓝${report.territory.earned.blue}`
+            : '';
+        document.getElementById('result-detail').textContent = endReason + '在场兵力：红方 ' + report.red + ' 人 · 蓝方 ' + report.blue + ' 人' + territoryLine;
         const leaders = Object.entries(report.teams.red.byType).filter(([, s]) => s.initial > 0).sort((a, b) => b[1].kills - a[1].kills);
         const leader = leaders[0];
         document.getElementById('result-metrics').innerHTML = `
@@ -867,8 +895,9 @@ export const UI = {
         if (!report.events.length) { const li = document.createElement('li'); li.textContent = '本局暂无关键交战记录'; events.appendChild(li); }
         document.querySelector('.battle-events').open = false;
         document.getElementById('btn-edit-red').textContent = this.challenge ? '✎ 调整阵容再挑战' : '✎ 调整红方再战';
-        document.getElementById('btn-edit-blue').hidden = !!this.challenge;
-        document.getElementById('btn-swap').hidden = !!this.challenge;
+        document.getElementById('btn-edit-blue').hidden = !!this.challenge || this.mode === 'territory';
+        document.getElementById('btn-swap').hidden = !!this.challenge || this.mode === 'territory';
+        document.getElementById('btn-edit-red').hidden = this.mode === 'territory';   // 领土征服阵容固定，重开即重置
         document.getElementById('btn-swap').textContent = this.battleOptions.terrain === 'flat' ? '⇄ 交换双方再战' : '⇄ 交换军队再战（地形不动）';
         const switchTactics = document.getElementById('btn-switch-tactics');
         switchTactics.hidden = this.mode !== 'tactics';
@@ -887,6 +916,58 @@ export const UI = {
         document.getElementById('blue-count').textContent = this.scene?.blueAlive || 0;
         this.updateMorale();
         this.updateTactics();
+        this.updateTerritoryHUD();
+    },
+
+    // ---------------- 领土征服 HUD：经济读数 + 征兵大按钮 ----------------
+    buildRecruitBar() {
+        const bar = document.getElementById('recruit-bar');
+        bar.replaceChildren();
+        for (const [key, t] of Object.entries(UNIT_TYPES)) {
+            if (t.hidden) continue;
+            const cost = t.cost * TERRITORY.COST_MULT;
+            const btn = document.createElement('button');
+            btn.className = 'recruit-btn';
+            btn.id = 'recruit-' + key;
+            btn.title = t.tip + ` · 训练 ${TERRITORY.TRAIN_MS[key] / 1000} 秒`;
+            btn.innerHTML = `<span class="rc-icon">${t.icon}</span><span class="rc-name">${t.name}</span><span class="rc-cost">🪙${cost}</span>`;
+            // 大按钮长按连买（亲子手感）：按下立即买一个，按住每 60ms 继续
+            this.bindHold(btn, () => {
+                if (this.phase !== 'battle' || this.countdown || !this.scene?.territory) return;
+                if (this.scene.territory.recruit.enqueue('red', key)) {
+                    Snd.play('buy');
+                    this.updateTerritoryHUD();
+                }
+            });
+            bar.appendChild(btn);
+        }
+    },
+
+    updateTerritoryHUD() {
+        const hud = document.getElementById('territory-hud');
+        const active = this.phase === 'battle' && this.battleOptions.territory && this.scene?.territory;
+        if (hud) hud.hidden = !active;
+        if (!active) return;
+        if (!document.getElementById('recruit-infantry')) this.buildRecruitBar();
+        const territory = this.scene.territory;
+        const owned = { red: 0, blue: 0 };
+        for (const flag of this.scene.flags || []) if (flag.owner) owned[flag.owner]++;
+        document.getElementById('territory-treasury').textContent = Math.floor(territory.econ.treasury.red);
+        document.getElementById('territory-income').textContent = '+' + territory.econ.incomeRate(owned.red) + '/秒';
+        document.getElementById('territory-tickets-red').textContent = Math.ceil(territory.tickets.tickets.red);
+        document.getElementById('territory-tickets-blue').textContent = Math.ceil(territory.tickets.tickets.blue);
+        document.getElementById('territory-flags-red').textContent = owned.red;
+        document.getElementById('territory-flags-blue').textContent = owned.blue;
+        document.getElementById('territory-army-red').textContent = this.scene.redAlive;
+        document.getElementById('territory-army-blue').textContent = this.scene.blueAlive;
+        document.getElementById('territory-queue').textContent =
+            territory.recruit.queues.red.length ? ` · 训练中 ${territory.recruit.queues.red.length}` : '';
+        for (const [key, t] of Object.entries(UNIT_TYPES)) {
+            if (t.hidden) continue;
+            const btn = document.getElementById('recruit-' + key);
+            if (btn) btn.disabled = this.countdown || !territory.econ.canAfford('red', key) ||
+                territory.recruit.queues.red.length >= TERRITORY.QUEUE_CAP;
+        }
     },
 
     updateTactics() {
@@ -953,6 +1034,9 @@ export const UI = {
         });
         document.querySelectorAll('[data-convoy-custom]').forEach(button => {
             button.onclick = () => { this.startConvoyCustom(); Snd.play('tick'); };
+        });
+        document.querySelectorAll('[data-territory-entry]').forEach(button => {
+            button.onclick = () => { this.startTerritory(); Snd.play('tick'); };
         });
         document.querySelectorAll('[data-terrain]').forEach(button => {
             button.onclick = () => this.selectTerrain(button.dataset.terrain);
