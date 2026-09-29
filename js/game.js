@@ -1665,6 +1665,12 @@ export class IsoBattleScene extends Phaser.Scene {
         } else if (command.k === 'order' && this.battalions) {
             const battalion = this.battalions.battalions.find(b => b.id === command.id && b.team === command.side);
             if (battalion) this.battalions.orderBattalion(battalion, command.flag);
+        } else if (command.k === 'hold' && this.battalions) {
+            const battalion = this.battalions.battalions.find(b => b.id === command.id && b.team === command.side);
+            if (battalion) this.battalions.orderHold(battalion, command.gx, command.gy);
+        } else if (command.k === 'charge' && this.battalions) {
+            const battalion = this.battalions.battalions.find(b => b.id === command.id && b.team === command.side);
+            if (battalion) this.battalions.orderCharge(battalion, this.simulationTime);
         }
     }
 
@@ -1789,6 +1795,10 @@ export class IsoBattleScene extends Phaser.Scene {
         // 领土模式远程兵种随队行军但停在旗圈外沿（5.5格）standoff 放箭。
         // 敌军残兵(≤3)时全员清场优先；骑兵由冲锋状态机驱动不经过这里（缰绳另行接管）。
         const battalion = this.battleOptions.territory ? unit.battalion : null;
+        // 有令近战的接敌阈值降为 6 格：半路遇敌不停下对砍，顶着远程火力把旗圈
+        // 推过去——夺旗优先；弓手仍按 12 格正常接敌（远程本就该边走边射）。
+        const orderedMarch = battalion && !battalion.gathering && battalion.orderFlag != null;
+        const engageRange = orderedMarch && !unit.typeData.ranged ? 6 : 12;
         if (battalion && battalion.gathering && !guardAnchor && minD > 12) {
             const gather = battalion.gatherPoint;
             unit.target = nearest;
@@ -1805,11 +1815,27 @@ export class IsoBattleScene extends Phaser.Scene {
             }
             return;
         }
+        // 驻守点令（玩家长期令）：敌远归位驻守（半径 3.5 格）；敌近且离驻点 7 格内
+        // 就地接敌、不追出——防线上的兵像钉子，打过就回位。
+        if (battalion && !battalion.gathering && battalion.orderPoint && !guardAnchor) {
+            const post = battalion.orderPoint;
+            const postDistance = Math.hypot(post.gx - unit.gx, post.gy - unit.gy);
+            if (minD > engageRange) {
+                unit.target = nearest;
+                if (postDistance > 3.5) {
+                    moveToward(unit, post.gx, post.gy, unit.type === 'cavalry'
+                        ? unit.typeData.speed : battalion.pace * BATTALION.PACE_SLACK, dt);
+                }
+                return;
+            }
+            if (postDistance > 7) {
+                unit.target = nearest;
+                moveToward(unit, post.gx, post.gy, unit.typeData.speed, dt);
+                return;
+            }
+            // 敌近且在驻点附近：落入正常接敌分支
+        }
         const flagMarch = this.battleOptions.control || this.battleOptions.territory;
-        // 有令近战的接敌阈值降为 6 格：半路遇敌不停下对砍，顶着远程火力把旗圈
-        // 推过去——夺旗优先；弓手仍按 12 格正常接敌（远程本就该边走边射）。
-        const orderedMarch = battalion && !battalion.gathering && battalion.orderFlag != null;
-        const engageRange = orderedMarch && !unit.typeData.ranged ? 6 : 12;
         if (flagMarch && !guardAnchor && minD > engageRange && foeCount > 3 &&
             (!unit.typeData.ranged || this.battleOptions.territory) &&
             !this.flags.some(f => f.owner !== unit.team && Math.hypot(f.gx - unit.gx, f.gy - unit.gy) <= 2.8)) {
@@ -2789,9 +2815,14 @@ export class IsoBattleScene extends Phaser.Scene {
         if (!this.battleOptions.territory || !this.battalions) return null;
         const battalion = unit.battalion;
         if (!battalion) return null;
+        // 冲锋窗口：该营骑兵全部交还冲锋状态机自由出击（窗口结束自动归队护送）
+        if (this.simulationTime < battalion.chargeUntil) return null;
         let target = null;
         if (battalion.gathering) target = battalion.gatherPoint;
         else if (battalion.retreat) target = this.battalions.homeRally(unit.team);
+        else if (battalion.orderPoint) {
+            target = battalion.orderPoint;
+        }
         else if (battalion.orderFlag != null && this.flags[battalion.orderFlag]) {
             const flag = this.flags[battalion.orderFlag];
             if (Math.hypot(flag.gx - unit.gx, flag.gy - unit.gy) <= 4.5) {
@@ -2910,6 +2941,7 @@ export class IsoBattleScene extends Phaser.Scene {
                 const from = this.groundPoint(center.gx, center.gy);
                 let toPoint = null, color = 0xffe49a;
                 if (selected.retreat) { toPoint = this.battalions.homeRally(selected.team); color = 0x8cdaff; }
+                else if (selected.orderPoint) { toPoint = selected.orderPoint; color = 0x9de3af; }
                 else if (selected.orderFlag != null && this.flags[selected.orderFlag]) {
                     toPoint = this.flags[selected.orderFlag]; color = 0xf6cc68;
                 }

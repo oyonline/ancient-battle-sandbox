@@ -105,6 +105,7 @@ export const UI = {
 
     onSceneReady(scene) {
         this.scene = scene;
+        scene.groundClick = (world, picked) => this.onGroundClick(world, picked);
         if (this.pendingNetStart) {
             this.pendingNetStart = false;
             this.launchNetBattle();
@@ -1292,12 +1293,133 @@ export const UI = {
         home.textContent = '🏠 回防集结';
         home.onclick = () => { this.giveBattalionOrder('home'); };
         row.appendChild(home);
+        const hold = document.createElement('button');
+        hold.className = 'order-btn';
+        hold.id = 'order-hold';
+        hold.textContent = '📍 驻守此处';
+        hold.title = '点击后到地图上选一个点，全营开过去驻守（桥头/林缘/高地均可设防）';
+        hold.onclick = () => this.beginHoldTargeting();
+        row.appendChild(hold);
+        const charge = document.createElement('button');
+        charge.className = 'order-btn order-charge';
+        charge.id = 'order-charge';
+        charge.textContent = '⚡ 冲锋！';
+        charge.title = '本营骑兵自由冲锋 6 秒（15 秒冷却）';
+        charge.onclick = () => this.giveChargeOrder();
+        row.appendChild(charge);
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'order-btn';
+        nextBtn.id = 'order-next';
+        nextBtn.textContent = '🔄 下一营';
+        nextBtn.title = '循环选择本方营队（快捷键 Tab / 数字键 1-9）';
+        nextBtn.onclick = () => this.selectNextBattalion();
+        row.appendChild(nextBtn);
         const deselect = document.createElement('button');
         deselect.className = 'order-btn';
         deselect.textContent = '✖';
         deselect.title = '取消选择';
         deselect.onclick = () => { this.scene?.selectBattalionByUnit(null); this.updateBattalionBar(); };
         row.appendChild(deselect);
+    },
+
+    // ---------------- 驻守目标模式 / 冲锋令 / 快捷选营 ----------------
+    beginHoldTargeting() {
+        const selected = this.scene?.selectedBattalion;
+        if (!selected || selected.team !== (this.mySide || 'red')) return;
+        this.holdTargeting = true;
+        document.body.classList.add('targeting');
+        this.showNetToast('📍 点击地图选择驻守位置（按 Esc 取消）');
+    },
+
+    cancelHoldTargeting() {
+        this.holdTargeting = false;
+        document.body.classList.remove('targeting');
+        const cue = document.getElementById('morale-cue');
+        if (cue) cue.hidden = true;
+    },
+
+    // 地面点击回调（inspection 上抛）：目标模式下视为选点下令
+    onGroundClick(world, picked) {
+        if (!this.holdTargeting) return;
+        const selected = this.scene?.selectedBattalion;
+        if (!selected) { this.cancelHoldTargeting(); return; }
+        // 世界坐标 → 网格（gridToScreen 的逆变换，不含地形高度——选点落地面即可）
+        const camera = this.scene.cameras.main;
+        void camera; void picked;
+        const scene = this.scene;
+        const board = scene.board_W ? { W: scene.board_W(), H: scene.board_H() } : null;
+        if (!board) { this.cancelHoldTargeting(); return; }
+        const TW = 64, TH = 32, OX = board.H * TW / 2, OY = 120;
+        const key = scene.battleOptions.terrain;
+        // 两次迭代补偿地形高度（高地上的点击不偏移）：groundPoint 的 y 含 height*24px 抬升
+        let gx = board.W / 2, gy = board.H / 2;
+        for (let pass = 0; pass < 2; pass++) {
+            const lift = Terrain.height(key, gx, gy) * Terrain.HEIGHT_SCALE;
+            const dx = (world.x - OX) / (TW / 2), dy = (world.y + lift - OY) / (TH / 2);
+            gx = (dx + dy) / 2; gy = (dy - dx) / 2;
+        }
+        // 量化到 0.1 格（确定性约定：联机两端坐标逐位一致）
+        gx = Math.round(Math.max(2, Math.min(board.W - 2, gx)) * 10) / 10;
+        gy = Math.round(Math.max(2, Math.min(board.H - 2, gy)) * 10) / 10;
+        if (!Terrain.walkable(scene.battleOptions.terrain, gx, gy)) {
+            this.showNetToast('⚠ 那里不能驻守（水面/出界）——换一个点');
+            return;
+        }
+        this.giveHoldOrder(gx, gy);
+        this.cancelHoldTargeting();
+    },
+
+    giveHoldOrder(gx, gy) {
+        const selected = this.scene?.selectedBattalion;
+        if (!selected) return;
+        const side = this.mySide || 'red';
+        if (this.battleOptions.net && this.scene.net) {
+            this.scene.net.lockstep.act({ k: 'hold', side, id: selected.id, gx, gy });
+        } else {
+            this.scene.battalions.orderHold(selected, gx, gy);
+        }
+        Snd.play('lock');
+        this.updateBattalionBar();
+    },
+
+    giveChargeOrder() {
+        const selected = this.scene?.selectedBattalion;
+        if (!selected || !this.scene) return;
+        const now = this.scene.simulationTime;
+        if (now < (selected.chargeReadyAt || 0)) return;
+        const hasCavalry = selected.aliveMembers().some(u => u.type === 'cavalry');
+        if (!hasCavalry) { this.showNetToast('本营没有骑兵——把骑兵编进来再冲锋'); return; }
+        const side = this.mySide || 'red';
+        if (this.battleOptions.net && this.scene.net) {
+            this.scene.net.lockstep.act({ k: 'charge', side, id: selected.id });
+        } else {
+            this.scene.battalions.orderCharge(selected, now);
+        }
+        Snd.play('go');
+        this.updateBattalionBar();
+    },
+
+    myBattalions() {
+        const side = this.mySide || 'red';
+        return (this.scene?.battalions?.battalions || []).filter(b => b.team === side && b.members.length);
+    },
+
+    selectBattalionByIndex(index) {
+        const list = this.myBattalions();
+        if (!list.length) return;
+        this.scene.selectedBattalion = list[Math.max(0, Math.min(list.length - 1, index))];
+        Snd.play('tick');
+        this.updateBattalionBar();
+    },
+
+    selectNextBattalion() {
+        const list = this.myBattalions();
+        if (!list.length) return;
+        const current = this.scene.selectedBattalion;
+        const index = list.indexOf(current);
+        this.scene.selectedBattalion = list[(index + 1) % list.length];
+        Snd.play('tick');
+        this.updateBattalionBar();
     },
 
     // 下营令：联机进命令队列，单机直接执行
@@ -1322,8 +1444,11 @@ export const UI = {
         if (!document.querySelector('#battalion-orders .order-btn')) this.buildBattalionBar();
         const flags = this.scene.flags || [];
         const own = selected.team === (this.mySide || 'red');
+        const now = this.scene.simulationTime || 0;
         const state = selected.gathering ? '集结中'
+            : now < (selected.chargeUntil || 0) ? '⚡ 冲锋中'
             : selected.retreat ? '回防'
+            : selected.orderPoint ? '📍 驻守'
             : selected.orderFlag != null && flags[selected.orderFlag] ? '目标 · ' + flags[selected.orderFlag].name
             : '自主作战';
         document.getElementById('battalion-label').textContent =
@@ -1338,6 +1463,15 @@ export const UI = {
                 btn.classList.toggle('active', own && selected.orderFlag === Number(btn.dataset.flagOrder));
             } else if (btn.dataset.orderHome !== undefined) {
                 btn.classList.toggle('active', own && selected.retreat);
+            } else if (btn.id === 'order-hold') {
+                btn.disabled = !own || this.holdTargeting;
+                btn.classList.toggle('active', this.holdTargeting);
+            } else if (btn.id === 'order-charge') {
+                const hasCavalry = own && selected.aliveMembers().some(u => u.type === 'cavalry');
+                const cooldown = Math.max(0, (selected.chargeReadyAt || 0) - now);
+                btn.disabled = !hasCavalry || cooldown > 0;
+                btn.textContent = cooldown > 0 ? `⚡ ${(cooldown / 1000).toFixed(1)}s` : '⚡ 冲锋！';
+                btn.classList.toggle('active', now < (selected.chargeUntil || 0));
             }
         });
     },
@@ -1422,6 +1556,13 @@ export const UI = {
             if (e.key === 'Enter') this.netJoin();
         });
         window.addEventListener('beforeunload', () => this.net.client?.bye());
+        window.addEventListener('keydown', e => {
+            if (this.phase !== 'battle' || !this.battleOptions.territory) return;
+            if (e.key === 'Escape') { this.cancelHoldTargeting(); return; }
+            if (e.key === 'Tab') { e.preventDefault(); this.selectNextBattalion(); return; }
+            const digit = Number(e.key);
+            if (Number.isInteger(digit) && digit >= 1 && digit <= 9) this.selectBattalionByIndex(digit - 1);
+        });
         document.querySelectorAll('[data-terrain]').forEach(button => {
             button.onclick = () => this.selectTerrain(button.dataset.terrain);
         });

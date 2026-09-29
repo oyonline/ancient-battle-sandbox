@@ -24,6 +24,11 @@ export class UnitInspector {
             this.selected = this.pick(p);
             // 领土征服联动：点兵即选中整营（含点空地清除选营）
             if (scene.selectBattalionByUnit) scene.selectBattalionByUnit(this.selected);
+            // 地面点击钩子（驻守目标模式等）：上抛世界坐标与命中单位
+            if (scene.groundClick) {
+                const camera = scene.cameras.main;
+                scene.groundClick(camera.getWorldPoint(p.x, p.y), this.selected);
+            }
             this.update();
         };
         this.onOutside = () => { this.pointer = null; };

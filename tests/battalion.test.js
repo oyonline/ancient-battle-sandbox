@@ -250,3 +250,53 @@ test('骑兵护送不折返：边界处不再旗↔营心来回掉头（贴图�
     }
     assert.ok(reversals <= 1, `行进方向折返 ${reversals} 次（护送点应同向推进，最多起步转向一次）`);
 });
+
+test('驻守点令：开赴驻点归位，敌近7格内接敌不追出，AI 不覆盖玩家点令', () => {
+    const scene = territoryScene({ territoryAI: false }, {}, { infantry: 2 });
+    scene.rebuildSpatial();
+    const foes = scene.units.filter(u => u.team === 'blue');
+    const pin = () => foes.forEach((u, i) => { u.gx = 96; u.gy = 64 + i; u.hp = u.maxHp; });
+    pin();
+    const battalion = new Battalion('red', 'line');
+    for (let i = 0; i < 6; i++) {
+        const u = addUnit(scene, 'red', 'infantry', 26, 34 + i * 0.9);
+        u.battalion = battalion; battalion.members.push(u);
+    }
+    battalion.refreshPace();
+    scene.battalions.battalions.push(battalion);
+    // 下达驻守点令（桥南 44,30 一带）
+    assert.equal(scene.battalions.orderHold(battalion, 44, 30), true);
+    assert.deepEqual(battalion.orderPoint, { gx: 44, gy: 30 });
+    assert.equal(battalion.playerOrdered, true);
+    run(scene, 14, pin);
+    const center = battalion.center();
+    assert.ok(Math.hypot(center.gx - 44, center.gy - 30) <= 5, '全营开赴并驻守在驻点附近');
+    // AI 评估不覆盖点令
+    scene.battalions.aiAssign();
+    assert.deepEqual(battalion.orderPoint, { gx: 44, gy: 30 }, 'AI 不动玩家点令');
+    // 旗令可替换点令
+    scene.selectedBattalion = battalion;
+    scene.orderSelectedBattalion(2);
+    assert.equal(battalion.orderPoint, null, '旗令替换点令');
+});
+
+test('冲锋令：窗口内骑兵交还冲锋状态机，冷却期内拒绝再次下令', () => {
+    const scene = territoryScene({ territoryAI: false }, {}, { infantry: 2 });
+    scene.rebuildSpatial();
+    const battalion = new Battalion('red', 'line');
+    const cav = addUnit(scene, 'red', 'cavalry', 30, 36);
+    cav.battalion = battalion; battalion.members.push(cav);
+    battalion.orderFlag = 2;
+    scene.battalions.battalions.push(battalion);
+    scene.rebuildSpatial();
+    // 未冲锋：骑兵被营接管（有护送目标）
+    assert.ok(scene.battalionDirectCavalry(cav) !== null, '平时骑兵随营护送');
+    assert.equal(scene.battalions.orderCharge(battalion, 1000), true);
+    assert.equal(battalion.chargeUntil, 7000);
+    scene.simulationTime = 2000;
+    assert.equal(scene.battalionDirectCavalry(cav), null, '冲锋窗口内交还冲锋状态机');
+    scene.simulationTime = 7100;
+    assert.ok(scene.battalionDirectCavalry(cav) !== null, '窗口结束自动归队');
+    assert.equal(scene.battalions.orderCharge(battalion, 7100), false, '冷却期内拒绝');
+    assert.equal(scene.battalions.orderCharge(battalion, 22000), true, '冷却结束可再冲');
+});

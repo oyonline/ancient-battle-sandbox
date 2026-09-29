@@ -31,8 +31,11 @@ export class Battalion {
         this.createdAt = 0;               // 场景模拟时钟（集结超时判定用）
         this.members = [];
         this.orderFlag = null;            // 目标旗 index；null = 无令
-        this.playerOrdered = false;       // 玩家令（AI 不覆盖）
+        this.orderPoint = null;           // 驻守点令 {gx,gy}（与 orderFlag 互斥；玩家长期令）
+        this.playerOrdered = false;       // 玩家令（AI 不覆盖；点令恒真）
         this.retreat = false;             // 玩家回防令
+        this.chargeUntil = 0;             // 冲锋窗口截止（模拟时钟 ms；窗口内骑兵交还冲锋状态机）
+        this.chargeReadyAt = 0;           // 冲锋冷却截止
         this.gatherPoint = null;
         this.pace = 2.2;                  // 营行军步速（最慢兵种）
     }
@@ -241,14 +244,34 @@ export class BattalionSystem {
         if (!battalion) return false;
         if (flagIndex === 'home') {
             battalion.orderFlag = null;
+            battalion.orderPoint = null;
             battalion.playerOrdered = true;
             battalion.retreat = true;
             return true;
         }
         if (flagIndex == null || !this.scene.flags[flagIndex]) return false;
         battalion.orderFlag = flagIndex;
+        battalion.orderPoint = null;      // 旗令替换点令
         battalion.playerOrdered = true;
         battalion.retreat = false;
+        return true;
+    }
+
+    // 驻守任意点（玩家长期令）：全营开赴并驻守；AI 永不覆盖，只有玩家的新令可替换。
+    orderHold(battalion, gx, gy) {
+        if (!battalion || !Number.isFinite(gx) || !Number.isFinite(gy)) return false;
+        battalion.orderFlag = null;
+        battalion.orderPoint = { gx, gy };
+        battalion.playerOrdered = true;
+        battalion.retreat = false;
+        return true;
+    }
+
+    // 骑兵冲锋令：6 秒自由冲锋窗口，15 秒冷却（营级，模拟时钟裁决——联机两端一致）
+    orderCharge(battalion, now) {
+        if (!battalion || now < (battalion.chargeReadyAt || 0)) return false;
+        battalion.chargeUntil = now + 6000;
+        battalion.chargeReadyAt = now + 21000;
         return true;
     }
 
