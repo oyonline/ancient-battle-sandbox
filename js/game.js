@@ -581,7 +581,9 @@ export class IsoBattleScene extends Phaser.Scene {
         this.terrainLabel = null;
         if (this.battleOptions.terrain !== 'flat' && !naturalSlope) {
             const map = Terrain.maps[this.battleOptions.terrain];
-            const labelPoint = this.groundPoint(map.cx || 35, (map.cy || 35) - 17);
+            // 领土山河图的标签放坡脚（默认 cy-17 会落在上翼河道上）
+            const labelY = this.battleOptions.terrain === 'territory' ? map.cy - map.ry - 2.5 : (map.cy || 35) - 17;
+            const labelPoint = this.groundPoint(map.cx || 35, labelY);
             this.terrainLabel = this.add.text(labelPoint.x, labelPoint.y - 42,
                 map.name + (map.rx ? ' · 缓坡' : ''), {
                     fontFamily: 'sans-serif', fontSize: '30px', color: '#fff3c7',
@@ -629,14 +631,26 @@ export class IsoBattleScene extends Phaser.Scene {
                 paint(zone, 0xd6bd80, 0.5);
                 g.lineStyle(2, 0xeee0ad, 0.6); g.strokePoints(polygon(zone), true);
             } else if (zone.kind === 'forest') {
-                // 连片噪声林斑：半格采样贴地铺色，边缘与通行判定共用同一占位场；四档由草色渐入深绿。
-                const ramp = [[0x537f47, 0.26], [0x47703d, 0.38], [0x3d6637, 0.52], [0x315c31, 0.64]];
-                for (let y = zone.y1; y < zone.y2; y += 0.5) for (let x = zone.x1; x < zone.x2; x += 0.5) {
-                    const depth = Terrain.forestField(x + 0.25, y + 0.25) - Terrain.FOREST_EDGE;
-                    if (depth <= 0) continue;
-                    const tier = depth > 0.55 ? 3 : depth > 0.32 ? 2 : depth > 0.16 ? 1 : 0;
-                    g.fillStyle(ramp[tier][0], ramp[tier][1]);
-                    g.fillPoints(polygon({ x1: x, y1: y, x2: x + 0.5, y2: y + 0.5 }), true);
+                if (zone.blob) {
+                    // 连片噪声林斑：半格采样贴地铺色，边缘与通行判定共用同一占位场；四档由草色渐入深绿。
+                    const ramp = [[0x537f47, 0.26], [0x47703d, 0.38], [0x3d6637, 0.52], [0x315c31, 0.64]];
+                    for (let y = zone.y1; y < zone.y2; y += 0.5) for (let x = zone.x1; x < zone.x2; x += 0.5) {
+                        const depth = Terrain.forestField(x + 0.25, y + 0.25) - Terrain.FOREST_EDGE;
+                        if (depth <= 0) continue;
+                        const tier = depth > 0.55 ? 3 : depth > 0.32 ? 2 : depth > 0.16 ? 1 : 0;
+                        g.fillStyle(ramp[tier][0], ramp[tier][1]);
+                        g.fillPoints(polygon({ x1: x, y1: y, x2: x + 0.5, y2: y + 0.5 }), true);
+                    }
+                } else {
+                    // 矩形林带（领土征服）：整片铺底色 + 噪声两档加深，边界即通行边界
+                    paint(zone, 0x44703c, 0.40);
+                    for (let y = zone.y1; y < zone.y2; y += 1) for (let x = zone.x1; x < zone.x2; x += 1) {
+                        if (this.terNoise(x * 0.9 + 5, y * 0.9 + 11) < 0.45) continue;
+                        g.fillStyle(0x356033, 0.30);
+                        g.fillPoints(polygon({ x1: x, y1: y, x2: x + 1, y2: y + 1 }), true);
+                    }
+                    g.lineStyle(2.5, 0x2c4f2a, 0.5);
+                    g.strokePoints(polygon(zone), true);
                 }
             }
         }
@@ -700,7 +714,10 @@ export class IsoBattleScene extends Phaser.Scene {
             sprite.setVisible(!['water', 'rock'].includes(Terrain.surface(this.battleOptions.terrain, gx, gy)));
         for (const zone of Terrain.geometry(this.battleOptions.terrain).zones.filter(zone => zone.kind === 'forest')) {
             for (let x = zone.x1 + 1; x < zone.x2 - 0.5; x += 2.2) for (let y = zone.y1 + 1; y < zone.y2 - 0.5; y += 2.2) {
-                const density = Terrain.forestField(x, y);
+                // 矩形林带（领土征服）没有噪声占位场：terNoise 控制疏密（约 8 成点位成树）
+                // 并映射到与噪声林斑同尺度的 density，让下方大小/明暗分档逻辑复用。
+                const noise = this.terNoise(x * 0.7 + 3, y * 0.7 + 9);
+                const density = zone.blob ? Terrain.forestField(x, y) : (noise > 0.18 ? 0.28 + noise * 0.55 : 0);
                 if (density <= Terrain.FOREST_EDGE) continue;
                 // 深林成簇大树、林缘稀疏小树：树只是林区提示，不是逐棵实体障碍。
                 const clump = this.terNoise(x * 0.55 + 9, y * 0.55 + 3);

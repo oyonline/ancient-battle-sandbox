@@ -1,4 +1,7 @@
 // 渲染、导航和战斗共用此处的确定性高度场与矩形地表。
+// 棋盘尺寸经 board 读取（默认 70×70；领土征服大地图 104×72）。除 territory 地形
+// 按棋盘比例布局外，其余地图是 70×70 时代设计、只在默认尺寸下运行，行为不变。
+import { board } from './board.js';
 export const Terrain = {
     HEIGHT_SCALE: 24,
     MAX_RANGE_MULTIPLIER: 1.2,
@@ -10,7 +13,10 @@ export const Terrain = {
         red_pass: { name: '红方自然坡地', defender: 'red', description: '连续草坡与宽正面守线；弓兵据山脊，骑兵沿侧坡绕行', cx: 19, cy: 35 },
         blue_pass: { name: '蓝方自然坡地', defender: 'blue', description: '步兵沿宽坡仰攻，弓兵据山脊俯射；骑兵可沿侧坡绕后', cx: 51, cy: 35 },
         forest: { name: '林间战场', description: '林内骑兵移速55%、其他兵种85%；入林打断冲锋，出林重新助跑，无隐身或箭矢遮挡' },
-        river: { name: '三桥河谷', description: '河面不可通行；中央宽桥争正面，两侧桥可绕后，击退不会落水，弓箭可以跨河' }
+        river: { name: '三桥河谷', description: '河面不可通行；中央宽桥争正面，两侧桥可绕后，击退不会落水，弓箭可以跨河' },
+        // 领土征服专用（104×72）：上翼横河+中央一道桥（两端可绕），中央高地缓坡，
+        // 下翼双林带夹开阔走廊；几何按棋盘比例生成（见 geometry），镜像自对称。
+        territory: { name: '山河领土', description: '上翼争桥、中央夺高地、下翼穿林——三条线三种打法', cx: 52, cy: 36, rx: 9, ry: 6.5 }
     },
 
     normalize(key) { return Object.hasOwn(this.maps, key) ? key : 'flat'; },
@@ -21,8 +27,21 @@ export const Terrain = {
     },
     height(key, gx, gy) {
         key = this.normalize(key);
-        if (['flat', 'forest', 'river'].includes(key) || !Number.isFinite(gx) || !Number.isFinite(gy) ||
-            gx <= 0 || gx >= 70 || gy <= 0 || gy >= 70) return 0;
+        if (key === 'flat' || !Number.isFinite(gx) || !Number.isFinite(gy) ||
+            gx <= 0 || gx >= board.W || gy <= 0 || gy >= board.H) return 0;
+        if (key === 'territory') {
+            // 中央高地：椭圆缓坡，坡顶 3 层；弓兵据顶俯射（rangedRange），
+            // 仰攻减速 / 下坡加速共用 movementMultiplier 的通用坡度规则。
+            const cx = board.W / 2, cy = board.H / 2;
+            const q = Math.hypot((gx - cx) / 9, (gy - cy) / 6.5);
+            if (q >= 1) return 0;
+            const smooth = value => value * value * (3 - 2 * value);
+            const slope = Math.max(0, (q - 0.35) / 0.65);
+            const edgeDistance = Math.min(gx, board.W - gx, gy, board.H - gy);
+            const edge = Math.max(0, Math.min(1, (edgeDistance - 3.5) / 8.5));
+            return 3 * (1 - smooth(slope)) * smooth(edge);
+        }
+        if (key === 'forest' || key === 'river') return 0;
         if (this.isNaturalSlope(key)) {
             const x = key === 'red_pass' ? 70 - gx : gx;
             // 宽前坡接入略弯的山脊；轮廓、脚底和战斗均消费同一连续高度。
@@ -74,7 +93,8 @@ export const Terrain = {
     },
     geometry(key) {
         key = this.normalize(key);
-        if (!this._geometry) {
+        const boardKey = board.W + 'x' + board.H;
+        if (!this._geometry || this._geometryBoard !== boardKey) {
             const rect = (x1, y1, x2, y2, kind) => ({ x1, y1, x2, y2, kind });
             const blue = { blockers: [], zones: [],
                 defense: { team: 'blue', center: { gx: 51, gy: 35 },
@@ -82,6 +102,11 @@ export const Terrain = {
                     archerRect: rect(49, 29, 58, 41, 'grass'), cavalryPosts: [{ gx: 52, gy: 23 }, { gx: 52, gy: 47 }] } };
             const mirrorRect = r => ({ ...r, x1: 70 - r.x2, x2: 70 - r.x1 });
             const mirrorPoint = p => ({ gx: 70 - p.gx, gy: p.gy });
+            const W = board.W, H = board.H;
+            // 领土征服山河图：上翼横河 y≈13-19，中央独桥 x=W/2±3，两端浅滩可绕行；
+            // 下翼双林带（x 30%~44% / 56%~70%，y 70%~88%）夹中央开阔走廊。
+            const riverY1 = Math.round(H * 0.18), riverY2 = riverY1 + 6;
+            const riverX1 = Math.round(W * 0.17), riverX2 = W - Math.round(W * 0.17);
             this._geometry = {
                 flat: { blockers: [], zones: [], defense: null },
                 blue_pass: blue,
@@ -91,8 +116,21 @@ export const Terrain = {
                         cavalryPosts: blue.defense.cavalryPosts.map(mirrorPoint) } },
                 forest: { blockers: [], zones: [{ x1: 25, y1: 12, x2: 45, y2: 58, kind: 'forest', blob: true }], defense: null },
                 river: { blockers: [[0, 13], [18, 32], [38, 52], [57, 70]].map(([a, b]) => rect(32, a, 38, b, 'water')),
-                    zones: [[13, 18], [32, 38], [52, 57]].map(([a, b]) => rect(32, a, 38, b, 'bridge')), defense: null }
+                    zones: [[13, 18], [32, 38], [52, 57]].map(([a, b]) => rect(32, a, 38, b, 'bridge')), defense: null },
+                territory: {
+                    blockers: [
+                        rect(riverX1, riverY1, W / 2 - 3, riverY2, 'water'),
+                        rect(W / 2 + 3, riverY1, riverX2, riverY2, 'water')
+                    ],
+                    zones: [
+                        rect(W / 2 - 3, riverY1, W / 2 + 3, riverY2, 'bridge'),
+                        rect(Math.round(W * 0.31), Math.round(H * 0.70), Math.round(W * 0.44), Math.round(H * 0.88), 'forest'),
+                        rect(Math.round(W * 0.56), Math.round(H * 0.70), Math.round(W * 0.69), Math.round(H * 0.88), 'forest')
+                    ],
+                    defense: null
+                }
             };
+            this._geometryBoard = boardKey;
         }
         return this._geometry[key] || this._geometry.flat;
     },
@@ -117,8 +155,8 @@ export const Terrain = {
         return this.surface(key, gx, gy) === 'forest' ? (type === 'cavalry' ? 0.55 : 0.85) : 1;
     },
     walkable(key, gx, gy, radius = 0.36) {
-        return Number.isFinite(gx) && Number.isFinite(gy) && gx >= radius && gx <= 70 - radius &&
-            gy >= radius && gy <= 70 - radius && !this.geometry(key).blockers.some(r => this.contains(r, gx, gy, radius));
+        return Number.isFinite(gx) && Number.isFinite(gy) && gx >= radius && gx <= board.W - radius &&
+            gy >= radius && gy <= board.H - radius && !this.geometry(key).blockers.some(r => this.contains(r, gx, gy, radius));
     },
     // Slab intersection against an expanded rectangle; endpoints on the boundary are legal.
     sweep(rect, ax, ay, bx, by, radius = 0) {
@@ -151,8 +189,8 @@ export const Terrain = {
         if (!this.hasBarriers(key)) return { x: mx, y: my, blocked: false };
         // 先截世界边界再扫掠；否则长击退可先绕出图外，再被 clamp 拉回另一岸。
         const edge = Math.max(0.6, radius);
-        mx = Math.max(edge, Math.min(70 - edge, gx + mx)) - gx;
-        my = Math.max(edge, Math.min(70 - edge, gy + my)) - gy;
+        mx = Math.max(edge, Math.min(board.W - edge, gx + mx)) - gx;
+        my = Math.max(edge, Math.min(board.H - edge, gy + my)) - gy;
         let x = gx, y = gy, dx = mx, dy = my, blocked = false;
         for (let pass = 0; pass < 3; pass++) {
             let hit = null;
@@ -180,8 +218,8 @@ export const Terrain = {
         return { x: x - gx, y: y - gy, blocked };
     },
     projectPoint(key, gx, gy, radius = 0.36, preferredSide = 0) {
-        gx = Math.max(radius + 0.01, Math.min(70 - radius - 0.01, gx));
-        gy = Math.max(radius + 0.01, Math.min(70 - radius - 0.01, gy));
+        gx = Math.max(radius + 0.01, Math.min(board.W - radius - 0.01, gx));
+        gy = Math.max(radius + 0.01, Math.min(board.H - radius - 0.01, gy));
         if (this.walkable(key, gx, gy, radius)) return { gx, gy };
         const candidates = [];
         for (const r of this.geometry(key).blockers) {

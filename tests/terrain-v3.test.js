@@ -4,7 +4,7 @@ import { Terrain, makeScene, addUnit } from './battle-harness.js';
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
 
 test('new map geometry, height and surface are mirrored without changing legacy keys', () => {
-    assert.equal(Object.keys(Terrain.maps).length, 7);
+    assert.equal(Object.keys(Terrain.maps).length, 8);   // 2026-09-29 新增 territory 山河领土图
     for (const key of Object.keys(Terrain.maps)) for (let x = 1; x < 70; x += 1.25) for (let y = 1; y < 70; y += 2.25) {
         const other = Terrain.mirror(key);
         near(Terrain.height(key, x, y), Terrain.height(other, 70 - x, y));

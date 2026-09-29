@@ -201,8 +201,11 @@ export class BattalionSystem {
                         const neutral = flag.owner == null;
                         score = 50 + (neutral ? 8 : 0) + (mine - theirs) * 0.4
                             - (center ? Math.hypot(flag.gx - center.gx, flag.gy - center.gy) : 0) * 0.35
-                            - assignedCount[i] * 22;
+                            - assignedCount[i] * 30;
                     }
+                    // 现任目标黏性：没有明显更优选择就别换旗——防止所有营每轮
+                    // 重评估都涌向"当前最优"的中央旗（山河图三线被吃成一条线的元凶）
+                    if (i === b.orderFlag) score += 10;
                     if (score > bestScore + 1e-9) { bestScore = score; best = i; }
                 }
                 if (best >= 0 && bestScore > 10) {

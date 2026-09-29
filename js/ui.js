@@ -278,6 +278,7 @@ export const UI = {
         this.orders = { red: 'advance', blue: 'advance' };
         this.resetBattleOptions();
         this.battleOptions.territory = true;
+        this.battleOptions.terrain = 'territory';   // 山河领土图：上翼河桥/中央高地/下翼林带
         this.deployArmies();
     },
 
@@ -743,7 +744,8 @@ export const UI = {
         const territory = this.battleOptions.territory === true;
         const reserves = Object.fromEntries(['red', 'blue'].map(team => [team,
             Math.min(this.battleOptions.reserves[team] || 0, Math.max(0, (this.configs[team].infantry || 0) - 1))]));
-        const terrain = ['sandbox', 'terrain'].includes(this.mode) ? Terrain.normalize(this.battleOptions.terrain) : 'flat';
+        const terrain = ['sandbox', 'terrain'].includes(this.mode) ? Terrain.normalize(this.battleOptions.terrain)
+            : this.mode === 'territory' ? 'territory' : 'flat';
         const cavalryOrders = Object.fromEntries(['red', 'blue'].map(team => [team,
             ['sandbox', 'terrain'].includes(this.mode) ? this.cavalryOrder(team) : 'auto']));
         this.battleOptions = { deathmatch, control, convoy, territory, reserves, terrain, cavalryOrders };
