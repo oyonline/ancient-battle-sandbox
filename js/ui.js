@@ -4,6 +4,7 @@ import { UNIT_TYPES, FORMATIONS, BUDGET } from './units.js';
 import { CHALLENGES, armyCost, fitArmyToBudget } from './challenges.js';
 import { TERRITORY, makeTerritoryFlags } from './battle/economy.js';
 import { setBoardSize, resetBoardSize } from './board.js';
+import { ArenaClient } from './net/arena-client.js';
 
 export const Snd = {
     ctx: null, muted: false, _last: {},
@@ -87,6 +88,8 @@ export const UI = {
     holdStops: [],
 
     init() {
+        this.net = { client: null, side: null, code: null, myReady: false, peerReady: false, inBattle: false };
+        this.mySide = 'red';
         this.loadProgress();
         this.bindControls();
         const params = new URLSearchParams(location.search);
@@ -101,6 +104,11 @@ export const UI = {
 
     onSceneReady(scene) {
         this.scene = scene;
+        if (this.pendingNetStart) {
+            this.pendingNetStart = false;
+            this.launchNetBattle();
+            return;
+        }
         if (this.pendingDeploy) {
             const autoplay = this.pendingAutoplay;
             this.pendingDeploy = this.pendingAutoplay = false;
@@ -169,7 +177,9 @@ export const UI = {
         this.updateTactics();
         this.updateTerrainControls();
         this.updateCommandControls();
-        document.getElementById('btn-pause').disabled = !fighting || this.countdown;
+        const netLock = this.battleOptions.net && fighting;
+        document.getElementById('btn-pause').disabled = !fighting || this.countdown || netLock;
+        document.querySelectorAll('.speed-btn').forEach(b => { b.disabled = netLock; });
         document.getElementById('btn-pause').textContent = this.scene?.paused ? '▶ 继续' : '⏸ 暂停';
         document.getElementById('btn-lock').disabled = !this.scene;
         document.getElementById('btn-start').disabled = !this.scene || this.phase !== 'ready';
@@ -466,6 +476,7 @@ export const UI = {
         else if (kind === 'terrain') this.startTerrain(arg);
         else if (kind === 'challenge') this.startChallenge(arg);
         else if (kind === 'sandbox') this.resetAll();
+        else if (kind === 'net') this.openNetLobby();
     },
 
     updateContinueButton() {
@@ -473,6 +484,144 @@ export const UI = {
         if (!this.lastMode) { button.hidden = true; return; }
         button.hidden = false;
         document.getElementById('continue-label').textContent = this.lastMode.label;
+    },
+
+    // ---------------- 局域网对战：房间流程 ----------------
+    openNetLobby() {
+        this.clearBattle();
+        this.setPhase('home');
+        this.setStep(0);
+        this.showSection('net');
+        document.getElementById('net-lobby').hidden = true;
+        document.getElementById('net-join-step').hidden = false;
+        this.netStatus('正在连接对战服务器…');
+        if (!this.net.client) {
+            this.net.client = new ArenaClient(message => this.onNetMessage(message));
+        }
+        if (!this.net.client.connected) {
+            this.net.client.connect()
+                .then(() => this.netStatus('已连接。创建房间，或输入房间码加入。'))
+                .catch(() => this.netStatus('连不上对战服务器——请先在房主电脑运行 npm run arena（并确认本页来自对战服务器地址）。'));
+        } else this.netStatus('已连接。创建房间，或输入房间码加入。');
+    },
+
+    netStatus(text) { document.getElementById('net-status').textContent = text; },
+
+    netCreate() {
+        if (!this.net.client?.connected) return;
+        this.net.client.createRoom();
+    },
+
+    netJoin() {
+        if (!this.net.client?.connected) return;
+        const code = document.getElementById('net-code-input').value.trim().toUpperCase();
+        if (code.length !== 4) { this.netStatus('请输入 4 位房间码。'); return; }
+        this.net.client.joinRoom(code);
+    },
+
+    netReady() {
+        if (!this.net.client?.connected) return;
+        this.net.myReady = true;
+        this.net.client.sendReady();
+        document.getElementById('btn-net-ready').disabled = true;
+        document.getElementById('btn-net-ready').textContent = this.net.peerReady ? '开战中…' : '已就绪，等对方…';
+    },
+
+    netQuit() {
+        this.net.client?.bye();
+        this.net = { client: null, side: null, code: null, myReady: false, peerReady: false, inBattle: false };
+        this.mySide = 'red';
+        this.showHome();
+    },
+
+    onNetMessage(message) {
+        switch (message.t) {
+            case 'room':
+                this.net.side = message.side;
+                this.net.code = message.code;
+                this.net.myReady = this.net.peerReady = false;
+                document.getElementById('net-join-step').hidden = true;
+                document.getElementById('net-lobby').hidden = false;
+                document.getElementById('net-my-side').textContent = message.side === 'red' ? '🔴 红方（你）' : '🔵 蓝方（你）';
+                document.getElementById('net-room-code').textContent = message.code;
+                document.getElementById('net-peer-state').textContent = message.side === 'red' ? '等待蓝方加入…' : '已连接红方房主';
+                document.getElementById('btn-net-ready').disabled = false;
+                document.getElementById('btn-net-ready').textContent = '✅ 就绪开战';
+                this.netStatus('房间就绪：' + message.code);
+                break;
+            case 'peer':
+                this.net.peerReady = false;
+                document.getElementById('net-peer-state').textContent = message.side === 'red' ? '🔴 红方已加入' : '🔵 蓝方已加入';
+                break;
+            case 'peer-ready':
+                this.net.peerReady = true;
+                document.getElementById('net-peer-state').textContent = (message.side === 'red' ? '🔴 红方' : '🔵 蓝方') + '已就绪';
+                if (this.net.myReady) document.getElementById('btn-net-ready').textContent = '开战中…';
+                break;
+            case 'start':
+                this.launchNetBattle();
+                break;
+            case 'turn':
+            case 'hash':
+                this.scene?.net?.handle(message);
+                break;
+            case 'peer-left':
+                this.onPeerLeft();
+                break;
+            case 'error':
+                this.netStatus(message.text || '房间操作失败。');
+                break;
+            case 'info':
+                this.netStatus(message.text || '');
+                break;
+            case 'closed':
+                if (this.net.inBattle || this.net.code) this.netStatus('与服务器的连接已断开。');
+                break;
+            default: break;
+        }
+    },
+
+    launchNetBattle() {
+        this.clearBattle();
+        this.mode = 'territory';
+        this.challenge = null;
+        this.editing = false;
+        this.mySide = this.net.side === 'blue' ? 'blue' : 'red';
+        this.configs = { red: { ...TERRITORY.OPENING }, blue: { ...TERRITORY.OPENING } };
+        this.formations = { red: 'custom', blue: 'custom' };
+        this.orders = { red: 'advance', blue: 'advance' };
+        this.resetBattleOptions();
+        this.battleOptions.territory = true;
+        this.battleOptions.terrain = 'territory';
+        this.battleOptions.net = true;
+        this.battleOptions.mySide = this.mySide;
+        this.net.inBattle = true;
+        this.rememberMode('🌐 局域网对战', 'net');
+        if (!this.scene) { this.pendingNetStart = true; return; }
+        this.scene.netClient = { send: packet => this.net.client.send(packet) };
+        this.deployArmies();
+        this.startBattle();
+    },
+
+    onPeerLeft() {
+        if (this.net.inBattle) {
+            this.showNetToast('对手已离开——可退出房间或等待对方重连重开。');
+            document.getElementById('btn-net-quit')?.focus?.();
+        } else if (this.net.code) {
+            document.getElementById('net-peer-state').textContent = '对手已离开，等待新对手…';
+        }
+    },
+
+    onNetDesync(turn) {
+        this.showNetToast('⚠ 两端战斗不同步（约第 ' + Math.round(turn / 60) + ' 秒）——请双方退出房间重新开局。');
+    },
+
+    showNetToast(text) {
+        const cue = document.getElementById('morale-cue');
+        if (!cue) return;
+        cue.hidden = false;
+        cue.textContent = text;
+        cue.classList.add('net-toast');
     },
 
     // 山河图缩略：临时切到大地图尺寸，读真实地形几何与旗点画进小画布——
@@ -846,13 +995,15 @@ export const UI = {
         const control = this.battleOptions.control === true;
         const convoy = this.battleOptions.convoy === true;
         const territory = this.battleOptions.territory === true;
+        const net = this.battleOptions.net === true;
+        const mySide = this.battleOptions.mySide || 'red';
         const reserves = Object.fromEntries(['red', 'blue'].map(team => [team,
             Math.min(this.battleOptions.reserves[team] || 0, Math.max(0, (this.configs[team].infantry || 0) - 1))]));
         const terrain = ['sandbox', 'terrain'].includes(this.mode) ? Terrain.normalize(this.battleOptions.terrain)
             : this.mode === 'territory' ? 'territory' : 'flat';
         const cavalryOrders = Object.fromEntries(['red', 'blue'].map(team => [team,
             ['sandbox', 'terrain'].includes(this.mode) ? this.cavalryOrder(team) : 'auto']));
-        this.battleOptions = { deathmatch, control, convoy, territory, reserves, terrain, cavalryOrders };
+        this.battleOptions = { deathmatch, control, convoy, territory, net, mySide, reserves, terrain, cavalryOrders };
         this.scene?.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue,
             { ...this.orders }, { ...this.battleOptions, reserves: { ...reserves }, cavalryOrders: { ...cavalryOrders } });
         this.setPhase('ready');
@@ -897,6 +1048,8 @@ export const UI = {
             ? '⚑ 占点征服 · 占旗攒分，先到 60 分者胜（全歼对手同样获胜）'
             : this.battleOptions.convoy
             ? '🛒 护送 · 送抵 3 辆辎重车获胜；蓝方劫走 3 辆即得手'
+            : this.battleOptions.net
+            ? '🌐 局域网对战 · 对面就是真人——占旗生财、征兵点营，票数耗尽即负'
             : this.battleOptions.territory
             ? '🚩 领土征服 · 占旗生财、征兵增援；票数耗尽即负（全歼对手同样获胜）'
             : (this.challenge ? this.challenge.title + ' · ' : this.mode === 'tactics' ? '战阵演练 · ' : '') + '拖动看战况 · 点击士兵看地形';
@@ -1004,6 +1157,12 @@ export const UI = {
         document.getElementById('btn-edit-blue').hidden = !!this.challenge || this.mode === 'territory';
         document.getElementById('btn-swap').hidden = !!this.challenge || this.mode === 'territory';
         document.getElementById('btn-edit-red').hidden = this.mode === 'territory';   // 领土征服阵容固定，重开即重置
+        if (this.battleOptions.net) {
+            document.getElementById('btn-edit-red').hidden = true;
+            const rematchButton = document.getElementById('btn-rematch');
+            rematchButton.textContent = '↻ 再战一局（双方确认）';
+            rematchButton.onclick = () => this.netReady();
+        }
         document.getElementById('btn-swap').textContent = this.battleOptions.terrain === 'flat' ? '⇄ 交换双方再战' : '⇄ 交换军队再战（地形不动）';
         const switchTactics = document.getElementById('btn-switch-tactics');
         switchTactics.hidden = this.mode !== 'tactics';
@@ -1037,10 +1196,18 @@ export const UI = {
             btn.id = 'recruit-' + key;
             btn.title = t.tip + ` · 训练 ${TERRITORY.TRAIN_MS[key] / 1000} 秒`;
             btn.innerHTML = `<span class="rc-icon">${t.icon}</span><span class="rc-name">${t.name}</span><span class="rc-cost">🪙${cost}</span>`;
-            // 大按钮长按连买（亲子手感）：按下立即买一个，按住每 60ms 继续
+            // 大按钮长按连买（亲子手感）：按下立即买一个，按住每 60ms 继续。
+            // 联机对战：操作进锁步命令队列（经服务器回环后在本回合确定性执行）。
             this.bindHold(btn, () => {
                 if (this.phase !== 'battle' || this.countdown || !this.scene?.territory) return;
-                if (this.scene.territory.recruit.enqueue('red', key)) {
+                const side = this.mySide || 'red';
+                if (this.battleOptions.net && this.scene.net) {
+                    this.scene.net.lockstep.act({ k: 'buy', side, type: key });
+                    Snd.play('buy');
+                    this.updateTerritoryHUD();
+                    return;
+                }
+                if (this.scene.territory.recruit.enqueue(side, key)) {
                     Snd.play('buy');
                     this.updateTerritoryHUD();
                 }
@@ -1056,10 +1223,11 @@ export const UI = {
         if (!active) return;
         if (!document.getElementById('recruit-infantry')) this.buildRecruitBar();
         const territory = this.scene.territory;
+        const mine = this.mySide || 'red';
         const owned = { red: 0, blue: 0 };
         for (const flag of this.scene.flags || []) if (flag.owner) owned[flag.owner]++;
-        document.getElementById('territory-treasury').textContent = Math.floor(territory.econ.treasury.red);
-        document.getElementById('territory-income').textContent = '+' + territory.econ.incomeRate(owned.red) + '/秒';
+        document.getElementById('territory-treasury').textContent = Math.floor(territory.econ.treasury[mine]);
+        document.getElementById('territory-income').textContent = '+' + territory.econ.incomeRate(owned[mine]) + '/秒';
         document.getElementById('territory-tickets-red').textContent = Math.ceil(territory.tickets.tickets.red);
         document.getElementById('territory-tickets-blue').textContent = Math.ceil(territory.tickets.tickets.blue);
         document.getElementById('territory-flags-red').textContent = owned.red;
@@ -1067,12 +1235,12 @@ export const UI = {
         document.getElementById('territory-army-red').textContent = this.scene.redAlive;
         document.getElementById('territory-army-blue').textContent = this.scene.blueAlive;
         document.getElementById('territory-queue').textContent =
-            territory.recruit.queues.red.length ? ` · 训练中 ${territory.recruit.queues.red.length}` : '';
+            territory.recruit.queues[mine].length ? ` · 训练中 ${territory.recruit.queues[mine].length}` : '';
         for (const [key, t] of Object.entries(UNIT_TYPES)) {
             if (t.hidden) continue;
             const btn = document.getElementById('recruit-' + key);
-            if (btn) btn.disabled = this.countdown || !territory.econ.canAfford('red', key) ||
-                territory.recruit.queues.red.length >= TERRITORY.QUEUE_CAP;
+            if (btn) btn.disabled = this.countdown || !territory.econ.canAfford(mine, key) ||
+                territory.recruit.queues[mine].length >= TERRITORY.QUEUE_CAP;
         }
         this.updateBattalionBar();
     },
@@ -1087,18 +1255,14 @@ export const UI = {
             btn.className = 'order-btn';
             btn.dataset.flagOrder = index;
             btn.innerHTML = `<span class="ob-dot"></span>⚑ ${flag.name}`;
-            btn.onclick = () => {
-                if (this.scene?.orderSelectedBattalion(index)) { Snd.play('lock'); this.updateBattalionBar(); }
-            };
+            btn.onclick = () => { this.giveBattalionOrder(index); };
             row.appendChild(btn);
         });
         const home = document.createElement('button');
         home.className = 'order-btn';
         home.dataset.orderHome = '';
         home.textContent = '🏠 回防集结';
-        home.onclick = () => {
-            if (this.scene?.orderSelectedBattalion('home')) { Snd.play('lock'); this.updateBattalionBar(); }
-        };
+        home.onclick = () => { this.giveBattalionOrder('home'); };
         row.appendChild(home);
         const deselect = document.createElement('button');
         deselect.className = 'order-btn';
@@ -1108,6 +1272,20 @@ export const UI = {
         row.appendChild(deselect);
     },
 
+    // 下营令：联机进命令队列，单机直接执行
+    giveBattalionOrder(order) {
+        const selected = this.scene?.selectedBattalion;
+        if (!selected) return;
+        const side = this.mySide || 'red';
+        if (this.battleOptions.net && this.scene.net) {
+            this.scene.net.lockstep.act({ k: 'order', side, id: selected.id, flag: order });
+            Snd.play('lock');
+            this.updateBattalionBar();
+            return;
+        }
+        if (this.scene.orderSelectedBattalion(order)) { Snd.play('lock'); this.updateBattalionBar(); }
+    },
+
     updateBattalionBar() {
         const bar = document.getElementById('battalion-bar');
         const selected = this.phase === 'battle' && this.battleOptions.territory ? this.scene?.selectedBattalion : null;
@@ -1115,7 +1293,7 @@ export const UI = {
         if (!selected) return;
         if (!document.querySelector('#battalion-orders .order-btn')) this.buildBattalionBar();
         const flags = this.scene.flags || [];
-        const own = selected.team === 'red';
+        const own = selected.team === (this.mySide || 'red');
         const state = selected.gathering ? '集结中'
             : selected.retreat ? '回防'
             : selected.orderFlag != null && flags[selected.orderFlag] ? '目标 · ' + flags[selected.orderFlag].name
@@ -1205,6 +1383,17 @@ export const UI = {
         document.querySelectorAll('[data-territory-entry]').forEach(button => {
             button.onclick = () => { this.startTerritory(); Snd.play('tick'); };
         });
+        document.querySelectorAll('[data-net-entry]').forEach(button => {
+            button.onclick = () => { this.openNetLobby(); Snd.play('tick'); };
+        });
+        document.getElementById('btn-net-create').onclick = () => this.netCreate();
+        document.getElementById('btn-net-join').onclick = () => this.netJoin();
+        document.getElementById('btn-net-ready').onclick = () => this.netReady();
+        document.getElementById('btn-net-quit').onclick = () => this.netQuit();
+        document.getElementById('net-code-input').addEventListener('keydown', e => {
+            if (e.key === 'Enter') this.netJoin();
+        });
+        window.addEventListener('beforeunload', () => this.net.client?.bye());
         document.querySelectorAll('[data-terrain]').forEach(button => {
             button.onclick = () => this.selectTerrain(button.dataset.terrain);
         });

@@ -736,3 +736,21 @@ summary { cursor: pointer; }
     .morale-counts b { font-size: 12px; }
     .ctl-btn, .speed-btn { font-size: 12px; padding: 6px 8px; }
 }
+
+/* ==================== 局域网对战：入口与房间面板 ==================== */
+.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.hero-btn-alt { padding: 10px 20px; font-size: 15px;
+    border-color: #3f6f9e; background: linear-gradient(180deg, #2c5378, #1e3d59); color: #d8ecff; }
+.hero-btn-alt:hover { filter: brightness(1.15); }
+.net-panel { display: flex; flex-direction: column; gap: 12px; }
+.net-tip { color: #cdbf9d; font: 13px/1.7 "PingFang SC", sans-serif; }
+.net-tip code { background: rgba(0,0,0,0.4); padding: 1px 7px; border-radius: 6px; color: #ffd76e; }
+.net-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.net-code { width: 110px; padding: 10px 14px; border-radius: 12px; border: 2px solid #7a6a3e;
+    background: #241c10; color: #ffe9c4; font: 800 20px/1 "PingFang SC", monospace; letter-spacing: 4px; text-transform: uppercase; }
+.net-code:focus { outline: none; border-color: #ffd76e; }
+.net-side-line { font: 600 14px/1.8 "PingFang SC", sans-serif; color: #e8f0f6; }
+.net-side-line b { color: #ffd76e; }
+#net-lobby { display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 14px;
+    border: 2px solid rgba(201, 164, 74, 0.55); background: rgba(30, 22, 10, 0.72); }
+.morale-cue.net-toast { color: #ffb9a8; font-weight: 700; }
