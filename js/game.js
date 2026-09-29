@@ -544,8 +544,9 @@ export class IsoBattleScene extends Phaser.Scene {
                     g.fillPoints(dia(x, y, 0.96), true);
                 }
 
-                // 自然坡面不描每格棋盘边线；其余地图保持原有网格风格。
-                if (naturalSlope) continue;
+                // 自然坡面与山河图不描每格棋盘边线——地形连续不"方块"；
+                // 旧地图（平地/红蓝高地）保持原有网格风格。
+                if (naturalSlope || this.battleOptions.terrain === 'territory') continue;
                 // 立体倒角：上左边缘亮，下右边缘暗
                 g.lineStyle(2, 0xd7e8b0, 0.28);
                 g.lineBetween(tile[3].x, tile[3].y, tile[0].x, tile[0].y);
@@ -709,7 +710,6 @@ export class IsoBattleScene extends Phaser.Scene {
             if (zone.kind === 'shallow') {
                 // 浅滩：浅蓝可通行水域 + 沙色描边 + 波纹点
                 paint(zone, 0x7fc0dd, 0.9);
-                g.lineStyle(3, 0xd8c48a, 0.8); g.strokePoints(polygon(zone), true);
                 for (let y = zone.y1 + 0.6; y < zone.y2; y += 1.4) for (let x = zone.x1 + 0.7; x < zone.x2; x += 1.8) {
                     const a = this.groundPoint(x, y);
                     g.lineStyle(2, 0xbfe4f7, 0.45); g.lineBetween(a.x - 4, a.y, a.x + 4, a.y);
@@ -771,7 +771,7 @@ export class IsoBattleScene extends Phaser.Scene {
                         }
                     }
                 }
-                g.lineStyle(4, 0xe2cf94, 0.85); g.strokePoints(polygon(block), true);
+                if (key !== 'territory') { g.lineStyle(4, 0xe2cf94, 0.85); g.strokePoints(polygon(block), true); }
             } else {
                 paint(block, 0x626355);
                 const base = polygon(block), top = polygon(block, 24);

@@ -20,23 +20,29 @@ function run(scene, seconds) {
     for (let i = 0; i < 60 * seconds && !scene.battleOver; i++) scene.advanceBattle(STEP);
 }
 
-test('山河图几何：上翼横河+中央独桥+两端浅滩，下翼双林带夹走廊（104×72）', () => {
-    board.W = TERRITORY.W; board.H = TERRITORY.H;
-    const W = TERRITORY.W, H = TERRITORY.H;
-    assert.equal(Terrain.surface('territory', 44, 16), 'water', '河面不可通行');
-    assert.equal(Terrain.surface('territory', 20, 16), 'water', '河西段');
-    assert.equal(Terrain.surface('territory', 80, 16), 'water', '河东段');
+test('山河图几何：蜿蜒河横贯+中央独桥+两端浅滩+镜像对称（104×72）', () => {
+    board.W = 104; board.H = 72;
+    // 蜿蜒河：多条竖切线上都能遇到水面；全图左右镜像逐位一致
+    let waterColumns = 0, mirrored = true;
+    for (let x = 20.3; x < 84; x += 4) {   // 0.3 偏移避开窄条边界（含严格不等式的零宽缝）
+        let has = false;
+        for (let y = 6; y < 24; y += 0.5) if (Terrain.surface('territory', x, y) === 'water') { has = true; break; }
+        if (has) waterColumns++;
+        for (let y = 4; y < 68; y += 2.3) {
+            if (Terrain.surface('territory', x, y) !== Terrain.surface('territory', 104 - x, y)) { mirrored = false; break; }
+        }
+    }
+    assert.ok(waterColumns >= 13, `河应横贯（有水切线 ${waterColumns}/17，桥位与窄条边界除外）`);
+    assert.ok(mirrored, '左右镜像逐位一致（含蜿蜒河/悬崖/林带/浅滩）');
     assert.equal(Terrain.surface('territory', 52, 16), 'bridge', '中央独桥');
-    assert.equal(Terrain.surface('territory', 10, 16), 'grass', '西端浅滩可绕');
-    assert.equal(Terrain.surface('territory', 92, 16), 'grass', '东端浅滩可绕');
+    assert.equal(Terrain.surface('territory', 6, 16), 'grass', '浅滩之外的远岸草地');
     assert.equal(Terrain.surface('territory', 39, 56), 'forest', '西林斑核心');
     assert.equal(Terrain.surface('territory', 65, 56), 'forest', '东林斑核心');
     assert.equal(Terrain.surface('territory', 52, 57), 'grass', '下翼中央走廊开阔');
-    // 蜿蜒河段：中央段平直、外侧段南北起伏（不再是一条笔直矩形带）
-    assert.equal(Terrain.surface('territory', 34, 13), 'grass', '河段南弓处的北岸草地');
-    assert.equal(Terrain.surface('territory', 24, 17.5), 'grass', '河段北弓处的南岸草地');
+    let shallowSeen = false;
+    for (let x = 6; x < 18; x += 0.7) for (let y = 6; y < 24; y += 0.7) if (Terrain.surface('territory', x, y) === 'shallow') shallowSeen = true;
+    assert.ok(shallowSeen, '西端有浅滩（东端由镜像保证）');
     board.W = 70; board.H = 70;
-    assert.ok(W === 104 && H === 72);
 });
 
 test('山河图通行：河面 walkable=false，桥与浅滩可通过；林带减速骑兵', () => {
@@ -134,10 +140,10 @@ test('山河图2.0：悬崖脊不可通行，浅滩可通行减速，旗点与�
     assert.equal(Terrain.surface('territory', 40, 68), 'rock', '下翼悬崖脊');
     assert.equal(Terrain.walkable('territory', 40, 68), false, '悬崖不可站');
     assert.equal(Terrain.surface('territory', 64, 68), 'rock', '镜像悬崖脊');
-    assert.equal(Terrain.surface('territory', 15, 16), 'shallow', '西端浅滩');
-    assert.equal(Terrain.surface('territory', 89, 16), 'shallow', '东端浅滩');
-    assert.equal(Terrain.walkable('territory', 15, 16), true, '浅滩可通行');
-    assert.ok(Terrain.surfaceSpeed('territory', 'cavalry', 15, 16) < 1, '浅滩减速');
+    assert.equal(Terrain.surface('territory', 16, 12), 'shallow', '西端浅滩');
+    assert.equal(Terrain.surface('territory', 88, 12), 'shallow', '东端浅滩');
+    assert.equal(Terrain.walkable('territory', 16, 12), true, '浅滩可通行');
+    assert.ok(Terrain.surfaceSpeed('territory', 'cavalry', 16, 12) < 1, '浅滩减速');
     // 关键可达点不被新地形堵死
     for (const [x, y] of [[8, 36], [96, 36], [25, 24], [79, 24], [34, 58], [70, 58], [52, 36]]) {
         assert.equal(Terrain.walkable('territory', x, y), true, `(${x},${y}) 应可站`);

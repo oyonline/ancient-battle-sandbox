@@ -131,12 +131,36 @@ export const Terrain = {
             const riverX1 = Math.round(W * 0.17), riverX2 = W - Math.round(W * 0.17);
             const bridgeL = W / 2 - 3, bridgeR = W / 2 + 3;
             const span = bridgeL - riverX1;
-            const t1 = riverX1 + Math.round(span * 0.4), t2 = riverX1 + Math.round(span * 0.75);
-            // [x起, x止, 河岸纵偏移]：桥两侧留平直护岸段
-            const spans = [
-                [riverX1, t1, -2.5], [t1, t2, 1.5], [t2, bridgeL, 0],
-                [bridgeR, W - t2, 0], [W - t2, W - t1, 1.5], [W - t1, riverX2, -2.5]
-            ];
+            // 真蜿蜒：2.5 格窄条沿弓形曲线铺（离桥越远越往北抬，折叠偶函数保镜像），
+            // 窄条阶梯在视觉上就是曲线河——不再是几段大方块
+            const stripW = 2.5;
+            const nStrips = Math.floor(span / stripW);
+            const bow = d => Math.round(Math.pow(Math.min(1, d / span), 1.3) * 5) / 2;   // 0 → 2.5（半格步进）
+            const waterStrips = [];
+            for (let i = 0; i < nStrips; i++) {
+                const xInner = bridgeL - (i + 1) * stripW, xOuter = bridgeL - i * stripW;
+                const lift = bow((i + 0.5) * stripW);
+                waterStrips.push(rect(xInner, riverY1 - lift, xOuter, riverY1 - lift + riverThick, 'water'));
+                waterStrips.push(rect(W - xOuter, riverY1 - lift, W - xInner, riverY1 - lift + riverThick, 'water'));
+            }
+            // 浅滩：河端外延三小条，跟随弓形趋势（可通行减速）
+            const shallowStrips = [];
+            for (let k = 1; k <= 3; k++) {
+                const lift = bow(span) + k * 0.5;
+                const xOuter = riverX1 - (3 - k) * 2.5, xInner = xOuter - 2.5;
+                shallowStrips.push(rect(xInner, riverY1 - lift, xOuter, riverY1 - lift + riverThick, 'shallow'));
+                shallowStrips.push(rect(W - xOuter, riverY1 - lift, W - xInner, riverY1 - lift + riverThick, 'shallow'));
+            }
+            // 悬崖脊：分段错落（y ±1 抖动）——山脊线而非大块岩壁；分段相互搭接不留缝
+            const cliffChunks = (x1Base, x2Base) => {
+                const chunks = [];
+                for (let x = x1Base; x < x2Base; x += 3) {
+                    const y1 = Math.round(H * 0.90) + ((x - x1Base) / 3 % 2 === 0 ? 0 : 1);
+                    chunks.push(rect(x, y1, Math.min(x2Base, x + 4), H - 1, 'rock'));
+                }
+                return chunks;
+            };
+            // 右崖 = 左崖逐块镜像（分段相位若各自生成会差半块，镜像逐位破坏）
             const forest = (x1, x2) => ({
                 x1, x2, y1: Math.round(H * 0.70), y2: Math.round(H * 0.88),
                 kind: 'forest', blob: 'generic'
@@ -153,20 +177,15 @@ export const Terrain = {
                     zones: [[13, 18], [32, 38], [52, 57]].map(([a, b]) => rect(32, a, 38, b, 'bridge')), defense: null },
                 territory: {
                     blockers: [
-                        ...spans.map(([x1, x2, lift]) => {
-                            const y1 = riverY1 + Math.round(lift * 2) / 2;
-                            return rect(x1, y1, x2, y1 + riverThick, 'water');
-                        }),
-                        // 下翼对称双悬崖脊（贴南边）：逼出绕行的"守口"地形；
-                        // 不压旗点/林带/出兵线（旗在 y58，脊在 y90% 以南）
-                        rect(Math.round(W * 0.33), Math.round(H * 0.90), Math.round(W * 0.44), H - 1, 'rock'),
-                        rect(Math.round(W * 0.56), Math.round(H * 0.90), Math.round(W * 0.67), H - 1, 'rock')
+                        ...waterStrips,
+                        ...(() => {
+                            const left = cliffChunks(Math.round(W * 0.33), Math.round(W * 0.44));
+                            return [...left, ...left.map(c => rect(W - c.x2, c.y1, W - c.x1, c.y2, 'rock'))];
+                        })()
                     ],
                     zones: [
                         rect(W / 2 - 3, riverY1, W / 2 + 3, riverY1 + riverThick, 'bridge'),
-                        // 河流两端浅滩：可通行、蹚水减速（替代"河到头就没了"的生硬）
-                        rect(riverX1 - 6, riverY1 - 1, riverX1, riverY1 + riverThick + 1, 'shallow'),
-                        rect(W - riverX1, riverY1 - 1, W - riverX1 + 6, riverY1 + riverThick + 1, 'shallow'),
+                        ...shallowStrips,
                         forest(Math.round(W * 0.31), Math.round(W * 0.44)),
                         forest(Math.round(W * 0.56), Math.round(W * 0.69))
                     ],
