@@ -1783,7 +1783,7 @@ class IsoBattleScene extends Phaser.Scene {
                 const d = Math.hypot(u.gx - unit.gx, u.gy - unit.gy);
                 if (u.team === unit.team) {
                     if (d <= 4 && u.moraleState !== 'routing') escort = true;
-                } else if (d <= 3.2) danger = true;
+                } else if (d <= 3.2 && u.moraleState !== 'routing') danger = true;
             });
             if (escort && !danger && unit.gx < this.convoy.goalX) {
                 moveToward(unit, this.convoy.goalX + 1, unit.gy, unit.typeData.speed, dt);
@@ -1822,7 +1822,7 @@ class IsoBattleScene extends Phaser.Scene {
         }
         // 护送模式：护送方近战单位敌远(>12格)时向最落后的车集结——落点取车侧翼
         // （不站在车队行进路径上，护卫从后方穿队会把自己和车一起堵死）；
-        // 敌近恢复正常接敌。劫掠方零特判：车在索敌网格里，默认"追最近敌"自然扑向车队。
+        // 敌近恢复正常接敌。
         if (this.battleOptions.convoy && unit.team === this.convoy.team && !guardAnchor &&
             !unit.typeData.ranged && minD > 12) {
             const wagons = this.convoy.wagons.filter(w => !w.dead && !w.withdrawn);
@@ -1834,6 +1834,32 @@ class IsoBattleScene extends Phaser.Scene {
                 unit.target = nearest;
                 const side = unit.gy >= tail.gy ? 2.6 : -2.6;   // 就近侧翼护航
                 moveToward(unit, tail.gx, tail.gy + side, unit.typeData.speed, dt);
+                return;
+            }
+        }
+        // 护送模式：劫掠方近战单位敌远(>12格)时扑向"守备最薄"的车并站进劫持圈内——
+        // 车已被 nearestEnemy 过滤，蓝方不主动去占就永远没人拉劫持进度（打赢护卫
+        // 也会去追下一个红兵离开车身）。选车口径：圈(3格)内非溃逃护卫数优先压倒距离
+        // （×100），已拉起的进度加权吸引续偷；等距取 id 小者决胜。敌近恢复正常接敌。
+        if (this.battleOptions.convoy && unit.team !== this.convoy.team && !guardAnchor &&
+            !unit.typeData.ranged && minD > 12) {
+            let pick = null, best = Infinity;
+            for (const w of this.convoy.wagons) {
+                if (w.dead || w.withdrawn) continue;
+                let guards = 0;
+                this.forEachNear(w.gx, w.gy, 3, u => {
+                    if (u === w || u.type === 'wagon' || u.dead || u.withdrawn ||
+                        u.moraleState === 'routing' || u.team !== this.convoy.team) return;
+                    if (Math.hypot(u.gx - w.gx, u.gy - w.gy) > 3) return;
+                    guards++;
+                });
+                const score = guards * 100 + dist(unit, w) - (w.hijack || 0) * 60;
+                if (score < best - 1e-9 || (Math.abs(score - best) <= 1e-9 && w.id < pick.id)) { best = score; pick = w; }
+            }
+            if (pick) {
+                unit.target = nearest;
+                const side = unit.gy >= pick.gy ? 1.2 : -1.2;   // 站进劫持圈(3格)内贴身
+                moveToward(unit, pick.gx, pick.gy + side, unit.typeData.speed, dt);
                 return;
             }
         }
@@ -2737,9 +2763,11 @@ class IsoBattleScene extends Phaser.Scene {
     updateConvoy(dt) {
         const c = this.convoy;
         if (this.blueAlive > 0) c.lastFoeAt = this.simulationTime;   // 敌人存活时刻：全灭后等车队进站的窗口计时
-        // 劫持拔河：车 2.5 格内只有劫掠方(蓝)时拉劫持进度(+1/6s)，拉满车被劫走；
-        // 护卫(红)在场则冻结，独占时较快夺回(-1/4s)，双方都不在缓慢回落。
-        // 车不可被攻击——得分手段是"占住车身"，不是"砍烂木头"。
+        // 劫持拔河：车 3 格内只有劫掠方(蓝)时拉劫持进度，拉满车被劫走；
+        // 护卫(红)在场则冻结，独占时较快夺回，双方都不在缓慢回落。
+        // 圈 3.0 > 护卫集结偏移 2.6：站桩护航的护卫明确算"在场冻结"，
+        // 不靠参数巧合维持语义；拉/夺速度均按圈内部队数 sqrt 缩放（封顶 ×2），
+        // 兵力投入换占领速度。车不可被攻击——得分手段是"占住车身"，不是"砍烂木头"。
         for (const wagon of c.wagons) {
             if (wagon.withdrawn || wagon.dead) continue;
             if (wagon.gx >= c.goalX) {
@@ -2751,14 +2779,16 @@ class IsoBattleScene extends Phaser.Scene {
                 continue;
             }
             let reds = 0, blues = 0;
-            this.forEachNear(wagon.gx, wagon.gy, 2.5, u => {
+            this.forEachNear(wagon.gx, wagon.gy, 3, u => {
                 if (u === wagon || u.type === 'wagon' || u.dead || u.withdrawn || u.moraleState === 'routing') return;
-                if (Math.hypot(u.gx - wagon.gx, u.gy - wagon.gy) > 2.5) return;
+                if (Math.hypot(u.gx - wagon.gx, u.gy - wagon.gy) > 3) return;
                 if (u.team === wagon.team) reds++; else blues++;
             });
             const HIJACK_SECONDS = 6;
-            if (blues > 0 && reds === 0) wagon.hijack = Math.min(1, (wagon.hijack || 0) + dt / HIJACK_SECONDS);
-            else if (reds > 0 && blues === 0) wagon.hijack = Math.max(0, (wagon.hijack || 0) - dt / (HIJACK_SECONDS * 0.45));
+            const pull = Math.min(2, Math.sqrt(blues));
+            const push = Math.min(2, Math.sqrt(reds));
+            if (blues > 0 && reds === 0) wagon.hijack = Math.min(1, (wagon.hijack || 0) + dt * pull / HIJACK_SECONDS);
+            else if (reds > 0 && blues === 0) wagon.hijack = Math.max(0, (wagon.hijack || 0) - dt * push / (HIJACK_SECONDS * 0.45));
             else if (reds === 0 && blues === 0) wagon.hijack = Math.max(0, (wagon.hijack || 0) - dt / 12);
             if (wagon.hijack >= 1) {
                 wagon.withdrawn = true;
@@ -2806,7 +2836,7 @@ class IsoBattleScene extends Phaser.Scene {
         for (const wagon of c.wagons) {
             if (wagon.withdrawn || wagon.dead || !(wagon.hijack > 0.02)) continue;
             const base = this.groundPoint(wagon.gx, wagon.gy);
-            const ring = sampleGroundRing(this, wagon.gx, wagon.gy, 1.9, 22);
+            const ring = sampleGroundRing(this, wagon.gx, wagon.gy, 2.3, 22);
             g.lineStyle(3.5, 0x57a0ff, 0.9);
             g.beginPath();
             g.arc(base.x, base.y + 4, 14 * 0.62, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * wagon.hijack);

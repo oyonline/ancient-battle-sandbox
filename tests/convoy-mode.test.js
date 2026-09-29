@@ -1,4 +1,4 @@
-// 护送模式：车队创建 / 有保护才前进 / 敌情闸门 / 到站与劫走计数 / 胜负判定 / 护送军集结 / 劫持拔河
+// 护送模式：车队创建 / 有保护才前进 / 敌情闸门 / 到站与劫走计数 / 胜负判定 / 护送军集结 / 劫持拔河 / 劫掠军占车
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { makeScene, addUnit, UNIT_TYPES } = require('./battle-harness.js');
@@ -134,4 +134,70 @@ test('护送 AI：护送军敌远时向最落后的车集结', () => {
     for (let i = 0; i < 60 * 3; i++) scene.advanceBattle(STEP);
     const d1 = Math.hypot(soldier.gx - tail.gx, soldier.gy - tail.gy);
     assert.ok(d1 < d0 - 1, `护送兵应向队尾车集结（${d0.toFixed(1)} → ${d1.toFixed(1)}）`);
+});
+
+test('劫掠 AI：敌远时蓝兵主动扑向守备最薄的车', () => {
+    const scene = convoyScene({ red: { infantry: 1 }, blue: { infantry: 4 } });
+    const target = scene.convoy.wagons[0];
+    // 红兵挪远角：既在场（蓝兵索敌有目标、不触发占车分支的敌远前提也满足），又远离车队不添守备
+    const redUnit = scene.units.find(u => u.team === 'red');
+    redUnit.gx = 2; redUnit.gy = 2;
+    const raiders = scene.units.filter(u => u.team === 'blue');
+    raiders.forEach((u, i) => { u.gx = target.gx + 14; u.gy = target.gy + i * 0.5; });
+    scene.rebuildSpatial();
+    const d0 = Math.hypot(raiders[0].gx - target.gx, raiders[0].gy - target.gy);
+    for (let i = 0; i < 60 * 3; i++) scene.advanceBattle(STEP);
+    const d1 = Math.hypot(raiders[0].gx - target.gx, raiders[0].gy - target.gy);
+    assert.ok(d1 < d0 - 1, `蓝兵应向无守备的车移动占圈（${d0.toFixed(1)} → ${d1.toFixed(1)}）`);
+    const closer = raiders.filter(u => Math.hypot(u.gx - target.gx, u.gy - target.gy) <
+        Math.hypot(target.gx + 14 - target.gx, 0)).length;
+    assert.ok(closer >= 3, `蓝兵应集体扑车（${closer}/4 靠近）`);
+});
+
+test('劫持圈 3.0：站桩护卫(2.6)在场即冻结，独占才拉条', () => {
+    const scene = convoyScene({ red: {}, blue: { infantry: 1 } });
+    const wagon = scene.convoy.wagons[0];
+    const raider = scene.units.find(u => u.team === 'blue');
+    raider.gx = wagon.gx + 1; raider.gy = wagon.gy;
+    // 护卫摆在集结偏移 2.6——恰在旧圈(2.5)外沿、新圈(3.0)内：必须算"在场冻结"
+    const guard = addUnit(scene, 'red', 'infantry', wagon.gx, wagon.gy + 2.6);
+    scene.rebuildSpatial();
+    scene.updateConvoy(3);                                 // 直接驱动计数：混合在场不拉条
+    assert.ok((wagon.hijack || 0) < 0.01, '圈内红方在场：进度冻结为 0');
+    guard.dead = true;
+    scene.rebuildSpatial();
+    scene.updateConvoy(3);
+    assert.ok(wagon.hijack > 0.4, `红方清场后蓝独占应拉条（实际 ${wagon.hijack.toFixed(2)}）`);
+});
+
+test('敌情闸门：溃逃中的蓝兵不算威胁，车队照常前进', () => {
+    const scene = convoyScene({ red: {}, blue: { infantry: 1 } });
+    const tail = scene.convoy.wagons.reduce((a, b) => (b.gx < a.gx ? b : a));
+    addUnit(scene, 'red', 'infantry', tail.gx, tail.gy + 1);   // 护卫随行
+    const raider = scene.units.find(u => u.team === 'blue');
+    raider.gx = tail.gx + 2.5; raider.gy = tail.gy; raider.moraleState = 'routing';
+    scene.rebuildSpatial();
+    const x0 = tail.gx;
+    scene.updateNormalUnit(tail, 0, STEP / 1000);          // 直接驱动车的行进门
+    assert.ok(tail.gx > x0 + 0.01, '溃逃蓝兵贴脸(3.2内)不应拦停车队');
+    raider.moraleState = null;                             // 恢复战斗状态：威胁成立
+    scene.rebuildSpatial();
+    const x1 = tail.gx;
+    scene.updateNormalUnit(tail, 0, STEP / 1000);
+    assert.ok(Math.abs(tail.gx - x1) < 1e-9, '有战斗力的蓝兵贴脸应拦停车队');
+});
+
+test('劫持速度按占车人数缩放（sqrt，封顶 ×2）', () => {
+    const scene = convoyScene({ red: {}, blue: { infantry: 5 } });
+    const w0 = scene.convoy.wagons[0], w2 = scene.convoy.wagons[2];
+    const blues = scene.units.filter(u => u.team === 'blue');
+    blues[0].gx = w0.gx - 1; blues[0].gy = w0.gy;          // 1 人独占 w0
+    for (let i = 1; i <= 4; i++) {                         // 4 人独占 w2（互相间距 >0，均圈内）
+        blues[i].gx = w2.gx + (i % 2 ? 1 : -1);
+        blues[i].gy = w2.gy + (i <= 2 ? 1 : -1);
+    }
+    scene.rebuildSpatial();
+    scene.updateConvoy(1.5);
+    assert.ok(Math.abs(w0.hijack - 0.25) < 0.01, `1 人 1.5 秒应拉 0.25（实际 ${w0.hijack.toFixed(2)}）`);
+    assert.ok(Math.abs(w2.hijack - 0.5) < 0.01, `4 人(sqrt=2) 1.5 秒应拉 0.5（实际 ${w2.hijack.toFixed(2)}）`);
 });

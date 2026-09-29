@@ -33,7 +33,7 @@
         <div id="morale-cue" class="morale-cue" role="status" hidden></div>
         <div id="deathmatch-hud-rule" class="deathmatch-rule" hidden>死斗：溃兵可重整，直到一方全灭</div>
         <div id="control-hud-rule" class="deathmatch-rule" hidden>⚑ 占点征服：占住旗帜攒积分，先到 60 分者胜</div>
-        <div id="convoy-hud-rule" class="deathmatch-rule" hidden>🛒 护送：送抵 3 辆辎重车获胜；车被蓝方占住 6 秒即遭劫走，劫走 3 辆蓝胜</div>
+        <div id="convoy-hud-rule" class="deathmatch-rule" hidden>🛒 护送：送抵 3 辆辎重车获胜；车身被蓝方独占约 6 秒即遭劫走（人越多越快），劫走 3 辆蓝胜</div>
         <div id="commands-hud" class="commands-hud" aria-label="本局双方指令" hidden></div>
         <div id="tactics-hud" class="tactics-hud" aria-label="两军战术与可战兵力" aria-live="off" hidden>
             <div class="tactics-team red" id="tactics-red">
@@ -98,7 +98,7 @@
                         <div class="terrain-entry-actions"><button class="secondary-btn" data-control-entry="flat"><b>⚑ 平原三旗</b><small>开阔地纯占点博弈</small></button><button class="secondary-btn" data-control-custom="flat"><b>⚑ 自定义占点</b><small>自己配兵打占点</small></button></div>
                     </div>
                     <div class="terrain-entry">
-                        <div><div class="eyebrow">辎重护送 · 新玩法</div><h3>四辆辎重车，穿越整个战场。</h3><p>红方步弓军护送车队开进，蓝方骑兵领衔截杀。车队只在护卫身边才前进——护得太紧走得慢，护得太散被各个击破；车不可被摧毁，被蓝方占住 6 秒即遭劫走，送抵 3 辆护送获胜、劫走 3 辆劫掠得手。</p></div>
+                        <div><div class="eyebrow">辎重护送 · 新玩法</div><h3>四辆辎重车，穿越整个战场。</h3><p>红方步弓军护送车队开进，蓝方骑兵领衔截杀。车队只在护卫身边才前进——护得太紧走得慢，护得太散被各个击破；车不可被摧毁，车身被蓝方独占约 6 秒即遭劫走（人越多越快），送抵 3 辆护送获胜、劫走 3 辆劫掠得手。</p></div>
                         <div class="terrain-entry-actions"><button class="secondary-btn" data-convoy-entry="flat"><b>🛒 平原护送线</b><small>护送 vs 劫掠的不对称博弈</small></button><button class="secondary-btn" data-convoy-custom="flat"><b>🛒 自定义护送</b><small>兵数阵容自己定</small></button></div>
                     </div>
                     <div class="tactics-entry">
@@ -255,14 +255,14 @@
     <script src="js/phaser.min.js"></script>
     <script src="js/terrain.js?v=20260924-natural-slope"></script>
     <script src="js/navigation.js?v=20260924-terrain3"></script>
-    <script src="js/units.js?v=20260924-natural-slope"></script>
+    <script src="js/units.js?v=20260929-hijack2"></script>
     <script src="js/combat.js?v=20260924-terrain3"></script>
     <script src="js/morale.js?v=20260923-morale-flow1"></script>
     <script src="js/tactics.js?v=20260924-natural-slope"></script>
     <script src="js/challenges.js?v=20260923-tactics1"></script>
     <script src="js/inspection.js?v=20260924-terrain3"></script>
-    <script src="js/game.js?v=20260929-hijack1"></script>
-    <script src="js/ui.js?v=20260928-control1"></script>
+    <script src="js/game.js?v=20260929-hijack2"></script>
+    <script src="js/ui.js?v=20260929-hijack2"></script>
     <script>
         const game = new Phaser.Game({
             type: Phaser.AUTO,

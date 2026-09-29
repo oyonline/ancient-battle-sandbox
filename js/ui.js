@@ -151,7 +151,7 @@ const UI = {
         convoyHud.hidden = !fighting || !this.battleOptions.convoy;
         if (this.battleOptions.convoy && this.scene?.convoy) {
             const c = this.scene.convoy;
-            convoyHud.textContent = `🛒 护送：送抵 ${c.delivered}/${c.need} · 被劫 ${c.hijacked || 0}/${c.need} —— 车队需要护卫随行才前进，被蓝方占住 6 秒即遭劫走`;
+            convoyHud.textContent = `🛒 护送：送抵 ${c.delivered}/${c.need} · 被劫 ${c.hijacked || 0}/${c.need} —— 车队需要护卫随行才前进；车身被蓝方独占约 6 秒即遭劫走（人越多越快），护卫在场即冻结`;
         }
         this.updateMorale();
         this.updateTactics();
@@ -500,7 +500,7 @@ const UI = {
                 <details><summary>需要一点战术提示？</summary><p>${this.challenge.hint}</p></details>`;
         }
         document.getElementById('buy-message').textContent = this.battleOptions.convoy
-            ? '🛒 护送模式 · 部署后红方自动获得 4 辆辎重车（不可购买、不可被摧毁），送抵 3 辆获胜；车被蓝方占住 6 秒即遭劫走'
+            ? '🛒 护送模式 · 部署后红方自动获得 4 辆辎重车（不可购买、不可被摧毁），送抵 3 辆获胜；车身被蓝方独占约 6 秒即遭劫走（人越多越快），劫走 3 辆蓝胜'
             : this.battleOptions.control
             ? '⚑ 占点征服 · 部署后中场自动立三面旗，占旗积分先到 60 获胜'
             : this.battleOptions.deathmatch
