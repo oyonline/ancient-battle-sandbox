@@ -1537,14 +1537,16 @@ export class IsoBattleScene extends Phaser.Scene {
                 if (i === 3) {
                     this.battleStarted = true;
                     this.spawnZoneGfx.clear();
-                    // 联机对战：倒计时结束建 NetBattle 并铺底包（两侧各自本地倒计时，
-                    // 模拟步进自同步，前瞻带吸收起步偏差）
-                    if (this.battleOptions.net && this.netClient && !this.net) {
-                        this.net = new NetBattle(this, this.netClient, {
-                            onDesync: turn => {
-                                if (typeof UI !== 'undefined' && UI.onNetDesync) UI.onNetDesync(turn);
-                            }
-                        });
+                    // 联机对战：倒计时结束铺底开跑。NetBattle 在部署后即由 UI 创建
+                    // （先到的对端包才能被接住——倒计时偏差曾导致铺底包被丢、全场冻住）。
+                    if (this.battleOptions.net && this.netClient) {
+                        if (!this.net) {
+                            this.net = new NetBattle(this, this.netClient, {
+                                onDesync: turn => {
+                                    if (typeof UI !== 'undefined' && UI.onNetDesync) UI.onNetDesync(turn);
+                                }
+                            });
+                        }
                         this.net.start();
                     }
                     if (onDone) onDone();

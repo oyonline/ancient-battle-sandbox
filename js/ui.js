@@ -5,6 +5,7 @@ import { CHALLENGES, armyCost, fitArmyToBudget } from './challenges.js';
 import { TERRITORY, makeTerritoryFlags } from './battle/economy.js';
 import { setBoardSize, resetBoardSize } from './board.js';
 import { ArenaClient } from './net/arena-client.js';
+import { NetBattle } from './net/lockstep.js';
 
 export const Snd = {
     ctx: null, muted: false, _last: {},
@@ -584,7 +585,8 @@ export const UI = {
                 break;
             case 'turn':
             case 'hash':
-                this.scene?.net?.handle(message);
+                if (this.scene?.net) this.scene.net.handle(message);
+                else (this.net.packets ??= []).push(message);   // 场景未就绪先缓冲，建网后回放
                 break;
             case 'peer-left':
                 this.onPeerLeft();
@@ -621,6 +623,11 @@ export const UI = {
         if (!this.scene) { this.pendingNetStart = true; return; }
         this.scene.netClient = { send: packet => this.net.client.send(packet) };
         this.deployArmies();
+        // 关键：网络层在部署后立即创建（早于倒计时）——对端先到的命令包才不会被丢
+        this.scene.net = new NetBattle(this.scene, this.scene.netClient,
+            { onDesync: turn => this.onNetDesync(turn) });
+        (this.net.packets || []).forEach(packet => this.scene.net.handle(packet));
+        this.net.packets = [];
         this.startBattle();
     },
 

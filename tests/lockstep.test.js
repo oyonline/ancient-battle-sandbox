@@ -127,3 +127,43 @@ test('哈希不同步检测：分歧即上报且只报一次', () => {
     sceneA.net.handle({ t: 'hash', turn: mine.turn, hash: 'x' });
     assert.equal(desyncTurn, before, '只上报一次');
 });
+
+test('晚建网不死锁：对端先到的包缓存回放，锁步从第 0 回合照常起步', () => {
+    const makeSide = mySide => {
+        const scene = makeScene();
+        scene.deployUnits({ ...TERRITORY.OPENING }, { ...TERRITORY.OPENING }, 'custom', 'custom', {},
+            { territory: true, terrain: 'territory', territoryAI: false, net: true, mySide });
+        scene.battleStarted = true;
+        return scene;
+    };
+    const sceneA = makeSide('red');
+    const sceneB = makeSide('blue');
+    // A 先建网铺底（真实中它的包经服务器到达 B 时，B 的 UI 还没建网 → 进缓冲）
+    const bufferForB = [];
+    sceneA.net = new NetBattle(sceneA, {
+        send: packet => { sceneA.net.handle(packet); if (sceneB.net) sceneB.net.handle(packet); else bufferForB.push(packet); }
+    });
+    sceneA.net.start();
+    assert.ok(bufferForB.length >= 12, '铺底包已发出');
+    // B 晚 2 秒才建网：缓冲包全部回放进 inbox（修复点；修复前这些包被直接丢弃）
+    sceneB.net = new NetBattle(sceneB, { send: packet => { sceneA.net.handle(packet); sceneB.net.handle(packet); } });
+    for (const packet of bufferForB) sceneB.net.handle(packet);
+    sceneB.net.start();
+    assert.equal(sceneA.net.lockstep.canStep(), true, 'A 第 0 回合包齐');
+    assert.equal(sceneB.net.lockstep.canStep(), true, 'B 第 0 回合包齐（回放生效）');
+    // 双端锁步推进 5 秒，每回合取令→步进→发包
+    for (let turn = 0; turn < 300; turn++) {
+        if (turn === 20) {
+            sceneA.net.lockstep.act({ k: 'buy', side: 'red', type: 'archer' });
+            sceneB.net.lockstep.act({ k: 'buy', side: 'blue', type: 'infantry' });
+        }
+        for (const scene of [sceneA, sceneB]) {
+            assert.ok(scene.net.lockstep.canStep(), `第 ${turn} 回合不死锁`);
+            for (const command of scene.net.lockstep.takeCommands()) scene.applyNetCommand(command);
+            scene.simulationTime += STEP;
+            scene.stepBattle(STEP / 1000);
+            scene.net.onTurnDone();
+        }
+    }
+    assert.equal(hashProjection(battleProjection(sceneA)), hashProjection(battleProjection(sceneB)), '晚建网追平后两端仍逐位一致');
+});

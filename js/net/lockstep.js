@@ -110,10 +110,14 @@ export class NetBattle {
         this.myHashes = new Map();            // turn -> hash
         this.peerHashes = new Map();          // turn -> hash
         this.desynced = false;
+        this.primed = false;
     }
 
-    // 开战（倒计时结束、battleStarted=true 后）调用：铺底包
+    // 铺底包（幂等）：必须在两端倒计时结束前完成创建并调用——包先到先存 inbox，
+    // 不会因创建晚而丢弃（曾因此两端互等第 0 回合、全场冻住的死锁）。
     start() {
+        if (this.primed) return;
+        this.primed = true;
         for (const packet of this.lockstep.prime()) this.client.send(packet);
     }
 
