@@ -139,7 +139,22 @@ return { server, wss };
 // ---------------- 启动横幅（仅直接运行时；测试 import 不监听） ----------------
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-    createArenaServer();   // 挂接 WebSocket（独立启动路径曾漏掉这一步：页面能开、房间按钮无响应的元凶）
+    const { wss } = createArenaServer();   // 挂接 WebSocket（独立启动路径曾漏掉这一步）
+    const onListenError = error => {
+        if (error.code === 'EADDRINUSE') {
+            console.log('┌──────────────────────────────────────────────┐');
+            console.log(`│  ⚠ 端口 ${PORT} 已被占用——多半已有一个对战服务器在跑。   │`);
+            console.log('│  直接用浏览器打开下方/上方横幅地址即可；          │');
+            console.log('│  要重启的话：先 Ctrl+C 或 kill 旧进程再运行。     │');
+            console.log('└──────────────────────────────────────────────┘');
+        } else {
+            console.error('服务器启动失败：', error.message);
+        }
+        process.exit(1);
+    };
+    // EADDRINUSE 会同时打在 http server 与 wss 两个实例上，两处都接住才不甩堆栈
+    server.on('error', onListenError);
+    wss.on('error', onListenError);
     server.listen(PORT, () => {
         const nets = Object.values(os.networkInterfaces()).flat()
             .filter(n => n?.family === 'IPv4' && !n.internal).map(n => n.address);
