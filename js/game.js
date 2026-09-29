@@ -1596,7 +1596,8 @@ export class IsoBattleScene extends Phaser.Scene {
         if (time - this._fpsT >= 500) {
             const fps = Math.round(this._fpsN * 1000 / (time - this._fpsT));
             if (this.fpsHud) {
-                this.fpsHud.textContent = fps + ' FPS · 存活 ' + (this.redAlive + this.blueAlive);
+                this.fpsHud.textContent = fps + ' FPS · 存活 ' + (this.redAlive + this.blueAlive) +
+                    (this.net ? ` · 停等${this.net.stalls} 缓存${this.net.peerLead}` : '');
                 this.fpsHud.style.color = fps >= 55 ? '#9cf5a0' : fps >= 30 ? '#ffd24a' : '#ff6b6b';
             }
             this._fpsN = 0; this._fpsT = time;
@@ -1632,12 +1633,16 @@ export class IsoBattleScene extends Phaser.Scene {
         else core.advanceBattle(this, delta);
     }
 
-    // 锁步推进（联机）：命令收齐才走下一回合；缺包短暂停等，渲染不受影响。
+    // 锁步推进（联机）：命令收齐才走下一回合；缺包短暂停等。
+    // 累积上限 250ms：停等期间不丢时间（旧实现钳到 16ms 会越等越慢），
+    // 包恢复后每帧最多追 15 步平滑赶上，避免一次爆发式连跳。
     advanceNet(delta) {
-        this.simulationAccumulator += Math.max(0, Math.min(delta, 50)) * this.gameSpeed;
+        this.simulationAccumulator = Math.min(250,
+            this.simulationAccumulator + Math.max(0, Math.min(delta, 50)) * this.gameSpeed);
+        let catchUp = 15;
         while (this.simulationAccumulator + 1e-7 >= core.SIMULATION_STEP_MS && !this.battleOver) {
             if (!this.net.lockstep.canStep()) {
-                this.simulationAccumulator = Math.min(this.simulationAccumulator, core.SIMULATION_STEP_MS);
+                this.net.noteStall();
                 return;
             }
             const commands = this.net.lockstep.takeCommands();
@@ -1646,6 +1651,8 @@ export class IsoBattleScene extends Phaser.Scene {
             this.simulationTime += core.SIMULATION_STEP_MS;
             this.stepBattle(core.SIMULATION_STEP_MS / 1000);
             this.net.onTurnDone();
+            this.net.noteBuffer();
+            if (--catchUp <= 0) return;    // 本帧追步额度用完，下帧继续
         }
     }
 

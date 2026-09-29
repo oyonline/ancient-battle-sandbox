@@ -7,7 +7,7 @@
 // 视觉随机量（bobPhase/slideOff/彩带）只进渲染不入哈希；状态哈希只投影模拟字段。
 
 export const LOCKSTEP = {
-    LOOKAHEAD: 12,          // 命令前瞻回合数（60fps 下 ≈200ms；局域网 RTT 远小于此）
+    LOOKAHEAD: 36,          // 命令前瞻回合数（60fps 下 ≈600ms；吸收 WiFi 抖动/省电缓冲的到达尖峰）
     HASH_EVERY: 120         // 每 120 回合（2 秒）交换一次状态哈希，检测不同步
 };
 
@@ -111,6 +111,16 @@ export class NetBattle {
         this.peerHashes = new Map();          // turn -> hash
         this.desynced = false;
         this.primed = false;
+        this.stalls = 0;          // 停等次数（诊断：持续增长=网络抖动超余量）
+        this.peerLead = 0;        // 对端包领先的本端执行回合数（缓冲深度）
+    }
+
+    noteStall() { this.stalls++; }
+
+    noteBuffer() {
+        let lead = 0;
+        for (const exec of this.lockstep.inbox.keys()) lead = Math.max(lead, exec - this.lockstep.execTurn + 1);
+        this.peerLead = lead;
     }
 
     // 铺底包（幂等）：必须在两端倒计时结束前完成创建并调用——包先到先存 inbox，
