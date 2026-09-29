@@ -463,7 +463,16 @@ export class IsoBattleScene extends Phaser.Scene {
         const g = this.make.graphics({ add: false });
         const naturalSlope = Terrain.isNaturalSlope(this.battleOptions.terrain);
         this.terNoise = this.terNoise || makeNoise(7);
-        const isWater = (gx, gy) => gx === 0 || gy === 0 || gx === board.W - 1 || gy === board.H - 1;
+        // 领土图：向外扩一圈草地（不可进入的画外景深），海岸线带噪声犬牙——
+        // 战场像一块更大的大陆的中部，而不是悬在方框海中央的完整菱形
+        const margin = this.battleOptions.terrain === 'territory' ? 5 : 0;
+        const isWater = (gx, gy) => {
+            if (!margin) return gx === 0 || gy === 0 || gx === board.W - 1 || gy === board.H - 1;
+            const edge = Math.min(gx + margin, gy + margin, board.W + margin - 1 - gx, board.H + margin - 1 - gy);
+            if (edge > 2.2) return false;                        // 大陆内部
+            if (edge <= 0.2) return true;                        // 外海
+            return hash(gx, gy) % 100 < edge / 2.2 * 100;        // 海岸带：犬牙交错
+        };
         const hash = (a, b) => {
             let h = (a * 374761393 + b * 668265263) ^ 0x5bf03635;
             h = (h ^ (h >> 13)) * 1274126177;
@@ -474,8 +483,8 @@ export class IsoBattleScene extends Phaser.Scene {
             { x: x, y: y + TH / 2 * s }, { x: x - TW / 2 * s, y: y }
         ];
 
-        for (let gy = 0; gy < board.H; gy++) {
-            for (let gx = 0; gx < board.W; gx++) {
+        for (let gy = -margin; gy < board.H + margin; gy++) {
+            for (let gx = -margin; gx < board.W + margin; gx++) {
                 const { x, y } = this.groundPoint(gx, gy);
                 const tile = this.groundTile(gx, gy);
                 const r1 = hash(gx, gy), r2 = hash(gx + 97, gy + 31);
@@ -599,8 +608,8 @@ export class IsoBattleScene extends Phaser.Scene {
                 }).setOrigin(0.5).setDepth(7);
         }
 
-        // 水面高光闪点（缓慢呼吸）
-        if (this.waterSparklesCreated) return;
+        // 水面高光闪点（缓慢呼吸）——领土图海岸在画外缘，跳过
+        if (this.battleOptions.terrain === 'territory' || this.waterSparklesCreated) return;
         this.waterSparklesCreated = true;
         for (let i = 0; i < 14; i++) {
             const side = i % 4;
@@ -932,6 +941,16 @@ export class IsoBattleScene extends Phaser.Scene {
         const g = this.spawnZoneGfx.setDepth(5).setAlpha(0.22);
         g.clear();
         if (Terrain.isNaturalSlope(this.battleOptions.terrain)) return;
+        if (this.battleOptions.terrain === 'territory') {
+            // 领土图：大本营领地光晕（三层椭圆渐隐），替代整块矩形出兵区
+            for (const [x, color] of [[8, 0xff5555], [board.W - 8, 0x5599ff]]) {
+                for (const [rx, ry, alpha] of [[9, 16, 0.30], [6, 11, 0.35], [3.4, 6.5, 0.42]]) {
+                    g.fillStyle(color, alpha);
+                    g.fillPoints(sampleGroundRing(this, x, board.H / 2, rx, ry, 26), true);
+                }
+            }
+            return;
+        }
         const zone = (x0, x1, color) => {
             for (let gy = 1; gy < board.H - 1; gy++)
                 for (let gx = x0; gx < x1; gx++) {
