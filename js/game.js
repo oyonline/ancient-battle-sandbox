@@ -1639,7 +1639,7 @@ export class IsoBattleScene extends Phaser.Scene {
     advanceNet(delta) {
         this.simulationAccumulator = Math.min(250,
             this.simulationAccumulator + Math.max(0, Math.min(delta, 50)) * this.gameSpeed);
-        let catchUp = 15;
+        let catchUp = 3;    // 追帧限速：等包后平滑追回（上限 15 步/帧会形成快进式顿挫）
         while (this.simulationAccumulator + 1e-7 >= core.SIMULATION_STEP_MS && !this.battleOver) {
             if (!this.net.lockstep.canStep()) {
                 this.net.noteStall();
@@ -2799,15 +2799,16 @@ export class IsoBattleScene extends Phaser.Scene {
                 const angle = (unit.id % 12) / 12 * Math.PI * 2;
                 return { gx: flag.gx + Math.cos(angle) * 2.2, gy: flag.gy + Math.sin(angle) * 1.6 };
             }
-            target = flag;
-            // 不超前主力 10 格：骑兵腿快，别撇下大队单骑先到旗点送死；
-            // 追赶目标与行军目标同向，不存在来回拉扯（阈值带 10 格）。
+            // 护送点：营心→旗连线上、营心前方约 8 格——单一目标随大队同向推进，
+            // 骑兵追上就缓行等队。旧版"超前就折回营心"会在阈值边界 180° 来回
+            // 折返（方向反复翻转=不同贴图快速闪），同向护送点从根上消除折返。
             const center = battalion.center();
             if (center) {
-                const mine = Math.hypot(flag.gx - unit.gx, flag.gy - unit.gy);
-                const column = Math.hypot(flag.gx - center.gx, flag.gy - center.gy);
-                if (mine < column - 10) target = center;
-            }
+                const dx = flag.gx - center.gx, dy = flag.gy - center.gy;
+                const len = Math.hypot(dx, dy) || 1;
+                const lead = Math.min(8, len * 0.6);
+                target = { gx: center.gx + dx / len * lead, gy: center.gy + dy / len * lead };
+            } else target = flag;
         } else return null;    // 无令无集结：自由作战
         let enemyNear = false;
         this.forEachNear(unit.gx, unit.gy, 6, u => {

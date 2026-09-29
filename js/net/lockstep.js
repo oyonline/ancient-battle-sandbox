@@ -7,7 +7,7 @@
 // 视觉随机量（bobPhase/slideOff/彩带）只进渲染不入哈希；状态哈希只投影模拟字段。
 
 export const LOCKSTEP = {
-    LOOKAHEAD: 36,          // 命令前瞻回合数（60fps 下 ≈600ms；吸收 WiFi 抖动/省电缓冲的到达尖峰）
+    LOOKAHEAD: 48,          // 命令前瞻回合数（60fps 下 ≈800ms；吸收 WiFi 抖动/省电缓冲的到达尖峰）
     HASH_EVERY: 120         // 每 120 回合（2 秒）交换一次状态哈希，检测不同步
 };
 

@@ -161,8 +161,10 @@ test('骑兵随营：集结蹲集结点、有令随旗推进、贴脸有敌才�
     const march = scene.battalionDirectCavalry(cav2);
     assert.ok(march, '有令骑兵应有行军目标');
     const flag = scene.flags[2], center = line.center();
-    assert.ok(Math.hypot(flag.gx - march.gx, flag.gy - march.gy) < 1e-9 ||
-        Math.hypot(center.gx - march.gx, center.gy - march.gy) < 1e-9, '目标为旗或营心（不超前主力）');
+    // 护送点：营心→旗连线上、营心前方约 8 格（同向推进，不折返）
+    const cross = (march.gx - center.gx) * (flag.gy - center.gy) - (march.gy - center.gy) * (flag.gx - center.gx);
+    assert.ok(Math.abs(cross) < 1e-6, '目标在营心→旗连线上');
+    assert.ok(Math.hypot(march.gx - center.gx, march.gy - center.gy) <= 8.5, '目标不超过营心前 8 格（护送位）');
     // 3) 贴脸有敌：交还冲锋状态机
     const foe = addUnit(scene, 'blue', 'infantry', cav2.gx + 3, cav2.gy);
     scene.rebuildSpatial();
@@ -215,4 +217,36 @@ test('推旗优先：有令近战在 6~12 格遇敌不停步，继续向目标�
     }
     const endFlagDist = Math.hypot(scene.flags[2].gx - troop.gx, scene.flags[2].gy - troop.gy);
     assert.ok(endFlagDist < startFlagDist - 8, '有令部队应穿过 9 格外的敌人继续推旗');
+});
+
+test('骑兵护送不折返：边界处不再旗↔营心来回掉头（贴图闪烁根因）', () => {
+    const scene = territoryScene({ territoryAI: false }, {}, { infantry: 2 });
+    scene.rebuildSpatial();
+    const foes = scene.units.filter(u => u.team === 'blue');
+    const pin = () => foes.forEach((u, i) => { u.gx = 98; u.gy = 60 + i; u.hp = u.maxHp; });
+    pin();
+    const battalion = new Battalion('red', 'line');
+    for (let i = 0; i < 6; i++) {
+        const u = addUnit(scene, 'red', 'infantry', 30, 34 + i * 0.9);
+        u.battalion = battalion; battalion.members.push(u);
+    }
+    const cav = addUnit(scene, 'red', 'cavalry', 40, 36);   // 恰在"超前"边界附近
+    cav.battalion = battalion; battalion.members.push(cav);
+    battalion.orderFlag = 2;                                  // 中央高地（约 22 格外）
+    battalion.refreshPace();
+    scene.battalions.battalions.push(battalion);
+    const headings = [];
+    let reversals = 0, lastDx = null;
+    for (let i = 0; i < 60 * 8 && !cav.dead; i++) {
+        pin();
+        const beforeX = cav.gx;
+        scene.advanceBattle(STEP);
+        const dx = cav.gx - beforeX;
+        headings.push(dx);
+        if (Math.abs(dx) > 0.002) {
+            if (lastDx != null && Math.sign(dx) !== Math.sign(lastDx) && Math.abs(lastDx) > 0.002) reversals++;
+            lastDx = dx;
+        }
+    }
+    assert.ok(reversals <= 1, `行进方向折返 ${reversals} 次（护送点应同向推进，最多起步转向一次）`);
 });
