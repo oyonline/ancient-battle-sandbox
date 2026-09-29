@@ -1271,6 +1271,7 @@ export class IsoBattleScene extends Phaser.Scene {
             econ: new TerritoryEconomy(),
             recruit: new RecruitSystem(this),
             tickets: new TicketSystem(),
+            rally: { red: null, blue: null },   // 玩家集结旗（null=老家集结）
             ai: { red: new TerritoryAI(this, 'red'), blue: new TerritoryAI(this, 'blue') },
             autoBuy: {
                 red: options.territoryAI === true,
@@ -1664,14 +1665,55 @@ export class IsoBattleScene extends Phaser.Scene {
             this.territory.recruit.enqueue(command.side, command.type);
         } else if (command.k === 'order' && this.battalions) {
             const battalion = this.battalions.battalions.find(b => b.id === command.id && b.team === command.side);
-            if (battalion) this.battalions.orderBattalion(battalion, command.flag);
+            if (battalion && this.battalions.orderBattalion(battalion, command.flag)) {
+                this.orderFlash(command.flag === 'home' ? '🏠 回防' : '⚑ 出发', battalion, '#f6cc68');
+            }
         } else if (command.k === 'hold' && this.battalions) {
             const battalion = this.battalions.battalions.find(b => b.id === command.id && b.team === command.side);
-            if (battalion) this.battalions.orderHold(battalion, command.gx, command.gy);
+            if (battalion && this.battalions.orderHold(battalion, command.gx, command.gy)) {
+                this.orderFlash('📍 驻守', battalion, '#9de3af');
+            }
         } else if (command.k === 'charge' && this.battalions) {
             const battalion = this.battalions.battalions.find(b => b.id === command.id && b.team === command.side);
-            if (battalion) this.battalions.orderCharge(battalion, this.simulationTime);
+            if (battalion && this.battalions.orderCharge(battalion, this.simulationTime)) {
+                this.orderFlash('⚡ 冲锋！', battalion, '#ff8b6b');
+            }
+        } else if (command.k === 'rally') {
+            this.territory.rally[command.side] = { gx: command.gx, gy: command.gy };
+            const point = this.groundPoint(command.gx, command.gy);
+            this.spawnOrderText('📍 集结点', point.x, point.y - 30, command.side === 'red' ? '#ffb0a0' : '#a8ceff');
+        } else if (command.k === 'stance' && this.battalions) {
+            const battalion = this.battalions.battalions.find(b => b.id === command.id && b.team === command.side);
+            if (battalion && this.battalions.orderStance(battalion, command.stance)) {
+                this.orderFlash(command.stance === 'aggressive' ? '🔥 好战' : '🛡 稳健', battalion, '#ffd76e');
+            }
+        } else if (command.k === 'clear' && this.battalions) {
+            const battalion = this.battalions.battalions.find(b => b.id === command.id && b.team === command.side);
+            if (battalion && this.battalions.orderClear(battalion)) {
+                this.orderFlash('⭕ 解除命令', battalion, '#c8c8c8');
+            }
         }
+    }
+
+    // 下令浮字（纯视觉，不入模拟/哈希）：营中心或指定点上浮短文字后淡出
+    orderFlash(text, battalion, color) {
+        const center = battalion.center();
+        if (!center) return;
+        const point = this.groundPoint(center.gx, center.gy);
+        this.spawnOrderText(text, point.x, point.y - 40, color);
+    }
+
+    spawnOrderText(text, x, y, color) {
+        if (!this.add?.text || !this.tweens?.add) return;   // 无渲染环境（测试）跳过
+        const label = this.add.text(x, y, text, {
+            fontFamily: '"PingFang SC", sans-serif', fontSize: '26px', fontStyle: 'bold',
+            color, stroke: '#000000', strokeThickness: 5
+        }).setOrigin(0.5).setDepth(160000);
+        this.tweens.add({
+            targets: label, y: y - 46, alpha: 0,
+            duration: 1100, ease: 'Cubic.Out',
+            onComplete: () => label.destroy()
+        });
     }
 
     stepBattle(dt) {
@@ -1828,12 +1870,13 @@ export class IsoBattleScene extends Phaser.Scene {
                 }
                 return;
             }
-            if (postDistance > 7) {
+            const leash = battalion.stance === 'aggressive' ? 14 : 7;
+            if (postDistance > leash) {
                 unit.target = nearest;
                 moveToward(unit, post.gx, post.gy, unit.typeData.speed, dt);
                 return;
             }
-            // 敌近且在驻点附近：落入正常接敌分支
+            // 敌近且在缰绳内：落入正常接敌分支（好战营追得更远才回位）
         }
         const flagMarch = this.battleOptions.control || this.battleOptions.territory;
         if (flagMarch && !guardAnchor && minD > engageRange && foeCount > 3 &&
@@ -2925,6 +2968,18 @@ export class IsoBattleScene extends Phaser.Scene {
         g.closePath();
         g.strokePath();
 
+        // 己方集结旗标记（敌方集结点属情报，不绘制）
+        const myRally = this.territory.rally[this.netMySide || 'red'];
+        if (myRally) {
+            const base = this.groundPoint(myRally.gx, myRally.gy);
+            const pulse = 0.7 + 0.3 * Math.sin(this.simulationTime * 0.004);
+            g.fillStyle(0x1c1812, 0.8);
+            g.fillEllipse(base.x, base.y + 2, 14, 7);
+            g.lineStyle(3, 0x3a2f1b, 0.95);
+            g.lineBetween(base.x, base.y, base.x, base.y - 38);
+            g.fillStyle(this.netMySide === 'blue' ? 0x57a0ff : 0xff5b5b, pulse);
+            g.fillTriangle(base.x, base.y - 38, base.x + 22, base.y - 31, base.x, base.y - 24);
+        }
         // 营队选中态：成员金圈 + 营令指向线（世界空间层，随镜头缩放）
         if (!this.selectionGfx) this.selectionGfx = this.add.graphics().setDepth(12050);
         const sel = this.selectionGfx;

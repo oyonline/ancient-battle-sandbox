@@ -36,6 +36,7 @@ export class Battalion {
         this.retreat = false;             // 玩家回防令
         this.chargeUntil = 0;             // 冲锋窗口截止（模拟时钟 ms；窗口内骑兵交还冲锋状态机）
         this.chargeReadyAt = 0;           // 冲锋冷却截止
+        this.stance = 'steady';           // 营姿态：稳健=驻守缰绳7格 | 好战=追击缰绳14格
         this.gatherPoint = null;
         this.pace = 2.2;                  // 营行军步速（最慢兵种）
     }
@@ -85,6 +86,12 @@ export class BattalionSystem {
         return { gx: team === 'red' ? 8 : this.scene.board_W(), gy: this.scene.board_H() / 2 };
     }
 
+    // 集结点：玩家自定义集结旗优先，否则老家（新兵/集结营在此聚兵）
+    gatherRally(team) {
+        const rally = this.scene.territory?.rally?.[team];
+        return rally ? { gx: rally.gx, gy: rally.gy } : this.homeRally(team);
+    }
+
     // 开局分编：按 gy 稳定排序后三等分（id 决胜），形成上/中/下三个成建制营。
     splitOpening(units) {
         for (const team of ['red', 'blue']) {
@@ -111,7 +118,7 @@ export class BattalionSystem {
         const team = unit.team;
         if (!this.pool[team]) {
             this.pool[team] = this.createBattalion(team, 'gathering');
-            this.pool[team].gatherPoint = this.homeRally(team);
+            this.pool[team].gatherPoint = this.gatherRally(team);
             this.pool[team].createdAt = this.scene.simulationTime;
             this.battalions.push(this.pool[team]);
         }
@@ -128,6 +135,7 @@ export class BattalionSystem {
                 battalion.members = battalion.aliveMembers();
             }
             battalion.refreshPace();
+            if (battalion.gathering) battalion.gatherPoint = this.gatherRally(battalion.team);   // 集结点改令实时生效
         }
         this.battalions = this.battalions.filter(b => b.members.length > 0);
         for (const team of ['red', 'blue']) {
@@ -264,6 +272,23 @@ export class BattalionSystem {
         battalion.orderPoint = { gx, gy };
         battalion.playerOrdered = true;
         battalion.retreat = false;
+        return true;
+    }
+
+    // 解除命令：清旗令/点令/回防，营交还 AI 调度
+    orderClear(battalion) {
+        if (!battalion) return false;
+        battalion.orderFlag = null;
+        battalion.orderPoint = null;
+        battalion.playerOrdered = false;
+        battalion.retreat = false;
+        return true;
+    }
+
+    // 营姿态：steady=驻守缰绳7格 | aggressive=追击缰绳14格
+    orderStance(battalion, stance) {
+        if (!battalion || !['steady', 'aggressive'].includes(stance)) return false;
+        battalion.stance = stance;
         return true;
     }
 

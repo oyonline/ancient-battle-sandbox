@@ -761,3 +761,8 @@ body.targeting #game-container { cursor: crosshair; }
 .order-btn.order-charge.active { border-color: #ff8b6b; color: #ff8b6b; animation: charge-pulse 0.6s ease infinite alternate; }
 .order-btn.order-charge:not(:disabled):hover { background: #46201a; }
 @keyframes charge-pulse { from { box-shadow: 0 0 2px rgba(255,139,107,0.4); } to { box-shadow: 0 0 10px rgba(255,139,107,0.95); } }
+
+.rally-btn { padding: 6px 12px; border-radius: 9px; border: 2px solid #6f9e5e; background: #22301c;
+    color: #cfe8c2; font: 700 12px/1 "PingFang SC", sans-serif; cursor: pointer; }
+.rally-btn:hover { background: #2f4227; }
+.rally-btn.active { border-color: #9de3af; color: #9de3af; }

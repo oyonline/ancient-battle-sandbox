@@ -1265,6 +1265,9 @@ export const UI = {
         document.getElementById('territory-army-blue').textContent = this.scene.blueAlive;
         document.getElementById('territory-queue').textContent =
             territory.recruit.queues[mine].length ? ` · 训练中 ${territory.recruit.queues[mine].length}` : '';
+        const rallyBtn = document.getElementById('btn-rally');
+        rallyBtn.classList.toggle('active', !!this.rallyTargeting);
+        rallyBtn.hidden = !active;
         for (const [key, t] of Object.entries(UNIT_TYPES)) {
             if (t.hidden) continue;
             const btn = document.getElementById('recruit-' + key);
@@ -1307,6 +1310,20 @@ export const UI = {
         charge.title = '本营骑兵自由冲锋 6 秒（15 秒冷却）';
         charge.onclick = () => this.giveChargeOrder();
         row.appendChild(charge);
+        const stanceBtn = document.createElement('button');
+        stanceBtn.className = 'order-btn';
+        stanceBtn.id = 'order-stance';
+        stanceBtn.textContent = '🛡 稳健';
+        stanceBtn.title = '稳健=驻守兵 7 格缰绳回位；好战=追到 14 格才回位';
+        stanceBtn.onclick = () => this.toggleStance();
+        row.appendChild(stanceBtn);
+        const clearBtn = document.createElement('button');
+        clearBtn.className = 'order-btn';
+        clearBtn.id = 'order-clear';
+        clearBtn.textContent = '⭕ 解除命令';
+        clearBtn.title = '清除本营旗令/驻点/回防，交还 AI 调度';
+        clearBtn.onclick = () => this.giveClearOrder();
+        row.appendChild(clearBtn);
         const nextBtn = document.createElement('button');
         nextBtn.className = 'order-btn';
         nextBtn.id = 'order-next';
@@ -1340,33 +1357,42 @@ export const UI = {
 
     // 地面点击回调（inspection 上抛）：目标模式下视为选点下令
     onGroundClick(world, picked) {
+        if (this.rallyTargeting) {
+            this.applyGroundOrder(world, (gx, gy) => {
+                this.giveRallyOrder(gx, gy);
+                this.cancelRallyTargeting();
+            });
+            return;
+        }
         if (!this.holdTargeting) return;
         const selected = this.scene?.selectedBattalion;
         if (!selected) { this.cancelHoldTargeting(); return; }
-        // 世界坐标 → 网格（gridToScreen 的逆变换，不含地形高度——选点落地面即可）
-        const camera = this.scene.cameras.main;
-        void camera; void picked;
+        this.applyGroundOrder(world, (gx, gy) => {
+            this.giveHoldOrder(gx, gy);
+            this.cancelHoldTargeting();
+        });
+    },
+
+    // 世界坐标 → 网格（两次迭代补偿地形高度；0.1 格量化保联机一致），可走则执行
+    applyGroundOrder(world, apply) {
         const scene = this.scene;
-        const board = scene.board_W ? { W: scene.board_W(), H: scene.board_H() } : null;
-        if (!board) { this.cancelHoldTargeting(); return; }
-        const TW = 64, TH = 32, OX = board.H * TW / 2, OY = 120;
+        if (!scene || !scene.board_W) return;
+        const W = scene.board_W(), H = scene.board_H();
+        const TW = 64, TH = 32, OX = H * TW / 2, OY = 120;
         const key = scene.battleOptions.terrain;
-        // 两次迭代补偿地形高度（高地上的点击不偏移）：groundPoint 的 y 含 height*24px 抬升
-        let gx = board.W / 2, gy = board.H / 2;
+        let gx = W / 2, gy = H / 2;
         for (let pass = 0; pass < 2; pass++) {
             const lift = Terrain.height(key, gx, gy) * Terrain.HEIGHT_SCALE;
             const dx = (world.x - OX) / (TW / 2), dy = (world.y + lift - OY) / (TH / 2);
             gx = (dx + dy) / 2; gy = (dy - dx) / 2;
         }
-        // 量化到 0.1 格（确定性约定：联机两端坐标逐位一致）
-        gx = Math.round(Math.max(2, Math.min(board.W - 2, gx)) * 10) / 10;
-        gy = Math.round(Math.max(2, Math.min(board.H - 2, gy)) * 10) / 10;
-        if (!Terrain.walkable(scene.battleOptions.terrain, gx, gy)) {
-            this.showNetToast('⚠ 那里不能驻守（水面/出界）——换一个点');
+        gx = Math.round(Math.max(2, Math.min(W - 2, gx)) * 10) / 10;
+        gy = Math.round(Math.max(2, Math.min(H - 2, gy)) * 10) / 10;
+        if (!Terrain.walkable(key, gx, gy)) {
+            this.showNetToast('⚠ 那里不能去（水面/出界）——换一个点');
             return;
         }
-        this.giveHoldOrder(gx, gy);
-        this.cancelHoldTargeting();
+        apply(gx, gy);
     },
 
     giveHoldOrder(gx, gy) {
@@ -1376,7 +1402,7 @@ export const UI = {
         if (this.battleOptions.net && this.scene.net) {
             this.scene.net.lockstep.act({ k: 'hold', side, id: selected.id, gx, gy });
         } else {
-            this.scene.battalions.orderHold(selected, gx, gy);
+            this.scene.applyNetCommand({ k: 'hold', side, id: selected.id, gx, gy });
         }
         Snd.play('lock');
         this.updateBattalionBar();
@@ -1393,7 +1419,7 @@ export const UI = {
         if (this.battleOptions.net && this.scene.net) {
             this.scene.net.lockstep.act({ k: 'charge', side, id: selected.id });
         } else {
-            this.scene.battalions.orderCharge(selected, now);
+            this.scene.applyNetCommand({ k: 'charge', side, id: selected.id });
         }
         Snd.play('go');
         this.updateBattalionBar();
@@ -1410,6 +1436,57 @@ export const UI = {
         this.scene.selectedBattalion = list[Math.max(0, Math.min(list.length - 1, index))];
         Snd.play('tick');
         this.updateBattalionBar();
+    },
+
+    toggleStance() {
+        const selected = this.scene?.selectedBattalion;
+        if (!selected || selected.team !== (this.mySide || 'red')) return;
+        const side = this.mySide || 'red';
+        const stance = selected.stance === 'aggressive' ? 'steady' : 'aggressive';
+        if (this.battleOptions.net && this.scene.net) {
+            this.scene.net.lockstep.act({ k: 'stance', side, id: selected.id, stance });
+        } else {
+            this.scene.applyNetCommand({ k: 'stance', side, id: selected.id, stance });
+        }
+        Snd.play('tick');
+        this.updateBattalionBar();
+    },
+
+    giveClearOrder() {
+        const selected = this.scene?.selectedBattalion;
+        if (!selected || selected.team !== (this.mySide || 'red')) return;
+        const side = this.mySide || 'red';
+        if (this.battleOptions.net && this.scene.net) {
+            this.scene.net.lockstep.act({ k: 'clear', side, id: selected.id });
+        } else {
+            this.scene.applyNetCommand({ k: 'clear', side, id: selected.id });
+        }
+        Snd.play('tick');
+        this.updateBattalionBar();
+    },
+
+    beginRallyTargeting() {
+        if (this.phase !== 'battle' || !this.battleOptions.territory || !this.scene?.territory) return;
+        this.rallyTargeting = true;
+        document.body.classList.add('targeting');
+        this.showNetToast('📍 点击地图设置本方集结点——新兵与集结营将在此聚兵（Esc 取消）');
+    },
+
+    cancelRallyTargeting() {
+        this.rallyTargeting = false;
+        document.body.classList.remove('targeting');
+        const cue = document.getElementById('morale-cue');
+        if (cue) cue.hidden = true;
+    },
+
+    giveRallyOrder(gx, gy) {
+        const side = this.mySide || 'red';
+        if (this.battleOptions.net && this.scene.net) {
+            this.scene.net.lockstep.act({ k: 'rally', side, gx, gy });
+        } else {
+            this.scene.applyNetCommand({ k: 'rally', side, gx, gy });
+        }
+        Snd.play('lock');
     },
 
     selectNextBattalion() {
@@ -1429,11 +1506,11 @@ export const UI = {
         const side = this.mySide || 'red';
         if (this.battleOptions.net && this.scene.net) {
             this.scene.net.lockstep.act({ k: 'order', side, id: selected.id, flag: order });
-            Snd.play('lock');
-            this.updateBattalionBar();
-            return;
+        } else {
+            this.scene.applyNetCommand({ k: 'order', side, id: selected.id, flag: order });
         }
-        if (this.scene.orderSelectedBattalion(order)) { Snd.play('lock'); this.updateBattalionBar(); }
+        Snd.play('lock');
+        this.updateBattalionBar();
     },
 
     updateBattalionBar() {
@@ -1466,6 +1543,13 @@ export const UI = {
             } else if (btn.id === 'order-hold') {
                 btn.disabled = !own || this.holdTargeting;
                 btn.classList.toggle('active', this.holdTargeting);
+            } else if (btn.id === 'order-stance') {
+                btn.disabled = !own;
+                const aggressive = selected.stance === 'aggressive';
+                btn.textContent = aggressive ? '🔥 好战' : '🛡 稳健';
+                btn.classList.toggle('active', aggressive);
+            } else if (btn.id === 'order-clear') {
+                btn.disabled = !own || !(selected.orderFlag != null || selected.orderPoint || selected.retreat);
             } else if (btn.id === 'order-charge') {
                 const hasCavalry = own && selected.aliveMembers().some(u => u.type === 'cavalry');
                 const cooldown = Math.max(0, (selected.chargeReadyAt || 0) - now);
@@ -1552,13 +1636,15 @@ export const UI = {
         document.getElementById('btn-net-join').onclick = () => this.netJoin();
         document.getElementById('btn-net-ready').onclick = () => this.netReady();
         document.getElementById('btn-net-quit').onclick = () => this.netQuit();
+        document.getElementById('btn-rally').onclick = () => this.beginRallyTargeting();
         document.getElementById('net-code-input').addEventListener('keydown', e => {
             if (e.key === 'Enter') this.netJoin();
         });
         window.addEventListener('beforeunload', () => this.net.client?.bye());
         window.addEventListener('keydown', e => {
             if (this.phase !== 'battle' || !this.battleOptions.territory) return;
-            if (e.key === 'Escape') { this.cancelHoldTargeting(); return; }
+            if (e.key === 'Escape') { this.cancelHoldTargeting(); this.cancelRallyTargeting(); return; }
+            if (e.key === 'r' || e.key === 'R') { this.beginRallyTargeting(); return; }
             if (e.key === 'Tab') { e.preventDefault(); this.selectNextBattalion(); return; }
             const digit = Number(e.key);
             if (Number.isInteger(digit) && digit >= 1 && digit <= 9) this.selectBattalionByIndex(digit - 1);

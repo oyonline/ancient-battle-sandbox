@@ -300,3 +300,76 @@ test('冲锋令：窗口内骑兵交还冲锋状态机，冷却期内拒绝再�
     assert.equal(scene.battalions.orderCharge(battalion, 7100), false, '冷却期内拒绝');
     assert.equal(scene.battalions.orderCharge(battalion, 22000), true, '冷却结束可再冲');
 });
+
+test('集结点：设令后新兵在集结点聚兵，改令实时生效', () => {
+    const scene = territoryScene({ territoryAI: false }, {}, { infantry: 2 });
+    scene.rebuildSpatial();
+    const foes = scene.units.filter(u => u.team === 'blue');
+    const pin = () => foes.forEach((u, i) => { u.gx = 96; u.gy = 64 + i; u.hp = u.maxHp; });
+    pin();
+    scene.territory.econ.treasury.red = 300;
+    // 设集结点在中央高地下坡 (44, 44)
+    scene.applyNetCommand({ k: 'rally', side: 'red', gx: 44, gy: 44 });
+    assert.deepEqual(scene.territory.rally.red, { gx: 44, gy: 44 });
+    for (let i = 0; i < 5; i++) scene.territory.recruit.enqueue('red', 'infantry');
+    run(scene, 26, pin);   // 出兵3秒训练 + 老家到集结点约38格（2.2格/秒）
+    const pool = redBattalions(scene).find(b => b.gathering);
+    assert.ok(pool, '存在集结营');
+    assert.ok(Math.abs(pool.gatherPoint.gx - 44) < 1e-9, '集结营跟随自定义集结点');
+    for (const u of pool.aliveMembers()) {
+        assert.ok(u.gx > 30, `新兵已向集结点聚拢（x=${u.gx.toFixed(1)}）`);
+    }
+    // 改集结点：现有集结营 gatherPoint 实时更新
+    scene.applyNetCommand({ k: 'rally', side: 'red', gx: 30, gy: 24 });
+    scene.battalions.update(scene.simulationTime);
+    assert.ok(Math.abs(pool.gatherPoint.gx - 30) < 1e-9, '集结点改令实时生效');
+});
+
+test('营姿态：稳健 7 格缰绳回位，好战追到 14 格才回位', () => {
+    const build = stance => {
+        const scene = territoryScene({ territoryAI: false }, {}, { infantry: 2 });
+        scene.rebuildSpatial();
+        const foes = scene.units.filter(u => u.team === 'blue');
+        const pin = () => foes.forEach((u, i) => { u.gx = 60; u.gy = 64 + i; u.hp = u.maxHp; });
+        pin();
+        const battalion = new Battalion('red', 'line');
+        battalion.stance = stance;
+        const troop = addUnit(scene, 'red', 'infantry', 44, 44);
+        troop.battalion = battalion; battalion.members.push(troop);
+        battalion.orderPoint = { gx: 44, gy: 44 };      // 驻点即脚下
+        battalion.playerOrdered = true;
+        scene.battalions.battalions.push(battalion);
+        battalion.refreshPace();
+        // 敌人放在驻点 11 格外（稳健缰绳外、好战缰绳内，且在 12 格接敌圈内）
+        const foe = foes[0];
+        foe.gx = 55; foe.gy = 44; foe.moraleState = 'steady';
+        const pinFoe = () => { foe.gx = 53; foe.gy = 44; foe.hp = foe.maxHp; };
+        troop.hp = troop.maxHp = 100000;   // 都打不死，纯看追击/回位行为
+        foe.hp = foe.maxHp = 100000;
+        let maxChase = 0;
+        for (let i = 0; i < 60 * 10; i++) {
+            pinFoe();
+            scene.advanceBattle(STEP);
+            maxChase = Math.max(maxChase, troop.gx - 44);
+        }
+        return maxChase;
+    };
+    const steadyChase = build('steady');
+    const aggressiveChase = build('aggressive');
+    assert.ok(steadyChase <= 7.2, `稳健营最多追出 ${steadyChase.toFixed(1)} 格（缰绳 7）`);
+    assert.ok(aggressiveChase > steadyChase + 1.5, `好战营追得更远（${aggressiveChase.toFixed(1)} 格 vs ${steadyChase.toFixed(1)}）`);
+});
+
+test('解除命令：清除玩家令，营交还 AI 调度', () => {
+    const scene = territoryScene({ territoryAI: false });
+    const battalion = redBattalions(scene)[0];
+    scene.selectedBattalion = battalion;
+    scene.applyNetCommand({ k: 'hold', side: 'red', id: battalion.id, gx: 44, gy: 30 });
+    assert.ok(battalion.orderPoint && battalion.playerOrdered);
+    scene.applyNetCommand({ k: 'clear', side: 'red', id: battalion.id });
+    assert.equal(battalion.orderPoint, null);
+    assert.equal(battalion.playerOrdered, false, '解除后 AI 可重新调度');
+    scene.rebuildSpatial();
+    scene.battalions.aiAssign();
+    assert.ok(battalion.orderFlag != null || battalion.orderPoint == null, 'AI 已接管该营');
+});
