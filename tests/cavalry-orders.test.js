@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { Terrain, makeScene, addUnit } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { Terrain, makeScene, addUnit } from './battle-harness.js';
 
 function fixture(order = 'flank_archers', mirrored = false, terrain = 'flat') {
     const scene = makeScene();

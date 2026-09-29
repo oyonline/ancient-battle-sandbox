@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { makeScene, Terrain, CombatRules } = require('./battle-harness');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { makeScene, Terrain, CombatRules } from './battle-harness.js';
 
 const army = { infantry: 36, pikeman: 12, archer: 16, cavalry: 12 };
 function deploy(team = 'blue', config = army, cavalry = 'auto') {

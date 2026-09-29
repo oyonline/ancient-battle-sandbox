@@ -1,5 +1,5 @@
 // 全单位镜像配对追踪：找最大偏差对及其随时间的演变（含传染路径）
-const { makeScene } = require('../tests/battle-harness.js');
+import { makeScene } from '../tests/battle-harness.js';
 
 const SCREEN = { pikeman: 80, archer: 15 }, CAV = { cavalry: 50 };
 

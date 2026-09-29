@@ -1,23 +1,9 @@
-# 系统杂物
+node_modules/
+dist/
 .DS_Store
-Thumbs.db
-.idea/
-.vscode/
-
-# 工具产物
-.trae-html-share-packages/
-
-# 备忘
-*.log
-
-# Python
 __pycache__/
-*.pyc
-.omc/
-
-# AI 原始生成图（大文件中间产物，可重新生成）
+.trae-html-share-packages/
 tools/ai_raw/
 tools/ai_raw_props/
-
-# 画风对比样张
+tools/ai_raw_v2/
 tools/style_samples/

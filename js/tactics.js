@@ -1,8 +1,13 @@
 // 战术只在明确选择时启用；所有指令共用 CombatRules 的接触与命中规则。
 // 阵位、路线与命中都使用模拟坐标/时钟，画面与音效不参与胜负。
+import { GRID_W, GRID_H } from './board.js';
+import { Terrain } from './terrain.js';
+import { CombatRules } from './combat.js';
+import { dist, clamp, moveToward } from './units.js';
+
 const TACTIC_LABELS = { advance: '自由接敌', assault: '正面强攻', flank: '单翼迂回', hold: '枪阵守位', hold_ground: '高地守位' };
 
-class TacticsSystem {
+export class TacticsSystem {
     constructor(scene, orders) {
         this.scene = scene;
         this.orders = { red: orders.red || 'advance', blue: orders.blue || 'advance' };

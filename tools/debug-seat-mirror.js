@@ -1,5 +1,5 @@
 // 座位交换不变量差分：runPair 两次对战逐帧比对镜像量，找第一处发散。
-const { makeScene, UNIT_TYPES } = require('../tests/battle-harness.js');
+import { makeScene, UNIT_TYPES } from '../tests/battle-harness.js';
 
 const SCREEN = { pikeman: 80, archer: 15 }, CAV = { cavalry: 50 };
 

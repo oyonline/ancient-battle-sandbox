@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { makeScene } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { makeScene } from './battle-harness.js';
 
 function fixture(mirrored = false) {
     const scene = makeScene(), team = mirrored ? 'blue' : 'red', enemy = mirrored ? 'red' : 'blue';

@@ -1,7 +1,7 @@
 // 占点征服模式（英雄连式兵力拔河）：占领判定 / 拔河 / 中立反占 / 积分胜利 / 歼灭仍胜 / AI 聚拢 / 对称同步
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { makeScene, addUnit } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { makeScene, addUnit } from './battle-harness.js';
 
 const STEP = 1000 / 60;
 

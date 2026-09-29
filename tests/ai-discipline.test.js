@@ -1,7 +1,7 @@
 // AI 纪律：目标粘滞（A） / 弓手火力纪律（B） / 骑兵绕枪墙（C） / 守骑侧翼反冲（D） / 矛兵遇骑结阵（E）。
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { makeScene, addUnit, TacticsSystem } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { makeScene, addUnit, TacticsSystem } from './battle-harness.js';
 
 const STEP = 1000 / 60;
 

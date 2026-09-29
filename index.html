@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>帝国亲子沙盒 · 统帅试炼</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E🏰%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="css/style.css?v=20260924-terrain3">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <!-- 战场：铺满整个视口 -->
@@ -251,36 +251,8 @@
     <!-- 轮流配兵遮罩（防偷看） -->
     <div class="overlay" id="overlay"></div>
 
-    <script src="assets/manifest.js?v=20260923-death2"></script>
-    <script src="js/phaser.min.js"></script>
-    <script src="js/terrain.js?v=20260924-natural-slope"></script>
-    <script src="js/navigation.js?v=20260924-terrain3"></script>
-    <script src="js/units.js?v=20260929-hijack2"></script>
-    <script src="js/combat.js?v=20260924-terrain3"></script>
-    <script src="js/morale.js?v=20260923-morale-flow1"></script>
-    <script src="js/tactics.js?v=20260924-natural-slope"></script>
-    <script src="js/challenges.js?v=20260923-tactics1"></script>
-    <script src="js/inspection.js?v=20260924-terrain3"></script>
-    <script src="js/game.js?v=20260929-hijack2"></script>
-    <script src="js/ui.js?v=20260929-hijack2"></script>
-    <script>
-        const game = new Phaser.Game({
-            type: Phaser.AUTO,
-            parent: 'game-container',
-            width: window.innerWidth,
-            height: window.innerHeight,
-            backgroundColor: '#1c3f5c',
-            pixelArt: true,          // 像素风：NEAREST 硬边采样，放大不糊
-            roundPixels: true,       // 像素对齐整数格，避免抖动
-            antialias: false,
-            scene: IsoBattleScene,
-            scale: {
-                mode: Phaser.Scale.RESIZE,
-                width: '100%',
-                height: '100%'
-            }
-        });
-        window.addEventListener('load', () => UI.init());
-    </script>
+    <!-- Phaser 以经典脚本全局加载（UMD 包，先于 ES 模块执行）；其余代码经 Vite 走 ES 模块图 -->
+    <script src="vendor/phaser.min.js"></script>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>

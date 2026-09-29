@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { Terrain, makeScene, addUnit, resolveAttack, snapshot } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { Terrain, makeScene, addUnit, resolveAttack, snapshot } from './battle-harness.js';
 
 test('deployment sets terrain before spawning and default deployment restores flat', () => {
     const scene = makeScene();

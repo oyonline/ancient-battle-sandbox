@@ -1,5 +1,5 @@
 // 防守骑兵AI改进验证：前瞻触发 / 对冲拦截 / 时机纪律 / 翼位分工
-const { makeScene } = require('../tests/battle-harness.js');
+import { makeScene } from '../tests/battle-harness.js';
 
 const STEP = 1000 / 60;
 const dist = (a, b) => Math.hypot(a.gx - b.gx, a.gy - b.gy);
@@ -7,7 +7,7 @@ const dist = (a, b) => Math.hypot(a.gx - b.gx, a.gy - b.gy);
 const army = { infantry: 36, pikeman: 12, archer: 16, cavalry: 12 };
 
 // 用 battle-harness 做真实部署
-const harness = require('../tests/battle-harness.js');
+import harness from '../tests/battle-harness.js';
 function fullScene(terrain, orders, options, redConfig, blueConfig) {
     const scene = harness.makeScene();
     scene.deployUnits(redConfig, blueConfig, 'custom', 'custom', orders, { terrain, ...options });

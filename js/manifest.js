@@ -1,5 +1,5 @@
 // 素材清单；死亡动画由 tools/build_death_sprites.py 维护。
-const MANIFEST = {
+export const MANIFEST = {
   "units": {
     "blue_infantry": {
       "file": "units/blue_infantry.png",

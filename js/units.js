@@ -1,6 +1,10 @@
 // ==================== 兵种定义（网格坐标系：1格=1个菱形块） ====================
 // 70×70 大地图：上限与预算支持 500 vs 500，行军速度按地图尺度上调
-const UNIT_TYPES = {
+import { GRID_W, GRID_H } from './board.js';
+import { Terrain } from './terrain.js';
+import { CombatRules } from './combat.js';
+
+export const UNIT_TYPES = {
     infantry: {
         name: '剑士', icon: '⚔️', cost: 5, maxCount: 400,
         hp: 100, atk: 16, def: 10, speed: 2.2, atkSpeed: 1000, range: 0.95,
@@ -30,7 +34,7 @@ const UNIT_TYPES = {
 };
 
 // ==================== 阵型定义（rows: 前排→后排的兵种优先级） ====================
-const FORMATIONS = {
+export const FORMATIONS = {
     custom:  { name: '自由队形', rows: ['infantry', 'pikeman', 'archer', 'cavalry'] },
     square:  { name: '方阵',   rows: ['infantry', 'cavalry', 'pikeman', 'archer'] },
     wedge:   { name: '锋矢阵', rows: ['cavalry', 'infantry', 'pikeman', 'archer'] },
@@ -39,14 +43,14 @@ const FORMATIONS = {
 };
 
 // 千人军团预算：满配 500 人约 3200 金
-const BUDGET = 4000;
+export const BUDGET = 4000;
 
 // ==================== 生成一支军队的网格站位 ====================
 // team: 'red'(左,朝右) / 'blue'(右,朝左)
 // 大军团自动展开：列数随总兵力自适应（≈√(兵力×1.6)），纵向 1.35 格间距，
 // 行深按"前排线→地图边缘"的可用纵深自适应压缩（无论配多少兵都不出界），
 // 两翼放骑兵/长枪；本排兵种耗尽时列内自动替补，保证每行尽量放满不空转。
-function generateArmyPositions(team, config, formationKey) {
+export function generateArmyPositions(team, config, formationKey) {
     const formation = FORMATIONS[formationKey] || FORMATIONS.custom;
     const remaining = { ...config };
     const positions = [];
@@ -93,7 +97,7 @@ function generateArmyPositions(team, config, formationKey) {
 }
 
 // 架枪读本步快照：移动或转向会重置准备，成阵并站稳半秒后才有正面抗冲锋。
-function updatePikeBrace(unit, dt) {
+export function updatePikeBrace(unit, dt) {
     if (unit.moraleState === 'routing' || unit.withdrawn) {
         unit.braceTime = 0; unit.braceReady = false; unit.braceHold = false;
         unit.braceSupport = 0; unit.braceDepth = 0;
@@ -136,7 +140,7 @@ function updatePikeBrace(unit, dt) {
     unit.braceReady = unit.braceTime >= 0.5 - 1e-9;
 }
 
-function isPreparedPike(guard, cavalry, dx, dy) {
+export function isPreparedPike(guard, cavalry, dx, dy) {
     if (guard.withdrawn || guard.moraleState === 'routing') return false;
     if (guard.type !== 'pikeman' || !guard.braceReady || guard.braceSupport < 2) return false;
     if (!Terrain.segmentClear(guard.scene?.battleOptions?.terrain, guard.gx, guard.gy, cavalry.gx, cavalry.gy)) return false;
@@ -154,7 +158,7 @@ function isPreparedPike(guard, cavalry, dx, dy) {
 // forEachNear 与阈值比较的都是同一格点（0.05 倍数的镜像仍是 0.05 倍数）。
 function snapMirror(v) { return Math.round(v * 20) / 20; }
 
-class CavalryAI {
+export class CavalryAI {
     command(unit) {
         const order = unit.scene.battleOptions?.cavalryOrders?.[unit.team];
         return order === 'direct' || order === 'flank_archers' ? order : 'auto';
@@ -719,14 +723,14 @@ class CavalryAI {
 
 // ==================== 通用工具 ====================
 function td() { return UNIT_TYPES.cavalry; }
-function dist(a, b) { return Math.hypot(a.gx - b.gx, a.gy - b.gy); }
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+export function dist(a, b) { return Math.hypot(a.gx - b.gx, a.gy - b.gy); }
+export function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 // 单位专属确定性伪随机（LCG）：微走位等行为抖动不再用 Math.random，
 // 固定步长模拟的同阵容重放与红蓝镜像对照保持一致。
 // 种子惰性按"当前位置"播种：镜像局中换边配对单位取 min(gx,70-gx) 量化必然同种子，
 // 且不受部署指令造成的出生站位差异影响（同一逻辑单位换指令序列不变）。
-function unitRand(unit) {
+export function unitRand(unit) {
     if (unit.randSeed == null) {
         const mxq = Math.round(Math.min(unit.gx, GRID_W - unit.gx) * 256);
         const myq = Math.round(unit.gy * 256);
@@ -787,11 +791,11 @@ function applyMovementPlan(unit, plan) {
     unit.pressX = plan.nx; unit.pressY = plan.ny;
 }
 
-function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
+export function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
     applyMovementPlan(unit, planMovement(unit, tx, ty, speed, dt, movement));
 }
 
-function knockback(target, from, amount) {
+export function knockback(target, from, amount) {
     if (target.tacticalRole === 'guard' && amount > 0) {
         target.guardReady = false; target.guardStableTime = 0;
         target.braceReady = false; target.braceTime = 0; target.braceHold = false;
@@ -812,12 +816,12 @@ function knockback(target, from, amount) {
 }
 
 // 所有攻击都先由原始攻击力结算一次倍率、一次护甲；applyDamage 只接收最终伤害。
-function calculateAttackDamage(from, target, { multiplier = 1, rawAttack = from.typeData.atk } = {}) {
+export function calculateAttackDamage(from, target, { multiplier = 1, rawAttack = from.typeData.atk } = {}) {
     const counter = from.type === 'pikeman' && target.type === 'cavalry' ? UNIT_TYPES.pikeman.antiCav : 1;
     return Math.max(1, Math.floor(rawAttack * multiplier * counter - target.typeData.def));
 }
 
-function resolveAttack(target, from, options = {}) {
+export function resolveAttack(target, from, options = {}) {
     if (target.dead || target.withdrawn || target.hp <= 0) return 0;
     const scene = target.scene;
     if (!from.typeData.ranged && !Terrain.segmentClear(scene?.battleOptions?.terrain,
@@ -835,7 +839,7 @@ function resolveAttack(target, from, options = {}) {
     return applyDamage(target, damage, from, attackStartedAt);
 }
 
-function applyDamage(target, dmg, from, attackStartedAt) {
+export function applyDamage(target, dmg, from, attackStartedAt) {
     if (target.dead || target.withdrawn || target.hp <= 0 || !Number.isFinite(dmg) || dmg <= 0) return 0;
     const scene = target.scene;
     if (scene && (target.battleId !== scene.battleId || (from && from.battleId !== scene.battleId))) return 0;

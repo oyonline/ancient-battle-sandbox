@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { makeScene, addUnit, Terrain } = require('./battle-harness');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { makeScene, addUnit, Terrain } from './battle-harness.js';
 
 const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
 function cavalryFixture(mirrored = false, order = 'flank_archers') {

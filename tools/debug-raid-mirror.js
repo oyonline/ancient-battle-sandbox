@@ -1,6 +1,6 @@
 // D 侧翼反冲镜像验证：A=红守red_pass vs 蓝攻；B=蓝守blue_pass vs 红攻（换座镜像）
 // 断言反冲发起/选翼/收手在换座下对称，90 秒内无宏观分歧
-const { makeScene } = require('../tests/battle-harness.js');
+import { makeScene } from '../tests/battle-harness.js';
 
 const DEF = { pikeman: 30, archer: 15, cavalry: 6 }, ATK = { infantry: 40, archer: 15 };
 

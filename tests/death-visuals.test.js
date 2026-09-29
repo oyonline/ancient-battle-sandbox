@@ -1,13 +1,9 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const { context, IsoBattleScene, makeScene, addUnit } = require('./battle-harness');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { MANIFEST } from '../js/manifest.js';
+import { IsoBattleScene, makeScene, addUnit } from './battle-harness.js';
 
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'assets', 'manifest.js'), 'utf8') +
-    '\nthis.deathTestManifest = MANIFEST;', context);
-const deaths = context.deathTestManifest.deaths;
+const deaths = MANIFEST.deaths;
 
 function visual(x = 0, y = 0, texture = '', frame = 0) {
     return {

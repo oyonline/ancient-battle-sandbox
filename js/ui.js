@@ -1,5 +1,9 @@
 // ==================== 音效（WebAudio 合成，无外部文件） ====================
-const Snd = {
+import { Terrain } from './terrain.js';
+import { UNIT_TYPES, FORMATIONS, BUDGET } from './units.js';
+import { CHALLENGES, armyCost, fitArmyToBudget } from './challenges.js';
+
+export const Snd = {
     ctx: null, muted: false, _last: {},
     ensure() {
         if (!this.ctx) {
@@ -42,7 +46,7 @@ const Snd = {
 };
 
 // ==================== 一键预设配兵（预算 4000） ====================
-const PRESETS = {
+export const PRESETS = {
     balance: { name: '均衡军团', config: { infantry: 150, pikeman: 30, archer: 40, cavalry: 30 } },
     ranged:  { name: '远程火力', config: { infantry: 60, pikeman: 60, archer: 150, cavalry: 0 } },
     rush:    { name: '铁骑洪流', config: { infantry: 80, pikeman: 0, archer: 0, cavalry: 120 } },
@@ -64,7 +68,7 @@ const UI_CAVALRY_OPTIONS = {
 };
 
 // ==================== 战役、配兵与战报 ====================
-const UI = {
+export const UI = {
     scene: null,
     phase: 'home',
     mode: 'sandbox',
@@ -999,3 +1003,10 @@ const UI = {
         window.addEventListener('blur', () => this.holdStops.forEach(stop => stop()));
     }
 };
+
+// game.js 在模块加载序上先于本文件，但它只在运行时（战斗结束/音效）引用 UI/Snd——
+// 挂到全局对象完成对接；node 测试环境无 window，跳过。
+if (typeof window !== 'undefined') {
+    window.UI = UI;
+    window.Snd = Snd;
+}

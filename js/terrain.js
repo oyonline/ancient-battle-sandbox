@@ -1,5 +1,5 @@
 // 渲染、导航和战斗共用此处的确定性高度场与矩形地表。
-const Terrain = {
+export const Terrain = {
     HEIGHT_SCALE: 24,
     MAX_RANGE_MULTIPLIER: 1.2,
     FOREST_EDGE: 0.25,

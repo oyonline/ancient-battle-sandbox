@@ -1,8 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const vm = require('node:vm');
-const { context, makeScene, addUnit, snapshot } = require('./battle-harness.js');
-const knockback = vm.runInContext('knockback', context);
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { knockback, makeScene, addUnit, snapshot } from './battle-harness.js';
 const STEP = 1000 / 60;
 
 function advance(scene, seconds, inspect) {

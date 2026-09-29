@@ -1,7 +1,20 @@
 // ==================== 等距视角战斗场景 ====================
 // 帝国时代2 风格：斜45°菱形地块 + Kenney 兵种贴图 + y轴深度排序
+// UI/Snd 是 ui.js 运行时挂到全局的（模块加载序 game→ui），此处只做运行时引用。
+import { GRID_W, GRID_H } from './board.js';
+import { Terrain } from './terrain.js';
+import { TerrainNavigation } from './navigation.js';
+import {
+    UNIT_TYPES, generateArmyPositions, updatePikeBrace, CavalryAI,
+    dist, clamp, moveToward, unitRand,
+    applyDamage, resolveAttack, calculateAttackDamage
+} from './units.js';
+import { CombatRules } from './combat.js';
+import { MoraleSystem } from './morale.js';
+import { TacticsSystem } from './tactics.js';
+import { UnitInspector } from './inspection.js';
+import { MANIFEST } from './manifest.js';
 
-const GRID_W = 70, GRID_H = 70;              // 千人对战大棋盘
 const TW = 64, TH = 32;                       // 菱形块宽高
 const OX = GRID_H * TW / 2, OY = 120;         // 屏幕原点偏移
 const VIEW_W = (GRID_W + GRID_H) * TW / 2;    // 4480
@@ -150,7 +163,7 @@ function makeNoise(seed) {
     };
 }
 
-class IsoBattleScene extends Phaser.Scene {
+export class IsoBattleScene extends Phaser.Scene {
     constructor() {
         super({ key: 'IsoBattleScene' });
     }

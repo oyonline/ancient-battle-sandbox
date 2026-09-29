@@ -1,8 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { context, applyDamage, makeScene, addUnit, snapshot } = require('./battle-harness.js');
-const vm = require('node:vm');
-const { updatePikeBrace, isPreparedPike } = vm.runInContext('({ updatePikeBrace, isPreparedPike })', context);
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { applyDamage, makeScene, addUnit, snapshot, updatePikeBrace, isPreparedPike } from './battle-harness.js';
 
 function route(scene, unit) {
     const previous = unit.moraleState;

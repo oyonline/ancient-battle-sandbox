@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { makeScene, snapshot } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { makeScene, snapshot } from './battle-harness.js';
 
 function deploy(mirrored = false, count = 150, reserve = 50) {
     const scene = makeScene();

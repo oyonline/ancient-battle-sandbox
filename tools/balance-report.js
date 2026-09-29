@@ -1,7 +1,8 @@
 // Run the actual battle simulation with drawing stubbed by the shared test harness.
 // Usage: node tools/balance-report.js [--budgets=240,600] [--mixed]
-const { performance } = require('node:perf_hooks');
-const { makeScene, UNIT_TYPES } = require('../tests/battle-harness.js');
+import { performance } from 'node:perf_hooks';
+import { pathToFileURL } from 'node:url';
+import { makeScene, UNIT_TYPES } from '../tests/battle-harness.js';
 
 function runBattle(red, blue, redFormation = 'custom', blueFormation = 'custom', options = {}) {
     const scene = makeScene();
@@ -38,7 +39,7 @@ function runPair(red, blue, redFormation = 'custom', blueFormation = 'custom', o
         runBattle(blue, red, blueFormation, redFormation, swapped)];
 }
 
-if (require.main === module) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
     const budgets = (process.argv.find(arg => arg.startsWith('--budgets='))?.split('=')[1] || '240,600')
         .split(',').map(Number);
     const types = Object.keys(UNIT_TYPES);
@@ -69,4 +70,4 @@ if (require.main === module) {
     console.log(JSON.stringify({ summary: { battles, wallSeconds: (performance.now() - started) / 1000 } }));
 }
 
-module.exports = { runBattle, runPair, pureArmy };
+export { runBattle, runPair, pureArmy };

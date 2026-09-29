@@ -1,5 +1,5 @@
 // 士气只读帧首快照，所有状态在伤害结算后一起提交；不移动单位、不操作画面。
-class MoraleSystem {
+export class MoraleSystem {
     constructor(scene) {
         this.scene = scene;
         this.reset();

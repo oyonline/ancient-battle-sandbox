@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { makeScene, Terrain, snapshot, resolveAttack, calculateAttackDamage } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { makeScene, Terrain, snapshot, resolveAttack, calculateAttackDamage } from './battle-harness.js';
 
 const STEP = 1000 / 60;
 const distance = (a, b) => Math.hypot(a.gx - b.gx, a.gy - b.gy);

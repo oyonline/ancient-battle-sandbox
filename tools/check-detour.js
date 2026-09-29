@@ -1,5 +1,5 @@
 // 行为级验证：绕枪墙全流程
-const { makeScene, addUnit } = require('../tests/battle-harness.js');
+import { makeScene, addUnit } from '../tests/battle-harness.js';
 
 const STEP = 1000 / 60;
 

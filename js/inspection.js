@@ -1,5 +1,7 @@
 // 只读观察层：高度、坡向与高差效果直接取模拟规则，不参与战斗决策。
-class UnitInspector {
+import { Terrain } from './terrain.js';
+
+export class UnitInspector {
     constructor(scene) {
         this.scene = scene;
         this.panel = document.getElementById('unit-inspector');

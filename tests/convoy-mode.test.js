@@ -1,7 +1,7 @@
 // 护送模式：车队创建 / 有保护才前进 / 敌情闸门 / 到站与劫走计数 / 胜负判定 / 护送军集结 / 劫持拔河 / 劫掠军占车
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { makeScene, addUnit, UNIT_TYPES } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { makeScene, addUnit, UNIT_TYPES } from './battle-harness.js';
 
 const STEP = 1000 / 60;
 

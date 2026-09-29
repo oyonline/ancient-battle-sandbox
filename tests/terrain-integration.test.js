@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { makeScene, addUnit, moveToward, Terrain, CombatRules, knockback } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { makeScene, addUnit, moveToward, Terrain, CombatRules, knockback } from './battle-harness.js';
 
 const legal = scene => {
     for (const unit of scene.units) if (!unit.dead && !unit.withdrawn)

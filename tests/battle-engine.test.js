@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { IsoBattleScene, applyDamage, calculateAttackDamage, resolveAttack, snapshot, makeScene, addUnit } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { IsoBattleScene, applyDamage, calculateAttackDamage, resolveAttack, snapshot, makeScene, addUnit } from './battle-harness.js';
 
 test('war report counts effective damage and attributes each death exactly once', () => {
     const scene = makeScene();

@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { makeScene, addUnit } = require('./battle-harness');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { makeScene, addUnit } from './battle-harness.js';
 
 function change(scene, unit, state, at) {
     const previous = unit.moraleState;

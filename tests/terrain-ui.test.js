@@ -1,10 +1,12 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { CHALLENGES } from '../js/challenges.js';
+import { UI, Snd, PRESETS } from '../js/ui.js';
 
-const root = path.join(__dirname, '..');
+const root = fileURLToPath(new URL('..', import.meta.url));
 const page = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const snapshot = value => JSON.parse(JSON.stringify(value));
 
@@ -65,21 +67,24 @@ function setup({ readyScene = true, query = '' } = {}) {
             return selectors.get(selector);
         }
     };
-    const context = vm.createContext({
-        document, location: { search: query }, URLSearchParams, performance: { now: () => 1000 },
-        window: { addEventListener() {} }, localStorage: { getItem: () => null },
-        clearTimeout() {}, clearInterval() {}, setTimeout() {}, setInterval() {}
-    });
-    for (const file of ['terrain.js', 'units.js', 'challenges.js', 'ui.js']) {
-        vm.runInContext(fs.readFileSync(path.join(root, 'js', file), 'utf8'), context);
-    }
-    const { UI, CHALLENGES } = vm.runInContext('Snd.muted = true; ({ UI, CHALLENGES });', context);
+    // ui.js 以真实 ES 模块加载：它引用的 document/location/定时器等裸标识符走 globalThis 桩
+    globalThis.document = document;
+    globalThis.location = { search: query };
+    globalThis.performance = { now: () => 1000 };
+    globalThis.window = { addEventListener() {} };
+    globalThis.localStorage = { getItem: () => null };
+    globalThis.clearTimeout = () => {}; globalThis.clearInterval = () => {};
+    globalThis.setTimeout = () => 0; globalThis.setInterval = () => 0;
+    Snd.muted = true;
     const scene = {
         deployments: [], starts: 0, terrain: 'flat', redAlive: 76, blueAlive: 76,
         clearUnits() { this.terrain = 'flat'; },
         deployUnits(...args) { this.deployments.push(snapshot(args)); this.terrain = args[5].terrain; },
         startCountdown(callback) { this.starts++; this.finishCountdown = callback; }
     };
+    // UI 现为共享模块实例（原先每次 vm 新建）：清掉上一用例残留的场景引用，
+    // 等价于全新 UI 的 scene:null，深链 pendingDeploy 判定才不被旧场景污染
+    UI.scene = null;
     if (readyScene) UI.onSceneReady(scene);
     UI.init();
     return { UI, scene, el, terrainButtons, terrainEntries, challenges: CHALLENGES };
@@ -255,16 +260,17 @@ test('unknown terrain deep link is ignored and invalid map input cannot alter a 
     assert.equal(scene.terrain, 'blue_pass');
 });
 
-test('terrain code loads before consumers, but reading UI presets does not require scene globals', () => {
-    const terrainScript = page.indexOf('src="js/terrain.js');
-    assert.ok(terrainScript >= 0);
-    for (const file of ['units', 'game', 'ui']) assert.ok(page.indexOf('src="js/' + file + '.js') > terrainScript);
-    assert.ok(page.indexOf('src="js/inspection.js') > page.indexOf('src="js/units.js'));
-    assert.ok(page.indexOf('src="js/inspection.js') < page.indexOf('src="js/game.js'));
-    assert.ok(page.indexOf('src="js/navigation.js') > terrainScript);
-    assert.ok(page.indexOf('src="js/navigation.js') < page.indexOf('src="js/units.js'));
-    const presets = vm.runInNewContext(fs.readFileSync(path.join(root, 'js/ui.js'), 'utf8') + '\nPRESETS;');
-    assert.equal(presets.balance.config.infantry, 150);
+test('module graph loads terrain before consumers, but reading UI presets does not require scene globals', () => {
+    // Phaser 全局脚本必须先于 ES 模块入口（game.js 求值期就要 Phaser.Scene）
+    const phaserTag = page.indexOf('src="vendor/phaser.min.js"');
+    assert.ok(phaserTag >= 0 && phaserTag < page.indexOf('src="js/main.js"'));
+    const gameSrc = fs.readFileSync(path.join(root, 'js/game.js'), 'utf8');
+    const at = name => gameSrc.indexOf(`from './${name}.js'`);
+    assert.ok(at('terrain') >= 0 && at('navigation') >= 0 && at('units') >= 0 && at('inspection') >= 0);
+    assert.ok(at('terrain') < at('units'), 'terrain 先于 units 消费方');
+    assert.ok(at('terrain') < at('navigation') && at('navigation') < at('units'), 'navigation 在 terrain 之后、units 之前');
+    assert.ok(at('units') < at('inspection'), 'inspection 在 units 之后加载');
+    assert.equal(PRESETS.balance.config.infantry, 150);
 });
 
 test('all seven terrain deep links use the map defender and keep neutral terrain symmetric', () => {

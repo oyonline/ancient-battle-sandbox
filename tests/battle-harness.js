@@ -1,17 +1,22 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
+// 引擎各模块以真实 ES 模块加载（与浏览器同一张模块图）。
+// 只有 game.js 在模块求值期就要 Phaser.Scene（类继承），而静态 import 先于模块体执行——
+// 桩必须在动态 import game.js 之前注入；其余模块不依赖 Phaser，静态导入即可。
+globalThis.Phaser = { Scene: class {} };
+globalThis.Snd = null;
+globalThis.UI = { onBattleEnd() {} };
 
-const context = vm.createContext({
-    Phaser: { Scene: class {} },
-    Snd: null,
-    UI: { onBattleEnd() {} }
-});
-for (const name of ['terrain.js', 'navigation.js', 'units.js', 'combat.js', 'morale.js', 'tactics.js', 'game.js']) {
-    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', name), 'utf8'), context);
-}
-vm.runInContext('this.engine = { Terrain, TerrainNavigation, CombatRules, TacticsSystem, knockback, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack };', context);
-const { Terrain, TerrainNavigation, CombatRules, TacticsSystem, knockback, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack } = context.engine;
+import { Terrain } from '../js/terrain.js';
+import { TerrainNavigation } from '../js/navigation.js';
+import {
+    UNIT_TYPES, CavalryAI, knockback, moveToward,
+    applyDamage, calculateAttackDamage, resolveAttack,
+    updatePikeBrace, isPreparedPike
+} from '../js/units.js';
+import { CombatRules } from '../js/combat.js';
+import { MoraleSystem } from '../js/morale.js';
+import { TacticsSystem } from '../js/tactics.js';
+
+const { IsoBattleScene } = await import('../js/game.js');
 const snapshot = value => JSON.parse(JSON.stringify(value));
 
 function displayObject() {
@@ -73,4 +78,9 @@ function addUnit(scene, team, type, gx = 30, gy = 30) {
     return unit;
 }
 
-module.exports = { context, Terrain, TerrainNavigation, CombatRules, TacticsSystem, knockback, moveToward, IsoBattleScene, UNIT_TYPES, CavalryAI, applyDamage, calculateAttackDamage, resolveAttack, snapshot, makeScene, addUnit };
+export {
+    Terrain, TerrainNavigation, CombatRules, MoraleSystem, TacticsSystem,
+    UNIT_TYPES, CavalryAI, knockback, moveToward, updatePikeBrace, isPreparedPike,
+    applyDamage, calculateAttackDamage, resolveAttack,
+    IsoBattleScene, snapshot, makeScene, addUnit
+};

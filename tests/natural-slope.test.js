@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { Terrain, makeScene, addUnit, moveToward, resolveAttack } = require('./battle-harness');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { Terrain, makeScene, addUnit, moveToward, resolveAttack } from './battle-harness.js';
 
 test('natural slope is continuous, bounded, mirrored and never folds the isometric ground projection', () => {
     for (const key of ['blue_pass', 'red_pass']) {

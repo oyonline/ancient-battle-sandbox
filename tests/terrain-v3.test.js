@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { Terrain, makeScene, addUnit } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { Terrain, makeScene, addUnit } from './battle-harness.js';
 const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
 
 test('new map geometry, height and surface are mirrored without changing legacy keys', () => {

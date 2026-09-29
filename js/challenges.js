@@ -1,5 +1,7 @@
 // 固定敌阵、自由解法。所有关卡都可直接尝试，胜利记录只保存在本机。
-const CHALLENGES = [
+import { UNIT_TYPES } from './units.js';
+
+export const CHALLENGES = [
     {
         id: 'hold-the-charge', title: '挡住铁骑', subtitle: '第一课 · 找到克制',
         icon: '🔱', unit: 'cavalry', difficulty: '入门', budget: 300,
@@ -37,11 +39,11 @@ const CHALLENGES = [
     }
 ];
 
-function armyCost(config) {
+export function armyCost(config) {
     return Object.entries(UNIT_TYPES).reduce((sum, [key, type]) => sum + (config[key] || 0) * type.cost, 0);
 }
 
-function fitArmyToBudget(config, budget) {
+export function fitArmyToBudget(config, budget) {
     const army = {};
     for (const [key, type] of Object.entries(UNIT_TYPES)) {
         if (type.hidden) continue;   // 辎重车等系统单位不进入军队配置

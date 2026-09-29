@@ -1,5 +1,5 @@
 // 调试矛阵方阵 vs 骑兵楔形：绕枪墙后骑兵为何反而全歼矛阵
-const { makeScene } = require('../tests/battle-harness.js');
+import { makeScene } from '../tests/battle-harness.js';
 
 const scene = makeScene();
 scene.deployUnits({ pikeman: 80, archer: 15 }, { cavalry: 50 }, 'square', 'wedge');

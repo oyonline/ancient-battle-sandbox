@@ -1,5 +1,8 @@
 // 地图静态可见图每种身体半径只建一次；单位保留路线，不逐帧搜索整张地图。
-class TerrainNavigation {
+import { Terrain } from './terrain.js';
+import { CombatRules } from './combat.js';
+
+export class TerrainNavigation {
     constructor(scene) { this.scene = scene; this.reset(scene.battleOptions?.terrain, scene.battleId); }
 
     reset(key, battleId) {

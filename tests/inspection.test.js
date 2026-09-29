@@ -1,16 +1,14 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const { makeScene, addUnit, Terrain } = require('./battle-harness');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { UnitInspector } from '../js/inspection.js';
+import { makeScene, addUnit, Terrain } from './battle-harness.js';
 
 function fixture() {
     const panel = { hidden: true, innerHTML: '' };
     const events = new Map();
     const input = { on(name, fn) { events.set(name, fn); }, off(name) { events.delete(name); } };
-    const context = vm.createContext({ Terrain, document: { getElementById: () => panel } });
-    vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/inspection.js'), 'utf8') + '\nthis.UnitInspector = UnitInspector;', context);
+    // UnitInspector 构造时读 document.getElementById：以真实 ES 模块加载后改走全局桩
+    globalThis.document = { getElementById: () => panel };
     const scene = makeScene();
     let destroyed = false;
     const ring = { setDepth() { return this; }, clear() {}, lineStyle() {}, strokeEllipse() {}, destroy() { destroyed = true; } };
@@ -19,8 +17,8 @@ function fixture() {
     scene.events = { once(name, fn) { this.shutdown = fn; } };
     scene.cameras.main.zoom = 1;
     scene.cameras.main.getWorldPoint = (x, y) => ({ x, y });
-    const inspector = new context.UnitInspector(scene);
-    return { scene, inspector, panel, events, describe: context.UnitInspector.describe, isDestroyed: () => destroyed };
+    const inspector = new UnitInspector(scene);
+    return { scene, inspector, panel, events, describe: UnitInspector.describe, isDestroyed: () => destroyed };
 }
 
 test('inspector uses real height, attack and range rules without changing battle state', () => {

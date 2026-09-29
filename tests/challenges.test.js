@@ -1,16 +1,11 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const { context, makeScene, UNIT_TYPES, snapshot } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { CHALLENGES, fitArmyToBudget, armyCost } from '../js/challenges.js';
+import { PRESETS } from '../js/ui.js';
+import { makeScene, UNIT_TYPES, snapshot } from './battle-harness.js';
 
-vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js/challenges.js'), 'utf8') +
-    '\nthis.challengeAPI = { CHALLENGES, fitArmyToBudget, armyCost };', context);
-const { CHALLENGES, fitArmyToBudget, armyCost } = context.challengeAPI;
-// Read the actual UI presets without initializing DOM handlers or audio.
-const { presets } = vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'js/ui.js'), 'utf8') +
-    '\n({ presets: PRESETS });');
+// 真实 UI 预设（ui.js 顶层不触碰 DOM/音频，可直接以模块加载）
+const presets = PRESETS;
 
 function assertLegalArmy(army, budget) {
     for (const [key, type] of Object.entries(UNIT_TYPES)) {

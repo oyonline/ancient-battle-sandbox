@@ -1,6 +1,6 @@
 // D 侧翼反冲行为验证：红守坡口(hold_ground) vs 蓝步兵推进(advance)
 // 追踪：咬合时刻、反冲发起、出击骑离锚距离轨迹、敌弓伤亡、返锚、结局
-const { makeScene } = require('../tests/battle-harness.js');
+import { makeScene } from '../tests/battle-harness.js';
 
 const scene = makeScene();
 scene.deployUnits(

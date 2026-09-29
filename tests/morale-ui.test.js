@@ -1,8 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { UI } from '../js/ui.js';
 
 function makeUI() {
     const elements = new Map();
@@ -12,10 +10,8 @@ function makeUI() {
             return elements.get(id);
         }
     };
-    const UI = vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'js/ui.js'), 'utf8') + '\nUI;', {
-        document,
-        UNIT_TYPES: { infantry: { icon: '⚔️', name: '剑士' }, cavalry: { icon: '🐴', name: '骑兵' } }
-    });
+    // ui.js 现为真实 ES 模块：document 走全局桩（原先经 vm 上下文注入）
+    globalThis.document = document;
     return { UI, el: id => document.getElementById(id) };
 }
 
@@ -117,7 +113,7 @@ test('legacy reports render zero withdrawals and morale experiences', () => {
         damage: 80,
         byType: { cavalry: { initial: 5, alive: 2, lost: 3, kills: 1 } }
     });
-    assert.match(html, /骑兵<\/th><td>5<\/td><td>2<\/td><td>3<\/td><td>0<\/td><td>1<\/td>/);
+    assert.match(html, /🐴 重骑士<\/th><td>5<\/td><td>2<\/td><td>3<\/td><td>0<\/td><td>1<\/td>/);
     assert.match(html, /曾溃逃 <b>0<\/b> 人/);
     assert.match(html, /重整 <b>0<\/b> 人/);
     assert.match(html, /当前溃逃 <b>0<\/b> 人/);

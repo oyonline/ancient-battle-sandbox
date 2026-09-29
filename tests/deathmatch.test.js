@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { makeScene, applyDamage, snapshot } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { makeScene, applyDamage, snapshot } from './battle-harness.js';
 
 const STEP = 1000 / 60;
 function fixture(redType = 'infantry', blueType = 'infantry') {

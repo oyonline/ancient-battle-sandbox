@@ -1,8 +1,8 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const {
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
     Terrain, UNIT_TYPES, moveToward, calculateAttackDamage, resolveAttack, makeScene, addUnit
-} = require('./battle-harness.js');
+} from './battle-harness.js';
 
 const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-10,
     message || `${actual} should equal ${expected}`);

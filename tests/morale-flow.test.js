@@ -1,10 +1,7 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const MoraleSystem = vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../js/morale.js'), 'utf8') + '\nMoraleSystem;');
-const { makeScene, snapshot } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { MoraleSystem } from '../js/morale.js';
+import { makeScene, snapshot } from './battle-harness.js';
 
 function fixture() {
     const scene = { units: [], simulationTime: 0, battleId: 1,

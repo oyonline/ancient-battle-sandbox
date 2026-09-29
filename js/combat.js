@@ -1,6 +1,9 @@
 // 指令决定去哪里、打谁；普通步行和近战共用这里的接触与命中规则。
 // 骑兵冲锋/穿透、已离弦箭矢继续使用各自的接触处理和共同伤害队列。
-const CombatRules = {
+import { Terrain } from './terrain.js';
+import { dist, resolveAttack, knockback } from './units.js';
+
+export const CombatRules = {
     canAct(unit) { return this.canBeHit(unit) && unit.moraleState !== 'routing'; },
     canBeHit(unit) { return !unit.dead && !unit.withdrawn && unit.hp > 0; },
     bodyRadius(unit) { return unit.typeData.bodyRadius ?? 0.36; },

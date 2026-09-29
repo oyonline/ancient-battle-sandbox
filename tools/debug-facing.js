@@ -1,5 +1,5 @@
 // 捕获 step 1649→1650 两帧：p20 弓手的位移、速度、facing 旋转输入输出
-const { makeScene } = require('../tests/battle-harness');
+import { makeScene } from '../tests/battle-harness';
 
 const A_ID = parseInt(process.env.A || '93', 10);   // forward 蓝方弓手 blue#20
 const B_ID = parseInt(process.env.B || '21', 10);    // reversed 红方弓手 red#20（镜像）

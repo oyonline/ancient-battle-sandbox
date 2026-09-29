@@ -1,6 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { IsoBattleScene, makeScene, addUnit } = require('./battle-harness');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { IsoBattleScene, makeScene, addUnit } from './battle-harness.js';
 
 function guardScene() {
     const scene = makeScene();

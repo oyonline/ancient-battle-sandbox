@@ -1,7 +1,7 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const { runBattle, runPair, pureArmy } = require('../tools/balance-report.js');
-const { makeScene } = require('./battle-harness.js');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { runBattle, runPair, pureArmy } from '../tools/balance-report.js';
+import { makeScene } from './battle-harness.js';
 
 // Test the stated counters at equal cost, in both player seats and two army sizes.
 // These are behavioral bounds, not snapshots of exact casualties or tuning values.

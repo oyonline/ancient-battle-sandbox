@@ -1,5 +1,5 @@
 // 高精度找首发分歧帧：逐帧全对比较，报告首个 >1e-12 的偏差对及其前后帧状态
-const { makeScene } = require('../tests/battle-harness.js');
+import { makeScene } from '../tests/battle-harness.js';
 
 const SCREEN = { pikeman: 80, archer: 15 }, CAV = { cavalry: 50 };
 

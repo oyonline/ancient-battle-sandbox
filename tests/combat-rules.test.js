@@ -1,9 +1,6 @@
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const vm = require('node:vm');
-const { context, makeScene, addUnit, calculateAttackDamage } = require('./battle-harness.js');
-const CombatRules = vm.runInContext('CombatRules', context);
-const knockback = vm.runInContext('knockback', context);
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { CombatRules, knockback, makeScene, addUnit, calculateAttackDamage } from './battle-harness.js';
 
 const STEP = 1000 / 60;
 
