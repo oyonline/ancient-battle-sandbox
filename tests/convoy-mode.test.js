@@ -1,4 +1,4 @@
-// 护送模式：车队创建 / 有保护才前进 / 到站与摧毁计数 / 胜负判定 / 护送军集结
+// 护送模式：车队创建 / 有保护才前进 / 敌情闸门 / 到站与劫走计数 / 胜负判定 / 护送军集结 / 劫持拔河
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { makeScene, addUnit, UNIT_TYPES } = require('./battle-harness.js');
@@ -49,7 +49,7 @@ test('护送：敌情未清时车队停车列队，清完威胁恢复前进', ()
     scene.rebuildSpatial();
     const x0 = tail.gx;
     for (let i = 0; i < 60 * 3; i++) scene.advanceBattle(STEP);
-    assert.ok(Math.abs(tail.gx - x0) < 0.05, '敌情在 7 格内：车队应停车列队');
+    assert.ok(Math.abs(tail.gx - x0) < 0.05, '敌情在 3.2 格内：车队应停车列队');
     raider.dead = true; guard.gx = tail.gx; guard.gy = tail.gy + 1;          // 威胁清除
     scene.rebuildSpatial();
     for (let i = 0; i < 60 * 3; i++) scene.advanceBattle(STEP);
@@ -68,11 +68,46 @@ test('护送：送抵 3 辆判红胜（endReason=convoy）', () => {
     assert.equal(scene.endReason, 'convoy');
 });
 
-test('护送：被毁 3 辆判蓝胜（endReason=convoy）', () => {
+test('劫持：车不可被攻击，蓝方占住车身拉进度，拉满即遭劫走', () => {
+    const scene = convoyScene({ red: {}, blue: { infantry: 1 } });
+    const wagon = scene.convoy.wagons[0];
+    const raider = scene.units.find(u => u.team === 'blue');
+    raider.gx = wagon.gx + 1; raider.gy = wagon.gy;
+    scene.rebuildSpatial();
+    // 车不在索敌结果里——最近的蓝兵也选不出车
+    assert.notEqual(scene.nearestEnemy(raider)?.type, 'wagon');
+    assert.equal(scene.nearestEnemy(wagon)?.type, 'infantry', '车的索敌正常找到劫掠兵');
+    // 蓝独占车身：6 秒拉满劫走
+    for (let i = 0; i < 60 * 6.5; i++) scene.advanceBattle(STEP);
+    assert.ok(wagon.hijacked && wagon.withdrawn, '蓝方占住 6 秒应劫走辎重车');
+    assert.equal(scene.convoy.hijacked, 1);
+    scene.checkWin();
+    assert.equal(scene.battleOver, false, '劫走 1 辆尚未达胜利线');
+});
+
+test('劫持：护卫在场进度冻结，独占时较快夺回', () => {
+    const scene = convoyScene({ red: {}, blue: { infantry: 1 } });
+    const wagon = scene.convoy.wagons[0];
+    const raider = scene.units.find(u => u.team === 'blue');
+    raider.gx = wagon.gx + 1.2; raider.gy = wagon.gy;
+    scene.rebuildSpatial();
+    for (let i = 0; i < 60 * 3; i++) scene.advanceBattle(STEP);          // 蓝 3 秒：进度约 0.5
+    const half = wagon.hijack;
+    assert.ok(half > 0.4 && half < 0.6, `3 秒进度应过半（实际 ${half.toFixed(2)}）`);
+    const guard = addUnit(scene, 'red', 'infantry', wagon.gx - 1.2, wagon.gy);   // 护卫赶回
+    scene.rebuildSpatial();
+    for (let i = 0; i < 60 * 1; i++) scene.advanceBattle(STEP);          // 冻结+护卫在场
+    assert.ok(Math.abs(wagon.hijack - half) < 0.05 || wagon.hijack <= half, '护卫在场进度不得上涨');
+    raider.dead = true;                                                  // 劫掠兵被清：快速夺回
+    scene.rebuildSpatial();
+    for (let i = 0; i < 60 * 3; i++) scene.advanceBattle(STEP);
+    assert.ok(wagon.hijack <= 0.01, '护卫独占应较快清空劫持进度');
+    assert.ok(!wagon.hijacked, '车未被劫走');
+});
+
+test('劫持：劫走 3 辆判蓝胜（endReason=convoy）', () => {
     const scene = convoyScene();
-    for (const w of scene.convoy.wagons.slice(0, 3)) w.dead = true;
-    scene.updateConvoy(STEP / 1000);
-    assert.equal(scene.convoy.destroyed, 3);
+    scene.convoy.hijacked = 3;                       // 直接置计数：本用例只验证胜负判定
     scene.checkWin();
     assert.ok(scene.battleOver);
     assert.equal(scene.winner, 'blue');
@@ -81,11 +116,8 @@ test('护送：被毁 3 辆判蓝胜（endReason=convoy）', () => {
 
 test('护送：2:2 全结算时不提前判定，交回常规胜负路径', () => {
     const scene = convoyScene();
-    scene.convoy.wagons[0].gx = scene.convoy.goalX + 0.5;
-    scene.convoy.wagons[1].gx = scene.convoy.goalX + 0.5;
-    scene.convoy.wagons[2].dead = true;
-    scene.convoy.wagons[3].dead = true;
-    scene.updateConvoy(STEP / 1000);
+    scene.convoy.delivered = 2;                      // 直接置计数：本用例只验证胜负判定
+    scene.convoy.hijacked = 2;
     assert.equal(scene.convoyOutcome(), null, '2:2 平分不应单方面判胜');
     scene.checkWin();
     assert.equal(scene.battleOver, false, '常规判定继续（双方步兵仍在）');

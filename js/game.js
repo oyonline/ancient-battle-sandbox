@@ -1684,17 +1684,16 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     // 最近敌人：环形扩张搜索；查到半径 r 内的最佳解即全局最近（圆内 ⊆ 查询方形）。
-    // 辎重车索敌距离加权 ×1.6：拦路的敌兵优先——清完护卫才轮到拆车，
-    // 否则劫掠骑兵会无视护送军直扑车队（体验上"不讲武德"且势不可挡）。
+    // 辎重车不可被攻击（劫持玩法）：战斗围绕车身控制权，不围绕拆车——
+    // 劫掠方的得分手段是把车"劫走"（updateConvoy 的拔河），不是把车砍烂。
     nearestEnemy(unit) {
         let best = null, bestD2 = Infinity, r = 6;
-        const maxR = (GRID_W + GRID_H) * 1.6;
+        const maxR = GRID_W + GRID_H;
         while (true) {
             this.forEachNear(unit.gx, unit.gy, r, e => {
-                if (e.team === unit.team || e.dead || e.withdrawn) return;
+                if (e.team === unit.team || e.dead || e.withdrawn || e.type === 'wagon') return;
                 const dx = e.gx - unit.gx, dy = e.gy - unit.gy;
-                let d2 = dx * dx + dy * dy;
-                if (e.type === 'wagon') d2 *= 1.6 * 1.6;
+                const d2 = dx * dx + dy * dy;
                 if (d2 < bestD2 - 1e-9 || (Math.abs(d2 - bestD2) <= 1e-9 && e.id < best.id)) { bestD2 = d2; best = e; }
             });
             if (best && bestD2 <= r * r) return best;
@@ -2734,10 +2733,13 @@ class IsoBattleScene extends Phaser.Scene {
     }
 
     // ---------------- 护送模式 ----------------
-    // 到站/被毁计数与事件；车本体的"有保护才前进"在 updateNormalUnit 的 wagon 特判里。
+    // 到站/劫持计数与事件；车本体的"有保护才前进"在 updateNormalUnit 的 wagon 特判里。
     updateConvoy(dt) {
         const c = this.convoy;
         if (this.blueAlive > 0) c.lastFoeAt = this.simulationTime;   // 敌人存活时刻：全灭后等车队进站的窗口计时
+        // 劫持拔河：车 2.5 格内只有劫掠方(蓝)时拉劫持进度(+1/6s)，拉满车被劫走；
+        // 护卫(红)在场则冻结，独占时较快夺回(-1/4s)，双方都不在缓慢回落。
+        // 车不可被攻击——得分手段是"占住车身"，不是"砍烂木头"。
         for (const wagon of c.wagons) {
             if (wagon.withdrawn || wagon.dead) continue;
             if (wagon.gx >= c.goalX) {
@@ -2746,24 +2748,37 @@ class IsoBattleScene extends Phaser.Scene {
                 this.addBattleEvent(`convoy-delivered-${c.delivered}`,
                     `红方辎重车送抵安全区（${c.delivered}/${c.need}）`, 'red');
                 this._countsDirty = true;
+                continue;
             }
-        }
-        const destroyed = c.wagons.filter(w => w.dead).length;
-        if (destroyed !== c.destroyed) {
-            c.destroyed = destroyed;
-            this.addBattleEvent(`convoy-destroyed-${destroyed}`,
-                `蓝方摧毁辎重车（${destroyed}/${c.need}）`, 'blue');
-            this._countsDirty = true;
+            let reds = 0, blues = 0;
+            this.forEachNear(wagon.gx, wagon.gy, 2.5, u => {
+                if (u === wagon || u.type === 'wagon' || u.dead || u.withdrawn || u.moraleState === 'routing') return;
+                if (Math.hypot(u.gx - wagon.gx, u.gy - wagon.gy) > 2.5) return;
+                if (u.team === wagon.team) reds++; else blues++;
+            });
+            const HIJACK_SECONDS = 6;
+            if (blues > 0 && reds === 0) wagon.hijack = Math.min(1, (wagon.hijack || 0) + dt / HIJACK_SECONDS);
+            else if (reds > 0 && blues === 0) wagon.hijack = Math.max(0, (wagon.hijack || 0) - dt / (HIJACK_SECONDS * 0.45));
+            else if (reds === 0 && blues === 0) wagon.hijack = Math.max(0, (wagon.hijack || 0) - dt / 12);
+            if (wagon.hijack >= 1) {
+                wagon.withdrawn = true;
+                wagon.hijacked = true;
+                c.hijacked = (c.hijacked || 0) + 1;
+                this.addBattleEvent(`convoy-hijacked-${c.hijacked}`,
+                    `蓝方劫走一辆辎重车（${c.hijacked}/${c.need}）`, 'blue');
+                this._countsDirty = true;
+            }
         }
     }
 
-    // 护送胜负：送抵/摧毁达标即胜；全部结算完（无在途车）按多者胜，2:2 交回常规判定
+    // 护送胜负：送抵/劫走达标即胜；全部结算完（无在途车）按多者胜，2:2 交回常规判定
     convoyOutcome() {
         const c = this.convoy;
         if (c.delivered >= c.need) return c.team;
-        if (c.destroyed >= c.need) return 'blue';
+        if ((c.hijacked || 0) >= c.need) return 'blue';
         const pending = c.wagons.filter(w => !w.dead && !w.withdrawn).length;
-        if (pending === 0 && c.delivered !== c.destroyed) return c.delivered > c.destroyed ? c.team : 'blue';
+        const stolen = c.hijacked || 0;
+        if (pending === 0 && c.delivered !== stolen) return c.delivered > stolen ? c.team : 'blue';
         return null;
     }
 
@@ -2787,6 +2802,18 @@ class IsoBattleScene extends Phaser.Scene {
         g.fillPoints(zone, true);
         g.lineStyle(2.5, 0x6fdc7f, 0.65);
         g.strokePoints(zone, true, true);
+        // 劫持进度环：蓝方占住车身时在车底拉起（拉满即被劫走）
+        for (const wagon of c.wagons) {
+            if (wagon.withdrawn || wagon.dead || !(wagon.hijack > 0.02)) continue;
+            const base = this.groundPoint(wagon.gx, wagon.gy);
+            const ring = sampleGroundRing(this, wagon.gx, wagon.gy, 1.9, 22);
+            g.lineStyle(3.5, 0x57a0ff, 0.9);
+            g.beginPath();
+            g.arc(base.x, base.y + 4, 14 * 0.62, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * wagon.hijack);
+            g.strokePath();
+            g.lineStyle(1.5, 0xffffff, 0.25);
+            g.strokePoints(ring, true, true);
+        }
     }
 
     // ---------------- 胜负 ----------------
@@ -2843,7 +2870,7 @@ class IsoBattleScene extends Phaser.Scene {
         if (this.endReason === 'convoy') {
             const escortWon = winner === this.convoy.team;
             this.addBattleEvent(`convoy-${winner}`,
-                escortWon ? '红方辎重车队突破封锁，护送获胜' : '蓝方劫掠得手，辎重车队覆灭', escortWon ? 'red' : 'blue');
+                escortWon ? '红方辎重车队突破封锁，护送获胜' : '蓝方劫掠得手，辎重车队尽数被劫', escortWon ? 'red' : 'blue');
         }
         if (stalemate) this.addBattleEvent('tactic-stalemate', '双方持续固守，未再接战，本局相持结束', null);
         this.showVictory(winner);

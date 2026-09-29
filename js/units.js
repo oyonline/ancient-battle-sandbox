@@ -25,7 +25,7 @@ const UNIT_TYPES = {
     wagon: {
         name: '辎重车', icon: '🛒', cost: 0, maxCount: 0, hidden: true,
         hp: 700, atk: 0, def: 10, speed: 1.4, atkSpeed: 999999, range: 0.6,
-        scale: 1.5, tip: '护送目标：送抵安全区得分，被毁则对方得分'
+        scale: 1.5, tip: '护送目标：送抵安全区得分；被劫掠方占住 6 秒即遭劫走'
     }
 };
 

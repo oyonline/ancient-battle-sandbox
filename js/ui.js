@@ -151,7 +151,7 @@ const UI = {
         convoyHud.hidden = !fighting || !this.battleOptions.convoy;
         if (this.battleOptions.convoy && this.scene?.convoy) {
             const c = this.scene.convoy;
-            convoyHud.textContent = `🛒 护送：送抵 ${c.delivered}/${c.need} · 被毁 ${c.destroyed}/${c.need} —— 车队需要护卫随行才前进`;
+            convoyHud.textContent = `🛒 护送：送抵 ${c.delivered}/${c.need} · 被劫 ${c.hijacked || 0}/${c.need} —— 车队需要护卫随行才前进，被蓝方占住 6 秒即遭劫走`;
         }
         this.updateMorale();
         this.updateTactics();
@@ -500,7 +500,7 @@ const UI = {
                 <details><summary>需要一点战术提示？</summary><p>${this.challenge.hint}</p></details>`;
         }
         document.getElementById('buy-message').textContent = this.battleOptions.convoy
-            ? '🛒 护送模式 · 部署后红方自动获得 4 辆辎重车（不可购买），送抵 3 辆获胜'
+            ? '🛒 护送模式 · 部署后红方自动获得 4 辆辎重车（不可购买、不可被摧毁），送抵 3 辆获胜；车被蓝方占住 6 秒即遭劫走'
             : this.battleOptions.control
             ? '⚑ 占点征服 · 部署后中场自动立三面旗，占旗积分先到 60 获胜'
             : this.battleOptions.deathmatch
@@ -766,7 +766,7 @@ const UI = {
             : this.battleOptions.control
             ? '⚑ 占点征服 · 占旗攒分，先到 60 分者胜（全歼对手同样获胜）'
             : this.battleOptions.convoy
-            ? '🛒 护送 · 送抵 3 辆辎重车获胜；蓝方摧毁 3 辆即劫掠得手'
+            ? '🛒 护送 · 送抵 3 辆辎重车获胜；蓝方劫走 3 辆即得手'
             : (this.challenge ? this.challenge.title + ' · ' : this.mode === 'tactics' ? '战阵演练 · ' : '') + '拖动看战况 · 点击士兵看地形';
         this.openSheet(false);
         this.scene.startCountdown(() => { this.countdown = false; this.syncControls(); });
@@ -829,7 +829,7 @@ const UI = {
         const endReason = report.deathmatch && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '已全灭，死斗结束。 '
             : report.endReason === 'control' ? (winner === 'red' ? '红方' : '蓝方') + '掌控旗帜积分达标，占点获胜。 '
-            : report.endReason === 'convoy' ? (winner === 'red' ? '红方辎重车队突破封锁，护送获胜。' : '蓝方劫掠得手，辎重车队覆灭。')
+            : report.endReason === 'convoy' ? (winner === 'red' ? '红方辎重车队突破封锁，护送获胜。' : '蓝方劫掠得手，辎重车队尽数被劫。')
             : report.endReason === 'stalemate' ? '双方持续固守、无人推进，本局相持结束。试着让一方改为进攻。 ' : report.endReason === 'rout' && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '军心瓦解，失去继续作战能力。 '
             : winner === 'draw' && report.red + report.blue > 0 && report.morale &&
