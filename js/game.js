@@ -23,6 +23,9 @@ import { TERRITORY, makeTerritoryFlags, TerritoryEconomy, TicketSystem } from '.
 import { RecruitSystem, TerritoryAI } from './battle/recruit.js';
 import { BattalionSystem, BATTALION } from './battle/battalion.js';
 import * as unitAi from './battle/unit-ai.js';
+import * as battleUnits from './battle/separate.js';
+import * as battleConvoy from './battle/convoy.js';
+import * as battleWin from './battle/win.js';
 import { NetBattle } from './net/lockstep.js';
 
 const TW = 64, TH = 32;                       // 菱形块宽高
@@ -42,11 +45,6 @@ function refreshWorldMetrics() {
 // 空间哈希单元格移至 js/battle/spatial.js（SP_CELL = 3）
 // 战斗核（定步长/编排/动作队列/迎击队列）移至 js/battle/core.js（SIMULATION_STEP_MS = 1000/60）
 
-function quantizePosition(value, extent) {
-    const center = extent / 2, offset = value - center;
-    // 以地图中心为原点，正负半格都向外舍入；1e-10格容差吸收浮点半格噪声。
-    return center + Math.sign(offset) * Math.floor(Math.abs(offset) * 1e6 + 0.5001) / 1e6;
-}
 
 function gridToScreen(gx, gy) {
     return { x: (gx - gy) * TW / 2 + OX, y: (gx + gy) * TH / 2 + OY };
@@ -1940,57 +1938,7 @@ export class IsoBattleScene extends Phaser.Scene {
     // 排斥保证不重叠；传导让"有前进意图的一方"把对方顶向自己的方向——
     // 后排顶前排、局部打赢得势就往前拱，战线才会呼吸进退。
     separate(dt) {
-        const units = this._aliveArr;
-        const R = CombatRules.maxContactDistance(units);
-        const k = Math.min(0.35, dt * 14);        // 卡顿帧不再一次性大步推移
-        const cap = 0.9 * dt;                     // 推挤传导每帧限幅（帧率无关，多人同挤也不瞬移）
-        for (const unit of units) { unit.separateX = 0; unit.separateY = 0; unit.pshX = 0; unit.pshY = 0; unit.touchGuard = false; }
-        // 守阵锚域：墙前 1.6 格内是刚体地带——人流压力到此为止，架好的墙顶不穿、缝里也灌不进人。
-        for (const guard of units) {
-            if (guard.tacticalRole !== 'guard') continue;
-            this.forEachNear(guard.gx, guard.gy, 1.6, o => { o.touchGuard = true; });
-        }
-        for (let i = 0; i < units.length; i++) {
-            const a = units[i];
-            if (a.dead) continue;
-            this.forEachNear(a.gx, a.gy, R, b => {
-                if (b.dead || b.id <= a.id) return;          // 每对只处理一次
-                const dx = b.gx - a.gx, dy = b.gy - a.gy;
-                const d2 = dx * dx + dy * dy;
-                const contact = CombatRules.contactDistance(a, b);
-                if (d2 < contact * contact && d2 > 0.0001) {
-                    const d = Math.sqrt(d2);
-                    const push = (contact - d) * k;
-                    const aWeight = a.guardReady && a.moraleState !== 'routing' ? 0.25 : 1;
-                    const bWeight = b.guardReady && b.moraleState !== 'routing' ? 0.25 : 1;
-                    const totalWeight = aWeight + bWeight;
-                    const nx = dx / d, ny = dy / d;
-                    a.separateX -= nx * push * aWeight / totalWeight; a.separateY -= ny * push * aWeight / totalWeight;
-                    b.separateX += nx * push * bWeight / totalWeight; b.separateY += ny * push * bWeight / totalWeight;
-                    // 推挤传导是"动量放大器"：只对敌对接触对生效——
-                    // 有前进意图的一方把挡路的敌人顶向自己前进的方向，接触线才会呼吸进退。
-                    // 同队之间不传导（后排顶前排靠挡路规则自然收力，行军队列不压缩、贴墙人柱不挤入）；
-                    // 被挡停的单位（moving=false）和守阵/锚域内单位都不受力，架好的墙顶不穿。
-                    if ((a.pressX || a.pressY) && a.team !== b.team && b.tacticalRole !== 'guard' && b.moving) { b.pshX += a.pressX * push * 0.5; b.pshY += a.pressY * push * 0.5; }
-                    if ((b.pressX || b.pressY) && b.team !== a.team && a.tacticalRole !== 'guard' && a.moving) { a.pshX += b.pressX * push * 0.5; a.pshY += b.pressY * push * 0.5; }
-                }
-            });
-        }
-        for (let i = 0; i < units.length; i++) {
-            const u = units[i];
-            // 推挤传导限幅后并入位移（cap 见上）；贴墙者被锚定，不吃传导位移
-            const l = u.touchGuard ? 0 : Math.hypot(u.pshX, u.pshY);
-            const px = l > 1e-6 ? u.pshX * (l > cap ? cap / l : 1) : 0;
-            const py = l > 1e-6 ? u.pshY * (l > cap ? cap / l : 1) : 0;
-            // 对称累计推开，并消除长时间镜像模拟中的浮点方向偏差。
-            const beforeX = u.gx, beforeY = u.gy;
-            const correction = Terrain.clipMotion(this.battleOptions.terrain, u.gx, u.gy,
-                u.separateX + px, u.separateY + py, CombatRules.bodyRadius(u));
-            u.gx = quantizePosition(clamp(u.gx + correction.x, 0.6, board.W - 0.6), board.W);
-            u.gy = quantizePosition(clamp(u.gy + correction.y, 0.6, board.H - 0.6), board.H);
-            // 保存实际纠偏量（含边界截断），供下一步架枪判定扣除。
-            u.separateX = u.gx - beforeX; u.separateY = u.gy - beforeY;
-        }
+        return battleUnits.separate(this, dt);
     }
 
     // ---------------- 箭矢（全场景合批到一张 Graphics） ----------------
@@ -2908,55 +2856,11 @@ export class IsoBattleScene extends Phaser.Scene {
     // ---------------- 护送模式 ----------------
     // 到站/劫持计数与事件；车本体的"有保护才前进"在 updateNormalUnit 的 wagon 特判里。
     updateConvoy(dt) {
-        const c = this.convoy;
-        if (this.blueAlive > 0) c.lastFoeAt = this.simulationTime;   // 敌人存活时刻：全灭后等车队进站的窗口计时
-        // 劫持拔河：车 3 格内只有劫掠方(蓝)时拉劫持进度，拉满车被劫走；
-        // 护卫(红)在场则冻结，独占时较快夺回，双方都不在缓慢回落。
-        // 圈 3.0 > 护卫集结偏移 2.6：站桩护航的护卫明确算"在场冻结"，
-        // 不靠参数巧合维持语义；拉/夺速度均按圈内部队数 sqrt 缩放（封顶 ×2），
-        // 兵力投入换占领速度。车不可被攻击——得分手段是"占住车身"，不是"砍烂木头"。
-        for (const wagon of c.wagons) {
-            if (wagon.withdrawn || wagon.dead) continue;
-            if (wagon.gx >= c.goalX) {
-                wagon.withdrawn = true;
-                c.delivered++;
-                this.addBattleEvent(`convoy-delivered-${c.delivered}`,
-                    `红方辎重车送抵安全区（${c.delivered}/${c.need}）`, 'red');
-                this._countsDirty = true;
-                continue;
-            }
-            let reds = 0, blues = 0;
-            this.forEachNear(wagon.gx, wagon.gy, 3, u => {
-                if (u === wagon || u.type === 'wagon' || u.dead || u.withdrawn || u.moraleState === 'routing') return;
-                if (Math.hypot(u.gx - wagon.gx, u.gy - wagon.gy) > 3) return;
-                if (u.team === wagon.team) reds++; else blues++;
-            });
-            const HIJACK_SECONDS = 6;
-            const pull = Math.min(2, Math.sqrt(blues));
-            const push = Math.min(2, Math.sqrt(reds));
-            if (blues > 0 && reds === 0) wagon.hijack = Math.min(1, (wagon.hijack || 0) + dt * pull / HIJACK_SECONDS);
-            else if (reds > 0 && blues === 0) wagon.hijack = Math.max(0, (wagon.hijack || 0) - dt * push / (HIJACK_SECONDS * 0.45));
-            else if (reds === 0 && blues === 0) wagon.hijack = Math.max(0, (wagon.hijack || 0) - dt / 12);
-            if (wagon.hijack >= 1) {
-                wagon.withdrawn = true;
-                wagon.hijacked = true;
-                c.hijacked = (c.hijacked || 0) + 1;
-                this.addBattleEvent(`convoy-hijacked-${c.hijacked}`,
-                    `蓝方劫走一辆辎重车（${c.hijacked}/${c.need}）`, 'blue');
-                this._countsDirty = true;
-            }
-        }
+        return battleConvoy.updateConvoy(this, dt);
     }
 
-    // 护送胜负：送抵/劫走达标即胜；全部结算完（无在途车）按多者胜，2:2 交回常规判定
     convoyOutcome() {
-        const c = this.convoy;
-        if (c.delivered >= c.need) return c.team;
-        if ((c.hijacked || 0) >= c.need) return 'blue';
-        const pending = c.wagons.filter(w => !w.dead && !w.withdrawn).length;
-        const stolen = c.hijacked || 0;
-        if (pending === 0 && c.delivered !== stolen) return c.delivered > stolen ? c.team : 'blue';
-        return null;
+        return battleConvoy.convoyOutcome(this);
     }
 
     drawConvoy() {
@@ -2995,74 +2899,7 @@ export class IsoBattleScene extends Phaser.Scene {
 
     // ---------------- 胜负 ----------------
     checkWin() {
-        if (this.battleOver) return;
-        const red = this.redAlive, blue = this.blueAlive;
-        const ready = { red: 0, blue: 0 };
-        for (const unit of this.units) {
-            if (!unit.dead && !unit.withdrawn && unit.moraleState !== 'routing') ready[unit.team]++;
-        }
-        const defeated = {};
-        for (const team of ['red', 'blue']) {
-            const alive = team === 'red' ? red : blue;
-            // 领土征服：钱还能买兵或队列里还有人时， momentarily 全灭不算败——
-            // 增援随时抵达，歼灭判定必须等经济枯竭（英雄连式"还能打"语义）。
-            const canRebuild = this.battleOptions.territory && this.territory &&
-                (this.territory.recruit.queues[team].length > 0 ||
-                    this.territory.econ.treasury[team] >= this.territory.econ.costOf('infantry'));
-            if (!this.battleOptions.deathmatch && alive > 0 && !ready[team]) {
-                if (this.collapseSince[team] == null) this.collapseSince[team] = this.simulationTime;
-            } else this.collapseSince[team] = null;
-            defeated[team] = !canRebuild && (!alive || (this.collapseSince[team] != null &&
-                this.simulationTime - this.collapseSince[team] >= 5000 - 1e-7));
-        }
-        const standingOff = !defeated.red && !defeated.blue && this.tactics?.isStalemate();
-        if (standingOff && this.battleOptions.deathmatch) this.tactics.breakStalemate();
-        const stalemate = standingOff && !this.battleOptions.deathmatch;
-        const controlWon = this.battleOptions.control
-            ? ['red', 'blue'].find(team => this.controlScore[team] >= 60) : null;
-        const ticketsWon = this.battleOptions.territory ? this.territory.tickets.winner() : null;
-        const convoyWon = this.battleOptions.convoy ? this.convoyOutcome() : null;
-        // 护送模式下劫掠方已全灭但车队还在路上：胜利只是时间问题，
-        // 压下歼灭结算等车队进站（上限 40 秒），让"护送成功"的叙事走完
-        if (!controlWon && !convoyWon && this.battleOptions.convoy && defeated.blue && !defeated.red) {
-            const c = this.convoy;
-            const pending = c.wagons.filter(w => !w.dead && !w.withdrawn).length;
-            if (pending + c.delivered >= c.need && this.simulationTime - (c.lastFoeAt ?? this.simulationTime) < 40000) return;
-        }
-        if (!ticketsWon && !controlWon && !convoyWon && !defeated.red && !defeated.blue && !stalemate) return;
-        // 已发出的箭继续落地：最后一名射手阵亡后仍可能双方同归于尽。
-        if (!ticketsWon && !controlWon && !convoyWon && this.arrows.length > 0) {
-            // 只等待已经离弦的箭；停止生成新攻击，避免密集箭雨无限延后溃败结算。
-            this.resolvingOutcome = true;
-            this.battleQueue = [];
-            return;
-        }
-        this.battleOver = true;
-        this.battleQueue = [];
-        const winner = ticketsWon || controlWon || convoyWon || (stalemate || (defeated.red && defeated.blue) ? 'draw' : defeated.red ? 'blue' : 'red');
-        this.endReason = ticketsWon ? 'tickets' : controlWon ? 'control' : convoyWon ? 'convoy' : stalemate ? 'stalemate' : winner === 'draw' ? 'draw' :
-            (defeated.red && red > 0) || (defeated.blue && blue > 0) ? 'rout' : 'elimination';
-        if (this.endReason === 'tickets') {
-            const loser = winner === 'red' ? 'blue' : 'red';
-            this.addBattleEvent(`tickets-${winner}`,
-                `${winner === 'red' ? '红方' : '蓝方'}掌控多数领土，${loser === 'red' ? '红方' : '蓝方'}票数耗尽，领土征服获胜`, loser);
-        }
-        if (this.endReason === 'rout') {
-            const loser = winner === 'red' ? 'blue' : 'red';
-            this.addBattleEvent(`collapse-${loser}`, `${loser === 'red' ? '红方' : '蓝方'}全军持续溃散，失去战斗意愿`, loser);
-        }
-        if (this.endReason === 'control') {
-            const loser = winner === 'red' ? 'blue' : 'red';
-            this.addBattleEvent(`control-${winner}`, `${winner === 'red' ? '红方' : '蓝方'}掌控旗帜积分获胜`, loser);
-        }
-        if (this.endReason === 'convoy') {
-            const escortWon = winner === this.convoy.team;
-            this.addBattleEvent(`convoy-${winner}`,
-                escortWon ? '红方辎重车队突破封锁，护送获胜' : '蓝方劫掠得手，辎重车队尽数被劫', escortWon ? 'red' : 'blue');
-        }
-        if (stalemate) this.addBattleEvent('tactic-stalemate', '双方持续固守，未再接战，本局相持结束', null);
-        this.showVictory(winner);
-        UI.onBattleEnd(winner, this.getBattleReport());
+        return battleWin.checkWin(this);
     }
 
     showVictory(winner) {
