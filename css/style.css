@@ -158,6 +158,20 @@ button:active { transform: scale(0.94); }
 .recruit-btn .rc-cost { color: #ffd76e; font-size: 13px; font-weight: 600; }
 .recruit-btn .rc-name { font-size: 14px; }
 
+/* ==================== 营队指挥条（选营 → 点旗下令） ==================== */
+.battalion-bar { flex: 0 0 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 6px 8px; border-radius: 10px; background: rgba(58, 42, 16, 0.55);
+    border: 1.5px dashed rgba(240, 210, 140, 0.45); }
+#battalion-label { font: 700 13px/1.4 "PingFang SC", sans-serif; color: #ffe9c4; white-space: nowrap; }
+.battalion-orders { display: flex; gap: 6px; flex-wrap: wrap; }
+.order-btn { display: flex; align-items: center; gap: 4px; padding: 7px 12px; border-radius: 10px;
+    border: 2px solid #7a6a3e; background: #2c2416; color: #f4e8c8;
+    font: 700 13px/1 "PingFang SC", sans-serif; cursor: pointer; }
+.order-btn:not(:disabled):hover { background: #3c3220; }
+.order-btn.active { border-color: #ffd76e; color: #ffd76e; background: #463a1c; }
+.order-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.order-btn .ob-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
 /* ==================== 底部抽屉面板 ==================== */
 #sheet {
     position: fixed;

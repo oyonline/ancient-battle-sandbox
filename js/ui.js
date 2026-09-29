@@ -968,6 +968,66 @@ export const UI = {
             if (btn) btn.disabled = this.countdown || !territory.econ.canAfford('red', key) ||
                 territory.recruit.queues.red.length >= TERRITORY.QUEUE_CAP;
         }
+        this.updateBattalionBar();
+    },
+
+    // ---------------- 营队指挥条：选中营后出现，点旗下令/回防 ----------------
+    buildBattalionBar() {
+        const row = document.getElementById('battalion-orders');
+        row.replaceChildren();
+        const flags = this.scene?.flags || [];
+        flags.forEach((flag, index) => {
+            const btn = document.createElement('button');
+            btn.className = 'order-btn';
+            btn.dataset.flagOrder = index;
+            btn.innerHTML = `<span class="ob-dot"></span>⚑ ${flag.name}`;
+            btn.onclick = () => {
+                if (this.scene?.orderSelectedBattalion(index)) { Snd.play('lock'); this.updateBattalionBar(); }
+            };
+            row.appendChild(btn);
+        });
+        const home = document.createElement('button');
+        home.className = 'order-btn';
+        home.dataset.orderHome = '';
+        home.textContent = '🏠 回防集结';
+        home.onclick = () => {
+            if (this.scene?.orderSelectedBattalion('home')) { Snd.play('lock'); this.updateBattalionBar(); }
+        };
+        row.appendChild(home);
+        const deselect = document.createElement('button');
+        deselect.className = 'order-btn';
+        deselect.textContent = '✖';
+        deselect.title = '取消选择';
+        deselect.onclick = () => { this.scene?.selectBattalionByUnit(null); this.updateBattalionBar(); };
+        row.appendChild(deselect);
+    },
+
+    updateBattalionBar() {
+        const bar = document.getElementById('battalion-bar');
+        const selected = this.phase === 'battle' && this.battleOptions.territory ? this.scene?.selectedBattalion : null;
+        bar.hidden = !selected;
+        if (!selected) return;
+        if (!document.querySelector('#battalion-orders .order-btn')) this.buildBattalionBar();
+        const flags = this.scene.flags || [];
+        const own = selected.team === 'red';
+        const state = selected.gathering ? '集结中'
+            : selected.retreat ? '回防'
+            : selected.orderFlag != null && flags[selected.orderFlag] ? '目标 · ' + flags[selected.orderFlag].name
+            : '自主作战';
+        document.getElementById('battalion-label').textContent =
+            (own ? '🔴' : '🔵') + `${selected.id}营 · ${selected.aliveMembers().length}人 · ${state}` + (own ? '' : ' · 敌营不可指挥');
+        document.querySelectorAll('#battalion-orders .order-btn').forEach(btn => {
+            btn.disabled = !own;
+            if (btn.dataset.flagOrder != null) {
+                const flag = flags[Number(btn.dataset.flagOrder)];
+                const dot = btn.querySelector('.ob-dot');
+                const ownerColor = flag?.owner === 'red' ? '#ff5b5b' : flag?.owner === 'blue' ? '#57a0ff' : '#d8d2c0';
+                if (dot) dot.style.background = ownerColor;
+                btn.classList.toggle('active', own && selected.orderFlag === Number(btn.dataset.flagOrder));
+            } else if (btn.dataset.orderHome !== undefined) {
+                btn.classList.toggle('active', own && selected.retreat);
+            }
+        });
     },
 
     updateTactics() {
