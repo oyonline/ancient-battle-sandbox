@@ -15,6 +15,7 @@ import { TacticsSystem } from './tactics.js';
 import { UnitInspector } from './inspection.js';
 import { MANIFEST } from './manifest.js';
 import { BattleSpatialIndex } from './battle/spatial.js';
+import * as targeting from './battle/targeting.js';
 
 const TW = 64, TH = 32;                       // 菱形块宽高
 const OX = GRID_H * TW / 2, OY = 120;         // 屏幕原点偏移
@@ -1656,71 +1657,41 @@ export class IsoBattleScene extends Phaser.Scene {
         }
     }
 
+    // 空间索引惰性单例：布防/inspection 阶段先于首帧 rebuildSpatial 也会被索敌调用
+    get spatial() {
+        if (!this._spatial) this._spatial = new BattleSpatialIndex();
+        return this._spatial;
+    }
+
     // ---------------- 空间哈希（实现在 js/battle/spatial.js，场景只做委托） ----------------
     rebuildSpatial() {
-        if (!this._spatial) this._spatial = new BattleSpatialIndex();
-        this._spatial.rebuild(this.units);
+        const spatial = this.spatial;
+        spatial.rebuild(this.units);
         // 兼容旧字段：harness/测试直接读 sgrid/_aliveArr/redAlive/centroid
-        this.sgrid = this._spatial.grid;
-        this._aliveArr = this._spatial.alive;
-        this.redAlive = this._spatial.redAlive;
-        this.blueAlive = this._spatial.blueAlive;
-        this.centroid = this._spatial.centroid;
+        this.sgrid = spatial.grid;
+        this._aliveArr = spatial.alive;
+        this.redAlive = spatial.redAlive;
+        this.blueAlive = spatial.blueAlive;
+        this.centroid = spatial.centroid;
     }
 
     forEachNear(gx, gy, r, fn) {
-        if (!this._spatial) this._spatial = new BattleSpatialIndex();
-        this._spatial.forEachNear(gx, gy, r, fn);
+        this.spatial.forEachNear(gx, gy, r, fn);
     }
 
-    // 最近敌人：环形扩张搜索；查到半径 r 内的最佳解即全局最近（圆内 ⊆ 查询方形）。
-    // 辎重车不可被攻击（劫持玩法）：战斗围绕车身控制权，不围绕拆车——
-    // 劫掠方的得分手段是把车"劫走"（updateConvoy 的拔河），不是把车砍烂。
+    // 最近敌人：实现在 js/battle/targeting.js（纯函数，场景薄委托）
     nearestEnemy(unit) {
-        let best = null, bestD2 = Infinity, r = 6;
-        const maxR = GRID_W + GRID_H;
-        while (true) {
-            this.forEachNear(unit.gx, unit.gy, r, e => {
-                if (e.team === unit.team || e.dead || e.withdrawn || e.type === 'wagon') return;
-                const dx = e.gx - unit.gx, dy = e.gy - unit.gy;
-                const d2 = dx * dx + dy * dy;
-                if (d2 < bestD2 - 1e-9 || (Math.abs(d2 - bestD2) <= 1e-9 && e.id < best.id)) { bestD2 = d2; best = e; }
-            });
-            if (best && bestD2 <= r * r) return best;
-            if (r >= maxR) return best;
-            r *= 2;
-        }
+        return targeting.nearestEnemy(this.spatial, unit);
     }
 
     // 目标粘滞：换目标需要新目标显著更优（近 20%+）或当前目标倒下，消除等距敌人间的来回抖动。
-    // 溃逃中的敌人仍是合法目标（追击规则维持现状），只治"选谁"，不改"打不打"。
     stickyTarget(unit) {
-        const nearest = this.nearestEnemy(unit);
-        const current = unit.meleeTarget;
-        if (!current || current.dead || current.withdrawn || current === nearest) {
-            unit.meleeTarget = nearest;
-            return nearest;
-        }
-        if (!nearest) return current;
-        const dc = dist(unit, current), dn = dist(unit, nearest);
-        if (dn < dc * 0.8) { unit.meleeTarget = nearest; return nearest; }
-        return current;
+        return targeting.stickyTarget(this.spatial, unit);
     }
 
-    // 遇骑结阵的探测器：半径内朝本队冲锋（含穿刺）且弹道指向 ±60° 扇区内的敌骑，取 id 最小者决胜。
-    // 读帧首冲锋视图快照（chargeView*），保证换座对称——见 advanceBattle 帧首注释。
+    // 遇骑结阵的探测器：读帧首冲锋视图快照（chargeView*），保证换座对称。
     incomingCharge(unit, radius) {
-        let threat = null;
-        this.forEachNear(unit.gx, unit.gy, radius, e => {
-            if (e.team === unit.team || e.dead || e.withdrawn || e.type !== 'cavalry') return;
-            const view = e.chargeViewState;
-            if (view !== 'charge' && view !== 'pierce') return;
-            const dx = unit.gx - e.gx, dy = unit.gy - e.gy, d = Math.hypot(dx, dy);
-            if (d > radius || d < 0.05) return;
-            if ((e.chargeViewX ?? 0) * dx + (e.chargeViewY ?? 0) * dy < d * 0.5) return;
-            if (!threat || e.id < threat.id) threat = e;
-        });
-        return threat;
+        return targeting.incomingCharge(this.spatial, unit, radius);
     }
 
     // 攻击时朝向实际目标，出手期间锁定画面朝向。
