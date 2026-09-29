@@ -16,6 +16,7 @@ import { UnitInspector } from './inspection.js';
 import { MANIFEST } from './manifest.js';
 import { BattleSpatialIndex } from './battle/spatial.js';
 import * as targeting from './battle/targeting.js';
+import { BattleLedger } from './battle/report.js';
 
 const TW = 64, TH = 32;                       // 菱形块宽高
 const OX = GRID_H * TW / 2, OY = 120;         // 屏幕原点偏移
@@ -837,7 +838,6 @@ export class IsoBattleScene extends Phaser.Scene {
         this.tactics = null;
         this.battleOptions = { deathmatch: false, control: false, reserves: { red: 0, blue: 0 }, terrain: 'flat',
             cavalryOrders: { red: 'auto', blue: 'auto' } };
-        this.firstContactMs = null;
         if (this.tacticsGfx) this.tacticsGfx.clear();
         this.battleId = (this.battleId || 0) + 1;
         this.navigation?.reset('flat', this.battleId);
@@ -848,84 +848,41 @@ export class IsoBattleScene extends Phaser.Scene {
         this.braceCandidates = new Map();
         this.collectingImpacts = false;
         this.planningStep = false;
-        this.battleEvents = [];
-        this.battleMilestones = new Set();
+        // 战报台账移至 js/battle/report.js（第 0 批 4/4）；battleStats 保持同一对象，外部契约不变
+        this.ledger = new BattleLedger(this.battleId);
+        this.battleStats = this.ledger.stats;
         this.dyingUnits = new Set();
         this.morale = new MoraleSystem(this);
         this.collapseSince = { red: null, blue: null };
         this.moraleLastReason = { red: '', blue: '' };
-        this.moraleCue = null;
         this.endReason = null;
         this.resolvingOutcome = false;
         this._rallyAnchors = [];
         this._rallyRefresh = -Infinity;
         this._lastMoraleUI = 0;
-        const emptyStats = () => ({ initial: 0, alive: 0, lost: 0, kills: 0, damage: 0,
-            withdrawn: 0, routed: 0, rallied: 0, reengaged: 0, postRallyDamage: 0 });
-        this.battleStats = {};
-        for (const team of ['red', 'blue']) {
-            this.battleStats[team] = {
-                ...emptyStats(),
-                byType: Object.fromEntries(Object.keys(UNIT_TYPES).map(type => [type, emptyStats()]))
-            };
-        }
     }
+
+    // 台账字段经 getter 暴露（ui.js/tests 直接读 scene.moraleCue / scene.firstContactMs）
+    get firstContactMs() { return this.ledger.firstContactMs; }
+    get moraleCue() { return this.ledger.moraleCue; }
 
     registerUnit(unit) {
         unit.battleId = this.battleId;
-        const team = this.battleStats[unit.team];
-        for (const stats of [team, team.byType[unit.type]]) {
-            stats.initial++;
-            stats.alive++;
-        }
+        this.ledger.register(unit);
     }
 
     recordDamage(target, damage, from, attackStartedAt = from?.lastAttack) {
-        if (!from || from.battleId !== this.battleId || from.team === target.team) return;
-        if (damage > 0 && this.firstContactMs == null) this.firstContactMs = Math.round(this.simulationTime);
-        const team = this.battleStats[from.team];
-        team.damage += damage;
-        team.byType[from.type].damage += damage;
-        if (damage > 0 && from.everRallied && attackStartedAt >= from.lastRalliedAt) {
-            for (const stats of [team, team.byType[from.type]]) {
-                stats.postRallyDamage += damage;
-                if (!from.everReengaged) stats.reengaged++;
-            }
-            from.everReengaged = true;
-            if (from.moralePhase === 'returning') from.moralePhase = null;
-        }
+        this.ledger.recordDamage(this.simulationTime, target, damage, from, attackStartedAt);
     }
 
     addBattleEvent(key, text, team) {
-        if (this.battleMilestones.has(key)) return;
-        this.battleMilestones.add(key);
-        this.battleEvents.push({ atMs: Math.round(this.simulationTime), text, team });
-        if (/^(morale-|tactic-rally|tactic-rescue)/.test(key)) {
-            this.moraleCue = { text, atMs: this.simulationTime };
-        }
+        this.ledger.addEvent(this.simulationTime, key, text, team);
     }
 
     recordDeath(unit, from) {
-        const team = this.battleStats[unit.team];
-        for (const stats of [team, team.byType[unit.type]]) {
-            stats.alive--;
-            stats.lost++;
-        }
-        if (unit.team === 'red') this.redAlive = team.alive;
-        else this.blueAlive = team.alive;
-        if (from && from.battleId === this.battleId && from.team !== unit.team) {
-            const attacker = this.battleStats[from.team];
-            attacker.kills++;
-            attacker.byType[from.type].kills++;
-            const side = from.team === 'red' ? '红方' : '蓝方';
-            this.addBattleEvent('first-kill', `${side}${UNIT_TYPES[from.type].name}取得首杀`, from.team);
-            if (from.type === 'cavalry' && unit.type === 'archer') {
-                this.addBattleEvent('cavalry-archer', `${side}骑兵首次击杀弓箭手`, from.team);
-            }
-        }
-        if (team.initial > 0 && team.lost * 2 >= team.initial) {
-            this.addBattleEvent(`half-${unit.team}`, `${unit.team === 'red' ? '红方' : '蓝方'}损失达到初始兵力的一半`, unit.team);
-        }
+        const alive = this.ledger.recordDeath(this.simulationTime, unit, from, this.battleId);
+        if (unit.team === 'red') this.redAlive = alive;
+        else this.blueAlive = alive;
     }
 
     getBattleReport() {
@@ -946,13 +903,13 @@ export class IsoBattleScene extends Phaser.Scene {
             terrain: this.battleOptions.terrain,
             orders: { red: this.tactics?.orders.red || 'advance', blue: this.tactics?.orders.blue || 'advance' },
             cavalryOrders: { ...this.battleOptions.cavalryOrders },
-            firstContactMs: this.firstContactMs,
+            firstContactMs: this.ledger.firstContactMs,
             teams,
             morale: this.getMoraleSummary(),
             deathmatch: this.battleOptions.deathmatch,
             tactics: this.getTacticsSummary(),
             endReason: this.endReason,
-            events: this.battleEvents.map(event => ({ ...event }))
+            events: this.ledger.events.map(event => ({ ...event }))
         };
     }
 
