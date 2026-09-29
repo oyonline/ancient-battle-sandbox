@@ -44,8 +44,8 @@ test('护送：敌情未清时车队停车列队，清完威胁恢复前进', ()
     const scene = convoyScene({ red: {}, blue: { infantry: 1 } });
     const tail = scene.convoy.wagons.reduce((a, b) => (b.gx < a.gx ? b : a));
     const guard = addUnit(scene, 'red', 'infantry', tail.gx, tail.gy + 1);   // 护卫随行
-    const raider = scene.units.find(u => u.team === 'blue');                 // 劫掠兵压到 6 格外
-    raider.gx = tail.gx + 6.2; raider.gy = tail.gy;
+    const raider = scene.units.find(u => u.team === 'blue');                 // 劫掠兵压到贴脸
+    raider.gx = tail.gx + 3.0; raider.gy = tail.gy;
     scene.rebuildSpatial();
     const x0 = tail.gx;
     for (let i = 0; i < 60 * 3; i++) scene.advanceBattle(STEP);
