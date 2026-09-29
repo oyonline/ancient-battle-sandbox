@@ -7,7 +7,7 @@
 
 import { Terrain } from '../terrain.js';
 import { CombatRules } from '../combat.js';
-import { updatePikeBrace, applyDamage, resolveAttack } from '../units.js';
+import { updatePikeBrace, applyDamage, resolveAttack, moveToward } from '../units.js';
 import { board } from '../board.js';
 
 export const SIMULATION_STEP_MS = 1000 / 60;
@@ -116,6 +116,12 @@ export function stepBattle(scene, dt) {
         if (scene.updateFallingBackUnit(unit, now, dt)) continue;
         if (scene.tactics?.updateGroundGuard(unit, now, dt)) continue;
         if (unit.type === 'cavalry') {
+            // 营队缰绳（可选场景钩子，仅领土征服）：骑兵孤军冒进超缰绳且无敌情 → 归队
+            if (scene.battalionHoldCavalry?.(unit)) {
+                const center = unit.battalion.center();
+                moveToward(unit, center.gx, center.gy, unit.typeData.speed, dt);
+                continue;
+            }
             if (scene.cavalryAI.update(unit, now, dt)) continue;
         }
         if (scene.tactics && scene.tactics.updateUnit(unit, now, dt)) continue;

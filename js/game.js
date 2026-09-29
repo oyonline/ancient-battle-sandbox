@@ -21,6 +21,7 @@ import * as core from './battle/core.js';
 import { BraceQueue } from './battle/core.js';
 import { TERRITORY, makeTerritoryFlags, TerritoryEconomy, TicketSystem } from './battle/economy.js';
 import { RecruitSystem, TerritoryAI } from './battle/recruit.js';
+import { BattalionSystem, BATTALION } from './battle/battalion.js';
 
 const TW = 64, TH = 32;                       // 菱形块宽高
 // 世界度量随棋盘尺寸走（默认 70×70 时 VIEW_W=4480）；大地图模式经 setBoardSize
@@ -891,6 +892,9 @@ export class IsoBattleScene extends Phaser.Scene {
             reserves: { red: 0, blue: 0 }, terrain: 'flat',
             cavalryOrders: { red: 'auto', blue: 'auto' } };
         this.territory = null;
+        this.battalions = null;
+        this.selectedBattalion = null;
+        this.selectionGfx?.clear();
         this._territoryCamInit = false;
         if (this.tacticsGfx) this.tacticsGfx.clear();
         this.battleId = (this.battleId || 0) + 1;
@@ -1245,6 +1249,10 @@ export class IsoBattleScene extends Phaser.Scene {
             ai: { red: new TerritoryAI(this, 'red'), blue: new TerritoryAI(this, 'blue') },
             autoBuy: { red: options.territoryAI === true, blue: options.territoryAI !== false }
         } : null;
+        // 营队系统（仅领土征服）：开局常备军按纵向三等分为上/中/下营
+        this.battalions = this.battleOptions.territory ? new BattalionSystem(this) : null;
+        this.selectedBattalion = null;
+        if (this.battalions) this.battalions.splitOpening(this.units);
         // 护送模式：红方 4 辆辎重车从出发区沿中线穿越战场，送抵 3 辆红胜、
         // 被毁 3 辆蓝胜；车附近有护送部队才前进（无保护停下等待）。
         this.convoy = null;
@@ -1692,25 +1700,51 @@ export class IsoBattleScene extends Phaser.Scene {
         // 敌军残兵(≤3)时全员清场优先——留着几个远程敌站桩，占旗得分也赢不踏实。
         // 骑兵由冲锋状态机驱动不经过这里；守位与战术组单位走各自入口，不受影响。
         const foeCount = unit.team === 'red' ? this.blueAlive : this.redAlive;
-        // 占点/领土：自由单位在敌尚远(>12格)且不在旗圈内时，向最近的非己方旗行进；
+        // 领土征服营队：① 集结营成员驻留集结点（攒满一波整营开进，不再单兵溜达）；
+        // ② 玩家回防令：全营撤回老家集结点；③ 有令营开赴目标旗（步速按营内
+        // 最慢兵种同步，弓骑不脱队）；④ 无令营沿用就近争旗。
+        // 占点/非营单位：在敌尚远(>12格)且不在旗圈内时向最近的非己方旗行进；
         // 已在非己方旗圈内的单位站住守旗（见追敌分支），敌近后照常接敌不追出圈。
-        // 领土模式额外允许远程兵种随队行军，但停在旗圈外沿（5.5格）standoff 放箭。
-        // 敌军残兵(≤3)时全员清场优先——留着几个远程敌站桩，占旗得分也赢不踏实。
-        // 骑兵由冲锋状态机驱动不经过这里；守位与战术组单位走各自入口，不受影响。
+        // 领土模式远程兵种随队行军但停在旗圈外沿（5.5格）standoff 放箭。
+        // 敌军残兵(≤3)时全员清场优先；骑兵由冲锋状态机驱动不经过这里（缰绳另行接管）。
+        const battalion = this.battleOptions.territory ? unit.battalion : null;
+        if (battalion && battalion.gathering && !guardAnchor && minD > 12) {
+            const gather = battalion.gatherPoint;
+            unit.target = nearest;
+            if (gather && Math.hypot(gather.gx - unit.gx, gather.gy - unit.gy) > BATTALION.GATHER_HOLD_RADIUS) {
+                moveToward(unit, gather.gx, gather.gy, unit.typeData.speed, dt);
+            }
+            return;
+        }
+        if (battalion && !battalion.gathering && battalion.retreat && !guardAnchor && minD > 12) {
+            const rally = this.battalions.homeRally(unit.team);
+            unit.target = nearest;
+            if (Math.hypot(rally.gx - unit.gx, rally.gy - unit.gy) > BATTALION.GATHER_HOLD_RADIUS + 2) {
+                moveToward(unit, rally.gx, rally.gy, battalion.pace * BATTALION.PACE_SLACK, dt);
+            }
+            return;
+        }
         const flagMarch = this.battleOptions.control || this.battleOptions.territory;
         if (flagMarch && !guardAnchor && minD > 12 && foeCount > 3 &&
             (!unit.typeData.ranged || this.battleOptions.territory) &&
             !this.flags.some(f => f.owner !== unit.team && Math.hypot(f.gx - unit.gx, f.gy - unit.gy) <= 2.8)) {
-            let flag = null, best = Infinity;
-            for (const f of this.flags) {
-                if (f.owner === unit.team) continue;
-                const d = Math.hypot(f.gx - unit.gx, f.gy - unit.gy);
-                // 等距取 y 小者：键为镜像不变量，换座两侧选同一面旗
-                if (d < best - 1e-9 || (Math.abs(d - best) <= 1e-9 && f.gy < flag.gy - 1e-9)) { best = d; flag = f; }
+            let flag = battalion && !battalion.gathering && battalion.orderFlag != null ? this.flags[battalion.orderFlag] : null;
+            if (!flag || flag.owner === unit.team) {
+                flag = null;
+                let best = Infinity;
+                for (const f of this.flags) {
+                    if (f.owner === unit.team) continue;
+                    const d = Math.hypot(f.gx - unit.gx, f.gy - unit.gy);
+                    // 等距取 y 小者：键为镜像不变量，换座两侧选同一面旗
+                    if (d < best - 1e-9 || (Math.abs(d - best) <= 1e-9 && f.gy < flag.gy - 1e-9)) { best = d; flag = f; }
+                }
             }
             if (flag && (!unit.typeData.ranged || Math.hypot(flag.gx - unit.gx, flag.gy - unit.gy) > 5.5)) {
                 unit.target = nearest;
-                moveToward(unit, flag.gx, flag.gy, unit.typeData.speed * (unit.typeData.ranged ? 0.9 : 1), dt);
+                const pace = battalion && !battalion.gathering && unit.type !== 'cavalry'
+                    ? Math.min(unit.typeData.speed, battalion.pace * BATTALION.PACE_SLACK)
+                    : unit.typeData.speed * (unit.typeData.ranged ? 0.9 : 1);
+                moveToward(unit, flag.gx, flag.gy, pace, dt);
                 return;
             }
         }
@@ -2587,7 +2621,7 @@ export class IsoBattleScene extends Phaser.Scene {
     }
 
     // ---------------- 领土征服 ----------------
-    // 每步推进：旗帜拔河（复用 updateFlags）→ 军费收入 → 征兵出兵 → 战略 AI 采购 → 票数流失。
+    // 每步推进：旗帜拔河（复用 updateFlags）→ 军费收入 → 征兵出兵 → 营队维护/AI → 战略 AI 采购 → 票数流失。
     updateTerritory(dt) {
         this.updateFlags(dt);
         const owned = { red: 0, blue: 0 };
@@ -2595,6 +2629,7 @@ export class IsoBattleScene extends Phaser.Scene {
         const state = this.territory;
         state.econ.tick(dt, owned);
         state.recruit.update();
+        this.battalions.update(this.simulationTime);
         for (const team of ['red', 'blue']) {
             if (state.autoBuy[team]) state.ai[team].update(this.simulationTime);
         }
@@ -2641,7 +2676,41 @@ export class IsoBattleScene extends Phaser.Scene {
                 if (this.spotFree(x, y)) { gx = x; gy = y; break outer; }
             }
         }
-        return this.spawnUnit(team, type, gx, gy);
+        const unit = this.spawnUnit(team, type, gx, gy);
+        if (this.battalions) this.battalions.assignReinforcement(unit);
+        return unit;
+    }
+
+    // 营队系统棋盘钩子（battle/battalion.js 经此读当前尺寸，不直接 import game.js）
+    board_W() { return board.W; }
+    board_H() { return board.H; }
+
+    // 点兵选营：观察层（UnitInspector）点击士兵时联动选中整营；点空地清除。
+    selectBattalionByUnit(unit) {
+        if (!this.battleOptions.territory) { this.selectedBattalion = null; return; }
+        this.selectedBattalion = unit && !unit.dead && !unit.withdrawn ? (unit.battalion || null) : null;
+    }
+
+    // 玩家下令：flagIndex 为旗序号，'home' 为回防集结，null 为取消选择。
+    orderSelectedBattalion(flagIndex) {
+        if (!this.battalions) return false;
+        return this.battalions.orderSelected(flagIndex, this);
+    }
+
+    // 骑兵缰绳：营开进途中骑兵孤军冒进（离营心超缰绳且无敌情）→ 本步由缰绳接管归队。
+    battalionHoldCavalry(unit) {
+        if (!this.battleOptions.territory || !this.battalions) return false;
+        const battalion = unit.battalion;
+        if (!battalion || battalion.gathering) return false;
+        const center = battalion.center();
+        if (!center) return false;
+        if (Math.hypot(center.gx - unit.gx, center.gy - unit.gy) <= BATTALION.CAVALRY_LEASH) return false;
+        let enemyNear = false;
+        this.forEachNear(unit.gx, unit.gy, BATTALION.LEASH_ENEMY_CLEAR, u => {
+            if (u.team !== unit.team && !u.dead && !u.withdrawn && u.moraleState !== 'routing' &&
+                Math.hypot(u.gx - unit.gx, u.gy - unit.gy) <= BATTALION.LEASH_ENEMY_CLEAR) enemyNear = true;
+        });
+        return !enemyNear;
     }
 
     // ---------------- 领土小地图（屏幕空间，点击/拖动直接跳镜头） ----------------
@@ -2719,6 +2788,34 @@ export class IsoBattleScene extends Phaser.Scene {
         });
         g.closePath();
         g.strokePath();
+
+        // 营队选中态：成员金圈 + 营令指向线（世界空间层，随镜头缩放）
+        if (!this.selectionGfx) this.selectionGfx = this.add.graphics().setDepth(12050);
+        const sel = this.selectionGfx;
+        sel.clear();
+        const selected = this.selectedBattalion;
+        if (selected && selected.members.length) {
+            sel.lineStyle(2.5, 0xffe49a, 0.95);
+            for (const u of selected.aliveMembers()) {
+                const p = this.groundPoint(u.gx, u.gy);
+                sel.strokeEllipse(p.x, p.y, 30, 15);
+            }
+            const center = selected.center();
+            if (center) {
+                const from = this.groundPoint(center.gx, center.gy);
+                let toPoint = null, color = 0xffe49a;
+                if (selected.retreat) { toPoint = this.battalions.homeRally(selected.team); color = 0x8cdaff; }
+                else if (selected.orderFlag != null && this.flags[selected.orderFlag]) {
+                    toPoint = this.flags[selected.orderFlag]; color = 0xf6cc68;
+                }
+                if (toPoint) {
+                    const to = this.groundPoint(toPoint.gx, toPoint.gy);
+                    sel.lineStyle(3, color, 0.8);
+                    sel.lineBetween(from.x, from.y, to.x, to.y);
+                    sel.strokeCircle(to.x, to.y, 6);
+                }
+            }
+        }
     }
 
     drawFlags() {

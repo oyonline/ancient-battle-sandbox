@@ -24,6 +24,9 @@ export const TERRITORY = {
     AI_INTERVAL_MS: 1200              // 战略 AI 决策间隔
 };
 
+// 占领力权重：占旗拔河与营队实力评估共用同一张表（人多/兵种强 = 占领力高）。
+export const BATTALION_POWER = { infantry: 10, pikeman: 7, archer: 4, cavalry: 12 };
+
 // 五面旗布局：双方半场各两面（起始归属各自方）+ 中场争夺点。
 // 坐标按棋盘比例给出，换座镜像（x→W-x）下自对称。
 export function makeTerritoryFlags() {

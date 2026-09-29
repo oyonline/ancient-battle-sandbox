@@ -22,6 +22,8 @@ export class UnitInspector {
             if (!start || p.id !== start.id || start.dragged || scene._pinching ||
                 Math.hypot(p.x - start.x, p.y - start.y) > 6) return;
             this.selected = this.pick(p);
+            // 领土征服联动：点兵即选中整营（含点空地清除选营）
+            if (scene.selectBattalionByUnit) scene.selectBattalionByUnit(this.selected);
             this.update();
         };
         this.onOutside = () => { this.pointer = null; };
