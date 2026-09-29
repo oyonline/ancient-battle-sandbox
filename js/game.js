@@ -22,6 +22,7 @@ import { BraceQueue } from './battle/core.js';
 import { TERRITORY, makeTerritoryFlags, TerritoryEconomy, TicketSystem } from './battle/economy.js';
 import { RecruitSystem, TerritoryAI } from './battle/recruit.js';
 import { BattalionSystem, BATTALION } from './battle/battalion.js';
+import { NetBattle } from './net/lockstep.js';
 
 const TW = 64, TH = 32;                       // 菱形块宽高
 // 世界度量随棋盘尺寸走（默认 70×70 时 VIEW_W=4480）；大地图模式经 setBoardSize
@@ -914,6 +915,8 @@ export class IsoBattleScene extends Phaser.Scene {
         this.territory = null;
         this.battalions = null;
         this.selectedBattalion = null;
+        this.net = null;
+        this.netMySide = 'red';
         this.selectionGfx?.clear();
         this._territoryCamInit = false;
         if (this.tacticsGfx) this.tacticsGfx.clear();
@@ -1223,6 +1226,8 @@ export class IsoBattleScene extends Phaser.Scene {
         this.battleOptions.control = options.control === true;
         this.battleOptions.convoy = options.convoy === true;
         this.battleOptions.territory = options.territory === true;
+        this.battleOptions.net = options.net === true;
+        this.netMySide = options.mySide === 'blue' ? 'blue' : 'red';   // 联机=本端阵营；单机恒红
         for (const [team] of armies) {
             const cavalryOrder = options.cavalryOrders?.[team];
             this.battleOptions.cavalryOrders[team] = ['direct', 'flank_archers'].includes(cavalryOrder) ? cavalryOrder : 'auto';
@@ -1261,13 +1266,16 @@ export class IsoBattleScene extends Phaser.Scene {
         this.controlScore = { red: 0, blue: 0 };
         // 领土征服运行态：经济 / 征兵队列 / 票数 / 战略 AI。五面旗布局见 battle/economy.js。
         // 蓝方默认自动征兵（红方玩家手动大按钮）；territoryAI:true 双方自动（观战/测试），
-        // territoryAI:false 双方停手（隔离变量测经济/票数）。
+        // territoryAI:false 双方停手（隔离变量测经济/票数）；联机对战双方都是真人（AI 只调度无令营）。
         this.territory = this.battleOptions.territory ? {
             econ: new TerritoryEconomy(),
             recruit: new RecruitSystem(this),
             tickets: new TicketSystem(),
             ai: { red: new TerritoryAI(this, 'red'), blue: new TerritoryAI(this, 'blue') },
-            autoBuy: { red: options.territoryAI === true, blue: options.territoryAI !== false }
+            autoBuy: {
+                red: options.territoryAI === true,
+                blue: options.net ? false : options.territoryAI !== false
+            }
         } : null;
         // 营队系统（仅领土征服）：开局常备军按纵向三等分为上/中/下营
         this.battalions = this.battleOptions.territory ? new BattalionSystem(this) : null;
@@ -1526,7 +1534,21 @@ export class IsoBattleScene extends Phaser.Scene {
                     t.destroy();
                 } });
                 if (Snd) Snd.play(i === 3 ? 'go' : 'tick');
-                if (i === 3) { this.battleStarted = true; this.spawnZoneGfx.clear(); if (onDone) onDone(); }
+                if (i === 3) {
+                    this.battleStarted = true;
+                    this.spawnZoneGfx.clear();
+                    // 联机对战：倒计时结束建 NetBattle 并铺底包（两侧各自本地倒计时，
+                    // 模拟步进自同步，前瞻带吸收起步偏差）
+                    if (this.battleOptions.net && this.netClient && !this.net) {
+                        this.net = new NetBattle(this, this.netClient, {
+                            onDesync: turn => {
+                                if (typeof UI !== 'undefined' && UI.onNetDesync) UI.onNetDesync(turn);
+                            }
+                        });
+                        this.net.start();
+                    }
+                    if (onDone) onDone();
+                }
             });
             this.countdownTimers.push(timer);
         });
@@ -1604,7 +1626,37 @@ export class IsoBattleScene extends Phaser.Scene {
     }
 
     advanceBattle(delta) {
-        core.advanceBattle(this, delta);
+        if (this.net) this.advanceNet(delta);
+        else core.advanceBattle(this, delta);
+    }
+
+    // 锁步推进（联机）：命令收齐才走下一回合；缺包短暂停等，渲染不受影响。
+    advanceNet(delta) {
+        this.simulationAccumulator += Math.max(0, Math.min(delta, 50)) * this.gameSpeed;
+        while (this.simulationAccumulator + 1e-7 >= core.SIMULATION_STEP_MS && !this.battleOver) {
+            if (!this.net.lockstep.canStep()) {
+                this.simulationAccumulator = Math.min(this.simulationAccumulator, core.SIMULATION_STEP_MS);
+                return;
+            }
+            const commands = this.net.lockstep.takeCommands();
+            for (const command of commands) this.applyNetCommand(command);
+            this.simulationAccumulator = Math.max(0, this.simulationAccumulator - core.SIMULATION_STEP_MS);
+            this.simulationTime += core.SIMULATION_STEP_MS;
+            this.stepBattle(core.SIMULATION_STEP_MS / 1000);
+            this.net.onTurnDone();
+        }
+    }
+
+    // 网络命令注入：两端各自按到达回合确定性执行（买兵 / 营令）。
+    // 不触碰 selectedBattalion——选中态是各端本地视图，不随对方命令漂移。
+    applyNetCommand(command) {
+        if (!command || !this.territory) return;
+        if (command.k === 'buy') {
+            this.territory.recruit.enqueue(command.side, command.type);
+        } else if (command.k === 'order' && this.battalions) {
+            const battalion = this.battalions.battalions.find(b => b.id === command.id && b.team === command.side);
+            if (battalion) this.battalions.orderBattalion(battalion, command.flag);
+        }
     }
 
     stepBattle(dt) {

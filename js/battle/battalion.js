@@ -20,11 +20,11 @@ export const BATTALION = {
     PACE_SLACK: 1.08           // 行军步速同步的宽容系数（略高于最慢兵种）
 };
 
-let battalionSeq = 1;
+let battalionSeq = 1000;   // 仅兜底（测试手工建营）；正式营一律由 BattalionSystem 编号
 
 export class Battalion {
-    constructor(team, kind) {
-        this.id = battalionSeq++;
+    constructor(team, kind, id) {
+        this.id = id ?? battalionSeq++;
         this.team = team;
         this.kind = kind;                 // 'line'（成建制作战营）| 'gathering'（集结中）
         this.gathering = kind === 'gathering';
@@ -71,6 +71,11 @@ export class BattalionSystem {
         this.battalions = [];               // 营创建序（确定性）
         this.pool = { red: null, blue: null };   // 各方现役集结营
         this.nextThink = 0;
+        this.seq = 1;                       // 营号从每场战斗重新计数——联机两端 id 逐一对齐（网络令按 id 寻址）
+    }
+
+    createBattalion(team, kind) {
+        return new Battalion(team, kind, this.seq++);
     }
 
     homeRally(team) {
@@ -85,7 +90,7 @@ export class BattalionSystem {
             mine.sort((a, b) => a.gy - b.gy || a.id - b.id);
             const lanes = Math.min(BATTALION.OPENING_LANES, mine.length);
             for (let lane = 0; lane < lanes; lane++) {
-                const battalion = new Battalion(team, 'line');
+                const battalion = this.createBattalion(team, 'line');
                 const from = Math.floor(lane * mine.length / lanes);
                 const to = Math.floor((lane + 1) * mine.length / lanes);
                 for (let i = from; i < to; i++) {
@@ -102,7 +107,7 @@ export class BattalionSystem {
     assignReinforcement(unit) {
         const team = unit.team;
         if (!this.pool[team]) {
-            this.pool[team] = new Battalion(team, 'gathering');
+            this.pool[team] = this.createBattalion(team, 'gathering');
             this.pool[team].gatherPoint = this.homeRally(team);
             this.pool[team].createdAt = this.scene.simulationTime;
             this.battalions.push(this.pool[team]);
@@ -230,20 +235,27 @@ export class BattalionSystem {
         return best;
     }
 
-    // 玩家指挥：选营点旗下令 / 回防集结。返回是否受理。
-    orderSelected(flagIndex, scene) {
-        const selected = scene.selectedBattalion;
-        if (!selected || selected.team !== 'red') return false;
+    // 无归属守卫的下令（网络命令路径）：命令自带 side，且按 id+team 双重匹配寻营，
+    // 两端各自确定性执行——"只许指挥己方"的守卫只属于 UI 路径（orderSelected）。
+    orderBattalion(battalion, flagIndex) {
+        if (!battalion) return false;
         if (flagIndex === 'home') {
-            selected.orderFlag = null;
-            selected.playerOrdered = true;
-            selected.retreat = true;
+            battalion.orderFlag = null;
+            battalion.playerOrdered = true;
+            battalion.retreat = true;
             return true;
         }
         if (flagIndex == null || !this.scene.flags[flagIndex]) return false;
-        selected.orderFlag = flagIndex;
-        selected.playerOrdered = true;
-        selected.retreat = false;
+        battalion.orderFlag = flagIndex;
+        battalion.playerOrdered = true;
+        battalion.retreat = false;
         return true;
+    }
+
+    // 玩家指挥：选营点旗下令 / 回防集结。返回是否受理。
+    orderSelected(flagIndex, scene, battalion = scene.selectedBattalion) {
+        const selected = battalion;
+        if (!selected || selected.team !== (scene.netMySide || 'red')) return false;
+        return this.orderBattalion(selected, flagIndex);
     }
 }

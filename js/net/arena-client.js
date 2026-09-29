@@ -1,0 +1,44 @@
+// ==================== 房间客户端（浏览器侧 WebSocket 封装） ====================
+// 页面由房间服务器托管（孩子输入房主 IP 打开），因此 WebSocket 永远连
+// location.host——两端零配置。事件经 onEvent 回调上抛给 UI / NetBattle。
+
+export class ArenaClient {
+    constructor(onEvent) {
+        this.ws = null;
+        this.onEvent = onEvent || (() => {});
+    }
+
+    get connected() {
+        return this.ws?.readyState === 1;
+    }
+
+    connect() {
+        return new Promise((resolve, reject) => {
+            try {
+                const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+                this.ws = new WebSocket(`${protocol}://${location.host}`);
+            } catch (error) {
+                reject(error);
+                return;
+            }
+            const failTimer = setTimeout(() => reject(new Error('连接超时')), 5000);
+            this.ws.onopen = () => { clearTimeout(failTimer); resolve(); };
+            this.ws.onerror = () => { clearTimeout(failTimer); reject(new Error('无法连接对战服务器')); };
+            this.ws.onclose = () => this.onEvent({ t: 'closed' });
+            this.ws.onmessage = event => {
+                let message;
+                try { message = JSON.parse(event.data); } catch (_) { return; }
+                this.onEvent(message);
+            };
+        });
+    }
+
+    send(message) {
+        if (this.connected) this.ws.send(JSON.stringify(message));
+    }
+
+    createRoom() { this.send({ t: 'create' }); }
+    joinRoom(code) { this.send({ t: 'join', code }); }
+    sendReady() { this.send({ t: 'ready' }); }
+    bye() { this.send({ t: 'bye' }); this.ws?.close(); }
+}
