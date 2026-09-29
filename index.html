@@ -33,6 +33,7 @@
         <div id="morale-cue" class="morale-cue" role="status" hidden></div>
         <div id="deathmatch-hud-rule" class="deathmatch-rule" hidden>死斗：溃兵可重整，直到一方全灭</div>
         <div id="control-hud-rule" class="deathmatch-rule" hidden>⚑ 占点征服：占住旗帜攒积分，先到 60 分者胜</div>
+        <div id="convoy-hud-rule" class="deathmatch-rule" hidden>🛒 护送：送抵 3 辆辎重车获胜，被毁 3 辆则劫掠方胜</div>
         <div id="commands-hud" class="commands-hud" aria-label="本局双方指令" hidden></div>
         <div id="tactics-hud" class="tactics-hud" aria-label="两军战术与可战兵力" aria-live="off" hidden>
             <div class="tactics-team red" id="tactics-red">
@@ -95,6 +96,10 @@
                     <div class="terrain-entry">
                         <div><div class="eyebrow">占点征服 · 新玩法</div><h3>三面旗立中场，歼灭不再是唯一解。</h3><p>双方各 64 人对称开进。旗圈是兵力拔河：占领力按兵种不同互相抵消，人多的一方能从对手手里硬拔旗；占住的旗每秒 +1 分，先到 60 分获胜——分兵抢旗还是集团碾压，全看调度。</p></div>
                         <div class="terrain-entry-actions"><button class="secondary-btn" data-control-entry="flat"><b>⚑ 平原三旗</b><small>开阔地纯占点博弈</small></button></div>
+                    </div>
+                    <div class="terrain-entry">
+                        <div><div class="eyebrow">辎重护送 · 新玩法</div><h3>四辆辎重车，穿越整个战场。</h3><p>红方步弓军护送车队开进，蓝方骑兵领衔截杀。车队只在护卫身边才前进——护得太紧走得慢，护得太散被各个击破；送抵 3 辆护送获胜，被毁 3 辆劫掠得手。</p></div>
+                        <div class="terrain-entry-actions"><button class="secondary-btn" data-convoy-entry="flat"><b>🛒 平原护送线</b><small>护送 vs 劫掠的不对称博弈</small></button></div>
                     </div>
                     <div class="tactics-entry">
                         <div class="tactics-entry-copy"><div class="eyebrow">战阵演练 · 新玩法</div><h3>再添五十预备，能否破阵？</h3><p>100 剑士发起进攻，50 剑士在后方接应、分批增援。收拢溃兵，重整后再次出击；也可切回 100 对 100 比较。</p></div>
@@ -256,7 +261,7 @@
     <script src="js/tactics.js?v=20260924-natural-slope"></script>
     <script src="js/challenges.js?v=20260923-tactics1"></script>
     <script src="js/inspection.js?v=20260924-terrain3"></script>
-    <script src="js/game.js?v=20260928-control3"></script>
+    <script src="js/game.js?v=20260929-convoy1"></script>
     <script src="js/ui.js?v=20260928-control1"></script>
     <script>
         const game = new Phaser.Game({

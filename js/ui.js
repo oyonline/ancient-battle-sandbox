@@ -147,6 +147,12 @@ const UI = {
         document.getElementById('controlbar').hidden = !fighting;
         document.getElementById('deathmatch-hud-rule').hidden = !fighting || !this.battleOptions.deathmatch;
         document.getElementById('control-hud-rule').hidden = !fighting || !this.battleOptions.control;
+        const convoyHud = document.getElementById('convoy-hud-rule');
+        convoyHud.hidden = !fighting || !this.battleOptions.convoy;
+        if (this.battleOptions.convoy && this.scene?.convoy) {
+            const c = this.scene.convoy;
+            convoyHud.textContent = `🛒 护送：送抵 ${c.delivered}/${c.need} · 被毁 ${c.destroyed}/${c.need} —— 车队需要护卫随行才前进`;
+        }
         this.updateMorale();
         this.updateTactics();
         this.updateTerrainControls();
@@ -202,7 +208,7 @@ const UI = {
     },
 
     resetBattleOptions() {
-        this.battleOptions = { deathmatch: false, control: false, reserves: { red: 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
+        this.battleOptions = { deathmatch: false, control: false, convoy: false, reserves: { red: 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
     },
 
     startTerrain(terrain = 'blue_pass') {
@@ -232,6 +238,23 @@ const UI = {
         this.orders = { red: 'advance', blue: 'advance' };
         this.resetBattleOptions();
         this.battleOptions.control = true;
+        this.deployArmies();
+    },
+
+    startConvoy() {
+        this.clearBattle();
+        this.mode = 'sandbox';
+        this.challenge = null;
+        this.editing = false;
+        // 护送军偏步矛弓（护得住），劫掠军带机动骑兵（截得住）；护送更难，红方预算略厚
+        this.configs = {
+            red: { infantry: 20, pikeman: 14, archer: 14 },
+            blue: { cavalry: 8, infantry: 14, archer: 6 }
+        };
+        this.formations = { red: 'custom', blue: 'custom' };
+        this.orders = { red: 'advance', blue: 'advance' };
+        this.resetBattleOptions();
+        this.battleOptions.convoy = true;
         this.deployArmies();
     },
 
@@ -407,7 +430,7 @@ const UI = {
         this.configs = { red: { infantry: reserve ? 150 : 100 }, blue: { pikeman: 100 } };
         this.formations = { red: 'custom', blue: 'square' };
         this.orders = { red: reserve ? 'flank' : order, blue: 'hold' };
-        this.battleOptions = { deathmatch: reserve, control: false, reserves: { red: reserve ? 50 : 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
+        this.battleOptions = { deathmatch: reserve, control: false, convoy: false, reserves: { red: reserve ? 50 : 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } };
         this.deployArmies();
     },
 
@@ -443,6 +466,7 @@ const UI = {
         const wrap = document.getElementById('unit-cards');
         wrap.innerHTML = '';
         for (const [key, t] of Object.entries(UNIT_TYPES)) {
+            if (t.hidden) continue;   // 辎重车等系统单位不进入配兵界面
             const card = document.createElement('div');
             card.className = 'ucard';
             card.innerHTML = `<img class="uc-img" src="assets/units/${team}_${key}.png" alt="${t.name}">
@@ -649,12 +673,13 @@ const UI = {
         this.pendingDeploy = !this.scene;
         const deathmatch = this.battleOptions.deathmatch;
         const control = this.battleOptions.control === true;
+        const convoy = this.battleOptions.convoy === true;
         const reserves = Object.fromEntries(['red', 'blue'].map(team => [team,
             Math.min(this.battleOptions.reserves[team] || 0, Math.max(0, (this.configs[team].infantry || 0) - 1))]));
         const terrain = ['sandbox', 'terrain'].includes(this.mode) ? Terrain.normalize(this.battleOptions.terrain) : 'flat';
         const cavalryOrders = Object.fromEntries(['red', 'blue'].map(team => [team,
             ['sandbox', 'terrain'].includes(this.mode) ? this.cavalryOrder(team) : 'auto']));
-        this.battleOptions = { deathmatch, control, reserves, terrain, cavalryOrders };
+        this.battleOptions = { deathmatch, control, convoy, reserves, terrain, cavalryOrders };
         this.scene?.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue,
             { ...this.orders }, { ...this.battleOptions, reserves: { ...reserves }, cavalryOrders: { ...cavalryOrders } });
         this.setPhase('ready');
@@ -697,6 +722,8 @@ const UI = {
             ? '死斗 · 溃兵可重整，直到一方全灭'
             : this.battleOptions.control
             ? '⚑ 占点征服 · 占旗攒分，先到 60 分者胜（全歼对手同样获胜）'
+            : this.battleOptions.convoy
+            ? '🛒 护送 · 送抵 3 辆辎重车获胜；蓝方摧毁 3 辆即劫掠得手'
             : (this.challenge ? this.challenge.title + ' · ' : this.mode === 'tactics' ? '战阵演练 · ' : '') + '拖动看战况 · 点击士兵看地形';
         this.openSheet(false);
         this.scene.startCountdown(() => { this.countdown = false; this.syncControls(); });
@@ -759,6 +786,7 @@ const UI = {
         const endReason = report.deathmatch && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '已全灭，死斗结束。 '
             : report.endReason === 'control' ? (winner === 'red' ? '红方' : '蓝方') + '掌控旗帜积分达标，占点获胜。 '
+            : report.endReason === 'convoy' ? (winner === 'red' ? '红方辎重车队突破封锁，护送获胜。' : '蓝方劫掠得手，辎重车队覆灭。')
             : report.endReason === 'stalemate' ? '双方持续固守、无人推进，本局相持结束。试着让一方改为进攻。 ' : report.endReason === 'rout' && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '军心瓦解，失去继续作战能力。 '
             : winner === 'draw' && report.red + report.blue > 0 && report.morale &&
@@ -869,6 +897,9 @@ const UI = {
         });
         document.querySelectorAll('[data-control-entry]').forEach(button => {
             button.onclick = () => { this.startControl(); Snd.play('tick'); };
+        });
+        document.querySelectorAll('[data-convoy-entry]').forEach(button => {
+            button.onclick = () => { this.startConvoy(); Snd.play('tick'); };
         });
         document.querySelectorAll('[data-terrain]').forEach(button => {
             button.onclick = () => this.selectTerrain(button.dataset.terrain);

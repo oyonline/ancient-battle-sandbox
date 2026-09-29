@@ -34,7 +34,10 @@ test('every real UI preset fits every challenge budget without changing its save
 
 test('budget fitting enforces unit caps and normalizes fractional, negative, or invalid counts', () => {
     const capped = fitArmyToBudget({ infantry: 99999, pikeman: 99999, archer: 99999, cavalry: 99999 }, 100000);
-    for (const [type, data] of Object.entries(UNIT_TYPES)) assert.equal(capped[type], data.maxCount);
+    for (const [type, data] of Object.entries(UNIT_TYPES)) {
+        if (data.hidden) continue;   // 辎重车等系统单位不进入军队配置
+        assert.equal(capped[type], data.maxCount);
+    }
     assert.deepEqual(snapshot(fitArmyToBudget({ infantry: 9.8, pikeman: -1, archer: Infinity, cavalry: NaN }, 100)), {
         infantry: 9, pikeman: 0, archer: 0, cavalry: 0
     });

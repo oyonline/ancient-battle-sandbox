@@ -20,6 +20,12 @@ const UNIT_TYPES = {
         name: '重骑士', icon: '🐴', cost: 12, maxCount: 150,
         hp: 160, atk: 30, def: 15, speed: 4.0, atkSpeed: 1500, range: 1.1,
         chargeSpeed: 6.0, charge: true, scale: 1.35, tip: '助跑3格后双倍冲锋，擅长追击弓手'
+    },
+    // 护送模式的辎重车：不可购买、无攻击；贴图运行时生成（见 game.js ensureWagonTextures）
+    wagon: {
+        name: '辎重车', icon: '🛒', cost: 0, maxCount: 0, hidden: true,
+        hp: 700, atk: 0, def: 10, speed: 1.4, atkSpeed: 999999, range: 0.6,
+        scale: 1.5, tip: '护送目标：送抵安全区得分，被毁则对方得分'
     }
 };
 

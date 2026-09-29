@@ -27,6 +27,8 @@ class MoraleSystem {
     }
 
     belongs(unit) {
+        // 辎重车无士气：不会动摇溃逃，只会被摧毁或送抵
+        if (unit && unit.type === 'wagon') return false;
         return unit && (unit.battleId === undefined || unit.battleId === this.battleId);
     }
 

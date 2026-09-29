@@ -50,6 +50,7 @@ const FOOT = {
     infantry: { pad: 18, dx:   2, w: 72, h: 35 },
     pikeman:  { pad: 34, dx:  -7, w: 63, h: 31 },
     archer:   { pad: 11, dx:  -6, w: 67, h: 33 },
+    wagon:    { pad:  6, dx:   0, w: 64, h: 30 },
     cavalry: {
         east:      { pad:  4, dx: -10, w: 83, h: 41 },
         southeast: { pad: 10, dx: -16, w: 74, h: 36 },
@@ -1184,6 +1185,7 @@ class IsoBattleScene extends Phaser.Scene {
         });
         this.battleOptions.deathmatch = options.deathmatch === true;
         this.battleOptions.control = options.control === true;
+        this.battleOptions.convoy = options.convoy === true;
         for (const [team] of armies) {
             const cavalryOrder = options.cavalryOrders?.[team];
             this.battleOptions.cavalryOrders[team] = ['direct', 'flank_archers'].includes(cavalryOrder) ? cavalryOrder : 'auto';
@@ -1219,6 +1221,19 @@ class IsoBattleScene extends Phaser.Scene {
             { gx: 35, gy: GRID_H * 0.76, name: '下翼' }
         ].map(f => ({ ...f, owner: null, progress: 0, contested: false })) : null;
         this.controlScore = { red: 0, blue: 0 };
+        // 护送模式：红方 4 辆辎重车从出发区沿中线穿越战场，送抵 3 辆红胜、
+        // 被毁 3 辆蓝胜；车附近有护送部队才前进（无保护停下等待）。
+        this.convoy = null;
+        if (this.battleOptions.convoy) {
+            this.ensureWagonTextures();
+            const wagons = [[13, GRID_H / 2 - 3], [12, GRID_H / 2], [13, GRID_H / 2 + 3], [10.5, GRID_H / 2]]
+                .map(([x, y]) => {
+                    const wagon = this.spawnUnit('red', 'wagon', x, y);
+                    wagon.tacticalRole = 'convoy_wagon';
+                    return wagon;
+                });
+            this.convoy = { team: 'red', goalX: GRID_W - 6, wagons, need: 3, delivered: 0, destroyed: 0 };
+        }
         if (this.cameras.main.setZoom) this.fitCamera();
     }
 
@@ -1331,6 +1346,43 @@ class IsoBattleScene extends Phaser.Scene {
                     g.destroy();
                 }
             }
+        }
+    }
+
+    // 辎重车贴图运行时生成：木箱车体+双轮+篷顶+队旗（无外部素材依赖）
+    ensureWagonTextures() {
+        for (const team of ['red', 'blue']) {
+            const key = `units/${team}_wagon`;
+            if (this.textures.exists(key)) continue;
+            const g = this.add.graphics();
+            const W = 64, H = 46, accent = team === 'red' ? 0xff5b5b : 0x57a0ff;
+            // 车轮（等距椭圆轮）
+            g.fillStyle(0x3a2c1a, 1);
+            g.fillEllipse(18, H - 10, 16, 9);
+            g.fillEllipse(46, H - 10, 16, 9);
+            g.lineStyle(2, 0x241a0e, 1);
+            g.strokeEllipse(18, H - 10, 16, 9);
+            g.strokeEllipse(46, H - 10, 16, 9);
+            g.fillStyle(0xc9a35f, 1);
+            g.fillEllipse(18, H - 10, 5, 3);
+            g.fillEllipse(46, H - 10, 5, 3);
+            // 车箱
+            g.fillStyle(0x8a6a3e, 1);
+            g.fillPoints([{ x: 8, y: H - 14 }, { x: 56, y: H - 14 }, { x: 58, y: H - 30 }, { x: 6, y: H - 30 }], true);
+            g.lineStyle(2, 0x5d4322, 1);
+            g.strokePoints([{ x: 8, y: H - 14 }, { x: 56, y: H - 14 }, { x: 58, y: H - 30 }, { x: 6, y: H - 30 }], true, true);
+            // 篷顶弧
+            g.fillStyle(0xd8cfb4, 1);
+            g.fillTriangle(4, H - 30, 60, H - 30, 32, H - 44);
+            g.lineStyle(2, 0x8f8468, 0.8);
+            g.strokeTriangle(4, H - 30, 60, H - 30, 32, H - 44);
+            // 队旗小杆
+            g.lineStyle(2, 0x241a0e, 1);
+            g.lineBetween(56, H - 30, 56, H - 44);
+            g.fillStyle(accent, 1);
+            g.fillTriangle(56, H - 44, 64, H - 41, 56, H - 38);
+            g.generateTexture(key, W, H);
+            g.destroy();
         }
     }
 
@@ -1574,6 +1626,7 @@ class IsoBattleScene extends Phaser.Scene {
         this.flushBattleImpacts();
         this.morale.update(dt);
         if (this.battleOptions.control) this.updateFlags(dt);
+        if (this.battleOptions.convoy) this.updateConvoy(dt);
         for (const unit of units) {
             if (!this.battleOptions.deathmatch && !unit.dead && !unit.withdrawn && unit.moraleState === 'routing' &&
                 (unit.gx <= 0.61 || unit.gx >= GRID_W - 0.61 || unit.gy <= 0.61 || unit.gy >= GRID_H - 0.61)) this.withdrawUnit(unit);
@@ -1630,15 +1683,18 @@ class IsoBattleScene extends Phaser.Scene {
         }
     }
 
-    // 最近敌人：环形扩张搜索；查到半径 r 内的最佳解即全局最近（圆内 ⊆ 查询方形）
+    // 最近敌人：环形扩张搜索；查到半径 r 内的最佳解即全局最近（圆内 ⊆ 查询方形）。
+    // 辎重车索敌距离加权 ×1.6：拦路的敌兵优先——清完护卫才轮到拆车，
+    // 否则劫掠骑兵会无视护送军直扑车队（体验上"不讲武德"且势不可挡）。
     nearestEnemy(unit) {
         let best = null, bestD2 = Infinity, r = 6;
-        const maxR = GRID_W + GRID_H;
+        const maxR = (GRID_W + GRID_H) * 1.6;
         while (true) {
             this.forEachNear(unit.gx, unit.gy, r, e => {
                 if (e.team === unit.team || e.dead || e.withdrawn) return;
                 const dx = e.gx - unit.gx, dy = e.gy - unit.gy;
-                const d2 = dx * dx + dy * dy;
+                let d2 = dx * dx + dy * dy;
+                if (e.type === 'wagon') d2 *= 1.6 * 1.6;
                 if (d2 < bestD2 - 1e-9 || (Math.abs(d2 - bestD2) <= 1e-9 && e.id < best.id)) { bestD2 = d2; best = e; }
             });
             if (best && bestD2 <= r * r) return best;
@@ -1717,6 +1773,22 @@ class IsoBattleScene extends Phaser.Scene {
 
     updateNormalUnit(unit, now, dt, guardAnchor = null) {
         if (unit.dead || unit.withdrawn || unit.moraleState === 'routing') return;
+        // 辎重车：附近 3.5 格内有护送方部队才沿中线推进——无保护停下等待，
+        // 护送节奏由护送军自己掌握；车不还手（atk 0），挨打走通用结算。
+        // 邻兵查询过滤界=查询界，桶毛边不泄漏。
+        if (unit.type === 'wagon') {
+            let escort = false;
+            this.forEachNear(unit.gx, unit.gy, 3.5, u => {
+                if (u === unit || u.team !== unit.team || u.type === 'wagon' ||
+                    u.dead || u.withdrawn || u.moraleState === 'routing') return;
+                if (Math.hypot(u.gx - unit.gx, u.gy - unit.gy) > 3.5) return;
+                escort = true;
+            });
+            if (escort && unit.gx < this.convoy.goalX) {
+                moveToward(unit, this.convoy.goalX + 1, unit.gy, unit.typeData.speed, dt);
+            }
+            return;
+        }
         const nearest = this.stickyTarget(unit);
         if (!nearest) {
             if (guardAnchor && dist(unit, guardAnchor) > 0.2) {
@@ -1744,6 +1816,23 @@ class IsoBattleScene extends Phaser.Scene {
             if (flag) {
                 unit.target = nearest;
                 moveToward(unit, flag.gx, flag.gy, unit.typeData.speed, dt);
+                return;
+            }
+        }
+        // 护送模式：护送方近战单位敌远(>12格)时向最落后的车集结——落点取车侧翼
+        // （不站在车队行进路径上，护卫从后方穿队会把自己和车一起堵死）；
+        // 敌近恢复正常接敌。劫掠方零特判：车在索敌网格里，默认"追最近敌"自然扑向车队。
+        if (this.battleOptions.convoy && unit.team === this.convoy.team && !guardAnchor &&
+            !unit.typeData.ranged && minD > 12) {
+            const wagons = this.convoy.wagons.filter(w => !w.dead && !w.withdrawn);
+            if (wagons.length) {
+                let tail = wagons[0];
+                for (const w of wagons) {
+                    if (w.gx < tail.gx - 1e-9 || (Math.abs(w.gx - tail.gx) <= 1e-9 && w.gy < tail.gy - 1e-9)) tail = w;
+                }
+                unit.target = nearest;
+                const side = unit.gy >= tail.gy ? 2.6 : -2.6;   // 就近侧翼护航
+                moveToward(unit, tail.gx, tail.gy + side, unit.typeData.speed, dt);
                 return;
             }
         }
@@ -2364,6 +2453,7 @@ class IsoBattleScene extends Phaser.Scene {
     syncRender(time) {
         this.drawTactics();
         this.drawFlags();
+        this.drawConvoy();
         this.unitInspector?.update();
         this.hpGfx.clear();
         const view = this._view;   // 战斗中每帧更新；部署阶段为空 = 全量同步
@@ -2430,7 +2520,8 @@ class IsoBattleScene extends Phaser.Scene {
         }
 
         // ---- 动画状态机：攻击锁定 > 行走 > 待机 ----
-        if (unit.animState !== 'attack') {
+        // 辎重车是运行时生成的单帧贴图，无行走/攻击动画可切，跳过状态机
+        if (unit.type !== 'wagon' && unit.animState !== 'attack') {
             const want = unit.moving ? 'walk' : 'idle';
             if (want !== unit.animState) {
                 unit.animState = want;
@@ -2640,6 +2731,62 @@ class IsoBattleScene extends Phaser.Scene {
         }
     }
 
+    // ---------------- 护送模式 ----------------
+    // 到站/被毁计数与事件；车本体的"有保护才前进"在 updateNormalUnit 的 wagon 特判里。
+    updateConvoy(dt) {
+        const c = this.convoy;
+        if (this.blueAlive > 0) c.lastFoeAt = this.simulationTime;   // 敌人存活时刻：全灭后等车队进站的窗口计时
+        for (const wagon of c.wagons) {
+            if (wagon.withdrawn || wagon.dead) continue;
+            if (wagon.gx >= c.goalX) {
+                wagon.withdrawn = true;
+                c.delivered++;
+                this.addBattleEvent(`convoy-delivered-${c.delivered}`,
+                    `红方辎重车送抵安全区（${c.delivered}/${c.need}）`, 'red');
+                this._countsDirty = true;
+            }
+        }
+        const destroyed = c.wagons.filter(w => w.dead).length;
+        if (destroyed !== c.destroyed) {
+            c.destroyed = destroyed;
+            this.addBattleEvent(`convoy-destroyed-${destroyed}`,
+                `蓝方摧毁辎重车（${destroyed}/${c.need}）`, 'blue');
+            this._countsDirty = true;
+        }
+    }
+
+    // 护送胜负：送抵/摧毁达标即胜；全部结算完（无在途车）按多者胜，2:2 交回常规判定
+    convoyOutcome() {
+        const c = this.convoy;
+        if (c.delivered >= c.need) return c.team;
+        if (c.destroyed >= c.need) return 'blue';
+        const pending = c.wagons.filter(w => !w.dead && !w.withdrawn).length;
+        if (pending === 0 && c.delivered !== c.destroyed) return c.delivered > c.destroyed ? c.team : 'blue';
+        return null;
+    }
+
+    drawConvoy() {
+        if (!this.convoy) return;
+        if (!this.convoyGfx) this.convoyGfx = this.add.graphics().setDepth(11980);
+        const g = this.convoyGfx;
+        g.clear();
+        const c = this.convoy;
+        // 路线虚线：出发区沿中线到安全区
+        const from = this.groundPoint(9, GRID_H / 2), to = this.groundPoint(c.goalX + 1.5, GRID_H / 2);
+        g.lineStyle(2.5, 0xf6e6b0, 0.35);
+        for (let i = 0; i < 24; i++) {
+            const a = i / 24, b = (i + 0.55) / 24;
+            g.lineBetween(from.x + (to.x - from.x) * a, from.y + (to.y - from.y) * a,
+                from.x + (to.x - from.x) * b, from.y + (to.y - from.y) * b);
+        }
+        // 终点安全区：绿色半透椭圆 + 框
+        const zone = sampleGroundRing(this, c.goalX + 1.5, GRID_H / 2, 4.5, 26);
+        g.fillStyle(0x6fdc7f, 0.14);
+        g.fillPoints(zone, true);
+        g.lineStyle(2.5, 0x6fdc7f, 0.65);
+        g.strokePoints(zone, true, true);
+    }
+
     // ---------------- 胜负 ----------------
     checkWin() {
         if (this.battleOver) return;
@@ -2662,9 +2809,17 @@ class IsoBattleScene extends Phaser.Scene {
         const stalemate = standingOff && !this.battleOptions.deathmatch;
         const controlWon = this.battleOptions.control
             ? ['red', 'blue'].find(team => this.controlScore[team] >= 60) : null;
-        if (!controlWon && !defeated.red && !defeated.blue && !stalemate) return;
+        const convoyWon = this.battleOptions.convoy ? this.convoyOutcome() : null;
+        // 护送模式下劫掠方已全灭但车队还在路上：胜利只是时间问题，
+        // 压下歼灭结算等车队进站（上限 40 秒），让"护送成功"的叙事走完
+        if (!controlWon && !convoyWon && this.battleOptions.convoy && defeated.blue && !defeated.red) {
+            const c = this.convoy;
+            const pending = c.wagons.filter(w => !w.dead && !w.withdrawn).length;
+            if (pending + c.delivered >= c.need && this.simulationTime - (c.lastFoeAt ?? this.simulationTime) < 40000) return;
+        }
+        if (!controlWon && !convoyWon && !defeated.red && !defeated.blue && !stalemate) return;
         // 已发出的箭继续落地：最后一名射手阵亡后仍可能双方同归于尽。
-        if (!controlWon && this.arrows.length > 0) {
+        if (!controlWon && !convoyWon && this.arrows.length > 0) {
             // 只等待已经离弦的箭；停止生成新攻击，避免密集箭雨无限延后溃败结算。
             this.resolvingOutcome = true;
             this.battleQueue = [];
@@ -2672,8 +2827,8 @@ class IsoBattleScene extends Phaser.Scene {
         }
         this.battleOver = true;
         this.battleQueue = [];
-        const winner = controlWon || (stalemate || (defeated.red && defeated.blue) ? 'draw' : defeated.red ? 'blue' : 'red');
-        this.endReason = controlWon ? 'control' : stalemate ? 'stalemate' : winner === 'draw' ? 'draw' :
+        const winner = controlWon || convoyWon || (stalemate || (defeated.red && defeated.blue) ? 'draw' : defeated.red ? 'blue' : 'red');
+        this.endReason = controlWon ? 'control' : convoyWon ? 'convoy' : stalemate ? 'stalemate' : winner === 'draw' ? 'draw' :
             (defeated.red && red > 0) || (defeated.blue && blue > 0) ? 'rout' : 'elimination';
         if (this.endReason === 'rout') {
             const loser = winner === 'red' ? 'blue' : 'red';
@@ -2682,6 +2837,11 @@ class IsoBattleScene extends Phaser.Scene {
         if (this.endReason === 'control') {
             const loser = winner === 'red' ? 'blue' : 'red';
             this.addBattleEvent(`control-${winner}`, `${winner === 'red' ? '红方' : '蓝方'}掌控旗帜积分获胜`, loser);
+        }
+        if (this.endReason === 'convoy') {
+            const escortWon = winner === this.convoy.team;
+            this.addBattleEvent(`convoy-${winner}`,
+                escortWon ? '红方辎重车队突破封锁，护送获胜' : '蓝方劫掠得手，辎重车队覆灭', escortWon ? 'red' : 'blue');
         }
         if (stalemate) this.addBattleEvent('tactic-stalemate', '双方持续固守，未再接战，本局相持结束', null);
         this.showVictory(winner);

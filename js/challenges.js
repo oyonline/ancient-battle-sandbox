@@ -44,6 +44,7 @@ function armyCost(config) {
 function fitArmyToBudget(config, budget) {
     const army = {};
     for (const [key, type] of Object.entries(UNIT_TYPES)) {
+        if (type.hidden) continue;   // 辎重车等系统单位不进入军队配置
         const count = Number.isFinite(config[key]) ? Math.floor(config[key]) : 0;
         army[key] = Math.max(0, Math.min(type.maxCount, count));
     }

@@ -30,6 +30,7 @@ function displayObject() {
         destroy() { this.destroyed = true; },
         clear() {}, lineStyle() {}, lineBetween() {}, fillStyle() {}, fillCircle() {}, fillRect() {},
         fillTriangle() {}, strokeTriangle() {}, fillPoints() {}, strokePoints() {}, fillEllipse() {},
+        strokeEllipse() {}, generateTexture() {},
         beginPath() {}, arc() {}, strokePath() {}, strokeCircle() {}
     };
 }
@@ -47,7 +48,8 @@ function makeScene() {
         cameras: { main: { width: 800, height: 600 } },
         cavalryAI: new CavalryAI(),
         add: { text: () => displayObject(), image: (x, y) => displayObject().setPosition(x, y),
-            sprite: (x, y) => displayObject().setPosition(x, y) },
+            sprite: (x, y) => displayObject().setPosition(x, y),
+            graphics: () => displayObject() },
         tweens: { killTweensOf() {}, add() {} },
         anims: { globalTimeScale: 1 },
         textures: { exists: () => false },
