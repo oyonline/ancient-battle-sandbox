@@ -172,6 +172,77 @@ button:active { transform: scale(0.94); }
 .order-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .order-btn .ob-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 
+/* ==================== 首页看板：继续 / 英雄卡 / 三区 ==================== */
+.continue-btn { display: block; width: 100%; padding: 12px 16px; margin-bottom: 10px;
+    border-radius: 12px; border: 2px solid #6fae62; background: rgba(38, 56, 30, 0.75);
+    color: #d8f0cf; font: 700 15px/1.4 "PingFang SC", sans-serif; cursor: pointer; text-align: left; }
+.continue-btn b { color: #b8f0a8; }
+.continue-btn:hover { background: rgba(48, 72, 38, 0.85); }
+
+.mode-hero { display: flex; gap: 14px; padding: 14px; margin-bottom: 14px;
+    border-radius: 16px; border: 2.5px solid rgba(214, 176, 92, 0.7);
+    background: linear-gradient(135deg, rgba(58, 40, 16, 0.82), rgba(38, 30, 14, 0.88)); }
+.mode-hero canvas { flex: 0 0 auto; width: 248px; height: 150px; border-radius: 10px;
+    border: 1.5px solid rgba(0, 0, 0, 0.45); background: #7fae62; image-rendering: pixelated; }
+.hero-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+.hero-copy h3 { margin: 0; font-size: 20px; color: #ffe9c4; }
+.hero-hook { margin: 0; font: 700 15px/1.5 "PingFang SC", sans-serif; color: #ffd76e; }
+.hero-hook i { color: #c9a44a; font-style: normal; margin: 0 2px; }
+.hero-details { color: #cdbf9d; font: 12px/1.7 "PingFang SC", sans-serif; }
+.hero-details summary { cursor: pointer; color: #e8cf8a; font-weight: 700; }
+.hero-details p { margin: 6px 0 0; }
+.hero-btn { align-self: flex-start; margin-top: auto; padding: 12px 26px; border-radius: 14px;
+    border: 2.5px solid #c9503c; background: linear-gradient(180deg, #a03c28, #7c2d1e);
+    color: #ffe9d8; font: 800 17px/1 "PingFang SC", sans-serif; cursor: pointer; }
+.hero-btn:hover { filter: brightness(1.12); }
+.hero-btn:active { transform: translateY(2px); }
+
+.mode-zone { margin-bottom: 14px; }
+.zone-heading { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px;
+    border-bottom: 1.5px dashed rgba(201, 164, 74, 0.4); padding-bottom: 5px; }
+.zone-heading b { font-size: 15px; color: #ffe9c4; }
+.zone-heading small { color: #b9a97f; font-size: 12px; }
+
+.quick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.quick-card { display: flex; flex-direction: column; gap: 6px; }
+.qc-main { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex: 1;
+    padding: 12px 14px; border-radius: 14px; border: 2px solid rgba(201, 164, 74, 0.55);
+    background: rgba(30, 22, 10, 0.72); color: #f0e6cc; cursor: pointer; text-align: left; }
+.qc-main:hover { background: rgba(48, 36, 18, 0.85); border-color: rgba(230, 196, 110, 0.8); }
+.qc-main:active { transform: translateY(1px); }
+.qc-icon { font-size: 24px; line-height: 1; }
+.qc-main strong { font-size: 16px; color: #ffe9c4; }
+.qc-line { font-size: 12.5px; color: #cdbf9d; line-height: 1.5; }
+.qc-meta { font-size: 11.5px; color: #9fb98f; }
+.qc-sub { align-self: flex-start; padding: 5px 12px; border-radius: 9px; border: 1.5px solid #7a6a3e;
+    background: #2c2416; color: #d8c9a0; font: 600 12px/1 "PingFang SC", sans-serif; cursor: pointer; }
+.qc-sub:hover { color: #ffd76e; border-color: #a8934f; }
+.qc-subs, .drill-subs { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.drill-row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+.drill-challenges { padding: 10px 12px; border-radius: 14px; border: 2px solid rgba(201, 164, 74, 0.45);
+    background: rgba(30, 22, 10, 0.55); }
+.drill-ch-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.drill-ch-head b { color: #ffe9c4; font-size: 15px; }
+.drill-side { display: flex; flex-direction: column; gap: 10px; }
+.drill-card-btn { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px;
+    border: 2px solid rgba(201, 164, 74, 0.55); background: rgba(30, 22, 10, 0.72);
+    color: #f0e6cc; cursor: pointer; text-align: left; flex: 1; }
+.drill-card-btn:hover { background: rgba(48, 36, 18, 0.85); }
+.dc-icon { font-size: 24px; }
+.dc-copy { display: flex; flex-direction: column; gap: 3px; }
+.dc-copy strong { font-size: 15.5px; color: #ffe9c4; }
+.dc-copy small { font-size: 12px; color: #b9a97f; line-height: 1.45; }
+
+.lobby-help { margin-top: 4px; color: #b9a97f; font: 12px/1.7 "PingFang SC", sans-serif; }
+.lobby-help summary { cursor: pointer; color: #d8c9a0; font-weight: 700; }
+
+@media (max-width: 720px) {
+    .mode-hero { flex-direction: column; }
+    .mode-hero canvas { width: 100%; height: auto; }
+    .drill-row { grid-template-columns: 1fr; }
+}
+
 /* ==================== 底部抽屉面板 ==================== */
 #sheet {
     position: fixed;

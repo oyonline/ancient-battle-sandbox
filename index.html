@@ -97,43 +97,90 @@
                 <section id="sec-home" class="sec on">
                     <div class="lobby-intro">
                         <div>
-                            <div class="eyebrow">五场战役 · 不止一种解法</div>
-                            <h2>小小统帅，大有谋略。</h2>
-                            <p>看敌阵，配军队。打完读战报，换个思路再来一局。</p>
-                        </div>
-                        <span class="campaign-progress" id="campaign-progress">0 / 5 已通过</span>
-                    </div>
-                    <div class="terrain-entry">
-                        <div><div class="eyebrow">地形演练 · 自然坡地 / 树林 / 河桥</div><h3>沿坡仰攻、骑兵绕后，还是争桥头？</h3><p>双方各 76 人，四兵种完全相同。自然坡地整片可走，据高一方沿坡守位；树林、河桥默认双方推进。换地形，也换一种打法。</p></div>
-                        <div class="terrain-entry-actions"><button class="secondary-btn" id="btn-terrain">⛰ 蓝方自然坡地 →</button><button class="secondary-btn" data-terrain-entry="red_pass">⛰ 红方自然坡地</button><button class="secondary-btn" data-terrain-entry="forest">🌲 穿越林地</button><button class="secondary-btn" data-terrain-entry="river">🌉 三桥河谷</button></div>
-                    </div>
-                    <div class="terrain-entry">
-                        <div><div class="eyebrow">占点征服 · 新玩法</div><h3>三面旗立中场，歼灭不再是唯一解。</h3><p>双方各 64 人对称开进。旗圈是兵力拔河：占领力按兵种不同互相抵消，人多的一方能从对手手里硬拔旗；占住的旗每秒 +1 分，先到 60 分获胜——分兵抢旗还是集团碾压，全看调度。</p></div>
-                        <div class="terrain-entry-actions"><button class="secondary-btn" data-control-entry="flat"><b>⚑ 平原三旗</b><small>开阔地纯占点博弈</small></button><button class="secondary-btn" data-control-custom="flat"><b>⚑ 自定义占点</b><small>自己配兵打占点</small></button></div>
-                    </div>
-                    <div class="terrain-entry">
-                        <div><div class="eyebrow">辎重护送 · 新玩法</div><h3>四辆辎重车，穿越整个战场。</h3><p>红方步弓军护送车队开进，蓝方骑兵领衔截杀。车队只在护卫身边才前进——护得太紧走得慢，护得太散被各个击破；车不可被摧毁，车身被蓝方独占约 6 秒即遭劫走（人越多越快），送抵 3 辆护送获胜、劫走 3 辆劫掠得手。</p></div>
-                        <div class="terrain-entry-actions"><button class="secondary-btn" data-convoy-entry="flat"><b>🛒 平原护送线</b><small>护送 vs 劫掠的不对称博弈</small></button><button class="secondary-btn" data-convoy-custom="flat"><b>🛒 自定义护送</b><small>兵数阵容自己定</small></button></div>
-                    </div>
-                    <div class="terrain-entry">
-                        <div><div class="eyebrow">领土征服 · 山河大地图</div><h3>夺旗生财，就地征兵。</h3><p>上翼一条大河只架一道桥（两端浅滩可绕），中央旗立在高地坡顶（据险俯射），下翼穿林争夺——旗归谁，军费就流向谁。用军费在老家征兵、点选营队下令推进，占多数领土抽干对方票数。拖动看各条战线，右上小地图点击跳转。</p></div>
-                        <div class="terrain-entry-actions"><button class="secondary-btn" data-territory-entry><b>🚩 开赴领土战场</b><small>红方手动征兵指挥 · 蓝方AI自动运营</small></button></div>
-                    </div>
-                    <div class="tactics-entry">
-                        <div class="tactics-entry-copy"><div class="eyebrow">战阵演练 · 新玩法</div><h3>再添五十预备，能否破阵？</h3><p>100 剑士发起进攻，50 剑士在后方接应、分批增援。收拢溃兵，重整后再次出击；也可切回 100 对 100 比较。</p></div>
-                        <div class="tactics-entry-actions">
-                            <button class="secondary-btn reserve-entry" data-tactics-entry="reserve"><b>⚑ 150 剑士 · 预备队死斗</b><small>100 进攻 + 50 预备，对阵 100 长枪兵；直到一方全灭</small></button>
-                            <button class="secondary-btn" data-tactics-entry="assault"><b>⚔ 正面强攻</b><small>100 对 100 · 集中推进，试探完整枪阵</small></button>
-                            <button class="secondary-btn" data-tactics-entry="flank"><b>↪ 单翼迂回</b><small>100 对 100 · 50 人牵制，50 人沿外缘绕行</small></button>
+                            <div class="eyebrow">小小统帅 · 大有谋略</div>
+                            <h2>今天打哪一仗？</h2>
+                            <p>看图选玩法。打完读战报，换个思路再来一局。</p>
                         </div>
                     </div>
-                    <p class="morale-guide">士兵受压会短暂后退，撑不住才转身逃离。黄标动摇 · 橙标溃逃 · 绿标恢复/整队 · 蓝箭头返场。绿色集结旗旁的真实预备队可加快接应；重整不回血。</p>
-                    <div id="challenge-list" class="challenge-grid"></div>
-                    <button id="btn-sandbox" class="sandbox-entry">
-                        <span><b>⚔️ 自由对战</b><small>两位队长轮流配兵 · 每方 4000 金币 · 千人沙盒</small></span>
-                        <span aria-hidden="true">开始 →</span>
-                    </button>
-                    <p class="hint-small">所有挑战均可直接尝试 · 通关记录保存在当前浏览器</p>
+                    <button id="btn-continue" class="continue-btn" hidden>▶ 继续上次：<b id="continue-label">领土征服</b></button>
+
+                    <!-- 大会战：英雄卡 -->
+                    <div class="mode-hero">
+                        <canvas id="territory-thumb" width="248" height="150" aria-hidden="true"></canvas>
+                        <div class="hero-copy">
+                            <div class="eyebrow">大会战 · ⭐⭐ 亲子推荐 · 约 10 分钟</div>
+                            <h3>🚩 领土征服 · 山河会战</h3>
+                            <p class="hero-hook">夺旗 <i>→</i> 生财 <i>→</i> 出兵 <i>→</i> 点营下令</p>
+                            <details class="hero-details"><summary>玩法详情（给队长看）▾</summary>
+                                <p>大地图五面旗：旗归谁军费就流向谁。用军费在老家征兵、点选营队下令推进；对方占多数旗时你的票数流失，票尽判负（全歼同样获胜）。上翼争桥、中央夺高地、下翼穿林；拖动看战线，右上小地图点击跳转。红方手动指挥，蓝方 AI 自动运营。</p>
+                            </details>
+                            <button class="hero-btn" data-territory-entry>开赴战场 →</button>
+                        </div>
+                    </div>
+
+                    <!-- 快速一局 -->
+                    <div class="mode-zone">
+                        <div class="zone-heading"><b>⚡ 快速一局</b><small>3~5 分钟 · 规则单一，一局见分晓</small></div>
+                        <div class="quick-grid">
+                            <div class="quick-card">
+                                <button class="qc-main" data-control-entry="flat">
+                                    <span class="qc-icon">⚑</span><strong>占点三旗</strong>
+                                    <span class="qc-line">中场三旗兵力拔河，先到 60 分</span>
+                                    <small class="qc-meta">约 3 分钟 · 64 对 64</small>
+                                </button>
+                                <button class="qc-sub" data-control-custom="flat">自定义配兵 ↗</button>
+                            </div>
+                            <div class="quick-card">
+                                <button class="qc-main" data-convoy-entry="flat">
+                                    <span class="qc-icon">🛒</span><strong>辎重护送</strong>
+                                    <span class="qc-line">护车队穿越战场 vs 骑兵截杀劫车</span>
+                                    <small class="qc-meta">约 4 分钟 · 不对称对抗</small>
+                                </button>
+                                <button class="qc-sub" data-convoy-custom="flat">自定义配兵 ↗</button>
+                            </div>
+                            <div class="quick-card">
+                                <button class="qc-main qc-main-tall" data-tactics-entry="reserve">
+                                    <span class="qc-icon">⚔️</span><strong>战阵演练</strong>
+                                    <span class="qc-line">150 剑士 + 预备队，正面强攻完整枪阵</span>
+                                    <small class="qc-meta">约 3 分钟 · 学看战术与士气</small>
+                                </button>
+                                <div class="qc-subs">
+                                    <button class="qc-sub" data-tactics-entry="assault">100 对 100 正面强攻</button>
+                                    <button class="qc-sub" data-tactics-entry="flank">100 对 100 单翼迂回</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 练兵场与沙盒 -->
+                    <div class="mode-zone">
+                        <div class="zone-heading"><b>🎖 练兵场与沙盒</b><small>关卡 · 地形 · 自由配兵</small></div>
+                        <div class="drill-row">
+                            <div class="drill-challenges">
+                                <div class="drill-ch-head"><b>🎖 挑战战役</b><span class="campaign-progress" id="campaign-progress">0 / 5 已通过</span></div>
+                                <div id="challenge-list" class="challenge-grid"></div>
+                            </div>
+                            <div class="drill-side">
+                                <button class="drill-card-btn" id="btn-terrain">
+                                    <span class="dc-icon">⛰</span><span class="dc-copy"><strong>地形演练</strong><small>同阵容换图：自然坡地 / 树林 / 河桥</small></span>
+                                </button>
+                                <div class="drill-subs">
+                                    <button class="qc-sub" data-terrain-entry="red_pass">红方坡地</button>
+                                    <button class="qc-sub" data-terrain-entry="forest">穿越林地</button>
+                                    <button class="qc-sub" data-terrain-entry="river">三桥河谷</button>
+                                </div>
+                                <button class="drill-card-btn" id="btn-sandbox">
+                                    <span class="dc-icon">⚔️</span><span class="dc-copy"><strong>自由对战</strong><small>两位队长轮流配兵 · 每方 4000 金币 · 千人沙盒</small></span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <details class="lobby-help">
+                        <summary>❓ 士兵状态与手感说明</summary>
+                        <p class="morale-guide">士兵受压会短暂后退，撑不住才转身逃离。黄标动摇 · 橙标溃逃 · 绿标恢复/整队 · 蓝箭头返场。绿色集结旗旁的真实预备队可加快接应；重整不回血。🔱长枪拦截骑兵 · 🐴骑兵助跑突击弓手 · ⚔️剑士抗线 · 🏹弓手远射。</p>
+                        <p class="hint-small">所有挑战均可直接尝试 · 通关记录保存在当前浏览器</p>
+                    </details>
                 </section>
                 <!-- 第1/2步：配兵 -->
                 <section id="sec-buy" class="sec">

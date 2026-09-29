@@ -2,7 +2,8 @@
 import { Terrain } from './terrain.js';
 import { UNIT_TYPES, FORMATIONS, BUDGET } from './units.js';
 import { CHALLENGES, armyCost, fitArmyToBudget } from './challenges.js';
-import { TERRITORY } from './battle/economy.js';
+import { TERRITORY, makeTerritoryFlags } from './battle/economy.js';
+import { setBoardSize, resetBoardSize } from './board.js';
 
 export const Snd = {
     ctx: null, muted: false, _last: {},
@@ -132,6 +133,10 @@ export const UI = {
                 }
             }
         } catch (_) { /* 浏览器禁用存储时仍可正常游玩。 */ }
+        try {
+            const last = JSON.parse(localStorage.getItem('battle-last-mode-v1') || 'null');
+            if (last && typeof last.kind === 'string') this.lastMode = last;
+        } catch (_) { /* 同上：存储被禁时仅本次会话内有效 */ }
     },
 
     saveWin() {
@@ -232,6 +237,7 @@ export const UI = {
         this.battleOptions.terrain = Terrain.normalize(terrain);
         const defender = Terrain.maps[this.battleOptions.terrain].defender;
         if (['red', 'blue'].includes(defender)) this.orders[defender] = 'hold_ground';
+        this.rememberMode('⛰ ' + Terrain.maps[this.battleOptions.terrain].name, 'terrain', this.battleOptions.terrain);
         this.deployArmies();
     },
 
@@ -246,6 +252,7 @@ export const UI = {
         this.orders = { red: 'advance', blue: 'advance' };
         this.resetBattleOptions();
         this.battleOptions.control = true;
+        this.rememberMode('⚑ 占点三旗', 'control');
         this.deployArmies();
     },
 
@@ -263,6 +270,7 @@ export const UI = {
         this.orders = { red: 'advance', blue: 'advance' };
         this.resetBattleOptions();
         this.battleOptions.convoy = true;
+        this.rememberMode('🛒 辎重护送', 'convoy');
         this.deployArmies();
     },
 
@@ -279,11 +287,13 @@ export const UI = {
         this.resetBattleOptions();
         this.battleOptions.territory = true;
         this.battleOptions.terrain = 'territory';   // 山河领土图：上翼河桥/中央高地/下翼林带
+        this.rememberMode('🚩 领土征服 · 山河会战', 'territory');
         this.deployArmies();
     },
 
     // 占点/护送的自定义配兵：预填推荐阵容进配兵界面，兵数阵容随意改
     startControlCustom() {
+        this.rememberMode('⚑ 占点 · 自定义配兵', 'controlCustom');
         this.clearBattle();
         this.mode = 'sandbox';
         this.challenge = null;
@@ -302,6 +312,7 @@ export const UI = {
     },
 
     startConvoyCustom() {
+        this.rememberMode('🛒 护送 · 自定义配兵', 'convoyCustom');
         this.clearBattle();
         this.mode = 'sandbox';
         this.challenge = null;
@@ -430,7 +441,97 @@ export const UI = {
         this.setPhase('home');
         this.setStep(0);
         this.renderChallenges();
+        this.updateContinueButton();
+        this.drawTerritoryThumb();
         this.showSection('home');
+    },
+
+    // ---------------- 首页看板：继续上次 + 山河图缩略 ----------------
+    rememberMode(label, kind, arg = null) {
+        this.lastMode = { label, kind, arg };
+        try { localStorage.setItem('battle-last-mode-v1', JSON.stringify(this.lastMode)); }
+        catch (_) { /* 浏览器禁用存储时仅本次会话内有效 */ }
+    },
+
+    resumeLast() {
+        const last = this.lastMode;
+        if (!last) return;
+        const { kind, arg } = last;
+        if (kind === 'territory') this.startTerritory();
+        else if (kind === 'control') this.startControl();
+        else if (kind === 'controlCustom') this.startControlCustom();
+        else if (kind === 'convoy') this.startConvoy();
+        else if (kind === 'convoyCustom') this.startConvoyCustom();
+        else if (kind === 'tactics') this.startTactics(arg);
+        else if (kind === 'terrain') this.startTerrain(arg);
+        else if (kind === 'challenge') this.startChallenge(arg);
+        else if (kind === 'sandbox') this.resetAll();
+    },
+
+    updateContinueButton() {
+        const button = document.getElementById('btn-continue');
+        if (!this.lastMode) { button.hidden = true; return; }
+        button.hidden = false;
+        document.getElementById('continue-label').textContent = this.lastMode.label;
+    },
+
+    // 山河图缩略：临时切到大地图尺寸，读真实地形几何与旗点画进小画布——
+    // 地图改了缩略图自动跟着变，不养第二份示意图。
+    drawTerritoryThumb() {
+        const canvas = document.getElementById('territory-thumb');
+        if (!canvas || !canvas.getContext) return;
+        const ctx = canvas.getContext('2d');
+        setBoardSize(TERRITORY.W, TERRITORY.H);
+        const W = TERRITORY.W, H = TERRITORY.H;
+        const sx = canvas.width / W, sy = canvas.height / H;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#7fae62';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // 草地杂色
+        for (let i = 0; i < 130; i++) {
+            const x = (i * 61.8) % W, y = (i * 37.3) % H;
+            ctx.fillStyle = i % 2 ? 'rgba(120,160,88,0.5)' : 'rgba(96,138,72,0.5)';
+            ctx.fillRect(x * sx, y * sy, 2.4, 2.4);
+        }
+        const geometry = Terrain.geometry('territory');
+        // 林斑（噪声 blob 逐点采样，边缘与游戏一致）
+        for (const zone of geometry.zones) {
+            if (zone.kind !== 'forest') continue;
+            for (let y = zone.y1; y < zone.y2; y += 0.55) for (let x = zone.x1; x < zone.x2; x += 0.55) {
+                if (!Terrain.contains(zone, x + 0.28, y + 0.28)) continue;
+                ctx.fillStyle = (x * 7 + y * 3) % 3 < 1 ? '#3d6a38' : '#335c30';
+                ctx.fillRect(x * sx, y * sy, sx * 0.6, sy * 0.6);
+            }
+        }
+        // 中央高地等高圈
+        ctx.beginPath();
+        ctx.ellipse(W / 2 * sx, H / 2 * sy, 9 * sx, 6.5 * sy, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(233,221,172,0.22)';
+        ctx.fill();
+        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = 'rgba(240,225,170,0.85)';
+        ctx.stroke();
+        // 河与桥
+        for (const block of geometry.blockers) {
+            ctx.fillStyle = '#3f7fb2';
+            ctx.fillRect(block.x1 * sx, block.y1 * sy, (block.x2 - block.x1) * sx, (block.y2 - block.y1) * sy);
+        }
+        for (const zone of geometry.zones) {
+            if (zone.kind !== 'bridge') continue;
+            ctx.fillStyle = '#c9a063';
+            ctx.fillRect(zone.x1 * sx, zone.y1 * sy, (zone.x2 - zone.x1) * sx, (zone.y2 - zone.y1) * sy);
+        }
+        // 五面旗
+        for (const flag of makeTerritoryFlags()) {
+            ctx.beginPath();
+            ctx.arc(flag.gx * sx, flag.gy * sy, 4.6, 0, Math.PI * 2);
+            ctx.fillStyle = flag.owner === 'red' ? '#ff5b5b' : flag.owner === 'blue' ? '#57a0ff' : '#ece6d4';
+            ctx.fill();
+            ctx.lineWidth = 1.4;
+            ctx.strokeStyle = 'rgba(20,20,20,0.8)';
+            ctx.stroke();
+        }
+        resetBoardSize();
     },
 
     renderChallenges() {
@@ -452,6 +553,7 @@ export const UI = {
     startChallenge(id) {
         const challenge = CHALLENGES.find(c => c.id === id);
         if (!challenge) return;
+        this.rememberMode('🎖 ' + challenge.title, 'challenge', id);
         this.clearBattle();
         this.mode = 'challenge';
         this.challenge = challenge;
@@ -467,6 +569,7 @@ export const UI = {
     },
 
     resetAll() {
+        this.rememberMode('⚔️ 自由对战', 'sandbox');
         this.clearBattle();
         this.mode = 'sandbox';
         this.challenge = null;
@@ -483,6 +586,7 @@ export const UI = {
 
     startTactics(order = 'flank') {
         if (!['assault', 'flank', 'reserve'].includes(order)) return;
+        this.rememberMode({ assault: '⚔️ 战阵 · 正面强攻', flank: '⚔️ 战阵 · 单翼迂回', reserve: '⚔️ 战阵 · 预备队死斗' }[order], 'tactics', order);
         this.clearBattle();
         this.mode = 'tactics';
         this.challenge = null;
@@ -1080,6 +1184,7 @@ export const UI = {
 
     bindControls() {
         document.getElementById('btn-home').onclick = () => this.showHome();
+        document.getElementById('btn-continue').onclick = () => { this.resumeLast(); Snd.play('tick'); };
         document.getElementById('btn-sandbox').onclick = () => this.resetAll();
         document.getElementById('btn-terrain').onclick = () => this.startTerrain();
         document.querySelectorAll('[data-terrain-entry]').forEach(button => {
