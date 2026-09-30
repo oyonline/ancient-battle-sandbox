@@ -49,8 +49,10 @@ npm run build && npm run arena
 ```
 js/game.js            战斗场景编排壳（模式编排 + sim→render 单行委托，渲染实现一律进 js/render/）
 js/battle/            纯模拟层：core 战斗核 / economy 领土经济 / battalion 营队 /
-                      recruit 征兵 / spatial 空间哈希 / report 战报 / determinism 确定性约定
-js/render/            渲染层（BattleRenderer 门面）：world 地貌海面装饰烘焙 / metrics 世界度量 / sprites 精灵轮廓
+                      recruit 征兵 / morale-bridge 士气桥 / territory-bridge 领土节拍 /
+                      spatial 空间哈希 / report 战报 / determinism 确定性约定
+js/render/            渲染层（BattleRenderer 门面）：world 地貌海面装饰烘焙 / units 单位同步 /
+                      fx 特效 / overlay 覆盖层 / camera 相机装配 / metrics 世界度量 / sprites 精灵轮廓
 js/snd.js             WebAudio 合成音效（无外部文件）
 js/lobby.js           局域网房间流程（lobbyMethods 并入 UI）
 js/tactics/           战术四组：deploy 布阵 / guards 守备纪律 / rally 集结波次 / steps 逐帧编排（原型混入 TacticsSystem）
