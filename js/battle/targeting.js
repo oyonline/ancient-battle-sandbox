@@ -28,17 +28,23 @@ export function nearestEnemy(spatial, unit) {
 
 // 目标粘滞：换目标需要新目标显著更优（近 20%+）或当前目标倒下，消除等距敌人间的来回抖动。
 // 溃逃中的敌人仍是合法目标（追击规则维持现状），只治"选谁"，不改"打不打"。
-// 受阻接战的回避目标（avoidTargetId，见 unit-ai 受阻接战处理）：强制换到可打
-// 目标后，打不出去的旧敌在回避期内仍是最近敌时不再选回——但回避随"旧敌是否
-// 重新可接战"实时重估：阻挡解除/回到射程即失效，正常粘滞接管。不会为回避
-// 而抛下身边已能打的目标去追远处的新目标。
+// 受阻接战的回避目标（avoidTargetId，见 unit-ai 受阻接战处理）按现场实时重估：
+// - 旧敌仍是最近敌且仍打不出去 → 保持新目标（防翻回打不出去的旧敌）；
+// - 旧敌重新打得着（阻挡解除/回到射程）→ 回避失效，正常粘滞接管；
+// - 新目标已离开有效接战范围 → 强制安排整体作废，回到正常粘滞（旧敌仍受阻
+//   会再次触发受阻解困，重新挑身边可打的目标），不追远处目标忽略身边之敌。
 export function stickyTarget(spatial, unit) {
     const nearest = nearestEnemy(spatial, unit);
     const current = unit.meleeTarget;
     if (current && !current.dead && !current.withdrawn && nearest &&
         nearest.id === unit.avoidTargetId && (unit.avoidUntil ?? 0) > (unit.scene?.simulationTime ?? 0)) {
-        if (!unit.scene || !CombatRules.canStrike(unit.scene, unit, nearest, unit.typeData.range)) return current;
-        unit.avoidTargetId = null;   // 旧敌重新打得着：回避失效，落入正常粘滞
+        if (unit.scene && CombatRules.canStrike(unit.scene, unit, nearest, unit.typeData.range)) {
+            unit.avoidTargetId = null;   // 旧敌重新打得着：回避失效，落入正常粘滞
+        } else if (dist(unit, current) > unit.typeData.range) {
+            // 新目标已出接战范围：强制换目标的安排失效，正常粘滞重选
+            unit.avoidTargetId = null;
+            unit.meleeTarget = null;
+        } else return current;   // 旧敌仍受阻且新目标仍在射程内：保持新目标
     }
     if (!current || current.dead || current.withdrawn || current === nearest) {
         unit.meleeTarget = nearest;

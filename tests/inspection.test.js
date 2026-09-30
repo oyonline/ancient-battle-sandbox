@@ -7,6 +7,7 @@ function fixture() {
     const panel = { hidden: true, innerHTML: '' };
     const events = new Map();
     const input = { on(name, fn) { events.set(name, fn); }, off(name) { events.delete(name); } };
+    const gameEvents = new Map();
     // UnitInspector 构造时读 document.getElementById：以真实 ES 模块加载后改走全局桩
     globalThis.document = { getElementById: () => panel };
     const scene = makeScene();
@@ -14,11 +15,12 @@ function fixture() {
     const ring = { setDepth() { return this; }, clear() {}, lineStyle() {}, strokeEllipse() {}, destroy() { destroyed = true; } };
     scene.add.graphics = () => ring;
     scene.input = input;
+    scene.game = { events: { on(name, fn) { gameEvents.set(name, fn); }, off(name) { gameEvents.delete(name); } } };
     scene.events = { once(name, fn) { this.shutdown = fn; } };
     scene.cameras.main.zoom = 1;
     scene.cameras.main.getWorldPoint = (x, y) => ({ x, y });
     const inspector = new UnitInspector(scene);
-    return { scene, inspector, panel, events, describe: UnitInspector.describe, isDestroyed: () => destroyed };
+    return { scene, inspector, panel, events, gameEvents, describe: UnitInspector.describe, isDestroyed: () => destroyed };
 }
 
 test('inspector uses real height, attack and range rules without changing battle state', () => {
@@ -79,6 +81,40 @@ test('click selects elevated unit, dragging never selects, blank click dismisses
     events.get('pointerdown')(blank); events.get('pointerup')(blank);
     assert.equal(inspector.selected, null);
     assert.equal(panel.hidden, true);
+});
+
+test('取消与失焦不触发选兵/地面命令（P2 回归）', () => {
+    const { scene, inspector, events, gameEvents } = fixture();
+    const unit = addUnit(scene, 'blue', 'infantry', 51, 35);
+    scene.rebuildSpatial();
+    const foot = scene.groundPoint(unit.gx, unit.gy);
+    const pointer = { id: 1, x: foot.x, y: foot.y - 18 };
+    const groundClicks = [];
+    scene.groundClick = (world, picked) => groundClicks.push({ world, picked });
+    // 前置：普通点击会选兵并触发地面钩子（测试敏感性）
+    events.get('pointerdown')(pointer);
+    events.get('pointerup')(pointer);
+    assert.equal(inspector.selected, unit);
+    assert.equal(groundClicks.length, 1);
+    inspector.selected = null;
+    groundClicks.length = 0;
+    // 场景一：按下 → 失焦 → 回来原地抬起：手势已取消，不选兵、不下令
+    assert.ok(gameEvents.has('blur'), '失焦监听应注册在 game.events');
+    events.get('pointerdown')(pointer);
+    gameEvents.get('blur')();   // 窗口失焦：按压作废
+    events.get('pointerup')(pointer);
+    assert.equal(inspector.selected, null, '失焦后的抬起不得选兵');
+    assert.equal(groundClicks.length, 0, '失焦后的抬起不得下令（集结/驻守令）');
+    // 场景二：touchCancel（Phaser 以普通 pointerup 送达，event.type 为 touchcancel）
+    events.get('pointerdown')(pointer);
+    events.get('pointerup')({ ...pointer, event: { type: 'touchcancel' } });
+    assert.equal(inspector.selected, null, '触摸取消不得选兵');
+    assert.equal(groundClicks.length, 0, '触摸取消不得下令');
+    // 场景三：正常路径不受影响
+    events.get('pointerdown')(pointer);
+    events.get('pointerup')(pointer);
+    assert.equal(inspector.selected, unit, '正常点击仍可选兵');
+    assert.equal(groundClicks.length, 1, '正常点击仍触发地面钩子');
 });
 
 test('dead or withdrawn targets cannot remain selected and teardown removes listeners', () => {

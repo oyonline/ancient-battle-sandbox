@@ -1,6 +1,14 @@
 // 只读观察层：高度、坡向与高差效果直接取模拟规则，不参与战斗决策。
 import { Terrain } from './terrain.js';
 
+// 触摸取消判定：Phaser 3.70 把 touchcancel 与 touchend 走同一条 processUpEvents
+// （以普通 pointerup 送达，event.type 仍是 'touchcancel'）——取消不是点击，
+// 不得触发选兵或地面命令（集结/驻守令）。
+function isCanceledPointer(p) {
+    const type = p?.event?.type;
+    return type === 'touchcancel' || type === 'pointercancel';
+}
+
 export class UnitInspector {
     constructor(scene) {
         this.scene = scene;
@@ -19,7 +27,7 @@ export class UnitInspector {
         this.onUp = p => {
             const start = this.pointer;
             this.pointer = null;
-            if (!start || p.id !== start.id || start.dragged || scene._pinching ||
+            if (!start || p.id !== start.id || isCanceledPointer(p) || start.dragged || scene._pinching ||
                 Math.hypot(p.x - start.x, p.y - start.y) > 6) return;
             this.selected = this.pick(p);
             // 领土征服联动：点兵即选中整营（含点空地清除选营）
@@ -32,6 +40,9 @@ export class UnitInspector {
             this.update();
         };
         this.onOutside = () => { this.pointer = null; };
+        // 失焦即取消进行中的按压：回来后原地抬起不再选兵/下令（与镜头手势同口径）
+        this.onBlur = () => { this.pointer = null; };
+        scene.game?.events?.on('blur', this.onBlur);
         scene.input.on('pointerdown', this.onDown);
         scene.input.on('pointermove', this.onMove);
         scene.input.on('pointerup', this.onUp);
@@ -157,6 +168,7 @@ export class UnitInspector {
         this.scene.input.off('pointermove', this.onMove);
         this.scene.input.off('pointerup', this.onUp);
         this.scene.input.off('pointerupoutside', this.onOutside);
+        this.scene.game?.events?.off('blur', this.onBlur);
         this.ring.destroy();
     }
 }

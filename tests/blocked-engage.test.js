@@ -156,6 +156,32 @@ test('回避重估：旧敌阻挡解除且重新可打时，不再追远处目�
     assert.ok(endedAt <= readyAt + 500, `打击应只等攻击冷却(至 ${readyAt.toFixed(0)}ms)，实际 ${endedAt.toFixed(0)}ms`);
 });
 
+test('旧安排作废：旧敌仍受阻且新目标撤离射程时，重挑身边可打目标（P2 回归）', () => {
+    const { scene, pike, blueA, blueB } = blockedScene();
+    const blueC = addUnit(scene, 'blue', 'infantry', 29.3, 31);   // 1.22 格，枪线干净
+    scene.rebuildSpatial();
+    assert.equal(CombatRules.canStrike(scene, pike, blueC, pike.typeData.range), true, '前置：蓝C 可打');
+    const strikes = trackStrikes(scene, pike);
+    // 阶段一：受阻 → 换到蓝B 并落地打击
+    drivePike(scene, pike, 60 * 2, () => strikes.length > 0);
+    assert.equal(pike.meleeTarget, blueB);
+    assert.ok(strikes.length, '先完成对蓝B 的换目标打击');
+    // 阶段二：蓝B 撤到 15 格外（离开接战范围），蓝A 仍被剑士挡住，蓝C 就在身边
+    blueB.gx = 15;
+    scene.rebuildSpatial();
+    assert.equal(CombatRules.canStrike(scene, pike, blueA, pike.typeData.range), false, '前置：蓝A 仍受阻');
+    // 阶段三：旧安排作废 → 回到蓝A（受阻）→ 重新解困挑中蓝C 并打击；
+    // 重置攻击冷却以隔离"重选节奏"（真实打击间隔由冷却纪律保证，另测覆盖）
+    pike.lastAttack = -9999;
+    const strikesBefore = strikes.length;
+    const t0 = scene.simulationTime;
+    const endedAt = drivePike(scene, pike, 60 * 3, () => strikes.length > strikesBefore);
+    assert.equal(pike.meleeTarget, blueC, '应重挑身边可打的蓝C，不追 15 格外的蓝B');
+    assert.equal(strikes[strikes.length - 1].target, blueC);
+    assert.ok(endedAt - t0 <= 800 + 95 + 400,
+        `重选+落地应在受阻阈值节奏内（800ms 阈值+95ms 结算），实际 ${(endedAt - t0).toFixed(0)}ms`);
+});
+
 test('受阻计时随脱离接战清零：离开射程再回来重新累计（P3 回归）', () => {
     const { scene, pike, blueA, blueB } = blockedScene();
     pike.typeData = { ...pike.typeData, speed: 0 };   // 冻结位移，隔离时间变量
