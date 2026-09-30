@@ -105,12 +105,14 @@ export class CameraRig {
         const cam = this.scene.cameras.main;
         const w = this.scene.scale.gameSize.width;
         const h = this.scene.scale.gameSize.height;
-        // 领土征服大地图：默认不整图铺满（千人单位会小到看不清）——取整图缩放与
-        // "约 55% 地图宽"两者的较大值作舒适基准；镜头初始对准红方大本营与中央
-        // 高地之间，全局定位交给小地图（resize 只重设缩放，不抢已平移的镜头）。
+        // 领土征服大地图：默认不整图铺满（千人单位会小到看不清）——舒适基准锚定
+        // 固定世界窗口宽（≈旧 104×72 图的 55% 宽 ≈ 3100px）：地图放大后单位像素
+        // 大小不变、多出的疆域靠平移/小地图探索，"变大"才看得见；若按当前图宽
+        // 取 55%，放大只会等比缩小单位，屏幕上毫无变化。整图铺满项仍作下限。
         if (this.scene.battleOptions.territory) {
             const mw = VIEW_W + 260, mh = VIEW_H + 320;
-            this.scene.baseZoom = Math.max(Math.max(w / mw, h / mh) * 1.06, w / (VIEW_W * 0.55));
+            const comfortWindow = Math.min(VIEW_W * 0.55, 3100);
+            this.scene.baseZoom = Math.max(Math.max(w / mw, h / mh) * 1.06, w / comfortWindow);
             cam.setBounds(0, 0, VIEW_W, VIEW_H);
             this.applyZoom();
             if (!this.scene._territoryCamInit && this.scene.units.length) {
