@@ -128,7 +128,8 @@ test('the production update finishes existing deaths after battleOver but respec
     scene._fpsN = 0;
     scene._fpsT = 0;
     scene.time.now = 0;
-    scene.updateBloods = scene.flushBloodQueue = scene.syncRender = () => {};
+    scene.updateBloods = scene.flushBloodQueue = () => {};
+    scene.render.units.syncRender = () => {};
     scene.paused = true;
     scene.update(25, 25);
     assert.equal(unit.deathVisual.elapsed, 0);
