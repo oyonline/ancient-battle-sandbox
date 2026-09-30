@@ -47,7 +47,7 @@ npm run build && npm run arena
 ## 代码结构
 
 ```
-js/game.js            战斗场景（渲染钩子 + 模式编排）
+js/game.js            战斗场景编排壳（模式编排 + sim→render 单行委托，渲染实现一律进 js/render/）
 js/battle/            纯模拟层：core 战斗核 / economy 领土经济 / battalion 营队 /
                       recruit 征兵 / spatial 空间哈希 / report 战报 / determinism 确定性约定
 js/render/            渲染层（BattleRenderer 门面）：world 地貌海面装饰烘焙 / metrics 世界度量 / sprites 精灵轮廓
@@ -60,5 +60,5 @@ server/arena.mjs      局域网对战服务器（静态托管 + WebSocket 房间
 tests/                369 项测试：战斗规则/模式/营队/锁步一致性/服务器协议
 ```
 
-铁律：`js/battle/` 与 `js/net/` 不碰 Phaser、不碰 DOM；渲染经场景钩子回调。
+铁律：`js/battle/` 与 `js/net/` 不碰 Phaser、不碰 DOM；渲染实现只进 `js/render/`，场景上仅留单行委托——新功能禁止把渲染/模拟实现堆回 game.js。
 地图尺寸经 `js/board.js` 读取，禁止缓存旧尺寸。
