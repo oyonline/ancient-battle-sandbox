@@ -715,7 +715,7 @@ export class IsoBattleScene extends Phaser.Scene {
     // ---- sim/渲染→render 视觉钩子（battle/、测试与其他渲染层经场景调用，单行委托） ----
     fireArrow(from, target) { return this.render.fx.fireArrow(from, target); }
     updateArrows(dt, now) { return this.render.fx.updateArrows(dt, now); }
-    meleeImpact(attacker, target) { return this.render.fx.meleeImpact(attacker, target); }
+    meleeImpact(attacker, target, kind) { return this.render.fx.meleeImpact(attacker, target, kind); }
     slashArc(x, y, ang, k = 1) { return this.render.fx.slashArc(x, y, ang, k); }
     bloodBurst(x, y, n = 6, power = 95, k = 1) { return this.render.fx.bloodBurst(x, y, n, power, k); }
     updateBloods(dt) { return this.render.fx.updateBloods(dt); }

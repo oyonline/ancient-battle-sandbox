@@ -5,6 +5,12 @@ import { Terrain } from '../terrain.js';
 import { clamp } from '../units.js';
 import { ANIM_ALIGN_K, CAVALRY_PROFILE_SUFFIX, CAVALRY_FLIPPED, cavalryProfile, cavalryRenderSign, cavalryHeadingFromMotion, footProfile, animAlignProfile, shadowTextureKey } from './sprites.js';
 
+// 接敌姿态参数（毫秒，走模拟时钟，暂停即冻结）：
+// 蓄势窗口——临近冷却终点收定在起手帧，让"下一击"的节奏可读；
+// 收势窗口——出手落地后短暂回落站姿（打击位移由既有 lunge 收尾）。
+const STANCE_WINDUP_MS = 450;
+const STANCE_RECOVER_MS = 420;
+
 export class UnitRenderer {
     constructor(scene) { this.scene = scene; }
 
@@ -58,6 +64,60 @@ export class UnitRenderer {
         unit.dirDX = 0;
         unit.dirDY = 0;
         unit.spr.play(this.unitAnimKey(unit, 'attack'), true);
+        // 姿态帧缓存作废：攻击动画结束时姿态需按现场重新落帧，
+        // 不能误以为贴图还停在缓存的那一帧上。
+        unit.stanceTex = null;
+        unit.stanceFrame = null;
+        if (unit.stancePose) unit.stancePose.active = false;
+    }
+
+    // 接敌姿态（纯表现）：把攻击间隙串成 出手 → 收势 → 持械戒备 → 蓄势。
+    // 真实出手仍是动画/命中/音效的唯一触发（playAttackAnim 只由模拟调用）；
+    // 这里只做静态帧持有，不播放剪辑、不空挥、不出声、不命中。
+    // 只读既有模拟字段（meleeTarget/lastAttack/atkSpeed/moving/moraleState/
+    // tacticalRole/braceHold），姿态缓存在渲染层字段 unit.stancePose（复用同一
+    // 对象逐帧改写，不每帧建对象），不写任何模拟决策字段。
+    // 退出条件全部由谓词覆盖：开始移动/无目标/目标倒下/目标离圈/溃逃/战斗结束。
+    updateStancePose(unit, now) {
+        const pose = unit.stancePose ||
+            (unit.stancePose = { active: false, clip: 'walk', frame: 0, breath: 1, target: null });
+        pose.active = false;
+        pose.target = null;
+        const scene = this.scene;
+        if (!scene.battleStarted || scene.battleOver) return pose;
+        const type = unit.type;
+        if (type !== 'infantry' && type !== 'pikeman' && type !== 'cavalry') return pose;
+        if (unit.animState === 'attack' || unit.moving || unit.moraleState === 'routing') return pose;
+        // 目标读 AI 每步维护的粘滞目标（渲染只读不写）；守阵/架枪单位改读其哨位目标。
+        let target = unit.meleeTarget;
+        if (!target && (unit.tacticalRole === 'guard' || unit.guardEngaging)) target = unit.target;
+        if (!target || target.dead || target.withdrawn || target.team === unit.team) return pose;
+        const distance = Math.hypot(target.gx - unit.gx, target.gy - unit.gy);
+        if (distance > unit.typeData.range + 1.0) return pose;
+        const since = now - unit.lastAttack;
+        if (since < 0) return pose;
+        // 冷却口径与 CombatRules.attack 一致：已就绪守阵枪 1000ms，其余按兵种攻速。
+        const cooldown = type === 'pikeman' && unit.tacticalRole === 'guard' && unit.guardReady
+            ? 1000 : unit.typeData.atkSpeed;
+        pose.target = target;
+        if (since >= cooldown - STANCE_WINDUP_MS) {
+            // 蓄势：临近下一击（或冷却已就绪待发/受阻待机），收定在起手帧、呼吸压低
+            pose.clip = 'attack'; pose.frame = 0; pose.breath = 0.2; pose.active = true;
+        } else if (since < 320 + Math.min(STANCE_RECOVER_MS, cooldown * 0.18)) {
+            // 收势：出手刚落地，回落站姿
+            pose.clip = 'walk'; pose.frame = 0; pose.breath = 0.35; pose.active = true;
+        } else if (type === 'pikeman' && (unit.tacticalRole === 'guard' || unit.braceHold)) {
+            // 枪墙/守阵：静态持枪戒备，整排一致不摇摆，脚底钉在阵位上
+            pose.clip = 'attack'; pose.frame = 0; pose.breath = 1; pose.active = true;
+        } else if (type === 'cavalry') {
+            // 骑兵贴身对砍间隙：驻立待发（蓄势时才前倾起手）
+            pose.clip = 'walk'; pose.frame = 0; pose.breath = 1; pose.active = true;
+        } else {
+            // 持械戒备：站姿与举械间缓慢换势（相位按单位错开；只持帧不成循环）
+            pose.clip = Math.sin(now * 0.0048 + unit.bobPhase) > -0.3 ? 'attack' : 'walk';
+            pose.frame = 0; pose.breath = 1; pose.active = true;
+        }
+        return pose;
     }
 
     faceGuardSprite(unit, dx, dy) {
@@ -191,9 +251,10 @@ export class UnitRenderer {
             if (Math.abs(unit.slideOff) < 1) unit.slideOff = 0;
         }
 
-        // ---- 动画状态机：攻击锁定 > 行走 > 待机 ----
+        // ---- 动画状态机：攻击锁定 > 行走 > 接敌姿态 > 待机 ----
         // 辎重车是运行时生成的单帧贴图，无行走/攻击动画可切，跳过状态机
         if (unit.type !== 'wagon' && unit.animState !== 'attack') {
+            const stance = this.updateStancePose(unit, this.scene.simulationTime);
             const want = unit.moving ? 'walk' : 'idle';
             if (want !== unit.animState) {
                 unit.animState = want;
@@ -202,6 +263,24 @@ export class UnitRenderer {
                 } else {
                     unit.spr.anims.stop();
                     unit.spr.setTexture(this.unitAnimKey(unit, 'walk'), 0); // 当前方向的站姿
+                }
+            }
+            if (stance.active) {
+                // 接敌姿态落帧：只持有静态帧（起手帧/站姿帧），不播放剪辑
+                const key = this.unitAnimKey(unit, stance.clip);
+                if (unit.stanceTex !== key || unit.stanceFrame !== stance.frame) {
+                    unit.stanceTex = key;
+                    unit.stanceFrame = stance.frame;
+                    unit.spr.anims.stop();
+                    unit.spr.setTexture(key, stance.frame);
+                }
+            } else if (unit.stanceTex != null) {
+                // 姿态退出：一次性回到当前方向站姿，待机呼吸照常接管
+                unit.stanceTex = null;
+                unit.stanceFrame = null;
+                if (!unit.moving && unit.animState === 'idle') {
+                    unit.spr.anims.stop();
+                    unit.spr.setTexture(this.unitAnimKey(unit, 'walk'), 0);
                 }
             }
         }
@@ -216,6 +295,14 @@ export class UnitRenderer {
                 this.faceGuardSprite(unit, unit.moraleFacingX, unit.moraleFacingY);
             } else if (unit.tacticalRole === 'guard' && unit.moraleState !== 'routing') {
                 this.faceGuardSprite(unit, unit.guardFacingX, unit.guardFacingY);
+            } else if (unit.type === 'pikeman' && unit.braceHold && unit.moraleState !== 'routing') {
+                // 架枪中的普通枪墙：枪口朝向（模拟抗冲锋判定读的 braceFacing）优先于
+                // 目标朝向——画面翻面不得背离架枪纪律（战术守卫走上一分支，此处补
+                // 行军结阵的 braceHold 枪兵）。
+                this.faceGuardSprite(unit, unit.braceFacingX, unit.braceFacingY);
+            } else if (unit.stancePose?.active && unit.stancePose.target) {
+                // 接敌姿态期间朝向粘滞目标；faceGuardSprite 自带近竖直防闪烁与翻面迟滞
+                this.faceGuardSprite(unit, unit.stancePose.target.gx - unit.gx, unit.stancePose.target.gy - unit.gy);
             } else {
                 unit.faceAcc += sdx;
                 if (unit.faceAcc > 2)       { unit.spr.setFlipX(false); unit.faceDir = 1;  unit.faceAcc = 0; }
@@ -225,18 +312,24 @@ export class UnitRenderer {
         }
         unit.lastSX = planar.x; unit.lastSY = planar.y;
 
-        // 待机呼吸：以脚底为支点做极轻微缩放（不再整体上下平移，脚不离地）
-        const breath = unit.animState === 'idle' ? Math.sin(time * 0.0035 + unit.bobPhase) : 0;
+        // 待机呼吸：以脚底为支点做极轻微缩放（不再整体上下平移，脚不离地）；
+        // 收势/蓄势期按姿态压低呼吸幅度，戒备期照常
+        let breath = unit.animState === 'idle' ? Math.sin(time * 0.0035 + unit.bobPhase) : 0;
+        if (unit.stancePose?.active) breath *= unit.stancePose.breath;
         const bs = unit.baseScale || 1;
         unit.spr.setScale(bs, bs * (1 + breath * 0.012));
 
         // ---- 逐帧对齐补正：抵消同一套动画里各帧站位不一致造成的左右抖 ----
+        // 姿态持有帧按姿态剪辑的那一帧取对齐值，与真实攻击播放同一帧时一致
         const alignProfile = animAlignProfile(unit.type, unit.visualDir);
-        const alignRow = alignProfile && alignProfile[unit.animState === 'attack' ? 'attack' : 'walk'];
+        const stanceAlign = unit.stancePose?.active && unit.animState !== 'attack' ? unit.stancePose : null;
+        const alignRow = alignProfile && alignProfile[unit.animState === 'attack' ? 'attack' : stanceAlign ? stanceAlign.clip : 'walk'];
         let ajx = 0, ajy = 0;
         if (alignRow) {
             const cf = unit.spr.anims.currentFrame;
-            const a = alignRow[cf ? Math.min(cf.index - 1, alignRow.length - 1) : 0] || [0, 0];
+            const index = stanceAlign ? Math.min(stanceAlign.frame, alignRow.length - 1)
+                : cf ? Math.min(cf.index - 1, alignRow.length - 1) : 0;
+            const a = alignRow[index] || [0, 0];
             const renderSign = unit.type === 'cavalry' ? cavalryRenderSign(unit.visualDir) : unit.faceDir;
             ajx = a[0] * bs * renderSign * ANIM_ALIGN_K;      // 横向补正随贴图镜像
             ajy = a[1] * bs * ANIM_ALIGN_K;

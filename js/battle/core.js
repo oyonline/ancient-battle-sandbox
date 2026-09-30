@@ -176,6 +176,6 @@ export function resolveBrace(scene, guard, cavalry) {
     resolveAttack(cavalry, guard, { multiplier: 1.5 });
     guard.lastBrace = scene.simulationTime;
     scene.playAttackAnim(guard, cavalry);
-    scene.meleeImpact(guard, cavalry);
+    scene.meleeImpact(guard, cavalry, 'thrust');   // 迎击是枪刺，不走斩弧
     scene.addBattleEvent(`brace-${guard.team}`, `${guard.team === 'red' ? '红方' : '蓝方'}正面枪阵迎击骑兵冲锋`, guard.team);
 }

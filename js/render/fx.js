@@ -70,7 +70,13 @@ export class EffectsRenderer {
     // ---------------- 特效 ----------------
 
     // ---------------- 特效 ----------------
-    meleeImpact(attacker, target) {
+    // 兵种出手反馈分流（真实命中事件驱动，表现不反向触碰模拟）：
+    //   slash  剑士挥砍——白色斩弧 + 暖色火花 + hit 音
+    //   thrust 枪兵直刺——沿攻击方向的短直刺光 + 冷色火花 + stab 音
+    //   charge 骑兵冲锋撞击——地面冲击波 + 大火花 + 更重的 charge 音
+    // 贴身砍击的骑兵（melee 状态）走 slash，不再冒充冲锋。
+    meleeImpact(attacker, target, kind = null) {
+        if (!kind) kind = attacker.type === 'pikeman' ? 'thrust' : 'slash';
         // 屏幕空间攻击方向（y 加权贴合地面斜向）
         const sA = this.scene.groundPoint(attacker.gx, attacker.gy);
         const s = this.scene.groundPoint(target.gx, target.gy);
@@ -80,7 +86,7 @@ export class EffectsRenderer {
         if (!this.scene.lowFX && this.scene._fxBudget > 0) {
             this.scene._fxBudget--;
             // 攻击冲拳：动画已带挥砍，这里只补一小段冲击位移
-            const L = attacker.lunge, reach = (attacker.type === 'cavalry' ? 10 : 6) * (attacker.sizeK || 1);
+            const L = attacker.lunge, reach = (kind === 'charge' ? 10 : attacker.type === 'cavalry' ? 8 : 6) * (attacker.sizeK || 1);
             this.scene.tweens.add({
                 targets: L,
                 x: Math.cos(ang) * reach, y: Math.sin(ang) * reach * 0.55,
@@ -99,12 +105,14 @@ export class EffectsRenderer {
                 onComplete: () => this.scene.tweens.add({ targets: target.lunge, x: 0, y: 0, duration: 200, ease: 'Back.Out' })
             });
 
-            // 斩击弧光 + 兵刃碰撞火花
-            this.slashArc(s.x, s.y - 14 * kb, ang, kb);
-            this.sparkBurst(s.x + Math.cos(ang) * 6, s.y - 16 * kb, 0xffe9a0, attacker.type === 'cavalry');
+            // 出手光效按兵种武器形态分流：斩弧 / 直刺 / 冲撞大火花
+            if (kind === 'thrust') this.thrustStreak(s.x, s.y - 14 * kb, ang, kb);
+            else this.slashArc(s.x, s.y - 14 * kb, ang, kb);
+            this.sparkBurst(s.x + Math.cos(ang) * 6, s.y - 16 * kb,
+                kind === 'thrust' ? 0xd8ecff : 0xffe9a0, kind === 'charge');
         }
 
-        if (attacker.type === 'cavalry') {
+        if (kind === 'charge') {
             const kb = target.sizeK || 1;
             // 冲击波只做地面局部反馈；不再震镜头——百骑齐战时全屏抖动会持续不断
             if (!this.scene.lowFX && this.scene._fxBudget > 0) {
@@ -123,7 +131,7 @@ export class EffectsRenderer {
         } else {
             this.scene.bloodBurst(s.x, s.y - 14 * (target.sizeK || 1), 9, 105, target.sizeK || 1);
         }
-        if (Snd) Snd.play('hit');
+        if (Snd) Snd.play(kind === 'thrust' ? 'stab' : kind === 'charge' ? 'charge' : 'hit');
     }
 
     // 斩击弧光：一道白色弧线闪过斩击位置（尺寸随目标体型）
@@ -142,6 +150,26 @@ export class EffectsRenderer {
         this.scene.tweens.add({
             targets: g, alpha: 0, scaleX: 1.55, scaleY: 1.25,
             duration: 150, ease: 'Quad.Out', onComplete: () => g.destroy()
+        });
+    }
+
+    // 直刺光：枪兵出手的短直线反馈——沿攻击方向的细长光带 + 枪尖亮点，
+    // 比斩弧更窄更快，读作"扎了一下"而不是"砍了一刀"（尺寸随目标体型）
+    thrustStreak(x, y, ang, k = 1) {
+        const g = this.scene.add.graphics();
+        const kk = Math.max(0.45, k);
+        const len = 24 * kk, half = 1.5 * kk;      // y 压半贴合地面斜向
+        g.lineStyle(2.4 * kk, 0xf4fbff, 0.95);
+        g.lineBetween(0, 0, Math.cos(ang) * len, Math.sin(ang) * len * 0.5);
+        g.fillStyle(0xffffff, 0.95);
+        g.fillCircle(Math.cos(ang) * len, Math.sin(ang) * len * 0.5, Math.max(1.2, half));
+        g.setPosition(x, y);
+        g.setRotation(0);   // 线段已按攻击方向画好，不再整体旋转
+        this.scene.airFX.add(g);
+        this.scene.tweens.add({
+            // 线段本身带方向，不做整体缩放（斜向缩放会把线拉歪）；只前送一点再淡出
+            targets: g, alpha: 0, x: x + Math.cos(ang) * 5, y: y + Math.sin(ang) * 2.5,
+            duration: 130, ease: 'Quad.Out', onComplete: () => g.destroy()
         });
     }
 

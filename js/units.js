@@ -480,7 +480,7 @@ export class CavalryAI {
             Terrain.movementMultiplier(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, unit.pierceX, unit.pierceY);
         resolveAttack(target, unit, { multiplier: (first ? 2 : 0.5) * slopeImpact });
         knockback(target, unit, (braced ? 0.14 : first ? 0.8 : 0.4) * slopeImpact);
-        unit.scene.meleeImpact(unit, target);
+        unit.scene.meleeImpact(unit, target, 'charge');   // 冲锋/穿刺撞击反馈（含擦撞），区别于贴身砍击
         if (first) unit.scene.playAttackAnim(unit, target);
         if (braced && now - target.lastBrace >= 1000) {
             if (unit.scene.collectingImpacts) unit.scene.queueBrace(target, unit);

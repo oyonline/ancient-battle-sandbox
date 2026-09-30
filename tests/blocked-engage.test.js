@@ -158,7 +158,16 @@ test('回避重估：旧敌阻挡解除且重新可打时，不再追远处目�
 
 test('旧安排作废：旧敌仍受阻且新目标撤离射程时，重挑身边可打目标（P2 回归）', () => {
     const { scene, pike, blueA, blueB } = blockedScene();
-    const blueC = addUnit(scene, 'blue', 'infantry', 29.3, 31);   // 1.22 格，枪线干净
+    // 敏感性布置（上一轮 P3 补强）：
+    // 1) C 放 (30,28.66)——距枪兵 1.34 格，比受阻蓝A(1.3 格) 更远，蓝A 仍是最近敌；
+    //    旧坐标 (29.3,31) 距 1.22 格比 A 还近，普通目标粘滞就能自然换到 C，
+    //    旧缺陷（回避安排不作废时死守 15 格外的蓝B）不会被暴露。
+    // 2) 冻结枪兵位移（与"受阻计时清零"用例同一手法）：否则枪兵向蓝B 挪动零点几格
+    //    就会让 C 变成最近敌、粘滞接管换到 C，旧代码照样借道通过。
+    //    冻结后旧代码要等回避期(1500ms)耗尽才回到受阻蓝A，再攒 800ms 才解困，
+    //    必然超出下面的时限断言。
+    pike.typeData = { ...pike.typeData, speed: 0 };
+    const blueC = addUnit(scene, 'blue', 'infantry', 30, 28.66);
     scene.rebuildSpatial();
     assert.equal(CombatRules.canStrike(scene, pike, blueC, pike.typeData.range), true, '前置：蓝C 可打');
     const strikes = trackStrikes(scene, pike);
