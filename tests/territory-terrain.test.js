@@ -20,36 +20,32 @@ function run(scene, seconds) {
     for (let i = 0; i < 60 * seconds && !scene.battleOver; i++) scene.advanceBattle(STEP);
 }
 
-test('山河图几何：蜿蜒河横贯+中央独桥+两端浅滩+镜像对称（104×72）', () => {
+test('山河图几何：纵河分隔上翼+中央独桥+南端浅滩+镜像对称（104×72）', () => {
     board.W = 104; board.H = 72;
-    // 蜿蜒河：多条竖切线上都能遇到水面；全图左右镜像逐位一致
-    let waterColumns = 0, mirrored = true;
-    for (let x = 20.3; x < 84; x += 4) {   // 0.3 偏移避开窄条边界（含严格不等式的零宽缝）
-        let has = false;
-        for (let y = 6; y < 24; y += 0.5) if (Terrain.surface('territory', x, y) === 'water') { has = true; break; }
-        if (has) waterColumns++;
-        for (let y = 4; y < 68; y += 2.3) {
-            if (Terrain.surface('territory', x, y) !== Terrain.surface('territory', 104 - x, y)) { mirrored = false; break; }
+    let waterRows = 0;
+    for (let y = 0.3; y < 28; y += 0.5) {
+        if (Terrain.surface('territory', 52, y) === 'water') waterRows++;
+        for (let x = 5.3; x < 100; x += 2.3) {
+            assert.equal(Terrain.surface('territory', x, y), Terrain.surface('territory', 104 - x, y), '河岸左右镜像');
         }
     }
-    assert.ok(waterColumns >= 13, `河应横贯（有水切线 ${waterColumns}/17，桥位与窄条边界除外）`);
-    assert.ok(mirrored, '左右镜像逐位一致（含蜿蜒河/悬崖/林带/浅滩）');
+    assert.ok(waterRows >= 40, '纵河分隔上翼两岸，桥位留出真实缺口');
     assert.equal(Terrain.surface('territory', 52, 16), 'bridge', '中央独桥');
     assert.equal(Terrain.surface('territory', 6, 16), 'grass', '浅滩之外的远岸草地');
     assert.equal(Terrain.surface('territory', 39, 56), 'forest', '西林斑核心');
     assert.equal(Terrain.surface('territory', 65, 56), 'forest', '东林斑核心');
     assert.equal(Terrain.surface('territory', 52, 57), 'grass', '下翼中央走廊开阔');
     let shallowSeen = false;
-    for (let x = 6; x < 18; x += 0.7) for (let y = 6; y < 24; y += 0.7) if (Terrain.surface('territory', x, y) === 'shallow') shallowSeen = true;
-    assert.ok(shallowSeen, '西端有浅滩（东端由镜像保证）');
+    for (let x = 48; x < 56; x += 0.7) for (let y = 28; y < 32; y += 0.7) if (Terrain.surface('territory', x, y) === 'shallow') shallowSeen = true;
+    assert.ok(shallowSeen, '南端有可绕行浅滩');
     board.W = 70; board.H = 70;
 });
 
 test('山河图通行：河面 walkable=false，桥与浅滩可通过；林带减速骑兵', () => {
     board.W = 104; board.H = 72;
-    assert.equal(Terrain.walkable('territory', 40, 16), false, '河面不可站');
+    assert.equal(Terrain.walkable('territory', 52, 10), false, '河面不可站');
     assert.equal(Terrain.walkable('territory', 52, 16), true, '桥面可站');
-    assert.equal(Terrain.walkable('territory', 10, 16), true, '浅滩可站');
+    assert.equal(Terrain.walkable('territory', 52, 29), true, '浅滩可站');
     assert.equal(Terrain.surfaceSpeed('territory', 'cavalry', 38, 57), 0.55, '林内骑兵 55%');
     assert.equal(Terrain.surfaceSpeed('territory', 'infantry', 38, 57), 0.85, '林内步兵 85%');
     assert.equal(Terrain.surfaceSpeed('territory', 'cavalry', 52, 57), 1, '走廊全速');
@@ -100,20 +96,20 @@ test('开局与出兵：常备军、增援、集结点全部不在水里', () =>
 test('跨桥行军：被河分隔的目标经导航走桥/浅滩抵达（无人下水）', () => {
     const scene = terrainScene({ territoryAI: false }, {}, { infantry: 2 });
     const foes = scene.units.filter(u => u.team === 'blue');
-    foes.forEach((u, i) => { u.gx = 52; u.gy = 8 + i; });     // 蓝兵钉在北岸（河北 y<13）
+    foes.forEach((u, i) => { u.gx = 64; u.gy = 16 + i; });     // 蓝兵钉在东桥头
     scene.rebuildSpatial();
-    const troop = addUnit(scene, 'red', 'infantry', 30, 24);   // 南岸红兵
+    const troop = addUnit(scene, 'red', 'infantry', 40, 16);   // 西桥头红兵
     scene.rebuildSpatial();
     let crossed = false;
     for (let i = 0; i < 60 * 45; i++) {
-        foes.forEach((u, j) => { u.gx = 52; u.gy = 8 + j; u.hp = u.maxHp; });
+        foes.forEach((u, j) => { u.gx = 64; u.gy = 16 + j; u.hp = u.maxHp; });
         troop.hp = troop.maxHp;
         scene.advanceBattle(STEP);
         if (troop.dead || troop.withdrawn) break;
         assert.notEqual(Terrain.surface('territory', troop.gx, troop.gy), 'water', '全程不得踩水');
-        if (troop.gy < 12.5) { crossed = true; break; }        // 抵达北岸
+        if (troop.gx > 58) { crossed = true; break; }        // 抵达东岸
     }
-    assert.ok(crossed, '应经桥或浅滩抵达北岸');
+    assert.ok(crossed, '应经桥或浅滩抵达东岸');
 });
 
 test('山河图全局对局：营队+山河地形同构两局镜像一致，且能正常分出胜负', () => {
@@ -140,12 +136,12 @@ test('山河图2.0：悬崖脊不可通行，浅滩可通行减速，旗点与�
     assert.equal(Terrain.surface('territory', 40, 68), 'rock', '下翼悬崖脊');
     assert.equal(Terrain.walkable('territory', 40, 68), false, '悬崖不可站');
     assert.equal(Terrain.surface('territory', 64, 68), 'rock', '镜像悬崖脊');
-    assert.equal(Terrain.surface('territory', 16, 12), 'shallow', '西端浅滩');
-    assert.equal(Terrain.surface('territory', 88, 12), 'shallow', '东端浅滩');
-    assert.equal(Terrain.walkable('territory', 16, 12), true, '浅滩可通行');
-    assert.ok(Terrain.surfaceSpeed('territory', 'cavalry', 16, 12) < 1, '浅滩减速');
+    assert.equal(Terrain.surface('territory', 50, 29), 'shallow', '南端西半浅滩');
+    assert.equal(Terrain.surface('territory', 54, 29), 'shallow', '南端东半浅滩');
+    assert.equal(Terrain.walkable('territory', 50, 29), true, '浅滩可通行');
+    assert.ok(Terrain.surfaceSpeed('territory', 'cavalry', 50, 29) < 1, '浅滩减速');
     // 关键可达点不被新地形堵死
-    for (const [x, y] of [[8, 36], [96, 36], [25, 24], [79, 24], [34, 58], [70, 58], [52, 36]]) {
+    for (const [x, y] of [[8, 36], [96, 36], [40, 16], [64, 16], [42, 52], [62, 52], [52, 36]]) {
         assert.equal(Terrain.walkable('territory', x, y), true, `(${x},${y}) 应可站`);
     }
     board.W = 70; board.H = 70;

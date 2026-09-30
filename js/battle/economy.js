@@ -8,6 +8,7 @@
 
 import { UNIT_TYPES } from '../units.js';
 import { board } from '../board.js';
+import { territoryLayout } from '../territory-map.js';
 
 export const TERRITORY = {
     W: 104, H: 72,                    // 领土征服大地图（常规模式仍为 70×70）
@@ -27,19 +28,9 @@ export const TERRITORY = {
 // 占领力权重：占旗拔河与营队实力评估共用同一张表（人多/兵种强 = 占领力高）。
 export const BATTALION_POWER = { infantry: 10, pikeman: 7, archer: 4, cavalry: 12 };
 
-// 五面旗布局（山河领土图）：双方半场各两面（起始归属各自方）+ 中场高地争夺点。
-// 旗点贴地形特征摆放——上翼旗在蜿蜒河段的南岸渡口，下翼旗嵌在林斑边缘，中场
-// 旗立高地坡顶；比例坐标，换座镜像（x→W-x）下自对称。
+// 五旗与实际桥头、高地、林口共用同一布局；起始归属与经济规则不变。
 export function makeTerritoryFlags() {
-    const W = board.W, H = board.H;
-    const ford = Math.round(W * 0.24), wood = Math.round(W * 0.33);
-    return [
-        { gx: ford, gy: Math.round(H * 0.335), name: '红方渡口·上', owner: 'red', progress: 1 },
-        { gx: wood, gy: Math.round(H * 0.80), name: '红方林缘·下', owner: 'red', progress: 1 },
-        { gx: W / 2, gy: H / 2, name: '中央高地', owner: null, progress: 0 },
-        { gx: W - ford, gy: Math.round(H * 0.335), name: '蓝方渡口·上', owner: 'blue', progress: -1 },
-        { gx: W - wood, gy: Math.round(H * 0.80), name: '蓝方林缘·下', owner: 'blue', progress: -1 }
-    ].map(f => ({ ...f, contested: false }));
+    return territoryLayout(board.W, board.H).sites.map(f => ({ ...f, contested: false }));
 }
 
 export class TerritoryEconomy {

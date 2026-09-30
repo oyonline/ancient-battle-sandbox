@@ -3,6 +3,7 @@ import { board } from '../board.js';
 import { Terrain } from '../terrain.js';
 import { clamp, dist } from '../units.js';
 import { TW, TH, OX, OY, gridToScreen, sampleGroundRing, lerpColor } from './metrics.js';
+import { TERRITORY } from '../battle/economy.js';
 
 export class OverlayRenderer {
     constructor(scene) { this.scene = scene; }
@@ -152,6 +153,7 @@ export class OverlayRenderer {
     }
 
     destroyMinimap() {
+        this.clearFlagLabels();
         if (this._minimapRelease) {
             this.scene.input.off('pointerup', this._minimapRelease);
             this.scene.input.off('pointerupoutside', this._minimapRelease);
@@ -279,7 +281,9 @@ export class OverlayRenderer {
     }
 
     drawFlags() {
-        if (!this.scene.flags) return;
+        if (!this.scene.flags) { this.clearFlagLabels(); return; }
+        this.scene.render?.world?.materials?.updateRiverFlow?.(this.scene.time?.now ?? this.scene.simulationTime);
+        this.updateFlagLabels();
         if (!this.scene.flagGfx) this.scene.flagGfx = this.scene.add.graphics().setDepth(11990);
         const g = this.scene.flagGfx;
         g.clear();
@@ -342,6 +346,33 @@ export class OverlayRenderer {
                 g.strokePath();
             }
         }
+    }
+
+    clearFlagLabels() {
+        for (const label of this.flagLabels || []) label.destroy();
+        this.flagLabels = null;
+        this.labelFlags = null;
+    }
+
+    updateFlagLabels() {
+        if (!this.scene.battleOptions?.territory) { this.clearFlagLabels(); return; }
+        if (!this.scene.add?.text) return;
+        if (this.labelFlags !== this.scene.flags) {
+            this.clearFlagLabels();
+            this.labelFlags = this.scene.flags;
+            this.flagLabels = this.scene.flags.map(flag => {
+                const p = this.scene.groundPoint(flag.gx, flag.gy);
+                return this.scene.add.text(p.x, p.y - 76,
+                    `${flag.name} · 军费 +${TERRITORY.FLAG_INCOME}/秒\n${flag.benefit || ''}`, {
+                        fontFamily: '"PingFang SC", sans-serif', fontSize: '22px', align: 'center',
+                        color: '#fff0c7', stroke: '#29291f', strokeThickness: 4,
+                        backgroundColor: '#303222b8', padding: { x: 7, y: 4 }
+                    }).setOrigin(0.5, 1).setDepth(11995);
+            });
+        }
+        // Zoom compensation keeps strategic names readable in the overview.
+        const scale = Math.min(2.4, Math.max(0.8, 0.62 / this.scene.cameras.main.zoom));
+        for (const label of this.flagLabels) label.setScale(scale);
     }
 
     // ---------------- 护送模式 ----------------

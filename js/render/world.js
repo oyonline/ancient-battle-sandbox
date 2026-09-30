@@ -4,10 +4,10 @@ import { Terrain } from '../terrain.js';
 import { clamp, UNIT_TYPES } from '../units.js';
 import { TW, TH, VIEW_W, VIEW_H, gridToScreen, sampleGroundRing, makeNoise, TWO_PI } from './metrics.js';
 import { unitVisualDirections, footProfile, shadowTextureKey } from './sprites.js';
-import { TerrainMaterialsRenderer } from './terrain-materials.js';
+import { TerritoryMapRenderer } from './territory-map.js';
 
 export class WorldRenderer {
-    constructor(scene) { this.scene = scene; this.materials = new TerrainMaterialsRenderer(scene); }
+    constructor(scene) { this.scene = scene; this.materials = new TerritoryMapRenderer(scene); }
 
     // ---------------- 全屏海面（铺满菱形外的屏幕区域） ----------------
     createOceanBackdrop() {

@@ -2,8 +2,9 @@
 // adjacent terrain rectangles never create an artificial bank inside the river.
 const CHANNEL_KIND = { water: 1, shallow: 2, bridge: 3 };
 
-export function buildWaterField(geometry, { step = 0.5 } = {}) {
+export function buildWaterField(geometry, { step = 0.5, padding = step } = {}) {
     if (!Number.isFinite(step) || step <= 0) throw new RangeError('Water field step must be finite and positive');
+    if (!Number.isFinite(padding) || padding < step) throw new RangeError('Water field padding must cover at least one sample');
     const channel = [
         ...(geometry.blockers || []).filter(rect => rect.kind === 'water'),
         ...(geometry.zones || []).filter(rect => rect.kind === 'shallow' || rect.kind === 'bridge')
@@ -20,9 +21,10 @@ export function buildWaterField(geometry, { step = 0.5 } = {}) {
         minX = Math.min(minX, rect.x1); minY = Math.min(minY, rect.y1);
         maxX = Math.max(maxX, rect.x2); maxY = Math.max(maxY, rect.y2);
     }
-    const x1 = minX - step, y1 = minY - step;
-    const cols = Math.ceil((maxX - minX) / step) + 2;
-    const rows = Math.ceil((maxY - minY) / step) + 2;
+    const pad = Math.ceil(padding / step);
+    const x1 = minX - pad * step, y1 = minY - pad * step;
+    const cols = Math.ceil((maxX - minX) / step) + pad * 2;
+    const rows = Math.ceil((maxY - minY) / step) + pad * 2;
     const kinds = new Uint8Array(cols * rows);
     const distance = new Float32Array(cols * rows);
     for (let row = 0; row < rows; row++) {

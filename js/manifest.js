@@ -2,7 +2,8 @@
 export const MANIFEST = {
   "terrain": {
     "materials": { "file": "terrain/materials.png" },
-    "props": { "file": "terrain/props.png" }
+    "props": { "file": "terrain/props.png" },
+    "rocks": { "file": "terrain/rocks-v2.png" }
   },
   "units": {
     "blue_infantry": {

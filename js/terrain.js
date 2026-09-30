@@ -2,6 +2,7 @@
 // 棋盘尺寸经 board 读取（默认 70×70；领土征服大地图 104×72）。除 territory 地形
 // 按棋盘比例布局外，其余地图是 70×70 时代设计、只在默认尺寸下运行，行为不变。
 import { board } from './board.js';
+import { territoryGeometry } from './territory-map.js';
 export const Terrain = {
     HEIGHT_SCALE: 24,
     MAX_RANGE_MULTIPLIER: 1.2,
@@ -14,8 +15,7 @@ export const Terrain = {
         blue_pass: { name: '蓝方自然坡地', defender: 'blue', description: '步兵沿宽坡仰攻，弓兵据山脊俯射；骑兵可沿侧坡绕后', cx: 51, cy: 35 },
         forest: { name: '林间战场', description: '林内骑兵移速55%、其他兵种85%；入林打断冲锋，出林重新助跑，无隐身或箭矢遮挡' },
         river: { name: '三桥河谷', description: '河面不可通行；中央宽桥争正面，两侧桥可绕后，击退不会落水，弓箭可以跨河' },
-        // 领土征服专用（104×72）：上翼横河+中央一道桥（两端可绕），中央高地缓坡，
-        // 下翼双林带夹开阔走廊；几何按棋盘比例生成（见 geometry），镜像自对称。
+        // 领土征服专用：纵河分隔上翼，桥头相向；中部高地、下翼林口构成三条路线。
         territory: { name: '山河领土', description: '上翼争桥、中央夺高地、下翼穿林——三条线三种打法', cx: 52, cy: 36, rx: 9, ry: 6.5 }
     },
 
@@ -124,47 +124,6 @@ export const Terrain = {
             const mirrorRect = r => ({ ...r, x1: 70 - r.x2, x2: 70 - r.x1 });
             const mirrorPoint = p => ({ gx: 70 - p.gx, gy: p.gy });
             const W = board.W, H = board.H;
-            // 领土征服山河图：上翼横河按段蜿蜒（中央桥段平直对齐，越靠两端越
-            // 往北弓；分界点按比例取，任意棋盘宽度下左右镜像对称）；下翼双噪声
-            // 林斑带（blob:'generic'）夹中央开阔走廊。
-            const riverY1 = Math.round(H * 0.18), riverThick = 6;
-            const riverX1 = Math.round(W * 0.17), riverX2 = W - Math.round(W * 0.17);
-            const bridgeL = W / 2 - 3, bridgeR = W / 2 + 3;
-            const span = bridgeL - riverX1;
-            // 真蜿蜒：2.5 格窄条沿弓形曲线铺（离桥越远越往北抬，折叠偶函数保镜像），
-            // 窄条阶梯在视觉上就是曲线河——不再是几段大方块
-            const stripW = 2.5;
-            const nStrips = Math.floor(span / stripW);
-            const bow = d => Math.round(Math.pow(Math.min(1, d / span), 1.3) * 5) / 2;   // 0 → 2.5（半格步进）
-            const waterStrips = [];
-            for (let i = 0; i < nStrips; i++) {
-                const xInner = bridgeL - (i + 1) * stripW, xOuter = bridgeL - i * stripW;
-                const lift = bow((i + 0.5) * stripW);
-                waterStrips.push(rect(xInner, riverY1 - lift, xOuter, riverY1 - lift + riverThick, 'water'));
-                waterStrips.push(rect(W - xOuter, riverY1 - lift, W - xInner, riverY1 - lift + riverThick, 'water'));
-            }
-            // 浅滩：河端外延三小条，跟随弓形趋势（可通行减速）
-            const shallowStrips = [];
-            for (let k = 1; k <= 3; k++) {
-                const lift = bow(span) + k * 0.5;
-                const xOuter = riverX1 - (3 - k) * 2.5, xInner = xOuter - 2.5;
-                shallowStrips.push(rect(xInner, riverY1 - lift, xOuter, riverY1 - lift + riverThick, 'shallow'));
-                shallowStrips.push(rect(W - xOuter, riverY1 - lift, W - xInner, riverY1 - lift + riverThick, 'shallow'));
-            }
-            // 悬崖脊：分段错落（y ±1 抖动）——山脊线而非大块岩壁；分段相互搭接不留缝
-            const cliffChunks = (x1Base, x2Base) => {
-                const chunks = [];
-                for (let x = x1Base; x < x2Base; x += 3) {
-                    const y1 = Math.round(H * 0.90) + ((x - x1Base) / 3 % 2 === 0 ? 0 : 1);
-                    chunks.push(rect(x, y1, Math.min(x2Base, x + 4), H - 1, 'rock'));
-                }
-                return chunks;
-            };
-            // 右崖 = 左崖逐块镜像（分段相位若各自生成会差半块，镜像逐位破坏）
-            const forest = (x1, x2) => ({
-                x1, x2, y1: Math.round(H * 0.70), y2: Math.round(H * 0.88),
-                kind: 'forest', blob: 'generic'
-            });
             this._geometry = {
                 flat: { blockers: [], zones: [], defense: null },
                 blue_pass: blue,
@@ -175,22 +134,7 @@ export const Terrain = {
                 forest: { blockers: [], zones: [{ x1: 25, y1: 12, x2: 45, y2: 58, kind: 'forest', blob: true }], defense: null },
                 river: { blockers: [[0, 13], [18, 32], [38, 52], [57, 70]].map(([a, b]) => rect(32, a, 38, b, 'water')),
                     zones: [[13, 18], [32, 38], [52, 57]].map(([a, b]) => rect(32, a, 38, b, 'bridge')), defense: null },
-                territory: {
-                    blockers: [
-                        ...waterStrips,
-                        ...(() => {
-                            const left = cliffChunks(Math.round(W * 0.33), Math.round(W * 0.44));
-                            return [...left, ...left.map(c => rect(W - c.x2, c.y1, W - c.x1, c.y2, 'rock'))];
-                        })()
-                    ],
-                    zones: [
-                        rect(W / 2 - 3, riverY1, W / 2 + 3, riverY1 + riverThick, 'bridge'),
-                        ...shallowStrips,
-                        forest(Math.round(W * 0.31), Math.round(W * 0.44)),
-                        forest(Math.round(W * 0.56), Math.round(W * 0.69))
-                    ],
-                    defense: null
-                }
+                territory: territoryGeometry(W, H)
             };
             this._geometryBoard = boardKey;
         }

@@ -96,14 +96,19 @@ export class TerrainNavigation {
             if (river) return river;
         }
         const { points, distances, next } = this.graph(radius);
+        // Goal visibility is identical for every start corner. Cache it once
+        // per plan rather than repeating rectangle sweeps inside the n² loop.
+        const goalCosts = points.map(b => Terrain.segmentClear(this.key, b.gx, b.gy, goal.gx, goal.gy, radius)
+            ? Math.hypot(b.gx - goal.gx, b.gy - goal.gy) : Infinity);
         let best = Infinity, start = -1, end = -1, bestTie = null;
         for (let i = 0; i < points.length; i++) {
             const a = points[i];
             if (!Terrain.segmentClear(this.key, unit.gx, unit.gy, a.gx, a.gy, radius)) continue;
+            const startCost = Math.hypot(a.gx - unit.gx, a.gy - unit.gy);
             for (let j = 0; j < points.length; j++) {
                 const b = points[j];
-                if (!Terrain.segmentClear(this.key, b.gx, b.gy, goal.gx, goal.gy, radius)) continue;
-                const cost = Math.hypot(a.gx - unit.gx, a.gy - unit.gy) + distances[i][j] + Math.hypot(b.gx - goal.gx, b.gy - goal.gy);
+                if (!Number.isFinite(goalCosts[j])) continue;
+                const cost = startCost + distances[i][j] + goalCosts[j];
                 const forward = unit.team === 'red' ? -1 : 1;
                 const tie = [a.gy, b.gy, a.gx * forward, b.gx * forward];
                 const difference = bestTie && tie.findIndex((value, k) => Math.abs(value - bestTie[k]) > 1e-9);
