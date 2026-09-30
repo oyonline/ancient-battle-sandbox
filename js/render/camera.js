@@ -42,7 +42,7 @@ export class CameraRig {
         if (this.scene.battleOptions.territory) {
             const mw = VIEW_W + 260, mh = VIEW_H + 320;
             this.scene.baseZoom = Math.max(Math.max(w / mw, h / mh) * 1.06, w / (VIEW_W * 0.55));
-            cam.setBounds(-320, -40, VIEW_W + 640, VIEW_H + 200);
+            cam.setBounds(0, 0, VIEW_W, VIEW_H);
             this.applyZoom();
             if (!this.scene._territoryCamInit && this.scene.units.length) {
                 this.scene._territoryCamInit = true;

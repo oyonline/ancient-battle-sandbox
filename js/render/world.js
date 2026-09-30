@@ -4,9 +4,10 @@ import { Terrain } from '../terrain.js';
 import { clamp, UNIT_TYPES } from '../units.js';
 import { TW, TH, VIEW_W, VIEW_H, gridToScreen, sampleGroundRing, makeNoise, TWO_PI } from './metrics.js';
 import { unitVisualDirections, footProfile, shadowTextureKey } from './sprites.js';
+import { TerrainMaterialsRenderer } from './terrain-materials.js';
 
 export class WorldRenderer {
-    constructor(scene) { this.scene = scene; }
+    constructor(scene) { this.scene = scene; this.materials = new TerrainMaterialsRenderer(scene); }
 
     // ---------------- 全屏海面（铺满菱形外的屏幕区域） ----------------
     createOceanBackdrop() {
@@ -25,6 +26,12 @@ export class WorldRenderer {
         const g = this.scene.ocean, gw = this.scene.oceanWaves;
         // 底色画 3 倍屏幕大，缩放/平移永远不露边
         g.clear();
+        if (this.scene.battleOptions.terrain === 'territory' && this.materials.available()) {
+            g.fillStyle(0x46502c, 1);
+            g.fillRect(-w, -h, w * 3, h * 3);
+            gw.clear();
+            return;
+        }
         g.fillStyle(0x1c3f5c, 1);
         g.fillRect(-w, -h, w * 3, h * 3);
 
@@ -121,6 +128,13 @@ export class WorldRenderer {
     // 帝国风地形：杂色草地 + 立体倒角 + 水域环绕 + 海岸黄边
     // 70×70 = 4900 块、数万条图形指令：一次性烘焙成大贴图，之后每帧只画一张图
     drawGround() {
+        if (this.scene.battleOptions.terrain === 'territory' && this.materials.available()) {
+            this.materials.draw();
+            for (const { sprite } of this.scene.edgeProps || []) sprite.setVisible(sprite.texture.key === 'props/tower');
+            if (this.scene.ocean) this.redrawOcean();
+            return;
+        }
+        this.materials.clearGround();
         const g = this.scene.make.graphics({ add: false });
         const naturalSlope = Terrain.isNaturalSlope(this.scene.battleOptions.terrain);
         this.scene.terNoise = this.scene.terNoise || makeNoise(7);
@@ -537,6 +551,16 @@ export class WorldRenderer {
     placeDecorations() {
         const deco = [];
         this.scene.edgeProps = [];
+        if (this.scene.battleOptions.terrain === 'territory' && this.materials.available()) {
+            // Keep the existing base towers; woodland is now placed by the material renderer.
+            for (const gy of [8, 20, 34, 48, 60]) for (const gx of [2.2, board.W - 3.2]) {
+                const p = this.scene.groundPoint(gx, gy);
+                const sprite = this.scene.add.image(p.x, p.y, 'props/tower')
+                    .setOrigin(0.5, 0.92).setScale(0.48).setDepth((gx + gy) * 100 + 10);
+                this.scene.edgeProps.push({ sprite, gx, gy });
+            }
+            return;
+        }
         // 双方大本营：箭塔沿基地前沿一字排开（要塞感）
         [8, 20, 34, 48, 60].forEach(gy => {
             deco.push(['tower', 2.2, gy]);

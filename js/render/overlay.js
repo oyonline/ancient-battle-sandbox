@@ -116,15 +116,19 @@ export class OverlayRenderer {
         const x = cam.width - w - 14, y = 74;
         const gfx = this.scene.add.graphics().setScrollFactor(0).setDepth(150010);
         const zone = this.scene.add.rectangle(x + w / 2, y + h / 2, w, h, 0x000000, 0.01)
-            .setOrigin(0.5).setScrollFactor(0).setInteractive();
+            .setOrigin(0.5).setScrollFactor(0).setDepth(150011).setInteractive();
         const jump = pointer => {
+            const { x, y } = this.scene._minimap;
             const gx = clamp((pointer.x - x) / w * board.W, 0, board.W);
             const gy = clamp((pointer.y - y) / h * board.H, 0, board.H);
             const world = gridToScreen(gx, gy);
             cam.centerOn(world.x, world.y);
         };
-        zone.on('pointerdown', jump);
-        zone.on('pointermove', pointer => { if (pointer.isDown) jump(pointer); });
+        zone.on('pointerdown', (pointer, _x, _y, event) => { event.stopPropagation(); jump(pointer); });
+        zone.on('pointermove', (pointer, _x, _y, event) => {
+            if (pointer.isDown) { event.stopPropagation(); jump(pointer); }
+        });
+        zone.on('pointerup', (_pointer, _x, _y, event) => event.stopPropagation());
         this.scene._minimap = { gfx, zone, x, y, w, h };
     }
 
@@ -137,6 +141,14 @@ export class OverlayRenderer {
 
     updateTerritoryOverlay() {
         if (!this.scene._minimap) this.buildMinimap();
+        // scrollFactor=0 cancels panning, but Phaser still zooms about the camera
+        // origin. Invert BOTH the zoom and its origin shift for a fixed-size HUD.
+        const cam = this.scene.cameras.main, mini = this.scene._minimap;
+        const scale = 1 / cam.zoom;
+        const ox = cam.width * cam.originX * (1 - scale), oy = cam.height * cam.originY * (1 - scale);
+        mini.x = cam.width - mini.w - 14;
+        mini.gfx.setScale(scale).setPosition(ox, oy);
+        mini.zone.setScale(scale).setPosition(ox + (mini.x + mini.w / 2) * scale, oy + (mini.y + mini.h / 2) * scale);
         const now = this.scene.time?.now || this.scene.simulationTime;
         if (now - (this.scene._minimapAt || 0) < 120) return;
         this.scene._minimapAt = now;
@@ -144,10 +156,19 @@ export class OverlayRenderer {
         const RED = 0xff5b5b, BLUE = 0x57a0ff, NEUTRAL = 0xd8d2c0;
         g.clear();
         // 底板与边框
-        g.fillStyle(0x10202e, 0.82);
+        g.fillStyle(0x343724, 0.94);
         g.fillRect(x - 4, y - 4, w + 8, h + 8);
-        g.lineStyle(2, 0x2f4a5e, 0.95);
+        g.lineStyle(2, 0xa68c56, 0.95);
         g.strokeRect(x - 4, y - 4, w + 8, h + 8);
+        g.fillStyle(0x697343, 1); g.fillRect(x, y, w, h);
+        const geometry = Terrain.geometry(this.scene.battleOptions.terrain);
+        for (const rect of [...geometry.blockers, ...geometry.zones]) {
+            const colors = { water: 0x3b7581, shallow: 0x83a194, bridge: 0xb79962, forest: 0x314d2b, rock: 0x8a8878 };
+            if (!colors[rect.kind]) continue;
+            g.fillStyle(colors[rect.kind], 0.95);
+            g.fillRect(x + rect.x1 / board.W * w, y + rect.y1 / board.H * h,
+                (rect.x2 - rect.x1) / board.W * w, (rect.y2 - rect.y1) / board.H * h);
+        }
         // 双方出兵线提示带
         g.fillStyle(0xff5555, 0.10);
         g.fillRect(x, y, w * (12 / board.W), h);
@@ -179,28 +200,29 @@ export class OverlayRenderer {
         g.lineStyle(1.5, 0xf6e6b0, 0.9);
         g.beginPath();
         corners.forEach((c, i) => {
-            const px = x + c.gx / board.W * w, py = y + c.gy / board.H * h;
+            const px = x + clamp(c.gx / board.W, 0, 1) * w, py = y + clamp(c.gy / board.H, 0, 1) * h;
             if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
         });
         g.closePath();
         g.strokePath();
 
+        // 营队选中态与集结旗使用世界空间层，不能画进屏幕空间小地图。
+        if (!this.scene.selectionGfx) this.scene.selectionGfx = this.scene.add.graphics().setDepth(12050);
+        const sel = this.scene.selectionGfx;
+        sel.clear();
         // 己方集结旗标记（敌方集结点属情报，不绘制）
         const myRally = this.scene.territory.rally[this.scene.netMySide || 'red'];
         if (myRally) {
             const base = this.scene.groundPoint(myRally.gx, myRally.gy);
             const pulse = 0.7 + 0.3 * Math.sin(this.scene.simulationTime * 0.004);
-            g.fillStyle(0x1c1812, 0.8);
-            g.fillEllipse(base.x, base.y + 2, 14, 7);
-            g.lineStyle(3, 0x3a2f1b, 0.95);
-            g.lineBetween(base.x, base.y, base.x, base.y - 38);
-            g.fillStyle(this.scene.netMySide === 'blue' ? 0x57a0ff : 0xff5b5b, pulse);
-            g.fillTriangle(base.x, base.y - 38, base.x + 22, base.y - 31, base.x, base.y - 24);
+            sel.fillStyle(0x1c1812, 0.8);
+            sel.fillEllipse(base.x, base.y + 2, 14, 7);
+            sel.lineStyle(3, 0x3a2f1b, 0.95);
+            sel.lineBetween(base.x, base.y, base.x, base.y - 38);
+            sel.fillStyle(this.scene.netMySide === 'blue' ? 0x57a0ff : 0xff5b5b, pulse);
+            sel.fillTriangle(base.x, base.y - 38, base.x + 22, base.y - 31, base.x, base.y - 24);
         }
         // 营队选中态：成员金圈 + 营令指向线（世界空间层，随镜头缩放）
-        if (!this.scene.selectionGfx) this.scene.selectionGfx = this.scene.add.graphics().setDepth(12050);
-        const sel = this.scene.selectionGfx;
-        sel.clear();
         const selected = this.scene.selectedBattalion;
         if (selected && selected.members.length) {
             sel.lineStyle(2.5, 0xffe49a, 0.95);

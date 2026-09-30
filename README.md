@@ -59,8 +59,16 @@ js/tactics/           战术四组：deploy 布阵 / guards 守备纪律 / rally
 js/net/               锁步联机：lockstep 调度与哈希 / arena-client 房间客户端
 js/terrain|navigation 地形高度场与寻路（棋盘尺寸参数化，默认 70×70，领土图 104×72）
 server/arena.mjs      局域网对战服务器（静态托管 + WebSocket 房间中继）
-tests/                369 项测试：战斗规则/模式/营队/锁步一致性/服务器协议
+tests/                376 项测试：战斗规则/模式/营队/锁步一致性/服务器协议/连续河岸
 ```
 
 铁律：`js/battle/` 与 `js/net/` 不碰 Phaser、不碰 DOM；渲染实现只进 `js/render/`，场景上仅留单行委托——新功能禁止把渲染/模拟实现堆回 game.js。
 地图尺寸经 `js/board.js` 读取，禁止缓存旧尺寸。
+
+领土山河图使用 `js/render/terrain-materials.js` 烘焙连续材质与真实高度坡面，地面以
+1024px 分块纹理和独立 Image 绘制，支持视口剔除；切换地图会释放纹理。
+`terrain-boundaries.js` 对水面、桥下水域和浅滩合并计算外岸距离，避免河段内部出现假岸线。
+树木与单位共用脚底深度排序，阴影烘焙进地面，小地图保持屏幕大小并支持点击定位。
+材质与透明装饰图集位于 `public/assets/terrain/`，本次由 ImageGen 原创生成；装饰图集
+前三棵树占上方 620px，后三种装饰占下方 404px，运行时裁取，完整保留树根。
+以上均为渲染实现，地形高度、碰撞、坡速、旗点与锁步模拟仍读取原有 `Terrain` 数据。

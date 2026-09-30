@@ -49,6 +49,8 @@ export class IsoBattleScene extends Phaser.Scene {
             this.load.image(u.file.replace('.png', ''), 'assets/' + u.file));
         Object.values(MANIFEST.props).forEach(p =>
             this.load.image(p.file.replace('.png', ''), 'assets/' + p.file));
+        Object.values(MANIFEST.terrain).forEach(p =>
+            this.load.image(p.file.replace('.png', ''), 'assets/' + p.file));
         Object.values(MANIFEST.corpses || {}).forEach(c =>
             this.load.image(c.file.replace('.png', ''), 'assets/' + c.file));
         Object.values(MANIFEST.deaths || {}).forEach(c =>

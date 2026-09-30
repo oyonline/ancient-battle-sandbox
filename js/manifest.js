@@ -1,5 +1,9 @@
 // 素材清单；死亡动画由 tools/build_death_sprites.py 维护。
 export const MANIFEST = {
+  "terrain": {
+    "materials": { "file": "terrain/materials.png" },
+    "props": { "file": "terrain/props.png" }
+  },
   "units": {
     "blue_infantry": {
       "file": "units/blue_infantry.png",
