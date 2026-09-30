@@ -50,10 +50,11 @@ npm run build && npm run arena
 js/game.js            战斗场景（渲染钩子 + 模式编排）
 js/battle/            纯模拟层：core 战斗核 / economy 领土经济 / battalion 营队 /
                       recruit 征兵 / spatial 空间哈希 / report 战报 / determinism 确定性约定
+js/tactics/           战术四组：deploy 布阵 / guards 守备纪律 / rally 集结波次 / steps 逐帧编排（原型混入 TacticsSystem）
 js/net/               锁步联机：lockstep 调度与哈希 / arena-client 房间客户端
 js/terrain|navigation 地形高度场与寻路（棋盘尺寸参数化，默认 70×70，领土图 104×72）
 server/arena.mjs      局域网对战服务器（静态托管 + WebSocket 房间中继）
-tests/                361 项测试：战斗规则/模式/营队/锁步一致性/服务器协议
+tests/                369 项测试：战斗规则/模式/营队/锁步一致性/服务器协议
 ```
 
 铁律：`js/battle/` 与 `js/net/` 不碰 Phaser、不碰 DOM；渲染经场景钩子回调。
