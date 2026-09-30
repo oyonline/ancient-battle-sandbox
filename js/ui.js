@@ -960,6 +960,12 @@ export const UI = {
             document.getElementById('btn-mute').textContent = Snd.muted ? '🔇' : '🔊';
             document.getElementById('btn-mute').setAttribute('aria-label', Snd.muted ? '开启声音' : '关闭声音');
         };
+        // 战斗信息面板折叠：隐藏 .hud-info 信息行只留操作件，战场视野让位（状态留在 DOM，不跨局记忆）
+        document.getElementById('btn-hud-collapse').onclick = () => {
+            const bar = document.getElementById('controlbar');
+            const collapsed = bar.classList.toggle('collapsed');
+            document.getElementById('btn-hud-collapse').textContent = collapsed ? '⌄ 展开信息' : '⌃ 收起信息';
+        };
         const toggleSheet = () => this.openSheet(!document.getElementById('sheet').classList.contains('open'));
         document.getElementById('btn-panel').onclick = toggleSheet;
         document.getElementById('btn-fold').onclick = toggleSheet;

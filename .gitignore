@@ -2,3 +2,12 @@
 .omc/
 node_modules/
 dist/
+.DS_Store
+__pycache__/
+.trae-html-share-packages/
+tools/ai_raw/
+tools/ai_raw_props/
+tools/ai_raw_v2/
+tools/style_samples/
+pnpm-lock.yaml
+pnpm-workspace.yaml

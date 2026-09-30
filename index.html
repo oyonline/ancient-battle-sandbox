@@ -28,13 +28,14 @@
 
     <aside id="unit-inspector" class="unit-inspector" aria-label="士兵地形与指令" aria-live="off" hidden></aside>
 
-    <!-- 底部悬浮控制条（战斗中） -->
+    <!-- 底部悬浮控制条（战斗中）；.hud-info 为信息类行，折叠时整体隐藏只留操作件 -->
     <div id="controlbar" hidden>
+        <button id="btn-hud-collapse" class="hud-collapse-btn" aria-label="收起或展开战斗信息面板">⌃ 收起信息</button>
         <div id="morale-cue" class="morale-cue" role="status" hidden></div>
-        <div id="deathmatch-hud-rule" class="deathmatch-rule" hidden>死斗：溃兵可重整，直到一方全灭</div>
-        <div id="control-hud-rule" class="deathmatch-rule" hidden>⚑ 占点征服：占住旗帜攒积分，先到 60 分者胜</div>
-        <div id="convoy-hud-rule" class="deathmatch-rule" hidden>🛒 护送：送抵 3 辆辎重车获胜；车身被蓝方独占约 6 秒即遭劫走（人越多越快），劫走 3 辆蓝胜</div>
-        <div id="territory-hud-rule" class="deathmatch-rule" hidden>🚩 领土征服：占旗产军费、老家征兵；对方占多数旗时你的票数流失，票尽判负（全歼对手同样获胜）</div>
+        <div id="deathmatch-hud-rule" class="deathmatch-rule hud-info" hidden>死斗：溃兵可重整，直到一方全灭</div>
+        <div id="control-hud-rule" class="deathmatch-rule hud-info" hidden>⚑ 占点征服：占住旗帜攒积分，先到 60 分者胜</div>
+        <div id="convoy-hud-rule" class="deathmatch-rule hud-info" hidden>🛒 护送：送抵 3 辆辎重车获胜；车身被蓝方独占约 6 秒即遭劫走（人越多越快），劫走 3 辆蓝胜</div>
+        <div id="territory-hud-rule" class="deathmatch-rule hud-info" hidden>🚩 领土征服：占旗产军费、老家征兵；对方占多数旗时你的票数流失，票尽判负（全歼对手同样获胜）</div>
         <div id="territory-hud" class="territory-hud" aria-label="领土征服经济与征兵" hidden>
             <div class="territory-econ">
                 <span>🔴 军费 <b id="territory-treasury">150</b><small id="territory-income">+13/秒</small></span>
@@ -49,8 +50,8 @@
             <span id="battalion-label">营队</span>
             <div class="battalion-orders" id="battalion-orders"></div>
         </div>
-        <div id="commands-hud" class="commands-hud" aria-label="本局双方指令" hidden></div>
-        <div id="tactics-hud" class="tactics-hud" aria-label="两军战术与可战兵力" aria-live="off" hidden>
+        <div id="commands-hud" class="commands-hud hud-info" aria-label="本局双方指令" hidden></div>
+        <div id="tactics-hud" class="tactics-hud hud-info" aria-label="两军战术与可战兵力" aria-live="off" hidden>
             <div class="tactics-team red" id="tactics-red">
                 <div class="tactics-heading"><b id="tactics-red-label">红方战术</b><span id="tactics-red-stage"></span></div>
                 <div class="tactics-strength" id="tactics-red-strength"></div>
