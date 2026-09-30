@@ -37,6 +37,9 @@ export class UnitRenderer {
 
     // 攻击时朝向实际目标，出手期间锁定画面朝向。
     // 伤害在挥砍帧上结算（见 updateNormalUnit）。
+    // 骑兵按八向贴图转向；步兵素材只有左右两面，普通剑士/枪兵/弓手出手时
+    // 与守卫同一口径：按目标方向翻面（近竖直方向保留原面避免闪烁）。
+    // 攻击期间朝向锁定（syncOne 的非骑兵翻面分支跳过 attack 状态）。
     playAttackAnim(unit, target = null) {
         if (unit.type === 'cavalry' && target) {
             const from = gridToScreen(unit.gx, unit.gy);
@@ -46,7 +49,7 @@ export class UnitRenderer {
                 unit.visualDir = cavalryHeadingFromMotion(dx, dy, unit.visualDir);
                 unit.faceDir = cavalryRenderSign(unit.visualDir);
             }
-        } else if (unit.tacticalRole === 'guard' && target) {
+        } else if (unit.type !== 'cavalry' && target) {
             this.faceGuardSprite(unit, target.gx - unit.gx, target.gy - unit.gy);
         }
         unit.animState = 'attack';

@@ -124,15 +124,44 @@ export class OverlayRenderer {
             const world = gridToScreen(gx, gy);
             cam.centerOn(world.x, world.y);
         };
-        zone.on('pointerdown', (pointer, _x, _y, event) => { event.stopPropagation(); jump(pointer); });
-        zone.on('pointermove', (pointer, _x, _y, event) => {
-            if (pointer.isDown) { event.stopPropagation(); jump(pointer); }
+        // 手势归属由按下位置决定：只有在小地图上按下的指针才能驱动跳镜头——
+        // 战场拖动经过小地图（isDown 但未在此按下）不被抢走。抬起、区域外释放、
+        // 失焦、真实按钮已全部抬起（buttons=0，如窗外释放后 isDown 残留）都
+        // 终止手势，避免残留拖动状态（下一次手势误判归属或持续跳镜头）。
+        const release = pointer => {
+            if (this.scene._minimapGesture === pointer.id) this.scene._minimapGesture = null;
+        };
+        zone.on('pointerdown', (pointer, _x, _y, event) => {
+            event.stopPropagation();
+            this.scene._minimapGesture = pointer.id;
+            jump(pointer);
         });
-        zone.on('pointerup', (_pointer, _x, _y, event) => event.stopPropagation());
+        zone.on('pointermove', (pointer, _x, _y, event) => {
+            if (this.scene._minimapGesture !== pointer.id) return;   // 非本手势不抢
+            if ((pointer.event?.buttons ?? 1) === 0) { release(pointer); return; }
+            event.stopPropagation();
+            jump(pointer);
+        });
+        zone.on('pointerup', (pointer, _x, _y, event) => { release(pointer); event.stopPropagation(); });
+        this._minimapRelease = release;
+        this.scene.input.on('pointerup', release);
+        this.scene.input.on('pointerupoutside', release);
+        this._minimapBlur = () => { this.scene._minimapGesture = null; };
+        this.scene.game?.events?.on('blur', this._minimapBlur);
         this.scene._minimap = { gfx, zone, x, y, w, h };
     }
 
     destroyMinimap() {
+        if (this._minimapRelease) {
+            this.scene.input.off('pointerup', this._minimapRelease);
+            this.scene.input.off('pointerupoutside', this._minimapRelease);
+            this._minimapRelease = null;
+        }
+        if (this._minimapBlur) {
+            this.scene.game?.events?.off('blur', this._minimapBlur);
+            this._minimapBlur = null;
+        }
+        this.scene._minimapGesture = null;
         if (!this.scene._minimap) return;
         this.scene._minimap.gfx.destroy();
         this.scene._minimap.zone.destroy();

@@ -44,17 +44,20 @@ export const CombatRules = {
         return distance < 0.001 || (dx * unit.guardFacingX + dy * unit.guardFacingY) / distance >= 0.55;
     },
 
-    clearLane(scene, unit, target, spear = unit.type === 'pikeman') {
+    // fromX/fromY：枪线起点（默认单位当前位置）；受阻接战换位时从候选位预验枪线。
+    clearLane(scene, unit, target, spear = unit.type === 'pikeman', fromX = unit.gx, fromY = unit.gy) {
         const terrain = scene.battleOptions?.terrain ?? unit.scene?.battleOptions?.terrain;
-        if (!Terrain.segmentClear(terrain, unit.gx, unit.gy, target.gx, target.gy)) return false;
-        const dx = target.gx - unit.gx, dy = target.gy - unit.gy, length2 = dx * dx + dy * dy;
+        if (!Terrain.segmentClear(terrain, fromX, fromY, target.gx, target.gy)) return false;
+        const dx = target.gx - fromX, dy = target.gy - fromY, length2 = dx * dx + dy * dy;
         if (length2 < 0.0001) return true;
         let blocked = false, supporting = 0;
-        scene.forEachNear(unit.gx, unit.gy, Math.sqrt(length2), other => {
+        scene.forEachNear(fromX, fromY, Math.sqrt(length2), other => {
             if (other === unit || other === target || !this.canBeHit(other)) return;
-            const projection = ((other.gx - unit.gx) * dx + (other.gy - unit.gy) * dy) / length2;
+            const projection = ((other.gx - fromX) * dx + (other.gy - fromY) * dy) / length2;
             if (projection <= 0.08 || projection >= 0.92) return;
-            const distance = Math.hypot(other.gx - unit.gx - projection * dx, other.gy - unit.gy - projection * dy);
+            // 投影与垂距都以同一原点（fromX/fromY）计算：候选位预验与实际站位
+            // 判定才会一致，否则士兵会挪到打不出去的位置。
+            const distance = Math.hypot(other.gx - fromX - projection * dx, other.gy - fromY - projection * dy);
             if (distance > this.bodyRadius(other) * (5 / 6)) return;
             const faceX = unit.guardFacingX ?? unit.braceFacingX;
             const faceY = unit.guardFacingY ?? unit.braceFacingY;

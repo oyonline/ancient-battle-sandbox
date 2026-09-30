@@ -10,6 +10,74 @@ import { CombatRules } from '../combat.js';
 import { BATTALION } from './battalion.js';
 import { dist, clamp, unitRand, moveToward } from '../units.js';
 
+// 受阻接战节奏（模拟时钟）：冷却就绪却持续打不出去达 BLOCKED_ENGAGE_MS 才解困，
+// 短于它的瞬时阻挡（友军路过）不打扰目标粘滞；解困尝试按 BLOCKED_SCAN_MS 节流，
+// 换目标后 RETARGET_LOCK_MS 内粘滞规则不得翻回旧敌。
+const BLOCKED_ENGAGE_MS = 800;
+const BLOCKED_SCAN_MS = 600;
+const RETARGET_LOCK_MS = 1500;
+
+// 受阻接战的解困：优先换"当前就能打出去"的目标（不动身、不破坏站位，
+// 射程/枪线/守位朝向全部按既有规则判），没有可打目标时绕接战环找合法出枪位。
+// 二者都不取消友军阻挡、不加攻击距离、不穿地形；架枪中的枪兵与守阵哨位
+// 目标不参与换位（架枪纪律与"墙不绕位"的既有口径）。
+// 确定性：局部空间扫描（半径=射程+2.5），距离优先、平局 id 最小决胜；
+// 换位角度走单位种子随机并按阵营镜像取反（与攻击间隙走位同构，换座对称）。
+export function resolveBlockedEngage(scene, unit, target, now, reach) {
+    let pick = null, bestD = Infinity;
+    scene.forEachNear(unit.gx, unit.gy, reach + 2.5, e => {
+        if (e === target || e.team === unit.team || e.dead || e.withdrawn || e.type === 'wagon') return;
+        if (!CombatRules.canStrike(scene, unit, e, reach)) return;
+        const d = dist(unit, e);
+        if (d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && e.id < pick.id)) { bestD = d; pick = e; }
+    });
+    if (pick) {
+        unit.meleeTarget = pick;
+        // 回避旧目标而非整体锁定：旧目标在回避期内仍是最近敌时保持新目标
+        // （否则粘滞的"近20%就切"立刻翻回打不出去的旧敌）；一旦别的敌人
+        // 成为最近（或旧目标不再最近），正常粘滞规则接管，不会把单位
+        // 拴在冲出范围的旧敌上拖离阵型。
+        unit.avoidTargetId = target.id;
+        unit.avoidUntil = now + RETARGET_LOCK_MS;
+        unit.blockedEngageAt = null;
+        return;
+    }
+    if ((unit.type === 'pikeman' && (unit.braceHold || unit.braceSupport >= 2)) || target.tacticalRole === 'guard') return;
+    // 枪兵集群纪律：有 2+ 矛邻支撑的枪兵是枪墙的一部分，挪位会拆散架枪密度
+    // （braceSupport/braceReady 掉线，抗骑能力崩），站桩等前排打出缺口是本分；
+    // 只有落单/弱支撑的枪兵才自己找角度。架枪中（braceHold）更是钉死原地。
+    // 绕接战环找合法出枪位：候选位先验"从该位到目标枪线合法"，找不到合法位
+    // 也至少挪开原地（位移本身可能打开枪线）；占位检查与攻击间隙走位一致。
+    const mir = unit.team === 'red' ? 1 : -1;
+    const cur = Math.atan2(unit.gy - target.gy, unit.gx - target.gx);
+    const nr = Math.max(0.55, reach * 0.85);
+    // 候选角度：初角随机 + ±0.9、±1.8 四个互不相同的增量（mir 保证换座镜像），
+    // 不来回重复同一两个方向。
+    const baseAng = cur + mir * (unitRand(unit) < 0.5 ? 1 : -1) * (0.7 + unitRand(unit) * 0.7);
+    let fallback = null;
+    for (let t = 0; t < 4; t++) {
+        const pickAng = baseAng + mir * (t % 2 === 0 ? 1 : -1) * (0.9 * Math.ceil((t + 1) / 2));
+        const sx = clamp(target.gx + Math.cos(pickAng) * nr, 1.2, board.W - 1.2);
+        const sy = clamp(target.gy + Math.sin(pickAng) * nr, 1.2, board.H - 1.2);
+        let taken = false;
+        scene.forEachNear(sx, sy, 0.42, o => {
+            if (o !== unit && o.team === unit.team && !o.dead && !o.withdrawn &&
+                Math.hypot(o.gx - sx, o.gy - sy) < 0.42) taken = true;
+        });
+        if (!taken) {
+            const legal = Terrain.segmentClear(scene.battleOptions.terrain, sx, sy, target.gx, target.gy) &&
+                CombatRules.clearLane(scene, unit, target, undefined, sx, sy);
+            if (legal) { fallback = { sx, sy }; break; }
+            fallback ??= { sx, sy };
+        }
+    }
+    if (fallback) {
+        unit.strafeX = fallback.sx; unit.strafeY = fallback.sy;
+        unit.strafeUntil = now + 500 + unitRand(unit) * 400;
+        unit.blockedEngageAt = null;   // 挪位后重计受阻时长；仍打不出去再解
+    }
+}
+
 export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
         if (unit.dead || unit.withdrawn || unit.moraleState === 'routing') return;
         // 辎重车：有护卫在侧(4格内)且无敌情(3.2格内无敌)才沿路线推进——
@@ -241,14 +309,18 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
                 }
             }
         } else {
-            // 微走位中：绕目标换角度，期间不攻击（找角度的节奏，不站桩）
+            // 微走位中：绕目标换角度，期间不攻击（找角度的节奏，不站桩）。
+            // 走位/逼近都不是"冷却就绪却打不出去"的受阻现场：受阻计时随脱离
+            // 接战清零，回来后重新累计，不吃离开前的旧时间戳直接换目标。
             if (unit.strafeUntil > now) {
+                unit.blockedEngageAt = null;
                 if (Math.hypot(unit.strafeX - unit.gx, unit.strafeY - unit.gy) < 0.12) {
                     unit.strafeUntil = 0;
                 } else {
                     moveToward(unit, unit.strafeX, unit.strafeY, unit.typeData.speed * 0.8, dt);
                 }
             } else if (minD > range || !Terrain.segmentClear(scene.battleOptions.terrain, unit.gx, unit.gy, nearest.gx, nearest.gy)) {
+                unit.blockedEngageAt = null;
                 // 遇骑结阵：矛邻成排且来骑弹道朝本队压来（±60°）时停步——
                 // 停稳半秒即触发现有架枪快照，行军矛兵就地变临时枪墙。
                 // 只停步不转向：行军矛枪口本来就朝着敌线，正面来骑正好迎击；
@@ -293,11 +365,22 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
                 }
             } else {
                 const lastAttackBefore = unit.lastAttack;
+                // 受阻接战检测：冷却已就绪却打不出去（枪线被友军挡住等）即视为受阻；
+                // 只在攻击分支内统计（接近分支自带移动）。骑兵有自己的近战-重整-
+                // 脱离状态机（melee/reform 循环），不经此处理；守阵哨位是钉死的墙
+                // 不参与；有 2+ 矛邻支撑的枪兵是枪墙的一部分，站桩等前排打出缺口
+                // 是本分——换目标出手会把它们卷进攻击间隙走位、溶解阵型密度
+                // （braceSupport 掉线，抗骑能力崩），集群枪兵整体不进受阻处理。
+                const laneBlocked = unit.type !== 'cavalry' && unit.tacticalRole !== 'guard' &&
+                    !(unit.type === 'pikeman' && unit.braceSupport >= 2) &&
+                    now - unit.lastAttack > unit.typeData.atkSpeed &&
+                    !CombatRules.canStrike(scene, unit, nearest, range);
                 CombatRules.attack(scene, unit, nearest, now, range);
                 // 攻击间隙走位：绕目标弧线换攻击角，占了的位就转下一格（抢位围杀）。
                 // 架枪中的长枪兵保持枪阵不挪窝；随机量走单位种子，保住确定性重放。
                 // 守阵哨位是钉死的墙，绕哨位抢位没有意义，还会把守军姿态搅散——不对其走位。
                 if (unit.lastAttack !== lastAttackBefore) {
+                    unit.blockedEngageAt = null;
                     if (unit.nextShift == null) unit.nextShift = now + 800 + unitRand(unit) * 2600;   // 首次命中后错峰
                     if (now > unit.nextShift && !(unit.type === 'pikeman' && unit.braceHold) && nearest.tacticalRole !== 'guard') {
                         unit.nextShift = now + 1200 + unitRand(unit) * 2200;
@@ -321,7 +404,15 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
                             pickAng += mir * (t % 2 === 0 ? 0.9 : -0.9);
                         }
                     }
-                }
+                } else if (laneBlocked) {
+                    // 冷却就绪却打不出去：持续受阻才解困（换可打目标/挪合法出枪位），
+                    // 尝试按 BLOCKED_SCAN_MS 节流，瞬时阻挡不打扰目标粘滞。
+                    if (unit.blockedEngageAt == null) unit.blockedEngageAt = now;
+                    else if (now - unit.blockedEngageAt >= BLOCKED_ENGAGE_MS && now >= (unit.blockedScanAt ?? 0)) {
+                        unit.blockedScanAt = now + BLOCKED_SCAN_MS;
+                        resolveBlockedEngage(scene, unit, nearest, now, range);
+                    }
+                } else unit.blockedEngageAt = null;
             }
         }
 }
