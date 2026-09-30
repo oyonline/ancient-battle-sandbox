@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test \"tests/*.test.js\"",
-    "arena": "node server/arena.mjs",
+    "arena": "vite build && node server/arena.mjs",
     "verify": "node tools/headless-verify.mjs"
   },
   "devDependencies": {
