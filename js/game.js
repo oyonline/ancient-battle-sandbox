@@ -27,161 +27,19 @@ import * as battleUnits from './battle/separate.js';
 import * as battleConvoy from './battle/convoy.js';
 import * as battleWin from './battle/win.js';
 import { NetBattle } from './net/lockstep.js';
+import { BattleRenderer } from './render/renderer.js';
+import { TW, TH, OX, OY, VIEW_W, VIEW_H, refreshWorldMetrics, gridToScreen, sampleGroundRing, lerpColor } from './render/metrics.js';
+import { ANIM_ALIGN_K, CAVALRY_PROFILE_SUFFIX, CAVALRY_FLIPPED, cavalryProfile, cavalryRenderSign, cavalryHeadingFromMotion, footProfile, animAlignProfile, shadowTextureKey } from './render/sprites.js';
 
-const TW = 64, TH = 32;                       // 菱形块宽高
-// 世界度量随棋盘尺寸走（默认 70×70 时 VIEW_W=4480）；大地图模式经 setBoardSize
-// 改尺寸后由 refreshWorldMetrics() 重算，渲染各层读当前值，不缓存旧尺寸。
-let OX = board.H * TW / 2, OY = 120;         // 屏幕原点偏移
-let VIEW_W = (board.W + board.H) * TW / 2;
-let VIEW_H = OY + (board.W + board.H) * TH / 2 + 60;
-function refreshWorldMetrics() {
-    const m = board.MARGIN || 0;
-    OX = board.H * TW / 2 + m * TW;             // 画外余量：整个世界画布外扩，陆地长到画面边缘外
-    OY = 120 + m * TH;
-    VIEW_W = (board.W + board.H) * TW / 2 + 2 * m * TW;
-    VIEW_H = OY + (board.W + board.H) * TH / 2 + 60 + m * TH;
-}
 
 // 空间哈希单元格移至 js/battle/spatial.js（SP_CELL = 3）
 // 战斗核（定步长/编排/动作队列/迎击队列）移至 js/battle/core.js（SIMULATION_STEP_MS = 1000/60）
 
 
-function gridToScreen(gx, gy) {
-    return { x: (gx - gy) * TW / 2 + OX, y: (gx + gy) * TH / 2 + OY };
-}
-
-// 地面圆的等距投影采样（等距视角下圆呈椭圆，不能直接 fillCircle）
-function sampleGroundRing(scene, gx, gy, radius, segments) {
-    const points = [];
-    for (let i = 0; i <= segments; i++) {
-        const a = i / segments * Math.PI * 2;
-        points.push(scene.groundPoint(gx + Math.cos(a) * radius, gy + Math.sin(a) * radius));
-    }
-    return points;
-}
-
-// 0xRRGGBB 颜色线性插值（渲染平滑过渡用，不影响模拟）
-function lerpColor(from, to, k) {
-    const fr = from >> 16 & 255, fg = from >> 8 & 255, fb = from & 255;
-    const tr = to >> 16 & 255, tg = to >> 8 & 255, tb = to & 255;
-    return (Math.round(fr + (tr - fr) * k) << 16) |
-        (Math.round(fg + (tg - fg) * k) << 8) | Math.round(fb + (tb - fb) * k);
-}
-
-// ==================== 接地基准表（素材源图像素，源图高 156） ====================
-// AI 出图的底部留白每张都不一样（10~34px），若直接以贴图底边当脚底，
-// 角色就会悬在影子上面 → 飘。这里把每个兵种的脚底位置量出来，统一压到地面线。
-// pad = 贴图底边 → 最低脚底的留白。注意骑兵是奔姿、四条腿只有一条落地，
-//       所以取“最低的实质内容行”，不能取最宽的一行（那会落在另外三条抬起的腿上，差 16px）。
-// dx  = 脚掌落地处相对图心的横向偏移（骑兵马头前伸，脚掌明显偏左，影心要跟着走）；
-// w/h = 脚掌投影尺寸（等距视角固定 2:1）。跑 tools/measure_foot.py 可重新量。
-const FOOT = {
-    infantry: { pad: 18, dx:   2, w: 72, h: 35 },
-    pikeman:  { pad: 34, dx:  -7, w: 63, h: 31 },
-    archer:   { pad: 11, dx:  -6, w: 67, h: 33 },
-    wagon:    { pad:  6, dx:   0, w: 64, h: 30 },
-    cavalry: {
-        east:      { pad:  4, dx: -10, w: 83, h: 41 },
-        southeast: { pad: 10, dx: -16, w: 74, h: 36 },
-        south:     { pad:  5, dx:   0, w: 24, h: 12 },
-        northeast: { pad: 12, dx: -20, w: 62, h: 30 },
-        north:     { pad:  3, dx: -26, w: 24, h: 12 }
-    }
-};
-
-// ==================== 逐帧对齐补正（素材源图像素，[dx, dy]，站姿为 0） ====================
-// 同一套动画的 4 帧，角色在画布里的站位互相差最多 30px（骑兵 16px），直接播就会左右抖。
-// 每帧的补正值 = 与站姿做投影相关求出的最佳位移；兵种为准，红蓝通用。
-// 攻击帧只给横向：挥砍会让重心大幅上下移动，纵向相关不可靠（帧间重合度仅 0.6~0.8），
-// 而攻击是一次性动作，纵向的小跳不易察觉。跑 tools/measure_foot.py 可重新量。
-const ANIM_ALIGN = {
-    infantry: { walk: [[1, 0], [-10, 4], [-9, 3], [-30, 4]], attack: [[5, 0], [10, 0], [-8, 0], [-14, 0]] },
-    pikeman:  { walk: [[0, -1], [-1, -2], [-3, -3], [-7, -3]], attack: [[1, 0], [1, 0], [5, 0], [-8, 0]] },
-    archer:   { walk: [[0, -3], [-13, 9], [-14, 0], [-19, 0]], attack: [[7, 0], [-11, 0], [-20, 0], [12, 0]] },
-    cavalry: {
-        east:      { walk: [[0, -1], [-9, 0], [-6, 0], [-14, 1]], attack: [[1, 0], [-6, 0], [2, 0], [-12, 0]] },
-        southeast: { walk: [[0, 0], [-6, -1], [-16, -8], [-8, -2]], attack: [[-1, 0], [-3, 0], [-2, 0], [-10, 0]] },
-        south:     { walk: [[0, 0], [-11, 1], [-5, 0], [-9, 0]], attack: [[16, 0], [2, 0], [-23, 0], [-11, 0]] },
-        northeast: { walk: [[0, 0], [-10, 5], [-13, 5], [-14, -7]], attack: [[-2, 0], [-11, 0], [-6, 0], [-16, 0]] },
-        north:     { walk: [[0, 0], [-17, 1], [-23, -2], [-30, 1]], attack: [[0, 0], [-19, 0], [-21, 0], [-31, 0]] }
-    }
-};
-const ANIM_ALIGN_K = 1;   // 对齐补正强度：1 = 全量纠正抖动，0 = 关闭（保留原始位移）
-
-const CAVALRY_HEADINGS = ['east', 'southeast', 'south', 'southwest', 'west', 'northwest', 'north', 'northeast'];
-const CAVALRY_HEADING_INDEX = {
-    east: 0, southeast: 1, south: 2, southwest: 3,
-    west: 4, northwest: 5, north: 6, northeast: 7
-};
-const CAVALRY_PROFILE = {
-    east: 'east', southeast: 'southeast', south: 'south', southwest: 'southeast',
-    west: 'east', northwest: 'northeast', north: 'north', northeast: 'northeast'
-};
-const CAVALRY_PROFILE_SUFFIX = {
-    east: '', southeast: '_down', south: '_south', northeast: '_northeast', north: '_north'
-};
-const CAVALRY_FLIPPED = new Set(['west', 'southwest', 'northwest']);
-const CAVALRY_DIR_STEP = Math.PI / 4;
-const CAVALRY_DIR_HYSTERESIS = Math.PI / 24; // 7.5°；当前方向保持到中心角 ±30°
-const TWO_PI = Math.PI * 2;
-
-function cavalryProfile(heading) {
-    return CAVALRY_PROFILE[heading] || 'east';
-}
-
-function cavalryRenderSign(heading) {
-    return CAVALRY_FLIPPED.has(heading) ? -1 : 1;
-}
-
-function cavalryHeadingFromMotion(dx, dy, current = 'east') {
-    let angle = Math.atan2(dy, dx);
-    if (angle < 0) angle += TWO_PI;
-    const currentIndex = CAVALRY_HEADING_INDEX[current] ?? 0;
-    const currentAngle = currentIndex * CAVALRY_DIR_STEP;
-    let distance = Math.abs(angle - currentAngle);
-    if (distance > Math.PI) distance = TWO_PI - distance;
-    if (distance <= CAVALRY_DIR_STEP / 2 + CAVALRY_DIR_HYSTERESIS) return current;
-    return CAVALRY_HEADINGS[Math.round(angle / CAVALRY_DIR_STEP) & 7];
-}
-
-function unitVisualDirections(type) {
-    return type === 'cavalry' ? ['east', 'southeast', 'south', 'northeast', 'north'] : ['side'];
-}
-
-function footProfile(type, visualDir = 'side') {
-    return type === 'cavalry' ? FOOT.cavalry[cavalryProfile(visualDir)] : FOOT[type];
-}
-
-function animAlignProfile(type, visualDir = 'side') {
-    return type === 'cavalry' ? ANIM_ALIGN.cavalry[cavalryProfile(visualDir)] : ANIM_ALIGN[type];
-}
-
-function shadowTextureKey(team, type, visualDir = 'side') {
-    const direction = type === 'cavalry' ? `-${cavalryProfile(visualDir)}` : '';
-    return `shadow-${team}-${type}${direction}`;
-}
-
-// 平滑值噪声：大尺度地形色带（肥沃绿 ↔ 干草黄）用
-function makeNoise(seed) {
-    const hash2 = (x, y) => {
-        let h = (x * 374761393 + y * 668265263) ^ seed;
-        h = (h ^ (h >> 13)) * 1274126177;
-        return ((h ^ (h >> 16)) >>> 0) / 4294967295;
-    };
-    return (x, y) => {
-        const xi = Math.floor(x), yi = Math.floor(y);
-        const xf = x - xi, yf = y - yi;
-        const sm = t => t * t * (3 - 2 * t);
-        const a = hash2(xi, yi), b = hash2(xi + 1, yi);
-        const c = hash2(xi, yi + 1), d = hash2(xi + 1, yi + 1);
-        const u = sm(xf), v = sm(yf);
-        return a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v;
-    };
-}
-
 export class IsoBattleScene extends Phaser.Scene {
     constructor() {
         super({ key: 'IsoBattleScene' });
+        this.render = new BattleRenderer(this);
     }
 
     preload() {
@@ -262,12 +120,12 @@ export class IsoBattleScene extends Phaser.Scene {
         this._fxBudget = 46;   // 每帧小特效配额（斩击弧光/火花等）
         this._dustBudget = 8;  // 每帧尘土配额
 
-        this.createOceanBackdrop();   // 全屏海面：填满菱形外的屏幕四角
-        this.drawGround();
-        this.placeDecorations();
-        this.scheduleBirds();         // 偶有飞鸟掠过
+        this.render.world.createOceanBackdrop();   // 全屏海面：填满菱形外的屏幕四角
+        this.render.world.drawGround();
+        this.render.world.placeDecorations();
+        this.render.world.scheduleBirds();         // 偶有飞鸟掠过
         this.spawnZoneGfx = this.add.graphics();
-        this.drawSpawnZones();
+        this.render.world.drawSpawnZones();
 
         this.groundFX = this.add.container(0, 0).setDepth(10);
         this.unitLayer = this.add.container(0, 0).setDepth(1000);
@@ -277,7 +135,7 @@ export class IsoBattleScene extends Phaser.Scene {
         this.scarRT = this.add.renderTexture(0, 0, VIEW_W, VIEW_H).setOrigin(0, 0).setDepth(6);
 
         this.buildUnitAnims();
-        this.makeShadowTextures();    // 阴影预烘焙成贴图（千人合批，见 syncOne）
+        this.render.world.makeShadowTextures();    // 阴影预烘焙成贴图（千人合批，见 syncOne）
 
         // 共享绘制层：血条 / 箭矢 / 血粒子 各一张 Graphics，全场景合批
         this.hpGfx = this.add.graphics().setDepth(40000);
@@ -296,48 +154,6 @@ export class IsoBattleScene extends Phaser.Scene {
         if (typeof UI !== 'undefined' && UI.onSceneReady) UI.onSceneReady(this);
     }
 
-    // ---------------- 全屏海面（铺满菱形外的屏幕区域） ----------------
-    createOceanBackdrop() {
-        this.ocean = this.add.graphics().setDepth(-1).setScrollFactor(0);
-        this.oceanWaves = this.add.graphics().setDepth(-1).setScrollFactor(0);
-        this.redrawOcean();
-        // 海面缓慢起伏
-        this.tweens.add({
-            targets: this.oceanWaves, y: 4, duration: 2600, yoyo: true,
-            repeat: -1, ease: 'Sine.InOut'
-        });
-    }
-
-    redrawOcean() {
-        const w = this.scale.gameSize.width, h = this.scale.gameSize.height;
-        const g = this.ocean, gw = this.oceanWaves;
-        // 底色画 3 倍屏幕大，缩放/平移永远不露边
-        g.clear();
-        g.fillStyle(0x1c3f5c, 1);
-        g.fillRect(-w, -h, w * 3, h * 3);
-
-        // 波纹：水平短划错位排布
-        gw.clear();
-        gw.lineStyle(2, 0x4a7da6, 0.32);
-        let n = 0;
-        for (let row = 0; row < Math.ceil(h / 34) + 2; row++) {
-            const offset = (row % 3) * 23;
-            for (let cx = -30; cx < w + 30; cx += 64) {
-                const len = 10 + ((row * 7 + cx) % 3) * 7;
-                gw.lineBetween(cx + offset, row * 34 - 10, cx + offset + len, row * 34 - 10);
-                n++;
-                if (n > 400) break;
-            }
-        }
-        // 稀疏亮点
-        gw.lineStyle(2, 0x7fb2d6, 0.25);
-        for (let i = 0; i < 30; i++) {
-            const x = (i * 173.7) % w, y = (i * 97.1) % h;
-            gw.lineBetween(x, y, x + 8, y);
-        }
-    }
-
-    // ---------------- 地面与装饰 ----------------
     terrainHeight(gx, gy) {
         return Terrain.height(this.battleOptions.terrain, gx, gy);
     }
@@ -353,78 +169,11 @@ export class IsoBattleScene extends Phaser.Scene {
             .map(([dx, dy]) => this.groundPoint(gx + dx, gy + dy));
     }
 
-    groundColor(gx, gy, variation = 0.5) {
-        const natural = Terrain.isNaturalSlope(this.battleOptions.terrain);
-        const dry = this.terNoise(gx * 0.16, gy * 0.16) * 0.62;
-        const dirt = Math.max(0, (this.terNoise(gx * 0.42 + 37, gy * 0.42 + 91) - 0.72) / 0.28) * 0.85;
-        const elevation = this.terrainHeight(gx, gy);
-        let r = 98 + 42 * dry, g = 150 - 6 * dry, b = 62 + 18 * dry;
-        r += (152 - r) * dirt; g += (124 - g) * dirt; b += (84 - b) * dirt;
-        const dx = this.terrainHeight(gx + 0.5, gy) - this.terrainHeight(gx - 0.5, gy);
-        const dy = this.terrainHeight(gx, gy + 0.5) - this.terrainHeight(gx, gy - 0.5);
-        const light = natural ? clamp(0.98 + (variation - 0.5) * 0.035 + dx * 0.8 + dy * 0.55, 0.62, 1.3)
-            : clamp(0.9 + variation * 0.16 + dx * 0.4 + dy * 0.25, 0.72, 1.25);
-        r += elevation * (natural ? 3 : 5); b += elevation * 2;
-        if (natural) g += elevation * 2;
-        if (this.battleOptions.terrain === 'territory') {
-            // 山河图 2.0：按高度分层提亮偏暖——山头向阳、谷地沉绿
-            const tier = Math.max(0, Math.min(1, elevation / 3.2));
-            r += tier * 22; g += tier * 8; b -= tier * 6;
-        }
-        return [r, g, b].map(value => Math.round(value * light));
-    }
-
-    drawNaturalRelief(g) {
-        // 半格细分坡面，消除整格明暗台阶；所有顶点仍从真实高度采样。
-        const key = this.battleOptions.terrain;
-        for (let x = 1; x < 69; x += 0.5) for (let y = 10; y < 60; y += 0.5) {
-            if (Terrain.height(key, x + 0.25, y + 0.25) <= 0.005) continue;
-            const rgb = this.groundColor(x + 0.25, y + 0.25);
-            g.fillStyle(Phaser.Display.Color.GetColor(...rgb), 1);
-            g.fillPoints([[x, y], [x + 0.5, y], [x + 0.5, y + 0.5], [x, y + 0.5]]
-                .map(([gx, gy]) => this.groundPoint(gx, gy)), true);
-        }
-    }
-
-    drawNaturalGroundTexture(g, hash) {
-        // 最后铺纹理，避免被细分坡面盖掉；只烘焙一次，不参与高度或通行计算。
-        for (let gy = 1; gy < board.H - 1; gy++) for (let gx = 1; gx < board.W - 1; gx++) {
-            const growth = this.terNoise(gx * 0.37 + 13, gy * 0.37 + 41);
-            for (let i = 0; i < 7; i++) {
-                const seed = gx * 7 + i;
-                const r = hash(seed, gy * 11);
-                const cx = gx - 0.44 + hash(seed + 157, gy * 13) * 0.88;
-                const cy = gy - 0.44 + hash(seed + 307, gy * 17) * 0.88;
-                const p = this.groundPoint(cx, cy);
-                // 碎叶和土粒提供细颗粒，草簇随大片疏密变化，不排成规则点阵。
-                if (i < 5) {
-                    g.fillStyle(r > 0.55 ? 0xc5bf86 : 0x354d28, 0.22 + r * 0.16);
-                    g.fillRect(p.x, p.y, 1.5 + r * 2.5, 1 + r * 1.2);
-                }
-                if (r < 0.12 + growth * 0.7) {
-                    const height = 3 + hash(seed + 509, gy) * 4;
-                    const lean = (hash(seed, gy + 701) - 0.5) * 5;
-                    g.lineStyle(1.4, 0x3b582b, 0.43);
-                    g.lineBetween(p.x - 2, p.y, p.x - 3 + lean, p.y - height * 0.65);
-                    g.lineBetween(p.x, p.y, p.x + lean, p.y - height);
-                    g.lineStyle(1.2, 0xb5bd71, 0.38);
-                    g.lineBetween(p.x + 1, p.y, p.x + 3 + lean, p.y - height * 0.8);
-                } else if (i === 0 && growth < 0.48 && r > 0.72) {
-                    const size = 0.14 + r * 0.15;
-                    g.fillStyle(0x998052, 0.2);
-                    g.fillPoints([[-size, 0], [-size * 0.4, -size], [size, -size * 0.3],
-                        [size * 0.55, size * 0.8], [-size * 0.5, size * 0.55]]
-                        .map(([dx, dy]) => this.groundPoint(cx + dx, cy + dy)), true);
-                }
-            }
-        }
-    }
-
     setTerrain(key) {
         this.battleOptions.terrain = Terrain.normalize(key);
         this.navigation?.reset(this.battleOptions.terrain, this.battleId);
         // 只有已创建的真实画布需要重烘焙；无绘图的战斗测试仍用同一高度数据。
-        if (this.groundImage && this._groundTerrain !== this.battleOptions.terrain) this.drawGround();
+        if (this.groundImage && this._groundTerrain !== this.battleOptions.terrain) this.render.world.drawGround();
     }
 
     // 棋盘尺寸变更（进入/退出领土征服大地图）：重算世界度量并重建依赖尺寸的渲染层。
@@ -434,21 +183,21 @@ export class IsoBattleScene extends Phaser.Scene {
         this._boardW = board.W;
         this._boardH = board.H;
         this.mapCenter = { x: VIEW_W / 2, y: OY + (board.W + board.H) * TH / 4 };
-        if (this.groundImage) this.drawGround();                 // 重烘焙地面大贴图（内含销毁重建）
+        if (this.groundImage) this.render.world.drawGround();                 // 重烘焙地面大贴图（内含销毁重建）
         if (this.edgeProps?.length) {                            // 大本营箭塔/边缘树林按新尺寸重摆
             for (const { sprite } of this.edgeProps) {
                 this.tweens.killTweensOf(sprite);
                 sprite.destroy();
             }
             this.edgeProps = [];
-            this.placeDecorations();
+            this.render.world.placeDecorations();
         }
         if (this.scarRT && this.add?.renderTexture) {            // 战场留痕层按新尺寸重建
             this.scarRT.destroy();
             this.scarRT = this.add.renderTexture(0, 0, VIEW_W, VIEW_H).setOrigin(0, 0).setDepth(6);
         }
         if (this._minimap) { this._minimap.gfx.destroy(); this._minimap.zone.destroy(); this._minimap = null; }
-        if (this.ocean) this.redrawOcean();
+        if (this.ocean) this.render.world.redrawOcean();
     }
 
     ensureNavigation() {
@@ -458,510 +207,6 @@ export class IsoBattleScene extends Phaser.Scene {
         return this.navigation;
     }
 
-    // 帝国风地形：杂色草地 + 立体倒角 + 水域环绕 + 海岸黄边
-    // 70×70 = 4900 块、数万条图形指令：一次性烘焙成大贴图，之后每帧只画一张图
-    drawGround() {
-        const g = this.make.graphics({ add: false });
-        const naturalSlope = Terrain.isNaturalSlope(this.battleOptions.terrain);
-        this.terNoise = this.terNoise || makeNoise(7);
-        // 领土图：向外扩一圈草地（不可进入的画外景深），海岸线带噪声犬牙——
-        // 战场像一块更大的大陆的中部，而不是悬在方框海中央的完整菱形
-        const margin = board.MARGIN || 0;
-        const isWater = (gx, gy) => {
-            if (!margin) return gx === 0 || gy === 0 || gx === board.W - 1 || gy === board.H - 1;
-            const edge = Math.min(gx + margin, gy + margin, board.W + margin - 1 - gx, board.H + margin - 1 - gy);
-            if (edge > 2.2) return false;                        // 大陆内部
-            if (edge <= 0.2) return true;                        // 外海
-            return hash(gx, gy) % 100 < edge / 2.2 * 100;        // 海岸带：犬牙交错
-        };
-        const hash = (a, b) => {
-            let h = (a * 374761393 + b * 668265263) ^ 0x5bf03635;
-            h = (h ^ (h >> 13)) * 1274126177;
-            return ((h ^ (h >> 16)) >>> 0) / 4294967295;
-        };
-        const dia = (x, y, s) => [
-            { x: x, y: y - TH / 2 * s }, { x: x + TW / 2 * s, y: y },
-            { x: x, y: y + TH / 2 * s }, { x: x - TW / 2 * s, y: y }
-        ];
-
-        for (let gy = -margin; gy < board.H + margin; gy++) {
-            for (let gx = -margin; gx < board.W + margin; gx++) {
-                const { x, y } = this.groundPoint(gx, gy);
-                const tile = this.groundTile(gx, gy);
-                const r1 = hash(gx, gy), r2 = hash(gx + 97, gy + 31);
-
-                if (isWater(gx, gy)) {
-                    // 水面：两种蓝做棋盘变化 + 波纹
-                    const w = r1 > 0.5 ? 0x3d84c6 : 0x4a94d4;
-                    g.fillStyle(w, 1);
-                    g.fillPoints(dia(x, y, 1.02), true);
-                    g.lineStyle(1, 0x2c6da8, 0.6);
-                    g.strokePoints(dia(x, y, 1.0), true);
-                    // 波纹短线
-                    g.lineStyle(2, 0xbfe4f7, 0.35);
-                    for (let i = 0; i < 2; i++) {
-                        const wx = x + (hash(gx * 3 + i, gy) - 0.5) * 24;
-                        const wy = y + (hash(gx, gy * 3 + i) - 0.5) * 10;
-                        g.lineBetween(wx - 7, wy, wx + 7, wy);
-                    }
-                    continue;
-                }
-
-                // 明暗随真实坡面法向变化；颜色计算共用，细分时不会出现材质接缝。
-                const base = this.groundColor(gx, gy, r1);
-                const col = Phaser.Display.Color.GetColor(base[0], base[1], base[2]);
-                g.fillStyle(col, 1);
-                g.fillPoints(tile, true);
-
-                // 2~3 块不规则深浅草斑
-                const patches = 2 + Math.floor(r2 * 2);
-                for (let i = 0; i < patches; i++) {
-                    const pr = hash(gx * 7 + i, gy * 13 + i);
-                    const dark = pr > 0.5;
-                    const pf = dark ? 0.82 + hash(i, gx + gy) * 0.08 : 1.12 + hash(i, gx * 2) * 0.1;
-                    const pc = Phaser.Display.Color.GetColor(
-                        Math.min(255, Math.round(base[0] * pf)),
-                        Math.min(255, Math.round(base[1] * pf)),
-                        Math.min(255, Math.round(base[2] * pf)));
-                    const px = x + (hash(gx + i * 17, gy) - 0.5) * TW * 0.55;
-                    const py = y + (hash(gx, gy + i * 17) - 0.5) * TH * 0.55;
-                    g.fillStyle(pc, naturalSlope ? 0.16 : 0.45);
-                    if (naturalSlope) {
-                        // 草斑贴在弯曲地面上，不把平面的菱形贴片悬在坡上。
-                        const cx = gx + (hash(gx + i * 17, gy) - 0.5) * 0.6;
-                        const cy = gy + (hash(gx, gy + i * 17) - 0.5) * 0.6;
-                        const size = 0.14 + pr * 0.13;
-                        g.fillPoints([[-size, 0], [0, -size * 0.6], [size, 0], [0, size]]
-                            .map(([dx, dy]) => this.groundPoint(cx + dx, cy + dy)), true);
-                    } else g.fillPoints(dia(px, py, 0.28 + pr * 0.22), true);
-                }
-
-                // 草叶点簇
-                g.fillStyle(0x4c7a34, naturalSlope ? 0.24 : 0.55);
-                for (let i = 0; i < 3; i++) {
-                    const sx = x + (hash(gx * 5 + i, gy * 11) - 0.5) * TW * 0.6;
-                    const sy = y + (hash(gx * 11, gy * 5 + i) - 0.5) * TH * 0.6;
-                    if (naturalSlope) {
-                        const point = this.groundPoint(gx + (hash(gx * 5 + i, gy * 11) - 0.5) * 0.6,
-                            gy + (hash(gx * 11, gy * 5 + i) - 0.5) * 0.6);
-                        g.fillCircle(point.x, point.y, 1.2 + hash(i, gx + gy * 2) * 1.4);
-                    } else g.fillCircle(sx, sy, 1.2 + hash(i, gx + gy * 2) * 1.4);
-                }
-
-                // 海岸：贴水的草地加黄沙边
-                if (isWater(gx - 1, gy) || isWater(gx + 1, gy) || isWater(gx, gy - 1) || isWater(gx, gy + 1)) {
-                    g.fillStyle(0xd8c48a, 0.22);
-                    g.fillPoints(dia(x, y, 0.96), true);
-                }
-
-                // 自然坡面与山河图不描每格棋盘边线——地形连续不"方块"；
-                // 旧地图（平地/红蓝高地）保持原有网格风格。
-                if (naturalSlope || this.battleOptions.terrain === 'territory') continue;
-                // 立体倒角：上左边缘亮，下右边缘暗
-                g.lineStyle(2, 0xd7e8b0, 0.28);
-                g.lineBetween(tile[3].x, tile[3].y, tile[0].x, tile[0].y);
-                g.lineBetween(tile[0].x, tile[0].y, tile[1].x, tile[1].y);
-                g.lineStyle(2, 0x1e3311, 0.3);
-                g.lineBetween(tile[1].x, tile[1].y, tile[2].x, tile[2].y);
-                g.lineBetween(tile[2].x, tile[2].y, tile[3].x, tile[3].y);
-            }
-        }
-
-        if (naturalSlope) {
-            this.drawNaturalRelief(g);
-            this.drawNaturalGroundTexture(g, hash);
-        }
-        if (Terrain.maps[this.battleOptions.terrain].rx) {
-            // 连续等高线勾出坡形，不用高台立墙冒充可通行的缓坡。
-            const { cx, cy, rx, ry } = Terrain.maps[this.battleOptions.terrain];
-            for (const radius of [0.35, 0.55, 0.75, 0.95]) {
-                const points = [];
-                for (let i = 0; i <= 100; i++) {
-                    const a = i / 100 * TWO_PI;
-                    const gx = cx + Math.cos(a) * rx * radius;
-                    const gy = cy + Math.sin(a) * ry * radius;
-                    if (gx >= 1 && gx <= board.W - 1) points.push(this.groundPoint(gx, gy));
-                }
-                g.lineStyle(radius === 0.35 ? 3 : 2, 0xe9ddac, radius === 0.35 ? 0.7 : 0.4);
-                g.strokePoints(points, false);
-            }
-        }
-        if (this.battleOptions.terrain === 'territory') this.bakeTerritoryDressing(g);
-        this.drawTerrainFeatures(g);
-        this.groundImage?.destroy();
-        if (this.textures.exists('groundTex')) this.textures.remove('groundTex');
-        g.generateTexture('groundTex', VIEW_W, VIEW_H);
-        g.destroy();
-        this.groundImage = this.add.image(0, 0, 'groundTex').setOrigin(0, 0).setDepth(0);
-        this._groundTerrain = this.battleOptions.terrain;
-        this.drawTerrainDecorations();
-        this.terrainLabel?.destroy();
-        this.terrainLabel = null;
-        if (this.battleOptions.terrain !== 'flat' && !naturalSlope) {
-            const map = Terrain.maps[this.battleOptions.terrain];
-            // 领土山河图的标签放坡脚（默认 cy-17 会落在上翼河道上）
-            const labelY = this.battleOptions.terrain === 'territory' ? map.cy - map.ry - 2.5 : (map.cy || 35) - 17;
-            const labelPoint = this.groundPoint(map.cx || 35, labelY);
-            this.terrainLabel = this.add.text(labelPoint.x, labelPoint.y - 42,
-                map.name + (map.rx ? ' · 缓坡' : ''), {
-                    fontFamily: 'sans-serif', fontSize: '30px', color: '#fff3c7',
-                    stroke: '#394629', strokeThickness: 6
-                }).setOrigin(0.5).setDepth(7);
-        }
-
-        // 水面高光闪点（缓慢呼吸）——领土图海岸在画外缘，跳过
-        if (this.battleOptions.terrain === 'territory' || this.waterSparklesCreated) return;
-        this.waterSparklesCreated = true;
-        for (let i = 0; i < 14; i++) {
-            const side = i % 4;
-            const t = hash(i, 777);
-            let wx, wy;
-            if (side === 0) { const { x, y } = gridToScreen(1 + t * (board.W - 2), 0); wx = x; wy = y; }
-            else if (side === 1) { const { x, y } = gridToScreen(1 + t * (board.W - 2), board.H - 1); wx = x; wy = y; }
-            else if (side === 2) { const { x, y } = gridToScreen(0, 1 + t * (board.H - 2)); wx = x; wy = y; }
-            else { const { x, y } = gridToScreen(board.W - 1, 1 + t * (board.H - 2)); wx = x; wy = y; }
-            const spark = this.add.graphics().setDepth(2);
-            spark.fillStyle(0xffffff, 0.5);
-            spark.fillEllipse(wx, wy, 10, 3);
-            this.tweens.add({
-                targets: spark, alpha: { from: 0.15, to: 0.75 },
-                duration: 1400 + i * 230, yoyo: true, repeat: -1,
-                delay: hash(i, 42) * 1200
-            });
-        }
-
-    }
-
-    // 山河图 2.0 皮肤烘焙：土路 / 灌木花草 / 老家营寨（纯视觉，一次烘焙进地面贴图；
-    // 噪声一律 |x-中心| 折叠采样，左右镜像一致——视觉公平且风格对称）
-    bakeTerritoryDressing(g) {
-        const W = board.W, H = board.H, cx = W / 2;
-        const quad = (x, y, color, alpha) => {
-            g.fillStyle(color, alpha);
-            g.fillPoints(this.groundTile(x, y), true);
-        };
-        const openGround = (x, y) =>
-            !['water', 'rock', 'bridge', 'shallow', 'forest'].includes(Terrain.surface('territory', x, y));
-        // ---- 土路：老家 → 本方两旗 → 高地脚下（被踩出来的行军线）----
-        const road = (x1, y1, x2, y2) => {
-            const steps = Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 0.45);
-            const nx = -(y2 - y1), ny = x2 - x1;
-            const len = Math.hypot(nx, ny) || 1;
-            for (let i = 0; i <= steps; i++) {
-                const t = i / steps;
-                const x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t;
-                const wob = (this.terNoise(Math.abs(x - cx) * 0.35 + 9, y * 0.35 - 6) - 0.5) * 1.4;
-                for (const side of [-0.45, 0.45]) {
-                    const px = x + nx / len * (side + wob * 0.3);
-                    const py = y + ny / len * (side + wob * 0.3);
-                    if (Terrain.surface('territory', px, py) === 'water') continue;
-                    quad(Math.round(px), Math.round(py), 0xc9b07c, 0.5);
-                }
-            }
-        };
-        road(8, 36, 25, 24); road(8, 36, 34, 58);
-        road(W - 8, 36, W - 25, 24); road(W - 8, 36, W - 34, 58);
-        road(25, 24, 50, 34); road(34, 58, 49, 39);
-        road(W - 25, 24, W - 50, 34); road(W - 34, 58, W - 49, 39);
-        // ---- 灌木与花草：哈希散点 + 镜像，只落开阔地 ----
-        for (let i = 0; i < 90; i++) {
-            const ax = 4 + (i * 37.13) % (cx - 6);
-            const y = 6 + (i * 53.7) % (H - 12);
-            for (const x of [ax, W - ax]) {
-                if (!openGround(x, y)) continue;
-                const p = this.groundPoint(x, y);
-                g.fillStyle(0x3f6b36, 0.85); g.fillEllipse(p.x, p.y, 9, 5);
-                g.fillStyle(0x537f47, 0.9); g.fillEllipse(p.x - 1, p.y - 1, 5, 3);
-            }
-        }
-        for (let i = 0; i < 70; i++) {
-            const ax = 5 + (i * 29.7) % (cx - 7);
-            const y = 8 + (i * 61.3) % (H - 14);
-            for (const x of [ax, W - ax]) {
-                if (!openGround(x, y)) continue;
-                const p = this.groundPoint(x, y);
-                g.fillStyle([0xfff3b0, 0xffffff, 0xffd1dc][i % 3], 0.95);
-                g.fillCircle(p.x, p.y, 1.6);
-            }
-        }
-        // ---- 老家营寨：栏栅（带门洞）+ 双帐篷 ----
-        for (const home of [{ x: 15.5, side: 'red' }, { x: W - 15.5, side: 'blue' }]) {
-            for (let y = 24; y <= 48; y += 1.1) {
-                if (Math.abs(y - 36) < 2.6) continue;   // 门洞朝战场
-                const x = home.x + (this.terNoise(Math.abs(home.x - cx) * 0.3 + y * 0.2, y) - 0.5) * 0.5;
-                const p = this.groundPoint(x, y);
-                g.fillStyle(0x6e4f2e, 1); g.fillRect(p.x - 2, p.y - 13, 4, 13);
-                g.fillStyle(0x8a6a3f, 1); g.fillRect(p.x - 2, p.y - 13, 4, 3);
-            }
-            const tentX = home.side === 'red' ? 6.5 : W - 6.5;
-            for (const ty of [27, 45]) {
-                const p = this.groundPoint(tentX, ty);
-                g.fillStyle(home.side === 'red' ? 0xb0524a : 0x4a6fb0, 0.95);
-                g.fillTriangle(p.x - 14, p.y, p.x + 14, p.y, p.x, p.y - 22);
-                g.fillStyle(0x2c2418, 0.9);
-                g.fillTriangle(p.x - 3, p.y, p.x + 3, p.y, p.x, p.y - 8);
-            }
-        }
-    }
-
-    drawTerrainFeatures(g) {
-        const key = this.battleOptions.terrain, geometry = Terrain.geometry(key);
-        const polygon = (rect, lift = 0) => [[rect.x1, rect.y1], [rect.x2, rect.y1],
-            [rect.x2, rect.y2], [rect.x1, rect.y2]].map(([x, y]) => {
-                const p = this.groundPoint(x, y); return { x: p.x, y: p.y - lift };
-            });
-        // 一格一片，沿真实高度贴地；边缘完全来自通行矩形，不用视觉近似的半格边界。
-        const paint = (rect, color, alpha = 1) => {
-            g.fillStyle(color, alpha);
-            for (let x = rect.x1; x < rect.x2; x++) for (let y = rect.y1; y < rect.y2; y++)
-                g.fillPoints(polygon({ x1: x, y1: y, x2: Math.min(x + 1, rect.x2), y2: Math.min(y + 1, rect.y2) }), true);
-        };
-        for (const zone of geometry.zones) {
-            if (zone.kind === 'shallow') {
-                // 浅滩：浅蓝可通行水域 + 沙色描边 + 波纹点
-                paint(zone, 0x7fc0dd, 0.9);
-                for (let y = zone.y1 + 0.6; y < zone.y2; y += 1.4) for (let x = zone.x1 + 0.7; x < zone.x2; x += 1.8) {
-                    const a = this.groundPoint(x, y);
-                    g.lineStyle(2, 0xbfe4f7, 0.45); g.lineBetween(a.x - 4, a.y, a.x + 4, a.y);
-                }
-            } else if (zone.kind === 'path') {
-                paint(zone, 0xd6bd80, 0.5);
-                g.lineStyle(2, 0xeee0ad, 0.6); g.strokePoints(polygon(zone), true);
-            } else if (zone.kind === 'forest') {
-                if (zone.blob) {
-                    // 连片噪声林斑（70 图 legacy / 领土 generic 共用此形态）：
-                    // 半格采样贴地铺色，边缘与通行判定共用同一占位场；四档由草色渐入深绿。
-                    const field = (x, y) => zone.blob === true ? Terrain.forestField(x, y) : Terrain.blobField(zone, x, y);
-                    const ramp = [[0x537f47, 0.26], [0x47703d, 0.38], [0x3d6637, 0.52], [0x315c31, 0.64]];
-                    for (let y = zone.y1; y < zone.y2; y += 0.5) for (let x = zone.x1; x < zone.x2; x += 0.5) {
-                        const depth = field(x + 0.25, y + 0.25) - Terrain.FOREST_EDGE;
-                        if (depth <= 0) continue;
-                        const tier = depth > 0.55 ? 3 : depth > 0.32 ? 2 : depth > 0.16 ? 1 : 0;
-                        g.fillStyle(ramp[tier][0], ramp[tier][1]);
-                        g.fillPoints(polygon({ x1: x, y1: y, x2: x + 0.5, y2: y + 0.5 }), true);
-                    }
-                } else {
-                    // 矩形林带（领土征服）：整片铺底色 + 噪声两档加深，边界即通行边界
-                    paint(zone, 0x44703c, 0.40);
-                    for (let y = zone.y1; y < zone.y2; y += 1) for (let x = zone.x1; x < zone.x2; x += 1) {
-                        if (this.terNoise(x * 0.9 + 5, y * 0.9 + 11) < 0.45) continue;
-                        g.fillStyle(0x356033, 0.30);
-                        g.fillPoints(polygon({ x1: x, y1: y, x2: x + 1, y2: y + 1 }), true);
-                    }
-                    g.lineStyle(2.5, 0x2c4f2a, 0.5);
-                    g.strokePoints(polygon(zone), true);
-                }
-            }
-        }
-        if (key === 'forest') {
-            // 林隙小径：腰桥两侧的豁口撒浅色草斑，向玩家提示可穿插的路线；只落在空地上，不压林斑。
-            for (const dir of [-1, 1]) for (let i = 0; i < 7; i++) {
-                const px = 35 + dir * (5.5 + i * 1.05);
-                const py = 35 + (this.terNoise(px * 0.9 + dir * 17, 5) - 0.5) * 4.2;
-                if (this.terNoise(px * 1.3 + 3, py * 1.3) < 0.3) continue;
-                if (Terrain.forestField(px, py) > Terrain.FOREST_EDGE - 0.06) continue;
-                g.fillStyle(0x9db36a, 0.45);
-                g.fillPoints(polygon({ x1: px - 0.55, y1: py - 0.55, x2: px + 0.55, y2: py + 0.55 }), true);
-            }
-        }
-        for (const block of geometry.blockers) {
-            if (block.kind === 'water') {
-                // 三段渐变：贴边沙色 → 浅水 → 深水；波纹只画深水
-                const DEEP = 0x377fac, LIGHT = 0x63a7d6, SAND = 0xd8c48a;
-                for (let x = Math.floor(block.x1); x < block.x2; x++) {
-                    for (let y = Math.floor(block.y1); y < block.y2; y++) {
-                        const edge = Math.min(x + 1 - block.x1, block.x2 - x, y + 1 - block.y1, block.y2 - y);
-                        if (edge <= 0) continue;
-                        const color = edge < 0.6 ? SAND : edge < 1.6 ? LIGHT : DEEP;
-                        g.fillStyle(color, edge < 0.6 ? 0.9 : 1);
-                        g.fillPoints(polygon({ x1: x, y1: y, x2: x + 1, y2: y + 1 }), true);
-                        if (edge >= 2 && (x + y) % 2 === 0) {
-                            const a = this.groundPoint(x + 0.3, y + 0.5), b = this.groundPoint(x + 0.95, y + 0.5);
-                            g.lineStyle(2, 0xa2d8e3, 0.5); g.lineBetween(a.x, a.y, b.x, b.y);
-                        }
-                    }
-                }
-                if (key !== 'territory') { g.lineStyle(4, 0xe2cf94, 0.85); g.strokePoints(polygon(block), true); }
-            } else {
-                paint(block, 0x626355);
-                const base = polygon(block), top = polygon(block, 24);
-                g.fillStyle(0x474e47, 1); g.fillPoints([top[1], top[2], base[2], base[1]], true);
-                g.fillStyle(0x343f39, 1); g.fillPoints([top[2], top[3], base[3], base[2]], true);
-                g.fillStyle(0x89917b, 1); g.fillPoints(top, true);
-                g.lineStyle(3, 0xb9bea0, 0.8); g.strokePoints(top, true);
-                for (let y = block.y1 + 1; y < block.y2; y += 1.7) {
-                    const a = this.groundPoint(block.x1 + 0.2, y), b = this.groundPoint(block.x2 - 0.2, y + 0.5);
-                    g.lineStyle(2, 0x535d51, 0.8); g.lineBetween(a.x, a.y - 23, b.x, b.y - 23);
-                }
-            }
-        }
-        for (const bridge of geometry.zones.filter(zone => zone.kind === 'bridge')) {
-            paint(bridge, 0xb38c52);
-            for (let x = bridge.x1; x <= bridge.x2; x += 0.5) {
-                const a = this.groundPoint(x, bridge.y1), b = this.groundPoint(x, bridge.y2);
-                g.lineStyle(2, 0x6e5133, 0.8); g.lineBetween(a.x, a.y, b.x, b.y);
-            }
-            for (const y of [bridge.y1, bridge.y2]) {
-                const a = this.groundPoint(bridge.x1, y), b = this.groundPoint(bridge.x2, y);
-                g.lineStyle(5, 0xe0c38e, 1); g.lineBetween(a.x, a.y - 8, b.x, b.y - 8);
-                for (let x = bridge.x1; x <= bridge.x2; x += 1.5) {
-                    const p = this.groundPoint(x, y);
-                    g.lineStyle(4, 0x735233, 1); g.lineBetween(p.x, p.y, p.x, p.y - 12);
-                }
-            }
-        }
-        const defense = geometry.defense;
-        if (defense && !Terrain.isNaturalSlope(key)) {
-            g.lineStyle(3, 0xf4e4a4, 0.75); g.strokePoints(polygon(defense.archerRect), true);
-        }
-    }
-
-    drawTerrainDecorations() {
-        for (const prop of this.terrainProps || []) prop.destroy();
-        this.terrainProps = [];
-        for (const { sprite, gx, gy } of this.edgeProps || [])
-            sprite.setVisible(!['water', 'rock'].includes(Terrain.surface(this.battleOptions.terrain, gx, gy)));
-        for (const zone of Terrain.geometry(this.battleOptions.terrain).zones.filter(zone => zone.kind === 'forest')) {
-            for (let x = zone.x1 + 1; x < zone.x2 - 0.5; x += 2.2) for (let y = zone.y1 + 1; y < zone.y2 - 0.5; y += 2.2) {
-                // 林斑占位：legacy 噪声场 / 领土通用噪声场 / 矩形兜底三形态
-                let density;
-                if (zone.blob === true) density = Terrain.forestField(x, y);
-                else if (zone.blob === 'generic') density = Terrain.blobField(zone, x, y);
-                else density = this.terNoise(x * 0.7 + 3, y * 0.7 + 9) > 0.18 ? 0.28 + this.terNoise(x * 0.7 + 3, y * 0.7 + 9) * 0.55 : 0;
-                if (density <= Terrain.FOREST_EDGE) continue;
-                // 山河图 2.0：成丛生长——簇噪声不过阈值的点位留空，林子有了疏密
-                if (zone.blob === 'generic' && this.terNoise(x * 0.33 + 7, y * 0.33 - 5) < 0.45) continue;
-                // 深林成簇大树、林缘稀疏小树：树只是林区提示，不是逐棵实体障碍。
-                const clump = this.terNoise(x * 0.55 + 9, y * 0.55 + 3);
-                if (clump > 0.25 + (density - Terrain.FOREST_EDGE) * 0.9) continue;
-                const p = this.groundPoint(x + (clump - 0.5) * 1.2, y + (this.terNoise(y * 0.9 + 17, x * 0.9) - 0.5) * 1.2);
-                const big = density > 0.55 && clump > 0.45;
-                const tree = this.add.image(p.x, p.y, big ? 'props/tree_big' : 'props/tree_small')
-                    .setOrigin(0.5, 0.92).setScale((big ? 0.42 : 0.33) + clump * 0.1).setAlpha(0.85).setDepth(3);
-                const shade = this.terNoise(x * 1.7 + 31, y * 1.7 + 7);
-                tree.setTint(shade > 0.62 ? 0xf2f6e4 : shade < 0.34 ? 0xd4e0d0 : 0xe7eeda);
-                this.terrainProps.push(tree);
-            }
-        }
-        for (const block of Terrain.geometry(this.battleOptions.terrain).blockers.filter(block => block.kind === 'rock')) {
-            for (let x = block.x1 + 0.6; x < block.x2; x += 1.6) for (let y = block.y1 + 0.6; y < block.y2; y += 1.7) {
-                const p = this.groundPoint(x, y);
-                const rock = this.add.image(p.x, p.y - 20, 'props/rock')
-                    .setOrigin(0.5, 0.9).setScale(0.38 + this.terNoise(x, y) * 0.12).setDepth(3);
-                this.terrainProps.push(rock);
-            }
-        }
-        // 山河图 2.0：坡地散树——林带之外的疏林点缀（哈希折叠镜像，避开一切非草地）
-        if (this.battleOptions.terrain === 'territory') {
-            for (let i = 0; i < 60; i++) {
-                const ax = 6 + (i * 41.3) % (board.W / 2 - 8);
-                const y = 22 + (i * 47.9) % (board.H - 30);
-                for (const x of [ax, board.W - ax]) {
-                    if (['water', 'rock', 'bridge', 'shallow', 'forest'].includes(Terrain.surface('territory', x, y))) continue;
-                    if (this.terNoise(x * 0.5 + 3, y * 0.5) < 0.52) continue;
-                    const p = this.groundPoint(x, y);
-                    const tree = this.add.image(p.x, p.y, 'props/tree_small')
-                        .setOrigin(0.5, 0.92).setScale(0.28 + this.terNoise(x * 1.3, y * 1.7) * 0.1)
-                        .setAlpha(0.92).setDepth(3);
-                    tree.setTint(this.terNoise(x * 1.7 + 31, y * 2.3) > 0.6 ? 0xe7eeda : 0xd4e0d0);
-                    this.terrainProps.push(tree);
-                }
-            }
-        }
-    }
-
-    placeDecorations() {
-        const deco = [];
-        this.edgeProps = [];
-        // 双方大本营：箭塔沿基地前沿一字排开（要塞感）
-        [8, 20, 34, 48, 60].forEach(gy => {
-            deco.push(['tower', 2.2, gy]);
-            deco.push(['tower', board.W - 3.2, gy]);
-        });
-        // 上下边缘树林带 + 零散岩石（不挡主战场）
-        const jit = (a, b) => a + Math.random() * (b - a);
-        for (let gx = 4; gx < board.W - 5; gx += 3) {
-            deco.push([Math.random() < 0.5 ? 'tree_big' : 'tree_small', jit(gx, gx + 2), jit(1.2, 2.6)]);
-            deco.push([Math.random() < 0.5 ? 'tree_big' : 'tree_small', jit(gx, gx + 2), jit(board.H - 2.8, board.H - 1.4)]);
-        }
-        for (let i = 0; i < 8; i++) {
-            deco.push(['rock', jit(6, board.W - 7), Math.random() < 0.5 ? jit(1.6, 2.4) : jit(board.H - 2.6, board.H - 1.8)]);
-        }
-        deco.forEach(([key, gx, gy]) => {
-            const { x, y } = gridToScreen(gx, gy);
-            const spr = this.add.image(x, y, 'props/' + key).setOrigin(0.5, 0.92);
-            spr.setScale(key === 'tower' ? 0.48 : 0.5);   // 新像素素材原生更大，按显示高度折算
-            spr.setDepth((gx + gy) * 100 + 10);
-            spr.setVisible(!['water', 'rock'].includes(Terrain.surface(this.battleOptions.terrain, gx, gy)));
-            this.edgeProps.push({ sprite: spr, gx, gy });
-            // 树随风轻摆
-            if (key.indexOf('tree') === 0) {
-                this.tweens.add({
-                    targets: spr, angle: { from: -1.3, to: 1.3 },
-                    duration: 2600 + Math.random() * 2000,
-                    yoyo: true, repeat: -1, ease: 'Sine.InOut',
-                    delay: Math.random() * 1600
-                });
-            }
-        });
-    }
-
-    // ---------------- 氛围层：飞鸟 ----------------
-    scheduleBirds() {
-        this.spawnBirds();
-        this.time.addEvent({ delay: 9000 + Math.random() * 4000, loop: true, callback: () => this.spawnBirds() });
-    }
-
-    spawnBirds() {
-        const n = 3 + Math.floor(Math.random() * 3);
-        const fromLeft = Math.random() > 0.5;
-        const y0 = 70 + Math.random() * 200;
-        for (let i = 0; i < n; i++) {
-            const bird = this.add.graphics().setDepth(150000);
-            bird.lineStyle(2, 0x1c1c1c, 0.7);
-            bird.lineBetween(-6, 1, 0, -3);
-            bird.lineBetween(0, -3, 6, 1);
-            bird.setPosition(fromLeft ? -80 - i * 30 : VIEW_W + 80 + i * 30, y0 + i * 9);
-            // 振翅（离场时随 killTweensOf 一并清理）
-            this.tweens.add({
-                targets: bird, scaleY: { from: 1, to: 0.5 },
-                duration: 170 + i * 25, yoyo: true, repeat: -1, ease: 'Sine.InOut'
-            });
-            this.tweens.add({
-                targets: bird, x: fromLeft ? VIEW_W + 140 : -140,
-                duration: 13000 + Math.random() * 3000,
-                onComplete: () => {
-                    this.tweens.killTweensOf(bird);
-                    bird.destroy();
-                }
-            });
-        }
-    }
-
-    drawSpawnZones() {
-        const g = this.spawnZoneGfx.setDepth(5).setAlpha(0.22);
-        g.clear();
-        if (Terrain.isNaturalSlope(this.battleOptions.terrain)) return;
-        if (this.battleOptions.terrain === 'territory') {
-            // 领土图：大本营领地光晕（三层椭圆渐隐），替代整块矩形出兵区
-            for (const [x, color] of [[8, 0xff5555], [board.W - 8, 0x5599ff]]) {
-                for (const [rx, ry, alpha] of [[9, 16, 0.30], [6, 11, 0.35], [3.4, 6.5, 0.42]]) {
-                    g.fillStyle(color, alpha);
-                    g.fillPoints(sampleGroundRing(this, x, board.H / 2, rx, ry, 26), true);
-                }
-            }
-            return;
-        }
-        const zone = (x0, x1, color) => {
-            for (let gy = 1; gy < board.H - 1; gy++)
-                for (let gx = x0; gx < x1; gx++) {
-                    g.fillStyle(color, 1);
-                    g.fillPoints(this.groundTile(gx, gy), true);
-                }
-        };
-        zone(2, 14, 0xff5555);
-        zone(board.W - 14, board.W - 2, 0x5599ff);
-    }
 
     setupCamera() {
         const cam = this.cameras.main;
@@ -1005,7 +250,7 @@ export class IsoBattleScene extends Phaser.Scene {
                 const home = this.groundPoint(board.W * 0.3, board.H / 2);
                 cam.centerOn((home.x + this.mapCenter.x) / 2, (home.y + this.mapCenter.y) / 2);
             }
-            if (this.ocean) this.redrawOcean();
+            if (this.ocean) this.render.world.redrawOcean();
             return;
         }
         // 地图的世界包围盒（含装饰余量）
@@ -1021,12 +266,12 @@ export class IsoBattleScene extends Phaser.Scene {
             this.baseZoom = Math.min((w - 40) / (maxX - minX), Math.max(220, h - 230) / (maxY - minY));
             this.applyZoom();
             cam.centerOn((minX + maxX) / 2, (minY + maxY) / 2 + 45 / cam.zoom);
-            if (this.ocean) this.redrawOcean();
+            if (this.ocean) this.render.world.redrawOcean();
             return;
         }
         this.applyZoom();
         cam.centerOn(this.mapCenter.x, this.mapCenter.y);
-        if (this.ocean) this.redrawOcean();
+        if (this.ocean) this.render.world.redrawOcean();
     }
 
     // anchorWorld/anchorScreen：保持缩放锚点（光标）下的世界坐标不动
@@ -1349,7 +594,7 @@ export class IsoBattleScene extends Phaser.Scene {
         if (options.territory) setBoardSize(TERRITORY.W, TERRITORY.H, 5); else resetBoardSize();
         if (this._boardW !== board.W || this._boardH !== board.H) this.applyBoardSize();
         this.clearUnits(options.terrain);
-        this.drawSpawnZones();
+        this.render.world.drawSpawnZones();
         const armies = [
             ['red', redConfig, redFormation],
             ['blue', blueConfig, blueFormation]
@@ -1421,7 +666,7 @@ export class IsoBattleScene extends Phaser.Scene {
         // 被毁 3 辆蓝胜；车附近有护送部队才前进（无保护停下等待）。
         this.convoy = null;
         if (this.battleOptions.convoy) {
-            this.ensureWagonTextures();
+            this.render.world.ensureWagonTextures();
             const wagons = [[13, board.H / 2 - 3], [12, board.H / 2], [13, board.H / 2 + 3], [10.5, board.H / 2]]
                 .map(([x, y]) => {
                     const wagon = this.spawnUnit('red', 'wagon', x, y);
@@ -1513,72 +758,6 @@ export class IsoBattleScene extends Phaser.Scene {
                 g.lineStyle(1.5, 0xf6cc68, 0.7);
                 g.strokeEllipse(p.x, p.y, 21, 10);
             }
-        }
-    }
-
-    // 阴影预烘焙：每个（阵营×兵种）的软椭圆+队伍圈烘成一张小贴图，
-    // 千人同屏时阴影走普通精灵合批，而不是一千个 Graphics 各画一遍
-    makeShadowTextures() {
-        for (const team of ['red', 'blue']) {
-            for (const type of Object.keys(UNIT_TYPES)) {
-                for (const visualDir of unitVisualDirections(type)) {
-                    const key = shadowTextureKey(team, type, visualDir);
-                    if (this.textures.exists(key)) continue;
-                    const F = footProfile(type, visualDir);
-                    const sizeK = type === 'cavalry' ? 0.37 : 0.30;
-                    const sc = UNIT_TYPES[type].scale * sizeK;
-                    const footDx = F.dx * sc;
-                    const w = Math.ceil(F.w * sc + Math.abs(footDx) * 2) + 4;
-                    const h = Math.ceil(F.h * sc) + 4;
-                    const g = this.make.graphics({ add: false });
-                    const cx = w / 2, cy = h / 2;
-                    g.fillStyle(0x0c1206, 0.30);
-                    g.fillEllipse(cx + footDx, cy, F.w * sc, F.h * sc);
-                    g.fillStyle(0x0c1206, 0.26);
-                    g.fillEllipse(cx + footDx, cy, F.w * sc * 0.62, F.h * sc * 0.62);
-                    g.lineStyle(2.2, team === 'red' ? 0xff3b30 : 0x2f7bff, 0.85);
-                    g.strokeEllipse(cx + footDx, cy, F.w * sc * 0.78, F.h * sc * 0.78);
-                    g.generateTexture(key, w, h);
-                    g.destroy();
-                }
-            }
-        }
-    }
-
-    // 辎重车贴图运行时生成：木箱车体+双轮+篷顶+队旗（无外部素材依赖）
-    ensureWagonTextures() {
-        for (const team of ['red', 'blue']) {
-            const key = `units/${team}_wagon`;
-            if (this.textures.exists(key)) continue;
-            const g = this.add.graphics();
-            const W = 64, H = 46, accent = team === 'red' ? 0xff5b5b : 0x57a0ff;
-            // 车轮（等距椭圆轮）
-            g.fillStyle(0x3a2c1a, 1);
-            g.fillEllipse(18, H - 10, 16, 9);
-            g.fillEllipse(46, H - 10, 16, 9);
-            g.lineStyle(2, 0x241a0e, 1);
-            g.strokeEllipse(18, H - 10, 16, 9);
-            g.strokeEllipse(46, H - 10, 16, 9);
-            g.fillStyle(0xc9a35f, 1);
-            g.fillEllipse(18, H - 10, 5, 3);
-            g.fillEllipse(46, H - 10, 5, 3);
-            // 车箱
-            g.fillStyle(0x8a6a3e, 1);
-            g.fillPoints([{ x: 8, y: H - 14 }, { x: 56, y: H - 14 }, { x: 58, y: H - 30 }, { x: 6, y: H - 30 }], true);
-            g.lineStyle(2, 0x5d4322, 1);
-            g.strokePoints([{ x: 8, y: H - 14 }, { x: 56, y: H - 14 }, { x: 58, y: H - 30 }, { x: 6, y: H - 30 }], true, true);
-            // 篷顶弧
-            g.fillStyle(0xd8cfb4, 1);
-            g.fillTriangle(4, H - 30, 60, H - 30, 32, H - 44);
-            g.lineStyle(2, 0x8f8468, 0.8);
-            g.strokeTriangle(4, H - 30, 60, H - 30, 32, H - 44);
-            // 队旗小杆
-            g.lineStyle(2, 0x241a0e, 1);
-            g.lineBetween(56, H - 30, 56, H - 44);
-            g.fillStyle(accent, 1);
-            g.fillTriangle(56, H - 44, 64, H - 41, 56, H - 38);
-            g.generateTexture(key, W, H);
-            g.destroy();
         }
     }
 

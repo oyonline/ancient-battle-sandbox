@@ -63,9 +63,9 @@ function makeScene() {
         } },
         playAttackAnim() {}, meleeImpact() {}, bloodBurst() {}, impactPuff() {}, chargeDust() {},
         showVictory(winner) { this.winner = winner; },
-        drawSpawnZones() {},
         killUnit() { this.deadCount++; }
     });
+    Object.assign(scene.render.world, { drawSpawnZones() {} });
     scene.resetBattleData();
     return scene;
 }

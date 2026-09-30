@@ -46,9 +46,9 @@ test('natural slope ground and unit foot positions use the same height; rectangu
     }
     let rectangles = 0;
     const graphics = { fillStyle() {}, fillPoints() { rectangles++; }, lineStyle() {}, strokePoints() { rectangles++; } };
-    scene.drawTerrainFeatures(graphics);
+    scene.render.world.drawTerrainFeatures(graphics);
     assert.equal(rectangles, 0, 'no wall, painted road, or archer rectangle');
-    scene.drawTerrainDecorations(); assert.equal(scene.terrainProps.length, 0, 'no rows of wall props');
+    scene.render.world.drawTerrainDecorations(); assert.equal(scene.terrainProps.length, 0, 'no rows of wall props');
 });
 
 test('grass texture is deterministic, follows the slope and leaves terrain physics unchanged', () => {
@@ -62,7 +62,7 @@ test('grass texture is deterministic, follows the slope and leaves terrain physi
         const calls = [];
         const graphics = Object.fromEntries(['fillStyle', 'fillRect', 'fillPoints', 'lineStyle', 'lineBetween']
             .map(method => [method, (...args) => calls.push([method, ...args])]));
-        scene.drawNaturalGroundTexture(graphics, hash);
+        scene.render.world.drawNaturalGroundTexture(graphics, hash);
         return JSON.parse(JSON.stringify(calls));
     };
     const first = render(), second = render();

@@ -159,11 +159,11 @@ test('switching terrain destroys forest decoration and hides bank props that wou
     const scene = makeScene(); scene.terNoise = () => 0.6;
     const sprite = { visible: true, setVisible(value) { this.visible = value; } };
     scene.edgeProps = [{ sprite, gx: 35, gy: 2 }];
-    scene.setTerrain('forest'); scene.drawTerrainDecorations();
+    scene.setTerrain('forest'); scene.render.world.drawTerrainDecorations();
     const trees = scene.terrainProps.slice();
     assert.ok(trees.length > 20); assert.ok(sprite.visible);
-    scene.setTerrain('river'); scene.drawTerrainDecorations();
+    scene.setTerrain('river'); scene.render.world.drawTerrainDecorations();
     assert.ok(trees.every(tree => tree.destroyed));
     assert.equal(scene.terrainProps.length, 0); assert.equal(sprite.visible, false);
-    scene.setTerrain('flat'); scene.drawTerrainDecorations(); assert.equal(sprite.visible, true);
+    scene.setTerrain('flat'); scene.render.world.drawTerrainDecorations(); assert.equal(sprite.visible, true);
 });
