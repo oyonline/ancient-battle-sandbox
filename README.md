@@ -51,6 +51,8 @@ js/game.js            战斗场景（渲染钩子 + 模式编排）
 js/battle/            纯模拟层：core 战斗核 / economy 领土经济 / battalion 营队 /
                       recruit 征兵 / spatial 空间哈希 / report 战报 / determinism 确定性约定
 js/render/            渲染层（BattleRenderer 门面）：world 地貌海面装饰烘焙 / metrics 世界度量 / sprites 精灵轮廓
+js/snd.js             WebAudio 合成音效（无外部文件）
+js/lobby.js           局域网房间流程（lobbyMethods 并入 UI）
 js/tactics/           战术四组：deploy 布阵 / guards 守备纪律 / rally 集结波次 / steps 逐帧编排（原型混入 TacticsSystem）
 js/net/               锁步联机：lockstep 调度与哈希 / arena-client 房间客户端
 js/terrain|navigation 地形高度场与寻路（棋盘尺寸参数化，默认 70×70，领土图 104×72）
