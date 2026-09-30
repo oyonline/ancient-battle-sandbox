@@ -11,7 +11,7 @@ import { board } from '../board.js';
 import { territoryLayout } from '../territory-map.js';
 
 export const TERRITORY = {
-    W: 104, H: 72,                    // 领土征服大地图（常规模式仍为 70×70）
+    W: 130, H: 90,                    // 领土征服大地图（常规模式仍为 70×70）；宽高比保持 13:9
     BASE_INCOME: 5,                   // 基础军费收入（军费/秒，无旗也有）
     FLAG_INCOME: 4,                   // 每面归属旗额外收入（军费/秒）
     START_TREASURY: 150,              // 开局军费

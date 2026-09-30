@@ -4,13 +4,17 @@ import { board } from '../js/board.js';
 import { Terrain } from '../js/terrain.js';
 import { TerrainNavigation } from '../js/navigation.js';
 import { territoryLayout } from '../js/territory-map.js';
+import { TERRITORY } from '../js/battle/economy.js';
 import { buildBankField } from '../js/render/terrain-naturalness.js';
 import { riverFlowMark } from '../js/render/territory-map.js';
 import { OverlayRenderer } from '../js/render/overlay.js';
 
 const radius = 0.36;
+const CX = () => TERRITORY.W / 2, CY = () => TERRITORY.H / 2;
+const BRIDGE_Y = () => Math.round(TERRITORY.H * 2 / 9);
+const FORD_Y = () => territoryLayout(TERRITORY.W, TERRITORY.H).fordY;
 function onMap(run) {
-    const before = { ...board }; board.W = 104; board.H = 72;
+    const before = { ...board }; board.W = TERRITORY.W; board.H = TERRITORY.H;
     try { run(); } finally { Object.assign(board, before); }
 }
 function navigation() { return new TerrainNavigation({ battleOptions: { terrain: 'territory' } }); }
@@ -25,19 +29,22 @@ function length(from, path) {
 }
 
 test('upper objectives face each other across a real bridge; the north cannot be bypassed', () => onMap(() => {
-    const { sites, bridge } = territoryLayout(104, 72), west = sites[0], east = sites[3];
+    const { sites, bridge } = territoryLayout(TERRITORY.W, TERRITORY.H), west = sites[0], east = sites[3];
     assert.ok(west.gx < bridge.x1 && east.gx > bridge.x2);
     assert.equal(west.gy, (bridge.y1 + bridge.y2) / 2);
     for (const r of [0.25, 0.36, 0.54, 0.7]) {
         assert.equal(Terrain.segmentClear('territory', west.gx, west.gy, east.gx, east.gy, r), true);
-        for (const y of [0.8, 4, 10, 23, 27]) assert.equal(Terrain.segmentClear('territory', 40, y, 64, y, r), false);
+        // 探针 y 全部取水带行：桥区以北、桥区以南到浅滩前
+        for (const y of [0.8, BRIDGE_Y() - 8, BRIDGE_Y() - 4, bridge.y2 + 3, FORD_Y() - 4]) {
+            assert.equal(Terrain.segmentClear('territory', CX() - 12, y, CX() + 12, y, r), false);
+        }
     }
-    assert.equal(Terrain.walkable('territory', 52, 0.7), false, 'river closes the north board edge');
+    assert.equal(Terrain.walkable('territory', TERRITORY.W / 2, 0.7), false, 'river closes the north board edge');
 }));
 
 test('bridge is the fast upper route; closing it preserves a substantially longer southern detour', () => onMap(() => {
-    const a = [40, 16], b = [64, 16], direct = length(a, route(navigation(), a, b));
-    const geometry = Terrain.geometry('territory'), { bridge } = territoryLayout(104, 72);
+    const a = [CX() - 12, BRIDGE_Y()], b = [CX() + 12, BRIDGE_Y()], direct = length(a, route(navigation(), a, b));
+    const geometry = Terrain.geometry('territory'), { bridge } = territoryLayout(TERRITORY.W, TERRITORY.H);
     geometry.blockers.push({ ...bridge, kind: 'water' });
     try {
         const path = route(navigation(), a, b);
@@ -48,26 +55,31 @@ test('bridge is the fast upper route; closing it preserves a substantially longe
             assert.equal(Terrain.segmentClear('territory', ...last, point.gx, point.gy, radius), true);
             last = [point.gx, point.gy];
         }
-        assert.ok(path.some(p => p.gy >= 28), 'detour uses southern ford');
+        assert.ok(path.some(p => p.gy >= FORD_Y() - 3), 'detour uses southern ford');
         assert.ok(length(a, path) > direct * 1.35, 'bridge confers an actual distance advantage');
     } finally { geometry.blockers.pop(); }
 }));
 
 test('all three objective routes remain accessible and mirrored, including goals behind the river', () => onMap(() => {
     const nav = navigation();
-    for (const [a, b] of [[[40,10],[64,10]], [[40,22],[64,22]], [[7,36],[64,16]], [[7,36],[52,36]], [[7,36],[62,52]]]) {
-        const red = route(nav, a, b), blue = route(nav, [104-a[0],a[1]], [104-b[0],b[1]], 'blue');
+    const pairs = [
+        [[CX() - 12, BRIDGE_Y() - 6], [CX() + 12, BRIDGE_Y() - 6]],
+        [[CX() - 12, BRIDGE_Y() + 6], [CX() + 12, BRIDGE_Y() + 6]],
+        [[7, CY()], [CX() + 12, BRIDGE_Y()]], [[7, CY()], [CX(), CY()]], [[7, CY()], [CX() + 10, CY() + 16]]
+    ];
+    for (const [a, b] of pairs) {
+        const red = route(nav, a, b), blue = route(nav, [TERRITORY.W - a[0], a[1]], [TERRITORY.W - b[0], b[1]], 'blue');
         assert.ok(red.length);
         assert.equal(red.length, blue.length);
         let last = a;
         red.forEach((p, i) => {
             assert.equal(Terrain.segmentClear('territory', ...last, p.gx, p.gy, radius), true);
-            assert.ok(Math.abs(p.gx + blue[i].gx - 104) < 1e-9);
+            assert.ok(Math.abs(p.gx + blue[i].gx - TERRITORY.W) < 1e-9);
             assert.ok(Math.abs(p.gy - blue[i].gy) < 1e-9);
             last = [p.gx, p.gy];
         });
     }
-    for (const site of territoryLayout(104,72).sites.filter(s => s.role === 'forest')) {
+    for (const site of territoryLayout(TERRITORY.W, TERRITORY.H).sites.filter(s => s.role === 'forest')) {
         const surroundings = new Set();
         for (let x=-3;x<=3;x++) for (let y=-3;y<=3;y++) surroundings.add(Terrain.surface('territory',site.gx+x,site.gy+y));
         assert.ok(surroundings.has('grass') && surroundings.has('forest'), 'forest objective sits at the woodland entrance');

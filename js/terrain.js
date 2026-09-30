@@ -1,5 +1,5 @@
 // 渲染、导航和战斗共用此处的确定性高度场与矩形地表。
-// 棋盘尺寸经 board 读取（默认 70×70；领土征服大地图 104×72）。除 territory 地形
+// 棋盘尺寸经 board 读取（默认 70×70；领土征服大地图 130×90）。除 territory 地形
 // 按棋盘比例布局外，其余地图是 70×70 时代设计、只在默认尺寸下运行，行为不变。
 import { board } from './board.js';
 import { territoryGeometry } from './territory-map.js';
@@ -16,7 +16,8 @@ export const Terrain = {
         forest: { name: '林间战场', description: '林内骑兵移速55%、其他兵种85%；入林打断冲锋，出林重新助跑，无隐身或箭矢遮挡' },
         river: { name: '三桥河谷', description: '河面不可通行；中央宽桥争正面，两侧桥可绕后，击退不会落水，弓箭可以跨河' },
         // 领土征服专用：纵河分隔上翼，桥头相向；中部高地、下翼林口构成三条路线。
-        territory: { name: '山河领土', description: '上翼争桥、中央夺高地、下翼穿林——三条线三种打法', cx: 52, cy: 36, rx: 9, ry: 6.5 }
+        // cx/cy 必须跟随 economy.js 的 TERRITORY.W/H（渲染层据此画高地轮廓，见 render/world.js）。
+        territory: { name: '山河领土', description: '上翼争桥、中央夺高地、下翼穿林——三条线三种打法', cx: 65, cy: 45, rx: 9, ry: 6.5 }
     },
 
     normalize(key) { return Object.hasOwn(this.maps, key) ? key : 'flat'; },
