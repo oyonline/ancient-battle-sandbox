@@ -199,7 +199,7 @@ export const UI = {
         this.countdown = false;
         this.pendingDeploy = this.pendingAutoplay = false;
         // 领土分区 HUD 收场：卸 body 态类并隐藏容器（updateTerritoryHUD 不会被被动调用）
-        document.body.classList.remove('territory-battle');
+        document.body?.classList?.remove('territory-battle');
         document.getElementById('territory-strip')?.setAttribute('hidden', '');
         document.getElementById('recruit-dock')?.setAttribute('hidden', '');
         // 营队条拆出大条后自管显隐：离场必须收起（旧布局由 #controlbar 整体隐藏掩蔽）
@@ -504,7 +504,7 @@ export const UI = {
         const strip = document.getElementById('territory-strip');
         const dock = document.getElementById('recruit-dock');
         const active = this.phase === 'battle' && this.battleOptions.territory && this.scene?.territory;
-        document.body.classList.toggle('territory-battle', active);
+        document.body?.classList?.toggle('territory-battle', active);
         if (strip) strip.hidden = !active;
         if (dock) dock.hidden = !active;
         // 战斗控制按钮（暂停/倍速/调整阵容）随布局迁移：领土进顶条，其它模式回大控制条。
@@ -512,7 +512,7 @@ export const UI = {
         const ctl = document.getElementById('battle-ctl');
         if (ctl) {
             const host = active ? document.getElementById('territory-ctl') : document.getElementById('controlbar');
-            if (host && ctl.parentElement !== host) host.appendChild(ctl);
+            if (host?.appendChild && ctl.parentElement !== host) host.appendChild(ctl);
         }
         this.campControls?.update();
         if (!active) return;
@@ -534,13 +534,41 @@ export const UI = {
         const rallyBtn = document.getElementById('btn-rally');
         rallyBtn.classList.toggle('active', !!this.rallyTargeting);
         rallyBtn.hidden = !active;
+        const hasRanch = (this.scene.flags || []).some(f => f.role === 'ranch' && f.owner === mine);
         for (const [key, t] of Object.entries(UNIT_TYPES)) {
             if (t.hidden && !t.territoryOnly) continue;
             const btn = document.getElementById('recruit-' + key);
-            if (btn) btn.disabled = this.countdown || !territory.econ.canAfford(mine, key) ||
+            if (!btn) continue;
+            const ranchLocked = key === 'cavalry' && !hasRanch;
+            btn.disabled = this.countdown || ranchLocked || !territory.econ.canAfford(mine, key) ||
                 territory.recruit.queues[mine].length >= TERRITORY.QUEUE_CAP;
+            // 马场门禁时按钮灰化并给出原因（亲子可读）
+            btn.title = ranchLocked ? '需先占领一座马场（地图北上翼）才能征骑兵' : t.tip + ` · 训练 ${TERRITORY.TRAIN_MS[key] / 1000} 秒`;
+            btn.classList.toggle('ranch-locked', ranchLocked);
         }
         this.updateBattalionBar();
+        this.maybeShowTerritoryTips();
+    },
+
+    // 开局引导（发现性修复）：每次页面加载只播一轮三条，错峰各显 7 秒。
+    maybeShowTerritoryTips() {
+        if (this._tipsShown) return;
+        this._tipsShown = true;
+        const tips = [
+            '🧰 建设入门：点选民夫 → 筑营寨 → 点己方据点；民夫要亲自到场施工',
+            '🏹 弓手可驻塔：选弓手所在营 → 驻入箭塔 → 点己方完工箭塔',
+            '🐎 占领马场（北上翼）才能征骑兵——断掉对方的马场，对面就出不了骑兵了'
+        ];
+        tips.forEach((text, index) => {
+            setTimeout(() => {
+                if (this.phase !== 'battle') return;
+                this.showNetToast(text);
+                setTimeout(() => {
+                    const cue = document.getElementById('morale-cue');
+                    if (cue && cue.textContent === text) { cue.hidden = true; cue.classList.remove('net-toast'); }
+                }, 7000);
+            }, 3000 + index * 8000);
+        });
     },
 
     // ---------------- 营队指挥条：选中营后出现，点旗下令/回防 ----------------

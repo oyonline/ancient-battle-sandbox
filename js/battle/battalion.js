@@ -213,6 +213,8 @@ export class BattalionSystem {
                         score = theirs > Math.max(12, mine * 1.2) && assignedCount[i] === 0
                             ? 120 + theirs - mine
                             : 4 - mine * 0.1;
+                        // 马场是骑兵来源：己方马场常驻加防（丢场断骑源）
+                        if (flag.role === 'ranch') score += 10;
                     } else {
                         // 非己方旗：把本营战力计入再判断打得过；打不过直接跳过（不送死）
                         const winnable = mine + b.power() * 0.8 >= theirs * 0.85;
@@ -221,6 +223,9 @@ export class BattalionSystem {
                         score = 50 + (neutral ? 8 : 0) + (mine - theirs) * 0.4
                             - (center ? Math.hypot(flag.gx - center.gx, flag.gy - center.gy) : 0) * 0.35
                             - assignedCount[i] * 30;
+                        // 马场争夺加权：自己没马场时优先夺场开门（+28），
+                        // 已有马场时仍给对方马场施压断其骑源（+10）。
+                        if (flag.role === 'ranch') score += this.nearestRanch(team) == null ? 28 : 10;
                     }
                     // 现任目标黏性：没有明显更优选择就别换旗——防止所有营每轮
                     // 重评估都涌向"当前最优"的中央旗（山河图三线被吃成一条线的元凶）
@@ -238,6 +243,14 @@ export class BattalionSystem {
                 }
             }
         }
+    }
+
+    nearestRanch(team) {
+        const flags = this.scene.flags || [];
+        for (let i = 0; i < flags.length; i++) {
+            if (flags[i].role === 'ranch' && flags[i].owner === team) return i;
+        }
+        return null;
     }
 
     nearestOwnFlag(battalion, flags) {

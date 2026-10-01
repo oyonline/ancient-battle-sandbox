@@ -24,6 +24,12 @@ export function updateFlags(scene, dt) {
         if (flag.owner !== had && flag.owner != null) {
             scene.addBattleEvent(`flag-${flag.name}-${flag.owner}-${Math.floor(scene.simulationTime)}`,
                 `${flag.owner === 'red' ? '红方' : '蓝方'}占领了${flag.name}旗帜`, flag.owner);
+            // 马场易主即时播报：夺场开骑源 / 断敌骑源都是大新闻
+            if (flag.role === 'ranch') {
+                const foe = flag.owner === 'red' ? 'blue' : 'red';
+                scene.addBattleEvent(`ranch-${flag.name}-${flag.owner}-${Math.floor(scene.simulationTime)}`,
+                    `${flag.owner === 'red' ? '红方' : '蓝方'}掌控${flag.name}，骑兵征募开启；${foe === 'red' ? '红方' : '蓝方'}骑源被断`, flag.owner);
+            }
             scene._countsDirty = true;
         }
     }

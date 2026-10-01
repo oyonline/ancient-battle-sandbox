@@ -886,3 +886,7 @@ body.territory-battle #controlbar { display: none !important; }
 #recruit-dock .recruit-btn .rc-name { display: none; }
 #recruit-dock .recruit-btn .rc-icon { font-size: 21px; }
 #recruit-dock .recruit-btn .rc-cost { font-size: 12px; }
+
+/* 马场未占领时的骑兵按钮：灰化+金色提示边，亲子一眼可读 */
+.recruit-btn.ranch-locked { border-color: #6a5a34; background: #2a2418; color: #9a8f74; }
+.recruit-btn.ranch-locked .rc-cost { color: #8d7f5a; }

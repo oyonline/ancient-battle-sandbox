@@ -14,12 +14,22 @@ export class RecruitSystem {
         this.spawned = { red: 0, blue: 0 };
     }
 
+    // 马场门禁：占领 ≥1 座马场才能征骑兵（已在场/已在队列的骑兵不受影响）。
+    // 纯读旗归属（模拟态），红蓝两端锁步一致。
+    ownsRanch(team) {
+        for (const flag of this.scene.flags ?? []) {
+            if (flag.role === 'ranch' && flag.owner === team) return true;
+        }
+        return false;
+    }
+
     // 入队即扣费（训练中钱已花掉）；队列满 / 钱不够 / 在场+队列超过兵种上限均拒绝。
     enqueue(team, type) {
         if (!this.queues[team] || (type === 'worker' && !this.scene.battleOptions?.territory)) return false;
         const econ = this.scene.territory.econ;
         const queue = this.queues[team];
         if (queue.length >= TERRITORY.QUEUE_CAP) return false;
+        if (type === 'cavalry' && !this.ownsRanch(team)) return false;
         if (!econ.canAfford(team, type)) return false;
         const typeData = UNIT_TYPES[type];
         const aliveOfType = this.scene.aliveCount(team, type) + queue.filter(item => item.type === type).length;
@@ -50,6 +60,8 @@ export class RecruitSystem {
 // 买得起就补一个；买不起就攒钱（不降级乱买）。
 export class TerritoryAI {
     static MIX = { infantry: 0.45, pikeman: 0.2, archer: 0.25, cavalry: 0.1, medic: 0.05 };
+    // 反骑兵阵：敌方骑兵占比高时的自适应配比（枪墙是唯一硬克星，见 units.js 反骑加成）。
+    static ANTI_CAV_MIX = { infantry: 0.35, pikeman: 0.45, archer: 0.15, cavalry: 0.0, medic: 0.05 };
     static ORDER = ['infantry', 'archer', 'pikeman', 'cavalry', 'medic'];   // 缺口并列时的固定决胜序
 
     constructor(scene, team) {
@@ -67,16 +79,22 @@ export class TerritoryAI {
 
         const counts = {};
         let total = 0;
+        // 自适应反制：敌方战斗单位里骑兵占比 ≥35% 且数量 ≥6 → 切换枪兵主导配比。
+        // 决策读实时存活表，无随机、步进序固定，锁步两端一致。
+        let foeCavalry = 0, foeCombat = 0;
+        for (const unit of scene._aliveArr) {
+            if (unit.team === this.team || unit.dead || unit.withdrawn) continue;
+            if (unit.type === 'worker' || unit.type === 'medic' || unit.type === 'wagon') continue;
+            foeCombat++;
+            if (unit.type === 'cavalry') foeCavalry++;
+        }
         for (const unit of scene._aliveArr) {
             if (unit.team !== this.team || !(unit.type in TerritoryAI.MIX)) continue;
             counts[unit.type] = (counts[unit.type] || 0) + 1;
             total++;
         }
-        for (const item of recruit.queues[this.team]) {
-            if (!(item.type in TerritoryAI.MIX)) continue;
-            counts[item.type] = (counts[item.type] || 0) + 1;
-            total++;
-        }
+        const antiCav = foeCavalry >= 6 && foeCombat > 0 && foeCavalry / foeCombat >= 0.35;
+        const mix = antiCav ? TerritoryAI.ANTI_CAV_MIX : TerritoryAI.MIX;
         // 缺口按配比 × 兵力基数计算。基数下限 24：战损后 army 缩水时不停止采购
         // （否则缺口恒小于 1，军费堆到几千也不补兵——平衡探针实测的囤钱问题）。
         const base = Math.max(total, 24);
@@ -85,7 +103,9 @@ export class TerritoryAI {
             // 兵种已到上限（在场+队列）时不再产生缺口：否则每拍都挑中它、
             // enqueue 拒绝且不试次选，其余兵种被永久饿死（医师 8 人上限即触发）。
             if ((counts[type] || 0) >= UNIT_TYPES[type].maxCount) continue;
-            const deficit = TerritoryAI.MIX[type] * base - (counts[type] || 0);
+            // 马场门禁同过滤：无马场不买骑（enqueued 必被拒，白占缺口）。
+            if (type === 'cavalry' && !recruit.ownsRanch(this.team)) continue;
+            const deficit = mix[type] * base - (counts[type] || 0);
             if (deficit > bestDeficit + 1e-9) { bestDeficit = deficit; best = type; }
         }
         // Reserve a pending field fort's cost; continuous troop spending must not starve construction forever.

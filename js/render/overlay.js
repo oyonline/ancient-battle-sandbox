@@ -220,6 +220,11 @@ export class OverlayRenderer {
             g.fillCircle(fx, fy, 2.6);
             g.lineStyle(1, 0x0c141c, 0.8);
             g.strokeCircle(fx, fy, 2.6);
+            // 小地图马场：金圈标记
+            if (flag.role === 'ranch') {
+                g.lineStyle(1.2, 0xe8c766, 0.95);
+                g.strokeCircle(fx, fy, 4.4);
+            }
         }
         // 镜头视口（世界四角逆投影成网格四边形）
         const v = this.scene.cameras.main.worldView;
@@ -304,6 +309,12 @@ export class OverlayRenderer {
             g.fillPoints(ringPts, true);
             g.lineStyle(2, color, flag.contested ? 0.5 + 0.35 * breathe : 0.45);
             g.strokePoints(ringPts, true, true);
+            // 马场：金色外圈标记骑兵来源点，与普通据点一眼区分
+            if (flag.role === 'ranch') {
+                const ranchRing = sampleGroundRing(this.scene, flag.gx, flag.gy, 3.6, 26);
+                g.lineStyle(2, 0xe8c766, 0.6);
+                g.strokePoints(ranchRing, true, true);
+            }
 
             // ---- 占领/易主的扩散脉冲（1.2 秒）----
             if (flag.pulseAt != null && t - flag.pulseAt < 1.2) {

@@ -22,7 +22,7 @@ export class CampControls {
         this.workerId = this.buildingId = null;
         this.pinned = false;
         this.lastMarkup = '';
-        document.getElementById('btn-camp-open')?.classList.remove('active');
+        document.getElementById('btn-camp-open')?.classList?.remove('active');
         if (this.panel) { this.panel.hidden = true; this.panel.replaceChildren(); }
     }
 
@@ -172,9 +172,12 @@ export class CampControls {
                 } else this.begin(button.dataset.campAction);
             });
         }
-        // 上下文弹出（B）：默认不在，固定展开/正在选点/选了民夫或建筑时才出现
-        this.panel.hidden = !this.active || !(this.pinned || this.targeting || this.workerId || this.buildingId);
-        document.getElementById('btn-camp-open')?.classList.toggle('active', this.pinned);
+        // 上下文弹出（B）：默认不在；固定展开/正在选点/选了民夫或建筑时出现；
+        // 选中可下令部队（弓手/医师/营队——驻塔驻帐攻寨按钮的载体）也自动弹出，
+        // 否则驻入入口被藏进面板里没人找得到（HUD 批次回归，实打反馈修复）。
+        this.panel.hidden = !this.active || !(this.pinned || this.targeting || this.workerId ||
+            this.buildingId || this.selectedTroops().length);
+        document.getElementById('btn-camp-open')?.classList?.toggle('active', this.pinned);
         if (!this.active) { this.cancel(); return; }
         const workers = this.workers();
         const worker = workers.find(u => u.id === this.workerId);
