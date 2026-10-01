@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HealingSystem, HEALING_RULES, updateMedic } from '../js/battle/healing.js';
 import { CampSystem, CAMP_RULES } from '../js/battle/camps.js';
-import { TerritoryEconomy, TERRITORY } from '../js/battle/economy.js';
+import { TerritoryEconomy, TicketSystem, TERRITORY } from '../js/battle/economy.js';
 import { RecruitSystem, TerritoryAI } from '../js/battle/recruit.js';
 import { BattleSpatialIndex } from '../js/battle/spatial.js';
 import { BattalionSystem } from '../js/battle/battalion.js';
@@ -12,6 +12,7 @@ import { UNIT_TYPES } from '../js/units.js';
 import { setBoardSize, resetBoardSize, board } from '../js/board.js';
 import { updateRoutedUnit } from '../js/battle/morale-bridge.js';
 import { updateFlags } from '../js/battle/territory-bridge.js';
+import { battleProjection } from '../js/net/lockstep.js';
 import * as targeting from '../js/battle/targeting.js';
 import { MoraleSystem } from '../js/morale.js';
 
@@ -28,7 +29,8 @@ function fixture({ ai = false } = {}) {
         simulationTime: 0, battleOver: false, planningStep: true,
         arrows: [], queue: [], events: [], controlScore: { red: 0, blue: 0 },
         _rallyAnchors: [], _rallyRefresh: -Infinity,
-        territory: { econ: new TerritoryEconomy(), autoBuy: { red: ai, blue: ai } },
+        territory: { econ: new TerritoryEconomy(), tickets: new TicketSystem(),
+            rally: { red: null, blue: null }, autoBuy: { red: ai, blue: ai } },
         forEachNear(...args) { spatial.forEachNear(...args); },
         nearestEnemy(unit) { return targeting.nearestEnemy(spatial, unit); },
         rebuildSpatial() { spatial.rebuild(this.units); this._aliveArr = spatial.alive; },
@@ -114,7 +116,7 @@ test('容量基线 8：满员后改投次近己方据点', () => {
     const s = fixture();
     const squad = Array.from({ length: 9 }, (_, i) => rout(add(s, 'red', 'infantry', 55 + (i % 3) * 0.5, 60 + Math.floor(i / 3) * 0.5), 40));
     run(s, 1.2);
-    assert.equal(s.territory.healing.healingCount(0), 8, '西路旗满员 8 人');
+    assert.equal(s.territory.healing.healingCount('red', 0), 8, '西路旗满员 8 人');
     const bounced = squad.find(u => u.healingAt == null);
     assert.ok(bounced, '第九人未挤进满员据点');
     assert.equal(bounced.healSiteId, 'home', '改投大本营');
@@ -240,6 +242,117 @@ test('镜像对称：两侧溃兵同等战损下疗伤进度与结局一致', ()
     assert.equal(r.moraleState, b.moraleState);
     assert.equal(r.hp, b.hp);
     assert.ok(Math.abs(r.gx + b.gx - board.W) < 1e-6, '位置换座镜像');
+    resetBoardSize();
+});
+
+test('P1-1 回归：双方大本营容量互不串用', () => {
+    const s = fixture();
+    // 红方本营 8 人占满
+    for (let i = 0; i < 8; i++) rout(add(s, 'red', 'infantry', 7 + (i % 3) * 0.4, board.H / 2 + Math.floor(i / 3) * 0.4), 40);
+    run(s, 0.6);
+    assert.equal(s.territory.healing.healingCount('red', 'home'), 8, '红方本营满员');
+    // 蓝方溃兵在本方大本营照常入住（不被红方占用堵死）
+    const blue = rout(add(s, 'blue', 'infantry', board.W - 7.5, board.H / 2), 40);
+    run(s, 0.8);
+    assert.equal(blue.healingAt, 'home', '蓝方本营独立计数，照常入住');
+    resetBoardSize();
+});
+
+test('P1-2 回归：入住半径量化，镜像浮点噪声不再分岔', () => {
+    const s = fixture(), h = s.territory.healing;
+    // 评审复现坐标：红 dist=2.200000000000003 / 蓝镜像 dist=2.1999999999999886，
+    // 量化后同为 2.2（含边界）→ 两侧必须同判。只跑疗伤拍、不跑行军循环，
+    // 单位停在原地，判定才只取决于量化半径。
+    const r = rout(add(s, 'red', 'infantry', 57.2, 60), 40);
+    const b = rout(add(s, 'blue', 'infantry', board.W - 57.2, 60), 40);
+    s.simulationTime += 100; h.update(1 / 60);
+    assert.equal(r.healingAt, 0, '红方边界噪声侧入住');
+    assert.equal(b.healingAt, 1, '蓝方镜像噪声侧同判入住');
+    // 明确超出（2.3）→ 两侧同判不入住（仍分配据点、原地未动）
+    const r2 = rout(add(s, 'red', 'infantry', 57.3, 60), 40);
+    const b2 = rout(add(s, 'blue', 'infantry', board.W - 57.3, 60), 40);
+    s.simulationTime += 600; h.update(1 / 60);
+    assert.ok(r2.healingAt == null, '红方超界不入住');
+    assert.ok(b2.healingAt == null, '蓝方镜像超界同判不入住');
+    resetBoardSize();
+});
+
+test('P1-3 回归：等距选址换座对称（镜像不变量决胜）', () => {
+    const s = fixture();
+    // 红方拥有 西桥头(55,65) 与 中央(130,65)；伤兵在两点等距处
+    s.flags[0].gx = 55; s.flags[0].gy = 65; s.flags[0].owner = 'red';
+    s.flags[1].owner = null;
+    s.flags[2].gx = 130; s.flags[2].gy = 65; s.flags[2].owner = 'red';
+    const r = rout(add(s, 'red', 'infantry', 92.5, 65), 40);
+    run(s, 0.3);
+    assert.equal(r.healSiteId, 0, '红方取西桥头');
+    // 换座镜像局：蓝方拥有 东桥头(W-55,65) 与 中央(130,65)；伤兵镜像位
+    s.flags[0].owner = null;
+    s.flags[1].gx = board.W - 55; s.flags[1].gy = 65; s.flags[1].owner = 'blue';
+    s.flags[2].owner = 'blue';
+    const b = rout(add(s, 'blue', 'infantry', board.W - 92.5, 65), 40);
+    run(s, 0.3);
+    assert.equal(b.healSiteId, 1, '蓝方取东桥头（与红方同相对位，而非绝对序号小的中央旗）');
+    resetBoardSize();
+});
+
+test('P1-4 回归：医师封顶后征兵 AI 不停购', () => {
+    const s = fixture();
+    for (let i = 0; i < 8; i++) add(s, 'red', 'medic', 10 + i * 0.8, 88);
+    s.territory.econ.treasury.red = 1000;
+    const ai = new TerritoryAI(s, 'red');
+    ai.update(0);
+    const bought = s.territory.recruit.queues.red[0]?.type;
+    assert.ok(bought && bought !== 'medic', `封顶兵种不产生缺口，改买其它（实际 ${bought}）`);
+    resetBoardSize();
+});
+
+test('P2 回归：锁步投影覆盖疗伤字段（分歧可被哈希检出）', () => {
+    const s = fixture();
+    rout(add(s, 'red', 'infantry', 56, 60.5), 40);
+    run(s, 0.3);
+    const before = battleProjection(s);
+    const u = s.units[0];
+    u.healSiteId = null; u.healingAt = 'home'; u.healingSince = 1234;
+    assert.notEqual(battleProjection(s), before, '疗伤字段变化必须改变投影');
+    u.healingAt = null;
+    assert.notEqual(battleProjection(s), before);
+    resetBoardSize();
+});
+
+test('P2 回归：毁帐降容——已入住者治完，新伤兵按新容量改投', () => {
+    const s = fixture(), c = s.territory.camps;
+    c.createBuilding('red', 'camp', 0, true);
+    c.createBuilding('red', 'tent', 0, true);
+    const squad = Array.from({ length: 16 }, (_, i) =>
+        rout(add(s, 'red', 'infantry', 55 + (i % 4) * 0.5, 60 + Math.floor(i / 4) * 0.5), 50));
+    run(s, 0.6);
+    assert.equal(s.territory.healing.healingCount('red', 0), 16, '医帐扩容 16 人入住');
+    const enemy = add(s, 'blue', 'infantry', 55, 63);
+    c.damageBuilding(c.getBuilding('tent:red:0'), 9999, enemy);
+    assert.equal(s.territory.healing.capacity('red', 0), 8, '毁帐后容量回落');
+    run(s, 1.5);
+    assert.equal(squad.filter(u => u.healingAt === 0).length, 16, '已入住者继续治完（不赶人）');
+    assert.ok(squad.every(u => u.hp > 50), '在疗者仍在回血');
+    const newcomer = rout(add(s, 'red', 'infantry', 56.5, 61), 60);
+    run(s, 0.8);
+    assert.equal(newcomer.healSiteId, 'home', '新伤兵不再挤入降容据点，改投大本营');
+    resetBoardSize();
+});
+
+test('P2 回归：纯医师营不领旗令（零战力营不夺旗）', () => {
+    const s = fixture();
+    const battalion = s.battalions.createBattalion('red', 'gathering');
+    s.battalions.battalions.push(battalion);   // 正式营一律入列（生产路径由 splitOpening/集结池推入）
+    for (let i = 0; i < 5; i++) {
+        const m = add(s, 'red', 'medic', 10 + i * 0.8, 90);
+        battalion.members.push(m); m.battalion = battalion;
+    }
+    battalion.createdAt = -30000;
+    s.battalions.update(0);
+    assert.equal(battalion.gathering, false, '集结超时激活为成建制营');
+    s.battalions.aiAssign();
+    assert.equal(battalion.orderFlag, null, '零占领力营不领旗令，就地待命');
     resetBoardSize();
 });
 

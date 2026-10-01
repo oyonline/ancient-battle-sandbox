@@ -82,6 +82,9 @@ export class TerritoryAI {
         const base = Math.max(total, 24);
         let best = null, bestDeficit = 0;
         for (const type of TerritoryAI.ORDER) {
+            // 兵种已到上限（在场+队列）时不再产生缺口：否则每拍都挑中它、
+            // enqueue 拒绝且不试次选，其余兵种被永久饿死（医师 8 人上限即触发）。
+            if ((counts[type] || 0) >= UNIT_TYPES[type].maxCount) continue;
             const deficit = TerritoryAI.MIX[type] * base - (counts[type] || 0);
             if (deficit > bestDeficit + 1e-9) { bestDeficit = deficit; best = type; }
         }

@@ -1,9 +1,10 @@
-// 局域网对战服务器：建房/入房分边/就绪开局/命令保序双发/掉线通知
+// 局域网对战服务器：建房/入房分边/就绪开局/命令保序双发/掉线通知/版本准入
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { WebSocket } from 'ws';
 import { createArenaServer } from '../server/arena.mjs';
+import { SIM_VERSION } from '../js/net/lockstep.js';
 
 async function openClient(port) {
     const ws = new WebSocket(`ws://127.0.0.1:${port}`);
@@ -30,12 +31,12 @@ test('房间服务器：创建/加入分边/命令与哈希保序双发/双方�
         const host = await openClient(port);
         const guest = await openClient(port);
 
-        host.ws.send(JSON.stringify({ t: 'create' }));
+        host.ws.send(JSON.stringify({ t: 'create', v: SIM_VERSION }));
         const room = await host.wait(m => m.t === 'room');
         assert.equal(room.side, 'red', '房主为红方');
         assert.match(room.code, /^[A-Z2-9]{4}$/, '四位房间码');
 
-        guest.ws.send(JSON.stringify({ t: 'join', code: room.code }));
+        guest.ws.send(JSON.stringify({ t: 'join', code: room.code, v: SIM_VERSION }));
         const joined = await guest.wait(m => m.t === 'room');
         assert.equal(joined.side, 'blue', '加入者为蓝方');
         await host.wait(m => m.t === 'peer');
@@ -66,6 +67,46 @@ test('房间服务器：创建/加入分边/命令与哈希保序双发/双方�
 
         host.ws.close();
         stranger.ws.close();
+    } finally {
+        server.close();
+    }
+});
+
+// 版本准入（评审 P1-5）：混版本（旧标签页缺版本号）双就绪不得开战，
+// 双方收到明确错误提示；同版本才发 start。
+test('版本准入：混版本拒绝开战，同版本正常开局', async () => {
+    const { server } = createArenaServer();
+    server.listen(0);
+    await once(server, 'listening');
+    const port = server.address().port;
+    try {
+        // 混版本：房主带版本，旧端加入不带版本
+        const host = await openClient(port);
+        const stale = await openClient(port);
+        host.ws.send(JSON.stringify({ t: 'create', v: SIM_VERSION }));
+        const room = await host.wait(m => m.t === 'room');
+        stale.ws.send(JSON.stringify({ t: 'join', code: room.code }));   // 旧客户端：无 v 字段
+        await stale.wait(m => m.t === 'room');
+        host.ws.send(JSON.stringify({ t: 'ready' }));
+        stale.ws.send(JSON.stringify({ t: 'ready' }));
+        await host.wait(m => m.t === 'error');
+        await stale.wait(m => m.t === 'error');
+        assert.ok(!host.received.some(m => m.t === 'start'), '混版本不开战（房主）');
+        assert.ok(!stale.received.some(m => m.t === 'start'), '混版本不开战（旧端）');
+
+        // 同版本重试可正常开局（ready 被消费，重新就绪）
+        const fresh = await openClient(port);
+        stale.ws.close();
+        await host.wait(m => m.t === 'peer-left');
+        fresh.ws.send(JSON.stringify({ t: 'join', code: room.code, v: SIM_VERSION }));
+        await fresh.wait(m => m.t === 'room');
+        host.ws.send(JSON.stringify({ t: 'ready' }));
+        fresh.ws.send(JSON.stringify({ t: 'ready' }));
+        await host.wait(m => m.t === 'start');
+        await fresh.wait(m => m.t === 'start');
+
+        host.ws.close();
+        fresh.ws.close();
     } finally {
         server.close();
     }

@@ -2,6 +2,8 @@
 // 页面由房间服务器托管（孩子输入房主 IP 打开），因此 WebSocket 永远连
 // location.host——两端零配置。事件经 onEvent 回调上抛给 UI / NetBattle。
 
+import { SIM_VERSION } from './lockstep.js';
+
 export class ArenaClient {
     constructor(onEvent) {
         this.ws = null;
@@ -39,8 +41,9 @@ export class ArenaClient {
         if (this.connected) this.ws.send(JSON.stringify(message));
     }
 
-    createRoom() { this.send({ t: 'create' }); }
-    joinRoom(code) { this.send({ t: 'join', code }); }
+    // create/join 自带模拟版本：服务器开局前做两端版本准入（混版本必分歧）。
+    createRoom() { this.send({ t: 'create', v: SIM_VERSION }); }
+    joinRoom(code) { this.send({ t: 'join', code, v: SIM_VERSION }); }
     sendReady() { this.send({ t: 'ready' }); }
     bye() { this.send({ t: 'bye' }); this.ws?.close(); }
 }

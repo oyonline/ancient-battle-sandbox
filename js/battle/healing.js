@@ -17,6 +17,11 @@ import { board } from '../board.js';
 import { moveToward } from '../units.js';
 import { quantizeDecision as q } from './determinism.js';
 
+// 距离比较一律先量化到 0.05 网格再与网格阈值比较（阈值 2.2/3.6/3.2/1.2/4 均为
+// 0.05 整数倍）——镜像坐标的浮点噪声（~1e-15）在量化后归到同一格点，
+// 换座两侧的离散决策一致（docs/DETERMINISM.md，同 camps.js distance 约定）。
+const qdist = (a, b) => q(Math.hypot(a.gx - b.gx, a.gy - b.gy));
+
 export const HEALING_RULES = {
     ENTER_REACH: 2.2,          // 进点疗伤半径（据点圈附近即可开始疗伤）
     FULL_HEAL_MS: 20000,       // 基准：从 1 血回满约 20 秒，按损血比例折算
@@ -71,8 +76,10 @@ export class HealingSystem {
         return count;
     }
 
-    // 最近的有空位己方据点；距离平方优先，平局据点序决胜（home 视作 -1）。
-    // 无可用据点返回 null（溃逃回退旧行为：接应锚 / 家边缘撤离）。
+    // 最近的有空位己方据点；量化距离优先，平局用镜像不变量决胜（先离左右边
+    // 最近距离、再离上下边最近距离——镜像局红蓝取到同一相对据点），最后才
+    // 落到据点序号（home 视作 -1，仅作确定性兜底）。无可用据点返回 null
+    // （溃逃回退旧行为：接应锚 / 家边缘撤离）。
     pickSite(unit) {
         let best = null, bestD = Infinity;
         const candidates = [{ siteId: 'home', order: -1, point: this.site(unit.team, 'home') }];
@@ -81,10 +88,15 @@ export class HealingSystem {
             if (flags[i].owner !== unit.team) continue;
             candidates.push({ siteId: i, order: i, point: flags[i] });
         }
+        // 平局决胜比较：先距左右边最近距离，再距上下边最近距离，最后据点序兜底。
+        const tieBreak = (a, b) => a.mirrorX !== b.mirrorX ? a.mirrorX - b.mirrorX
+            : a.mirrorY !== b.mirrorY ? a.mirrorY - b.mirrorY : a.order - b.order;
         for (const candidate of candidates) {
             if (!candidate.point || this.load(unit.team, candidate.siteId) >= this.capacity(unit.team, candidate.siteId)) continue;
-            const d = (candidate.point.gx - unit.gx) ** 2 + (candidate.point.gy - unit.gy) ** 2;
-            if (d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && candidate.order < best.order)) {
+            const d = qdist(unit, candidate.point);
+            candidate.mirrorX = q(Math.min(candidate.point.gx, board.W - candidate.point.gx));
+            candidate.mirrorY = q(Math.min(candidate.point.gy, board.H - candidate.point.gy));
+            if (d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && tieBreak(candidate, best) < 0)) {
                 bestD = d; best = candidate;
             }
         }
@@ -105,9 +117,13 @@ export class HealingSystem {
             this.ownsSite(unit.team, unit.healingAt);
     }
 
-    healingCount(siteId) {
+    // 据点在疗人数按阵营计数：双方大本营共用 'home' 键，绝不能串用容量
+    // （红方本营满员不挡蓝方本营——评审 P1-1）。
+    healingCount(team, siteId) {
         let count = 0;
-        for (const u of this.scene.units) if (u.healingAt === siteId && !u.dead && !u.withdrawn) count++;
+        for (const u of this.scene.units) {
+            if (u.team === team && u.healingAt === siteId && !u.dead && !u.withdrawn) count++;
+        }
         return count;
     }
 
@@ -132,13 +148,13 @@ export class HealingSystem {
                 if (u.healSiteId == null) u.healSiteId = this.pickSite(u);
             }
         }
-        // ② 到点入住：距指定据点足够近且仍有空位 → 开始疗伤。
+        // ② 到点入住：量化距离判定（镜像对称），有空位才入住。
         for (const u of scene.units) {
             if (u.dead || u.withdrawn || u.moraleState !== 'routing' || u.healingAt != null ||
                 u.healSiteId == null || !this.ownsSite(u.team, u.healSiteId)) continue;
             const point = this.site(u.team, u.healSiteId);
-            if (Math.hypot(point.gx - u.gx, point.gy - u.gy) > HEALING_RULES.ENTER_REACH) continue;
-            if (this.healingCount(u.healSiteId) >= this.capacity(u.team, u.healSiteId)) {
+            if (qdist(u, point) > HEALING_RULES.ENTER_REACH) continue;
+            if (this.healingCount(u.team, u.healSiteId) >= this.capacity(u.team, u.healSiteId)) {
                 u.healSiteId = null;    // 满员：下一拍改投次近据点
                 continue;
             }
@@ -150,6 +166,7 @@ export class HealingSystem {
                 `${u.team === 'red' ? '红方' : '蓝方'}${u.typeData.name}退入${u.healingAt === 'home' ? '大本营' : this.scene.flags[u.healingAt].name}疗伤`, u.team);
         }
         // ③ 疗伤推进：HP 按损血比例回满，士气同步恢复；据点失守立即中断再溃逃。
+        // 毁帐降容语义：已入住者继续治完（不赶人），新入住按当前容量（评审 P2 决策）。
         for (const u of scene.units) {
             if (u.healingAt == null) continue;
             if (u.dead || u.withdrawn || u.moraleState !== 'routing' ||
@@ -185,7 +202,7 @@ export class HealingSystem {
                     target.type === 'wagon' || target.type === 'medic' ||
                     target.moraleState === 'routing' || target.healingAt != null ||
                     target.garrisonTowerId || target.hp >= target.maxHp - 1e-9) return;
-                if (Math.hypot(target.gx - medic.gx, target.gy - medic.gy) > radius) return;
+                if (qdist(medic, target) > radius) return;   // 半径量化：镜像光环边界一致
                 wounded.push({ target, ratio: target.hp / target.maxHp });
             });
             wounded.sort((a, b) => a.ratio - b.ratio || a.target.id - b.target.id);
@@ -199,6 +216,7 @@ export class HealingSystem {
 
 // 医师战场行为（unit-ai 委托）：不攻击不占旗，随营行军；敌近且贴身时且战且退。
 // 驻塔/驻帐令由 CampSystem.updateUnit 先行接管，这里只处理野战随队。
+// 距离阈值均量化（镜像对称，见文件头 qdist 约定）。
 export function updateMedic(scene, unit, now, dt) {
     const battalion = scene.battleOptions.territory ? unit.battalion : null;
     let target = null;
@@ -209,14 +227,14 @@ export function updateMedic(scene, unit, now, dt) {
         scene.flags[battalion.orderFlag].owner !== unit.team) target = scene.flags[battalion.orderFlag];
     else {
         const center = battalion?.center();
-        if (center && Math.hypot(center.gx - unit.gx, center.gy - unit.gy) > 4) target = center;
+        if (center && qdist(unit, center) > 4) target = center;
     }
     // 敌人贴身：优先保命后撤（医师是对方斩医疗的优先目标）。
     let nearest = null, nearestD = Infinity;
     scene.forEachNear(unit.gx, unit.gy, 4, enemy => {
         if (enemy.team === unit.team || enemy.dead || enemy.withdrawn ||
             enemy.moraleState === 'routing' || enemy.type === 'wagon') return;
-        const d = Math.hypot(enemy.gx - unit.gx, enemy.gy - unit.gy);
+        const d = qdist(unit, enemy);
         if (d < nearestD - 1e-9 || (Math.abs(d - nearestD) <= 1e-9 && enemy.id < nearest.id)) { nearestD = d; nearest = enemy; }
     });
     if (nearest && nearestD <= 3.2) {
@@ -224,7 +242,7 @@ export function updateMedic(scene, unit, now, dt) {
         moveToward(unit, unit.gx + dx / length * 3, unit.gy + dy / length * 3, unit.typeData.speed, dt);
         return;
     }
-    if (target && Math.hypot(target.gx - unit.gx, target.gy - unit.gy) > 1.2) {
+    if (target && qdist(unit, target) > 1.2) {
         const pace = battalion && !battalion.gathering && unit.type !== 'cavalry'
             ? Math.min(unit.typeData.speed, battalion.pace * 1.08) : unit.typeData.speed;
         moveToward(unit, target.gx, target.gy, pace, dt);

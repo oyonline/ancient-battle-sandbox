@@ -14,6 +14,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { SIM_VERSION } from '../js/net/lockstep.js';
 
 const PORT = Number(process.env.PORT || 5300);
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
@@ -27,22 +28,27 @@ const MIME = {
 };
 
 // ---------------- 静态托管 dist ----------------
-const server = http.createServer(async (req, res) => {
-    try {
-        const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-        let file = path.join(ROOT, url === '/' ? 'index.html' : url);
-        if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
-        if (!existsSync(file) || !path.extname(file)) file = path.join(ROOT, 'index.html');   // SPA 兜底
-        const data = await readFile(file);
-        res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
-        res.end(data);
-    } catch (_) {
-        res.writeHead(404).end('not found');
-    }
-});
+// http 实例在工厂内创建：多次 createArenaServer()（测试并行建多个服务器）
+// 不会在同一 http 实例上重复挂 WebSocket upgrade 处理器。
+function makeHttpServer() {
+    return http.createServer(async (req, res) => {
+        try {
+            const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+            let file = path.join(ROOT, url === '/' ? 'index.html' : url);
+            if (!file.startsWith(ROOT)) { res.writeHead(403).end(); return; }
+            if (!existsSync(file) || !path.extname(file)) file = path.join(ROOT, 'index.html');   // SPA 兜底
+            const data = await readFile(file);
+            res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
+            res.end(data);
+        } catch (_) {
+            res.writeHead(404).end('not found');
+        }
+    });
+}
 
 // ---------------- 房间与中继 ----------------
 export function createArenaServer() {
+const server = makeHttpServer();
 const rooms = new Map();     // code -> { players: [ws|null, ws|null], ready: [bool, bool] }
 
 const codeOf = ws => ws.__room ?? null;
@@ -74,6 +80,7 @@ wss.on('connection', ws => {
                 rooms.set(code, { players: [ws, null], ready: [false, false] });
                 ws.__room = code;
                 ws.__side = 0;
+                ws.__sim = message.v ?? null;
                 send(ws, { t: 'room', code, side: 'red' });
                 send(ws, { t: 'info', text: '房间已创建。对方在同一局域网浏览器打开本地址，输入房间码即可加入。' });
                 break;
@@ -86,6 +93,7 @@ wss.on('connection', ws => {
                 room.ready = [false, false];
                 ws.__room = String(message.code).toUpperCase().trim();
                 ws.__side = 1;
+                ws.__sim = message.v ?? null;
                 send(ws, { t: 'room', code: ws.__room, side: 'blue' });
                 send(room.players[0], { t: 'peer', side: 'blue' });
                 break;
@@ -96,6 +104,15 @@ wss.on('connection', ws => {
                 room.ready[ws.__side] = true;
                 send(peerOf(ws), { t: 'peer-ready', side: ws.__side === 0 ? 'red' : 'blue' });
                 if (room.ready.every(Boolean)) {
+                    // 版本准入：混版本（或旧标签页缺版本）锁步必分歧，拒绝开战。
+                    if (room.players.some(p => p?.__sim !== SIM_VERSION)) {
+                        room.ready = [false, false];
+                        for (const player of room.players) {
+                            if (player) send(player, { t: 'error',
+                                text: `双方游戏版本不一致（本服务器为 ${SIM_VERSION}）。请两边都刷新页面到最新版再开战。` });
+                        }
+                        break;
+                    }
                     room.ready = [false, false];      // 消费掉，重开（rematch）可重新就绪
                     for (const player of room.players) send(player, { t: 'start' });
                 }
@@ -139,7 +156,7 @@ return { server, wss };
 // ---------------- 启动横幅（仅直接运行时；测试 import 不监听） ----------------
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
-    const { wss } = createArenaServer();   // 挂接 WebSocket（独立启动路径曾漏掉这一步）
+    const { server, wss } = createArenaServer();   // http 实例与 WebSocket 一并在工厂内挂接
     const onListenError = error => {
         if (error.code === 'EADDRINUSE') {
             console.log('┌──────────────────────────────────────────────┐');

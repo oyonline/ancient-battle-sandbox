@@ -199,6 +199,9 @@ export class BattalionSystem {
             for (const b of active) if (b.playerOrdered && b.orderFlag != null) assignedCount[b.orderFlag]++;
             for (const b of active) {
                 if (b.playerOrdered) continue;
+                // 零战力营（纯医师/纯民夫）不领旗令：占领力为 0 去夺旗永远完不成，
+                // 医疗营就地待命随队急救即可（玩家令不受限）。
+                if (b.power() <= 0) { b.orderFlag = null; b.retreat = false; continue; }
                 const center = b.center();
                 let best = -1, bestScore = -Infinity;
                 for (let i = 0; i < flags.length; i++) {

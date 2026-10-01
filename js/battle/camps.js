@@ -11,6 +11,7 @@ export const CAMP_RULES = {
     tower: { cost: 120, seconds: 14, hp: 650, def: 6, radius: 0.9 },
     tent: { cost: 140, seconds: 15, hp: 550, def: 4, radius: 1.5 },   // 医帐：据点疗伤提速扩容
     HOME_HP: 1800, CAPACITY: 4, TOWER_RANGE: 14, GARRISON_HEIGHT_PX: 82,
+    TENT_GARRISON_HEIGHT_PX: 14,   // 医帐无高台：驻帐医师站在帐篷门口地面，不上 82px 平台
     BUILD_REACH: 1.6, ENTER_REACH: 1.15, AI_INTERVAL_MS: 1800
 };
 
@@ -91,7 +92,8 @@ export class CampSystem {
             paused: false, garrisonIds: [],
             capacity: type === 'tower' ? CAMP_RULES.CAPACITY
                 : type === 'tent' ? HEALING_RULES.TENT_MEDIC_SLOTS : 0,
-            radius: rule.radius, garrisonHeight: CAMP_RULES.GARRISON_HEIGHT_PX,
+            radius: rule.radius,
+            garrisonHeight: type === 'tent' ? CAMP_RULES.TENT_GARRISON_HEIGHT_PX : CAMP_RULES.GARRISON_HEIGHT_PX,
             isBuilding: true, typeData: { def: rule.def, atk: 0, range: 0, speed: 0, bodyRadius: rule.radius },
             scene: this.scene, battleId: this.scene.battleId
         };
@@ -388,7 +390,7 @@ export class CampSystem {
             if (!ready(u) || !b || b.dead || !b.complete || u.garrisonTowerId ||
                 distance(u, b) > CAMP_RULES.ENTER_REACH || b.garrisonIds.length >= b.capacity) continue;
             b.garrisonIds.push(u.id); b.garrisonIds.sort((a, z) => a - z);
-            u.garrisonTowerId = b.id; u.garrisonOrderId = null; u.garrisonHeight = CAMP_RULES.GARRISON_HEIGHT_PX;
+            u.garrisonTowerId = b.id; u.garrisonOrderId = null; u.garrisonHeight = b.garrisonHeight;
             u.gx = b.gx; u.gy = b.gy; u.pgx = b.gx; u.pgy = b.gy;
             u.moveX = 0; u.moveY = 0; u.pushX = 0; u.pushY = 0;
             u.actionEpoch = (u.actionEpoch ?? 0) + 1;

@@ -120,9 +120,11 @@ export function towerCrewOffset(unit, camps) {
         camps?.buildings?.find(b => b.id === unit.garrisonTowerId);
     if (!tower || tower.dead || !tower.complete) return null;
     const slot = Math.max(0, tower.garrisonIds.indexOf(unit.id));
-    const offsets = [[-13,-3],[12,-3],[-2,6],[0,-10]];
-    const [x,y] = offsets[slot % offsets.length];
-    return { x, y: y - (unit.garrisonHeight || tower.garrisonHeight || TOWER_DECK_HEIGHT), depth: 80 };
+    // 驻帐医师站在帐篷门口地面（低高度、贴地深度），不上箭塔的 82px 平台。
+    const offsets = tower.type === 'tent' ? [[-15, -2], [14, -2]] : [[-13,-3],[12,-3],[-2,6],[0,-10]];
+    const [x, y] = offsets[slot % offsets.length];
+    const height = unit.garrisonHeight ?? tower.garrisonHeight ?? TOWER_DECK_HEIGHT;
+    return { x, y: y - height, depth: tower.type === 'tent' ? 20 : 80 };
 }
 
 export class CampRenderer {
@@ -174,7 +176,7 @@ export class CampRenderer {
         const label=scene.add.text(p.x,p.y-(tower?141:tent?110:131), '',
             {fontSize:'13px',fontFamily:'sans-serif',color:'#f8edcc',stroke:'#302c20',strokeThickness:3})
             .setOrigin(0.5,1).setDepth(depth+171);
-        const half=tower?74:tent?68:home?190:151,height=tower?147:tent?110:143;
+        const half=tower?74:tent?68:home?190:151,height=tower?147:tent?132:143;
         building.renderBounds={x:p.x-half,y:p.y-height,width:half*2,height:height+(tower?24:tent?20:79)};
         return {building,parts,image,rubble,scaffold,status,label,p,signature:null};
     }

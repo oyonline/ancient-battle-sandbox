@@ -11,6 +11,12 @@ export const LOCKSTEP = {
     HASH_EVERY: 120         // 每 120 回合（2 秒）交换一次状态哈希，检测不同步
 };
 
+// 模拟版本：任何改变锁步命令语义/模拟结果的批次提交时递增（日期-批次名）。
+// 房间服务器用它做开局准入——两端版本不一致（或旧标签页缺版本）时拒绝开战，
+// 否则同一命令在两端产生分歧结果（如本批的 build tent），锁步必然漂移。
+// server/arena.mjs 与 js/net/arena-client.js 共同引用本常量（本模块纯逻辑，node 可直接 import）。
+export const SIM_VERSION = '2026-10-01-healing';
+
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {
         this.side = side;
@@ -79,7 +85,9 @@ export function battleProjection(scene) {
         if (scene.territory?.camps) {
             parts.push('camp-unit', unit.garrisonTowerId || '', unit.garrisonOrderId || '',
                 unit.orderBuildingId || '', Math.round((unit.garrisonHeight || 0) * 1e3),
-                Math.round(unit.lastAttack * 1e3), JSON.stringify(unit.workerTask || null));
+                Math.round(unit.lastAttack * 1e3), JSON.stringify(unit.workerTask || null),
+                // 疗伤字段入哈希：撤退目标/在疗状态/入住时刻任一分歧都能被 2 秒哈希检出
+                unit.healSiteId ?? '', unit.healingAt ?? '', Math.round(unit.healingSince || 0));
         }
     }
     parts.push('f');
@@ -102,6 +110,7 @@ export function battleProjection(scene) {
             parts.push(team, JSON.stringify(territory.recruit.queues[team]),
                 JSON.stringify(territory.rally[team]));
         }
+        if (territory.healing) parts.push('healing', String(Math.round(territory.healing.nextAssign || 0)));
     }
     return parts.join(',');
 }
