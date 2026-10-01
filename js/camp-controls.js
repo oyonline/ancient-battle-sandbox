@@ -5,6 +5,7 @@ export class CampControls {
         this.workerId = null;
         this.buildingId = null;
         this.targeting = null;
+        this.pinned = false;    // 「🧰 建设」固定展开（上下文弹出布局的显式入口）
         this.lastMarkup = '';
         this.panel = null;
     }
@@ -19,8 +20,17 @@ export class CampControls {
     reset() {
         this.cancel();
         this.workerId = this.buildingId = null;
+        this.pinned = false;
         this.lastMarkup = '';
+        document.getElementById('btn-camp-open')?.classList.remove('active');
         if (this.panel) { this.panel.hidden = true; this.panel.replaceChildren(); }
+    }
+
+    // 「🧰 建设」固定展开/收起：无选择时展开列出民夫列表，供玩家点选开工
+    togglePin() {
+        this.pinned = !this.pinned;
+        if (!this.pinned) this.cancel();
+        this.update();
     }
 
     cancel() {
@@ -142,6 +152,11 @@ export class CampControls {
                 const button = event.target.closest('button');
                 if (!button || button.disabled) return;
                 if (button.dataset.worker) this.selectWorker(Number(button.dataset.worker));
+                else if (button.dataset.campAction === 'close') {
+                    this.pinned = false; this.cancel();
+                    this.workerId = this.buildingId = null;
+                    this.update();
+                }
                 else if (button.dataset.campAction === 'exit') {
                     this.send({ k: 'ungarrison', building: this.buildingId });
                     this.update();
@@ -157,7 +172,9 @@ export class CampControls {
                 } else this.begin(button.dataset.campAction);
             });
         }
-        this.panel.hidden = !this.active;
+        // 上下文弹出（B）：默认不在，固定展开/正在选点/选了民夫或建筑时才出现
+        this.panel.hidden = !this.active || !(this.pinned || this.targeting || this.workerId || this.buildingId);
+        document.getElementById('btn-camp-open')?.classList.toggle('active', this.pinned);
         if (!this.active) { this.cancel(); return; }
         const workers = this.workers();
         const worker = workers.find(u => u.id === this.workerId);
@@ -200,7 +217,8 @@ export class CampControls {
         if (troops.some(u => u.type === 'medic' && !u.garrisonTowerId)) actions += button('medic-in', '➕ 驻入医帐');
         if (troops.length) actions += button('attack', '⚔ 攻击建筑');
         if (this.targeting) actions += button('cancel', '取消选点');
-        const markup = `<div class="camp-control-title"><b>${heading}</b><small>${this.targeting ? '等待选择目标' : details}</small></div>` +
+        const markup = `<div class="camp-control-title"><b>${heading}</b><small>${this.targeting ? '等待选择目标' : details}</small>` +
+            `<button data-camp-action="close" class="camp-close" aria-label="收起建设面板">✕</button></div>` +
             `<div class="camp-actions">${actions}</div><div class="camp-workers">` +
             workers.map(u => `<button data-worker="${u.id}" class="${u.id === this.workerId ? 'active' : ''}">🧰 民夫${u.id}${u.workerTask ? ' · 忙碌' : ' · 待命'}</button>`).join('') + '</div>';
         if (markup !== this.lastMarkup) { this.panel.innerHTML = markup; this.lastMarkup = markup; }

@@ -804,3 +804,85 @@ body.targeting #game-container { cursor: crosshair; }
 
 .battalion-chip b { color: #ffd76e; margin-right: 4px; }
 .battalion-chip .bc-count { font-weight: 600; }
+
+/* ==================== 领土模式分区 HUD（读数上移/征兵贴底左/建设左下弹出/营队右下） ====================
+   A+B 布局：拆掉底部中央大条堆叠，操作件贴边停靠、建设面板上下文弹出，
+   战场中央与下半部视野还给玩家。非领土模式沿用原 #controlbar 布局不变。 */
+#territory-strip {
+    position: fixed; top: 54px; left: 50%; transform: translateX(-50%);
+    z-index: 18; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    max-width: calc(100vw - 20px); padding: 6px 12px;
+    background: rgba(30, 19, 8, 0.82); border: 1.5px solid rgba(201, 164, 74, 0.45);
+    border-radius: 12px; backdrop-filter: blur(4px);
+}
+#territory-strip .territory-hud { flex: none; flex-direction: row; align-items: center; gap: 12px;
+    flex-wrap: wrap; justify-content: center; }
+#territory-strip .territory-econ { flex-wrap: nowrap; gap: 12px; white-space: nowrap; }
+#territory-strip .territory-econ b { font-size: 14px; }
+#territory-ctl, #battle-ctl { display: flex; gap: 4px; align-items: center; }
+#territory-ctl .ctl-btn, #territory-ctl .speed-btn { font-size: 12px; padding: 3px 8px;
+    border-width: 1.5px; border-radius: 7px; }
+#territory-hud-rule { flex: none; text-align: center; }
+
+/* 征兵 + 建设入口：左下贴角；大按钮尺寸不变（亲子长按连买手感） */
+#recruit-dock {
+    position: fixed; left: 12px; bottom: 12px; z-index: 19;
+    display: flex; gap: 6px; align-items: stretch; flex-wrap: wrap;
+    max-width: calc(100vw - 420px);
+    padding: 6px 8px; background: rgba(30, 19, 8, 0.72);
+    border: 1.5px solid rgba(201, 164, 74, 0.4); border-radius: 14px; backdrop-filter: blur(3px);
+}
+#recruit-dock .recruit-bar { justify-content: flex-start; gap: 6px; }
+#btn-camp-open {
+    display: flex; align-items: center; gap: 7px; padding: 9px 14px;
+    border-radius: 12px; border: 2px solid #8a9a55; background: #25301c;
+    color: #eaf3d2; font: 700 15px/1 "PingFang SC", sans-serif; cursor: pointer;
+}
+#btn-camp-open:hover { background: #31401f; }
+#btn-camp-open.active { border-color: #c9e08a; background: #3c4d24; }
+
+/* 前线建设面板：左下弹出（征兵条上方，留 6px 呼吸），有选择/选点/固定展开时才出现 */
+#camp-control-bar {
+    position: fixed; left: 12px; bottom: 94px; z-index: 19;
+    width: min(340px, calc(100vw - 24px));
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* 营队指挥条：右下贴角（小地图在右上，不冲突） */
+#battalion-bar {
+    position: fixed; right: 12px; bottom: 12px; z-index: 19;
+    width: min(380px, calc(100vw - 24px)); justify-content: flex-end;
+    background: rgba(30, 19, 8, 0.72); backdrop-filter: blur(3px);
+}
+
+/* 领土模式隐藏中央大控制条 */
+body.territory-battle #controlbar { display: none !important; }
+
+/* 声明式显隐保护：新容器都自带 display，不能压过 [hidden] */
+#territory-strip[hidden], #recruit-dock[hidden], #morale-cue[hidden] { display: none !important; }
+
+/* 士气播报：独立顶部 toast（原挤在控制条内，全模式共用） */
+#morale-cue {
+    position: fixed; top: 110px; left: 50%; transform: translateX(-50%);
+    z-index: 30; max-width: min(440px, calc(100vw - 24px));
+    border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 900px) {
+    #territory-strip { top: 100px; }
+    #territory-strip .territory-hud { flex-direction: column; gap: 4px; }
+    #territory-strip .territory-econ { flex-wrap: wrap; justify-content: center; white-space: normal; }
+    #recruit-dock { max-width: calc(100vw - 24px); }
+    #battalion-bar { width: calc(100vw - 24px); bottom: 138px; }
+}
+
+/* 建设面板标题行的收起钮 */
+.camp-close { margin-left: auto; padding: 1px 7px; border: 1px solid #88734b; border-radius: 6px;
+    background: rgba(50, 40, 20, 0.6); color: #d8cba4; font: 600 12px/1.5 "PingFang SC", sans-serif; cursor: pointer; }
+.camp-close:hover { border-color: #ecd089; color: #ffe9c4; }
+
+/* 征兵按钮在左下坞内紧凑化：图标+价格（悬停提示看全名），把底边宽度还给战场 */
+#recruit-dock .recruit-btn { padding: 8px 11px; gap: 5px; flex-direction: column; align-items: center; }
+#recruit-dock .recruit-btn .rc-name { display: none; }
+#recruit-dock .recruit-btn .rc-icon { font-size: 21px; }
+#recruit-dock .recruit-btn .rc-cost { font-size: 12px; }

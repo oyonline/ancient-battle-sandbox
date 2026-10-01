@@ -68,6 +68,10 @@ export const UI = {
     onSceneReady(scene) {
         this.scene = scene;
         this.campControls = new CampControls(this);
+        // 左下「🧰 建设」入口：固定展开/收起前线建设面板（无选择时列出民夫）
+        document.getElementById('btn-camp-open')?.addEventListener('click', () => {
+            this.campControls?.togglePin();
+        });
         scene.groundClick = (world, picked) => this.onGroundClick(world, picked);
         if (this.pendingNetStart) {
             this.pendingNetStart = false;
@@ -194,6 +198,12 @@ export const UI = {
         this.stopHolds();
         this.countdown = false;
         this.pendingDeploy = this.pendingAutoplay = false;
+        // 领土分区 HUD 收场：卸 body 态类并隐藏容器（updateTerritoryHUD 不会被被动调用）
+        document.body.classList.remove('territory-battle');
+        document.getElementById('territory-strip')?.setAttribute('hidden', '');
+        document.getElementById('recruit-dock')?.setAttribute('hidden', '');
+        // 营队条拆出大条后自管显隐：离场必须收起（旧布局由 #controlbar 整体隐藏掩蔽）
+        document.getElementById('battalion-bar')?.setAttribute('hidden', '');
         if (this.scene) this.scene.clearUnits();
         document.getElementById('overlay').className = 'overlay';
         this.updateCounts();
@@ -491,10 +501,20 @@ export const UI = {
     },
 
     updateTerritoryHUD() {
-        const hud = document.getElementById('territory-hud');
+        const strip = document.getElementById('territory-strip');
+        const dock = document.getElementById('recruit-dock');
         const active = this.phase === 'battle' && this.battleOptions.territory && this.scene?.territory;
+        document.body.classList.toggle('territory-battle', active);
+        if (strip) strip.hidden = !active;
+        if (dock) dock.hidden = !active;
+        // 战斗控制按钮（暂停/倍速/调整阵容）随布局迁移：领土进顶条，其它模式回大控制条。
+        // DOM 原件搬移不加副本，按钮状态与事件绑定不丢。
+        const ctl = document.getElementById('battle-ctl');
+        if (ctl) {
+            const host = active ? document.getElementById('territory-ctl') : document.getElementById('controlbar');
+            if (host && ctl.parentElement !== host) host.appendChild(ctl);
+        }
         this.campControls?.update();
-        if (hud) hud.hidden = !active;
         if (!active) return;
         if (!document.getElementById('recruit-infantry')) this.buildRecruitBar();
         const territory = this.scene.territory;
