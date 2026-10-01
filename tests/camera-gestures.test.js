@@ -49,6 +49,19 @@ test('点兵轻微抖手不移镜头：6px 内（含恰好 6px）是点击不是
     assert.equal(cam.scrollX, beforeX);
 });
 
+test('大地图初始镜头落在本方营寨与军队附近，重新适配不抢走观察位置', () => {
+    for (const side of ['red', 'blue']) {
+        const { rig, scene, cam } = cameraScene();
+        Object.assign(scene, { battleOptions: { territory: true }, netMySide: side, units: [{}],
+            mapCenter: { x: 6000, y: 4000 }, groundPoint: (x, y) => ({ x, y }), zoomLevel: 1 });
+        rig.fitCamera();
+        assert.deepEqual(cam._centers.at(-1), { x: side === 'red' ? 20 : board.W - 20, y: board.H / 2 });
+        const count = cam._centers.length;
+        rig.fitCamera();
+        assert.equal(cam._centers.length, count, '同局重新适配不会自动回营寨');
+    }
+});
+
 test('明确拖动正常平移：严格超过 6px 后按帧位移平移', () => {
     const { handlers, cam } = cameraScene();
     const near = (a, b) => Math.abs(a - b) < 1e-9;

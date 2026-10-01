@@ -35,7 +35,7 @@
         <div id="deathmatch-hud-rule" class="deathmatch-rule hud-info" hidden>死斗：溃兵可重整，直到一方全灭</div>
         <div id="control-hud-rule" class="deathmatch-rule hud-info" hidden>⚑ 占点征服：占住旗帜攒积分，先到 60 分者胜</div>
         <div id="convoy-hud-rule" class="deathmatch-rule hud-info" hidden>🛒 护送：送抵 3 辆辎重车获胜；车身被蓝方独占约 6 秒即遭劫走（人越多越快），劫走 3 辆蓝胜</div>
-        <div id="territory-hud-rule" class="deathmatch-rule hud-info" hidden>🚩 领土征服：占旗产军费、老家征兵；对方占多数旗时你的票数流失，票尽判负（全歼对手同样获胜）</div>
+        <div id="territory-hud-rule" class="deathmatch-rule hud-info" hidden>🚩 十一据点产军费，民夫筑寨、弓手驻塔；控点耗尽敌方票数，或摧毁敌方大本营获胜</div>
         <div id="territory-hud" class="territory-hud" aria-label="领土征服经济与征兵" hidden>
             <div class="territory-econ">
                 <span>🔴 军费 <b id="territory-treasury">150</b><small id="territory-income">+13/秒</small></span>
@@ -46,6 +46,7 @@
             </div>
             <div class="recruit-bar" id="recruit-bar" aria-label="征兵按钮"></div>
         </div>
+        <div id="camp-control-bar" class="camp-control-bar" aria-label="营寨建设与箭塔驻守" hidden></div>
         <div id="battalion-bar" class="battalion-bar" aria-label="营队指挥" hidden>
             <span id="battalion-label">营队</span>
             <div class="battalion-orders" id="battalion-orders"></div>
@@ -61,7 +62,7 @@
                 <div class="tactics-strength" id="tactics-blue-strength"></div>
             </div>
         </div>
-        <div id="morale-hud" class="morale-hud" aria-label="两军士气，以下状态均为人数" aria-live="off" hidden>
+        <div id="morale-hud" class="morale-hud hud-info" aria-label="两军士气，以下状态均为人数" aria-live="off" hidden>
             <div class="morale-team red">
                 <div class="morale-heading"><b>红方士气</b><span>均值 <strong id="morale-red-average">—</strong></span></div>
                 <div class="morale-counts"><span>稳定 <b id="morale-red-steady">0</b></span><span class="morale-wavering">动摇 <b id="morale-red-wavering">0</b></span><span class="morale-routing">溃逃 <b id="morale-red-routing">0</b></span><small>人</small></div>
@@ -114,7 +115,7 @@
                             <h3>🚩 领土征服 · 山河会战</h3>
                             <p class="hero-hook">夺旗 <i>→</i> 生财 <i>→</i> 出兵 <i>→</i> 点营下令</p>
                             <details class="hero-details"><summary>玩法详情（给队长看）▾</summary>
-                                <p>大地图五面旗：旗归谁军费就流向谁。用军费在老家征兵、点选营队下令推进；对方占多数旗时你的票数流失，票尽判负（全歼同样获胜）。上翼争桥、中央夺高地、下翼穿林；拖动看战线，右上小地图点击跳转。红方手动指挥，蓝方 AI 自动运营。</p>
+                                <p>四倍面积、十一据点：夺旗获得军费，派民夫筑起前线营寨，弓手驻入箭塔守路。控点耗尽敌方票数，或率军攻破敌方大本营。上翼争桥、中央夺高地、下翼迂回；拖动看战线，小地图点击跳转。红方手动指挥，蓝方 AI 自动运营。</p>
                             </details>
                             <div class="hero-actions">
                                 <button class="hero-btn" data-territory-entry>开赴战场（对战AI）→</button>
@@ -205,7 +206,7 @@
                         <div id="net-lobby" hidden>
                             <div class="net-side-line">本端 <b id="net-my-side">🔴 红方</b> · 房间码 <b id="net-room-code">----</b></div>
                             <div class="net-side-line">对手 <b id="net-peer-state">等待加入…</b></div>
-                            <p class="net-tip">双方都点「就绪」自动开战：山河大图 · 五面旗 · 票数制，各操一端（征兵 + 营队指令）。<b>没有暂停与倍速</b>；不同步或掉线时友好重开。</p>
+                            <p class="net-tip">双方都点「就绪」自动开战：十一据点 · 民夫筑寨 · 弓手驻塔 · 控点或攻破主寨获胜，各操一端。<b>没有暂停与倍速</b>；不同步或掉线时友好重开。</p>
                             <div class="net-row">
                                 <button class="big-btn" id="btn-net-ready">✅ 就绪开战</button>
                                 <button class="secondary-btn" id="btn-net-quit">退出房间</button>

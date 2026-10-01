@@ -1,6 +1,6 @@
 // Territory presentation reuses the terrain atlas; layout stays in simulation.
-import { TerrainMaterialsRenderer } from './terrain-materials.js';
-import { buildBankField, bankDistance, bankAppearance, sampleBankWeight } from './terrain-naturalness.js';
+import { TerrainMaterialsRenderer, intersectBakeRegion } from './terrain-materials.js';
+import { bankDistance, bankAppearance, sampleBankWeight } from './terrain-naturalness.js';
 import { sampleWaterField } from './terrain-boundaries.js';
 import { territoryLayout } from '../territory-map.js';
 import { Terrain } from '../terrain.js';
@@ -59,13 +59,15 @@ export class TerritoryMapRenderer extends TerrainMaterialsRenderer {
         }
     }
 
-    paintRiver(ctx, _material, geometry, at) {
-        const field = buildBankField(geometry);
-        this.waterField = field;
-        const width = field.cols * field.step * PIXELS, height = field.rows * field.step * PIXELS;
-        const patch = ctx.getImageData(at(field.x1), at(field.y1), width, height), data = patch.data;
+    paintRiver(ctx, _material, _geometry, _at, region) {
+        const field = this.waterField;
+        const clipped=intersectBakeRegion(region,{x1:field.x1,y1:field.y1,x2:field.x1+field.cols*field.step,y2:field.y1+field.rows*field.step});
+        if (!clipped) return;
+        const width=(clipped.x2-clipped.x1)*PIXELS,height=(clipped.y2-clipped.y1)*PIXELS;
+        const offsetX=(clipped.x1-region.x1)*PIXELS,offsetY=(clipped.y1-region.y1)*PIXELS;
+        const patch=ctx.getImageData(offsetX,offsetY,width,height),data=patch.data;
         for (let py = 0; py < height; py += 2) for (let px = 0; px < width; px += 2) {
-            const gx = field.x1 + (px + 1) / PIXELS, gy = field.y1 + (py + 1) / PIXELS;
+            const gx=clipped.x1+(px+1)/PIXELS,gy=clipped.y1+(py+1)/PIXELS;
             const kind = sampleWaterField(field, gx, gy).kind;
             const n = Terrain._vnoise(Math.abs(gx - board.W / 2) * 0.5 + 9, gy * 0.24);
             const look = bankAppearance(kind, bankDistance(field, gx, gy), n,
@@ -84,7 +86,14 @@ export class TerritoryMapRenderer extends TerrainMaterialsRenderer {
                 }
             }
         }
-        ctx.putImageData(patch, at(field.x1), at(field.y1));
+        ctx.putImageData(patch,offsetX,offsetY);
+    }
+
+    exteriorIntersects(x,y,width,height) {
+        const cx=board.W/2;
+        const points=[[cx-6,-100],[cx+6,-100],[cx-6,-10],[cx+6,-10]].map(([gx,gy])=>this.scene.groundPoint(gx,gy));
+        return Math.max(...points.map(p=>p.x))>=x && Math.min(...points.map(p=>p.x))<=x+width &&
+            Math.max(...points.map(p=>p.y))>=y && Math.min(...points.map(p=>p.y))<=y+height;
     }
 
     paintBridges(ctx, geometry) {
@@ -94,7 +103,9 @@ export class TerritoryMapRenderer extends TerrainMaterialsRenderer {
         // here has gy < 0; the playable shoreline and blockers stay untouched.
         // One continuous UV plane avoids seams between projected strip quads.
         const x1 = board.W / 2 - 6, y1 = -100;
-        const exterior = document.createElement('canvas');
+        let exterior=this.exteriorWater;
+        if (!exterior) {
+        exterior=document.createElement('canvas');
         exterior.width = 12 * PIXELS; exterior.height = 90 * PIXELS;
         const e = exterior.getContext('2d'), patch = e.createImageData(exterior.width, exterior.height);
         for (let py = 0; py < exterior.height; py += 2) for (let px = 0; px < exterior.width; px += 2) {
@@ -111,11 +122,12 @@ export class TerritoryMapRenderer extends TerrainMaterialsRenderer {
             }
         }
         e.putImageData(patch,0,0);
+        this.exteriorWater=exterior;
+        }
         const origin = this.scene.groundPoint(x1,y1);
         ctx.save();
         ctx.transform(TW/2/PIXELS,TH/2/PIXELS,-TW/2/PIXELS,TH/2/PIXELS,origin.x,origin.y);
         ctx.drawImage(exterior,0,0); ctx.restore();
-        exterior.width = exterior.height = 1;
         super.paintBridges(ctx, geometry);
     }
 
@@ -146,8 +158,11 @@ export class TerritoryMapRenderer extends TerrainMaterialsRenderer {
         // Clear only visual vegetation, preserving the actual woodland slow zone.
         this.scene.terrainProps = this.scene.terrainProps.filter(prop => {
             const near = sites.some(site => {
-                const p = this.scene.groundPoint(site.gx, site.gy);
-                return Math.hypot((prop.x - p.x) / 60, (prop.y - p.y) / 30) < 2.4;
+                const offsets=[[0,0],[-3.5,3.5],[3.5,3.5]];
+                return offsets.some(([dx,dy])=>{
+                    const p=this.scene.groundPoint(site.gx+dx,site.gy+dy);
+                    return Math.hypot((prop.x-p.x)/60,(prop.y-p.y)/30)<3.3;
+                });
             });
             if (near && prop.texture.key === 'terrain/props') { prop.destroy(); return false; }
             return true;
@@ -155,46 +170,37 @@ export class TerritoryMapRenderer extends TerrainMaterialsRenderer {
         for (const site of sites) this.drawLandmark(site);
     }
 
+    paintCamp() {
+        // Actual home fortifications are rendered by CampsRenderer.
+    }
+
     drawLandmark(site) {
-        // These are scenery, never extra collision, spawning or combat bonuses.
-        const c = document.createElement('canvas'); c.width = 176; c.height = 150;
-        const ctx = c.getContext('2d'), cx = 88, foot = 127;
-        const poly = (points, color) => {
-            ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
-            ctx.closePath(); ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = '#514b35'; ctx.lineWidth = 1.4; ctx.stroke();
-        };
-        ctx.fillStyle = 'rgba(29,36,22,.24)'; ctx.beginPath(); ctx.ellipse(cx, foot + 3, 49, 14, 0, 0, Math.PI * 2); ctx.fill();
-        if (site.role === 'hill') {
-            poly([[55,109],[88,125],[122,108],[88,92]], '#939381');
-            poly([[76,104],[90,110],[104,103],[104,63],[76,63]], '#766c4c');
-            ctx.strokeStyle = '#c4b085'; ctx.lineWidth = 4;
-            for (const x of [77,102]) { ctx.beginPath(); ctx.moveTo(x,105); ctx.lineTo(x,49); ctx.stroke(); }
-            poly([[66,62],[88,47],[112,61],[90,74]], '#b8a175');
-            poly([[64,57],[88,31],[114,56],[90,67]], '#77684d');
-            ctx.strokeStyle = '#5b523e'; ctx.lineWidth = 2;
-            for (let y = 77; y < 106; y += 7) { ctx.beginPath(); ctx.moveTo(84,y); ctx.lineTo(96,y); ctx.stroke(); }
+        const c=document.createElement('canvas');c.width=144;c.height=90;
+        const ctx=c.getContext('2d'),foot=72;
+        ctx.fillStyle='rgba(29,36,22,.18)';ctx.beginPath();ctx.ellipse(72,foot+2,40,10,0,0,Math.PI*2);ctx.fill();
+        // Unoccupied objectives use signposts and resource piles, never fake
+        // arrow towers or storehouses that could be confused with real buildings.
+        ctx.strokeStyle='#665a40';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(91,70);ctx.lineTo(91,27);ctx.stroke();
+        ctx.fillStyle='#c2af82';ctx.fillRect(72,29,38,12);
+        ctx.strokeStyle='#73654b';ctx.lineWidth=1.5;ctx.strokeRect(72,29,38,12);
+        if (site.role==='forest') {
+            for (let i=0;i<4;i++) {
+                const x=32+i*8,y=65+i*2;
+                ctx.strokeStyle='#6b593d';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+27,y-13);ctx.stroke();
+                ctx.fillStyle='#c6b080';ctx.beginPath();ctx.ellipse(x,y,3.5,3.5,0,0,Math.PI*2);ctx.fill();
+            }
         } else {
-            const timber = site.role === 'forest';
-            poly([[48,93],[86,112],[127,93],[127,67],[87,84],[48,67]], '#a58d63');
-            poly([[48,93],[86,112],[86,84],[48,67]], '#80704f');
-            poly([[43,67],[87,43],[133,65],[86,87]], timber ? '#79734b' : '#958568');
-            ctx.strokeStyle = '#c0af86'; ctx.lineWidth = 1.3;
-            for (let y = 78; y <= 94; y += 6) { ctx.beginPath(); ctx.moveTo(49,y); ctx.lineTo(82,y+16); ctx.stroke(); }
-            ctx.fillStyle = '#4d4934'; ctx.fillRect(92,91,12,13);
-            for (let i = 0; i < 3; i++) {
-                const x = 40 + i * 11, y = 115 + i * 3;
-                if (timber) {
-                    ctx.strokeStyle = '#675a3f'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+26,y-12); ctx.stroke();
-                    ctx.fillStyle = '#d2bc88'; ctx.beginPath(); ctx.ellipse(x,y,3,3,0,0,Math.PI*2); ctx.fill();
-                } else poly([[x,y],[x+9,y+4],[x+17,y],[x+8,y-4]], '#bda574');
+            for (const [x,y,r] of [[46,65,11],[59,65,9],[52,55,8]]) {
+                ctx.fillStyle=site.role==='ford'?'#92968a':'#a19a7f';
+                ctx.beginPath();ctx.ellipse(x,y,r,r*0.65,-0.2,0,Math.PI*2);ctx.fill();
+                ctx.strokeStyle='#6e705f';ctx.lineWidth=1;ctx.stroke();
             }
         }
-        const key = `territory-site-${site.role}-${site.gx}`;
+        const key=`territory-site-${site.siteId}`;
         if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
-        this.scene.textures.addCanvas(key, c);
-        // Offset from the flag so the capture marker and approaching troops stay visible.
-        const p = this.scene.groundPoint(site.gx - 1.8, site.gy + 1.9);
-        const prop = this.scene.add.image(p.x, p.y, key).setOrigin(0.5, foot / c.height).setDepth((site.gx + site.gy + 0.1) * 100 + 40);
+        this.scene.textures.addCanvas(key,c);
+        const gx=site.gx+(site.gx>board.W/2?7:-7),gy=site.gy+7,p=this.scene.groundPoint(gx,gy);
+        const prop=this.scene.add.image(p.x,p.y,key).setOrigin(0.5,foot/c.height).setDepth((gx+gy)*100+40);
         this.scene.terrainProps.push(prop);
     }
 }

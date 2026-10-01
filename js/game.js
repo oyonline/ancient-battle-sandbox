@@ -21,6 +21,8 @@ import * as core from './battle/core.js';
 import { BraceQueue } from './battle/core.js';
 import { TERRITORY, makeTerritoryFlags, TerritoryEconomy, TicketSystem } from './battle/economy.js';
 import { RecruitSystem, TerritoryAI } from './battle/recruit.js';
+import { CampSystem } from './battle/camps.js';
+import { CAMP_COMMANDS, applyCampCommand } from './battle/camp-commands.js';
 import { BattalionSystem, BATTALION } from './battle/battalion.js';
 import * as unitAi from './battle/unit-ai.js';
 import * as battleUnits from './battle/separate.js';
@@ -30,6 +32,7 @@ import { NetBattle } from './net/lockstep.js';
 import * as moraleBridge from './battle/morale-bridge.js';
 import * as territoryBridge from './battle/territory-bridge.js';
 import { BattleRenderer } from './render/renderer.js';
+import { ScarLayer } from './render/scars.js';
 import { TW, TH, OX, OY, VIEW_W, VIEW_H, refreshWorldMetrics, gridToScreen, sampleGroundRing, lerpColor } from './render/metrics.js';
 import { ANIM_ALIGN_K, CAVALRY_PROFILE_SUFFIX, CAVALRY_FLIPPED, cavalryProfile, cavalryRenderSign, cavalryHeadingFromMotion, footProfile, animAlignProfile, shadowTextureKey } from './render/sprites.js';
 
@@ -109,7 +112,7 @@ export class IsoBattleScene extends Phaser.Scene {
         this.airFX = this.add.container(0, 0).setDepth(100000);
 
         // 战场留痕层：血渍与尸体增量盖印进一张全图纹理，整场只占 1 次绘制
-        this.scarRT = this.add.renderTexture(0, 0, VIEW_W, VIEW_H).setOrigin(0, 0).setDepth(6);
+        this.scarRT = new ScarLayer(this);
 
         this.render.units.buildUnitAnims();
         this.render.world.makeShadowTextures();    // 阴影预烘焙成贴图（千人合批，见 syncOne）
@@ -171,7 +174,7 @@ export class IsoBattleScene extends Phaser.Scene {
         }
         if (this.scarRT && this.add?.renderTexture) {            // 战场留痕层按新尺寸重建
             this.scarRT.destroy();
-            this.scarRT = this.add.renderTexture(0, 0, VIEW_W, VIEW_H).setOrigin(0, 0).setDepth(6);
+            this.scarRT = new ScarLayer(this);
         }
         if (this._minimap) { this._minimap.gfx.destroy(); this._minimap.zone.destroy(); this._minimap = null; }
         if (this.ocean) this.render.world.redrawOcean();
@@ -187,6 +190,8 @@ export class IsoBattleScene extends Phaser.Scene {
 
     resetBattleData() {
         this.unitInspector?.reset();
+        this.render.camps?.reset();
+        if (typeof UI !== 'undefined') UI.campControls?.reset();
         this.tactics = null;
         this.battleOptions = { deathmatch: false, control: false, convoy: false, territory: false,
             reserves: { red: 0, blue: 0 }, terrain: 'flat',
@@ -317,7 +322,11 @@ export class IsoBattleScene extends Phaser.Scene {
     deployUnits(redConfig, blueConfig, redFormation, blueFormation, orders = {}, options = {}) {
         // 棋盘尺寸：领土征服用大地图，其余模式回默认；尺寸变化时重建依赖尺寸的渲染层。
         if (options.territory) setBoardSize(TERRITORY.W, TERRITORY.H, 5); else resetBoardSize();
-        if (this._boardW !== board.W || this._boardH !== board.H) this.applyBoardSize();
+        if (this._boardW !== board.W || this._boardH !== board.H) {
+            // Bake the destination terrain once, rather than a huge temporary flat map.
+            this.battleOptions.terrain = Terrain.normalize(options.terrain);
+            this.applyBoardSize();
+        }
         this.clearUnits(options.terrain);
         this.render.world.drawSpawnZones();
         const armies = [
@@ -369,7 +378,7 @@ export class IsoBattleScene extends Phaser.Scene {
                 { gx: 35, gy: board.H * 0.76, name: '下翼' }
             ].map(f => ({ ...f, owner: null, progress: 0, contested: false })) : null;
         this.controlScore = { red: 0, blue: 0 };
-        // 领土征服运行态：经济 / 征兵队列 / 票数 / 战略 AI。五面旗布局见 battle/economy.js。
+        // 领土征服运行态：经济 / 征兵队列 / 票数 / 建造与驻守 / 战略 AI。
         // 蓝方默认自动征兵（红方玩家手动大按钮）；territoryAI:true 双方自动（观战/测试），
         // territoryAI:false 双方停手（隔离变量测经济/票数）；联机对战双方都是真人（AI 只调度无令营）。
         this.territory = this.battleOptions.territory ? {
@@ -383,10 +392,22 @@ export class IsoBattleScene extends Phaser.Scene {
                 blue: options.net ? false : options.territoryAI !== false
             }
         } : null;
+        if (this.territory) {
+            for (const [team, cfg] of armies) {
+                const count = Math.min(12, Math.max(0, Math.floor(cfg.worker || 0)));
+                for (let i = 0; i < count; i++) {
+                    this.spawnUnit(team, 'worker', team === 'red' ? 9.5 : board.W - 9.5,
+                        board.H / 2 + (i - (count - 1) / 2) * 1.2);
+                }
+            }
+            this.territory.camps = new CampSystem(this);
+            this.rebuildSpatial();
+        }
         // 营队系统（仅领土征服）：开局常备军按纵向三等分为上/中/下营
         this.battalions = this.battleOptions.territory ? new BattalionSystem(this) : null;
         this.selectedBattalion = null;
         if (this.battalions) this.battalions.splitOpening(this.units);
+        this.render.camps?.update();
         // 护送模式：红方 4 辆辎重车从出发区沿中线穿越战场，送抵 3 辆红胜、
         // 被毁 3 辆蓝胜；车附近有护送部队才前进（无保护停下等待）。
         this.convoy = null;
@@ -406,6 +427,7 @@ export class IsoBattleScene extends Phaser.Scene {
     getTacticsSummary() { return this.tactics ? this.tactics.summary() : null; }
 
     spawnUnit(team, type, gx, gy) {
+        if (type === 'worker') this.render.units.ensureWorkerTextures?.();
         const typeData = UNIT_TYPES[type];
         const key = `units/${team}_${type}`;
         const { x, y } = this.groundPoint(gx, gy);
@@ -562,6 +584,7 @@ export class IsoBattleScene extends Phaser.Scene {
             this._fpsN = 0; this._fpsT = time;
         }
         const dt = Math.min(delta, 50) / 1000 * this.gameSpeed;
+        this.render.camps?.update();
         this.render.units.updateDeathVisuals(delta); // 暂停冻结；结局后仍让已开始的倒地完整落地。
         this.updateBloods(dt);
         this.flushBloodQueue();
@@ -574,12 +597,12 @@ export class IsoBattleScene extends Phaser.Scene {
         // 领土征服小地图（常驻屏幕空间；退出该模式即销毁）
         if (this.battleOptions.territory) this.updateTerritoryOverlay();
         else if (this._minimap) this.destroyMinimap();
-        if (!this.battleStarted || this.paused || this.battleOver) { this.render.units.syncRender(time); return; }
         // 本帧视口（世界坐标）+ LOD 开关：拉远看全局时砍掉小特效
         const cam = this.cameras.main;
         const v = cam.worldView;
-        this._view = { x0: v.x - 160, y0: v.y - 220, x1: v.right + 160, y1: v.bottom + 280 };
+        this._view = v ? { x0: v.x - 160, y0: v.y - 220, x1: v.right + 160, y1: v.bottom + 280 } : null;
         this.lowFX = cam.zoom < 0.42;
+        if (!this.battleStarted || this.paused || this.battleOver) { this.render.units.syncRender(time); return; }
         this._fxBudget = 46;
         this._dustBudget = 8;
 
@@ -619,6 +642,8 @@ export class IsoBattleScene extends Phaser.Scene {
     // 不触碰 selectedBattalion——选中态是各端本地视图，不随对方命令漂移。
     applyNetCommand(command) {
         if (!command || !this.territory) return;
+        if (CAMP_COMMANDS.has(command.k)) return applyCampCommand(this, command);
+        if (!['red', 'blue'].includes(command.side)) return false;
         if (command.k === 'buy') {
             this.territory.recruit.enqueue(command.side, command.type);
         } else if (command.k === 'order' && this.battalions) {
@@ -637,9 +662,12 @@ export class IsoBattleScene extends Phaser.Scene {
                 this.orderFlash('⚡ 冲锋！', battalion, '#ff8b6b');
             }
         } else if (command.k === 'rally') {
-            this.territory.rally[command.side] = { gx: command.gx, gy: command.gy };
-            const point = this.groundPoint(command.gx, command.gy);
-            this.spawnOrderText('📍 集结点', point.x, point.y - 30, command.side === 'red' ? '#ffb0a0' : '#a8ceff');
+            if (this.battalions?.orderRally(command.side, command.gx, command.gy)) {
+                const point = this.groundPoint(command.gx, command.gy);
+                this.spawnOrderText('📍 集结点', point.x, point.y - 30, command.side === 'red' ? '#ffb0a0' : '#a8ceff');
+                return true;
+            }
+            return false;
         } else if (command.k === 'stance' && this.battalions) {
             const battalion = this.battalions.battalions.find(b => b.id === command.id && b.team === command.side);
             if (battalion && this.battalions.orderStance(battalion, command.stance)) {

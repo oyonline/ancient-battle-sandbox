@@ -8,6 +8,7 @@
 // 与 docs/DETERMINISM.md 的换座镜像 / 锁步约定兼容。
 
 import { BATTALION_POWER } from './economy.js';
+import { board } from '../board.js';
 
 export const BATTALION = {
     OPENING_LANES: 3,          // 开局常备军分营数（按纵向位置三等分）
@@ -42,7 +43,7 @@ export class Battalion {
     }
 
     aliveMembers() {
-        return this.members.filter(u => !u.dead && !u.withdrawn);
+        return this.members.filter(u => !u.dead && !u.withdrawn && !u.garrisonTowerId);
     }
 
     center() {
@@ -95,7 +96,7 @@ export class BattalionSystem {
     // 开局分编：按 gy 稳定排序后三等分（id 决胜），形成上/中/下三个成建制营。
     splitOpening(units) {
         for (const team of ['red', 'blue']) {
-            const mine = units.filter(u => u.team === team && !u.dead && !u.withdrawn);
+            const mine = units.filter(u => u.team === team && !u.dead && !u.withdrawn && u.type !== 'worker');
             if (!mine.length) continue;
             mine.sort((a, b) => a.gy - b.gy || a.id - b.id);
             const lanes = Math.min(BATTALION.OPENING_LANES, mine.length);
@@ -115,6 +116,7 @@ export class BattalionSystem {
 
     // 新兵入集结营：满一波（或超时）整营激活并另开新集结营。
     assignReinforcement(unit) {
+        if (unit.type === 'worker' || unit.garrisonTowerId) return;
         const team = unit.team;
         if (!this.pool[team]) {
             this.pool[team] = this.createBattalion(team, 'gathering');
@@ -251,6 +253,7 @@ export class BattalionSystem {
     orderBattalion(battalion, flagIndex) {
         if (!battalion) return false;
         if (flagIndex === 'home') {
+            this.cancelCampOrders(battalion);
             battalion.orderFlag = null;
             battalion.orderPoint = null;
             battalion.playerOrdered = true;
@@ -258,6 +261,7 @@ export class BattalionSystem {
             return true;
         }
         if (flagIndex == null || !this.scene.flags[flagIndex]) return false;
+        this.cancelCampOrders(battalion);
         battalion.orderFlag = flagIndex;
         battalion.orderPoint = null;      // 旗令替换点令
         battalion.playerOrdered = true;
@@ -268,6 +272,7 @@ export class BattalionSystem {
     // 驻守任意点（玩家长期令）：全营开赴并驻守；AI 永不覆盖，只有玩家的新令可替换。
     orderHold(battalion, gx, gy) {
         if (!battalion || !Number.isFinite(gx) || !Number.isFinite(gy)) return false;
+        this.cancelCampOrders(battalion);
         battalion.orderFlag = null;
         battalion.orderPoint = { gx, gy };
         battalion.playerOrdered = true;
@@ -278,10 +283,23 @@ export class BattalionSystem {
     // 解除命令：清旗令/点令/回防，营交还 AI 调度
     orderClear(battalion) {
         if (!battalion) return false;
+        this.cancelCampOrders(battalion);
         battalion.orderFlag = null;
         battalion.orderPoint = null;
         battalion.playerOrdered = false;
         battalion.retreat = false;
+        return true;
+    }
+
+    cancelCampOrders(battalion) {
+        this.scene.territory?.camps?.cancelUnitOrders(battalion.team, battalion.aliveMembers().map(u => u.id));
+    }
+
+    orderRally(team, gx, gy) {
+        if (!this.scene.territory || !['red', 'blue'].includes(team) || !Number.isFinite(gx) || !Number.isFinite(gy) ||
+            gx < 0.6 || gx > board.W - 0.6 || gy < 0.6 || gy > board.H - 0.6) return false;
+        for (const b of this.battalions) if (b.team === team && b.gathering) this.cancelCampOrders(b);
+        this.scene.territory.rally[team] = { gx, gy };
         return true;
     }
 

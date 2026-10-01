@@ -1,5 +1,7 @@
 // 只读观察层：高度、坡向与高差效果直接取模拟规则，不参与战斗决策。
 import { Terrain } from './terrain.js';
+import { towerCrewOffset } from './render/camps.js';
+import { CAMP_RULES } from './battle/camps.js';
 
 // 触摸取消判定：Phaser 3.70 把 touchcancel 与 touchend 走同一条 processUpEvents
 // （以普通 pointerup 送达，event.type 仍是 'touchcancel'）——取消不是点击，
@@ -57,10 +59,11 @@ export class UnitInspector {
         for (const unit of this.scene.units) {
             if (unit.dead || unit.withdrawn) continue;
             const foot = this.scene.groundPoint(unit.gx, unit.gy);
+            const crew = towerCrewOffset(unit, this.scene.territory?.camps);
             // 小比例下允许约 9 屏幕像素的点选；仍以最近的可见身体中心决胜。
             const radius = Math.max(18, 9 / camera.zoom);
-            const dx = world.x - foot.x;
-            const dy = world.y - (foot.y - (unit.type === 'cavalry' ? 24 : 18));
+            const dx = world.x - (foot.x + (crew?.x || 0));
+            const dy = world.y - (foot.y + (crew?.y || 0) - (unit.type === 'cavalry' ? 24 : 18));
             const distance = Math.hypot(dx, dy * 0.8);
             if (distance <= radius && (distance < bestDistance - 1e-9 ||
                 (Math.abs(distance - bestDistance) <= 1e-9 && unit.id < best.id))) {
@@ -72,7 +75,9 @@ export class UnitInspector {
 
     static describe(scene, unit) {
         const key = Terrain.normalize(scene.battleOptions.terrain);
-        const height = Terrain.height(key, unit.gx, unit.gy);
+        const groundHeight = Terrain.height(key, unit.gx, unit.gy);
+        const platformHeight = unit.garrisonTowerId ? (unit.garrisonHeight || 0) / Terrain.HEIGHT_SCALE : 0;
+        const height = groundHeight + platformHeight;
         const dx = unit.moveX || 0, dy = unit.moveY || 0;
         const walking = unit.moving && Math.hypot(dx, dy) > 1e-6;
         // 使用主动行军方向而非击退、身体分离的被动位移。
@@ -98,20 +103,20 @@ export class UnitInspector {
         }
         const comparison = valid(enemy) ? {
             label: current ? '当前目标' : '最近敌人（高差对照）',
-            name: enemy.typeData.name,
+            name: enemy.typeData.name || (enemy.isBuilding ? enemy.type === 'tower' ? '箭塔' : enemy.siteId === 'home' ? '大本营' : '前线营寨' : enemy.type),
             difference: height - Terrain.height(key, enemy.gx, enemy.gy),
-            attack: Terrain.attackMultiplier(key, unit, enemy),
-            range: unit.typeData.ranged ? Terrain.rangedRange(key, unit, enemy) : null
+            attack: Terrain.attackMultiplier(key, unit, enemy, height),
+            range: unit.typeData.ranged ? platformHeight ? CAMP_RULES.TOWER_RANGE : Terrain.rangedRange(key, unit, enemy) : null
         } : null;
         const commands = { auto: '自由突击', direct: '正面强冲', flank_archers: '侧翼袭弓' };
         const cavalryOrder = scene.battleOptions.cavalryOrders?.[unit.team] || 'auto';
         const guarded = unit.tacticalRole === 'ground_guard' &&
             (unit.type !== 'cavalry' || cavalryOrder === 'auto');
         const protectingArchers = guarded && unit.type === 'cavalry' && !!Terrain.defenseLayout(key, unit.team);
-        return { height, movement, comparison, surface, surfaceSpeed,
+        return { height, platformHeight, movement, comparison, surface, surfaceSpeed,
             surfaceLabel: { grass: '草地 / 道路', forest: '林地', water: '水域（不可通行）', bridge: '桥面', rock: '岩壁（不可通行）', shallow: '浅滩（蹚水减速）' }[surface],
             chargeRestricted: unit.type === 'cavalry' && surface === 'forest',
-            ground: height < 0.01 ? '平地' : height >= 2.99 ? '坡顶' : '缓坡',
+            ground: groundHeight < 0.01 ? '平地' : groundHeight >= 2.99 ? '坡顶' : '缓坡',
             slope: movement == null ? '站定 · 无行军坡向' : movement < 0.999 ? '上坡' : movement > 1.001 ? '下坡' : '平缓行军',
             order: (guarded ? '高地守位' : '') + (unit.type === 'cavalry' ?
                 (guarded ? protectingArchers ? ' · 就近护弓反击' : ' · 就近反击' : commands[cavalryOrder]) : '')
@@ -132,8 +137,9 @@ export class UnitInspector {
         }
         const info = UnitInspector.describe(this.scene, unit);
         const p = this.scene.groundPoint(unit.gx, unit.gy);
+        const crew = towerCrewOffset(unit, this.scene.territory?.camps);
         this.ring.lineStyle(2 / Math.max(0.4, this.scene.cameras.main.zoom), 0xffe49a, 0.95);
-        this.ring.strokeEllipse(p.x, p.y, 36, 18);
+        this.ring.strokeEllipse(p.x + (crew?.x || 0), p.y + (crew?.y || 0), 36, 18);
         const percent = multiplier => {
             const delta = Math.round((multiplier - 1) * 100);
             return (delta > 0 ? '+' : '') + delta + '%';
@@ -141,7 +147,7 @@ export class UnitInspector {
         const comparison = info.comparison;
         const markup = `<b>${unit.team === 'red' ? '🔴 红方' : '🔵 蓝方'} · ${unit.typeData.name}</b>` +
             `<span>生命 ${Math.max(0, Math.ceil(unit.hp))} / ${unit.maxHp}${info.order ? ' · ' + info.order : ''}</span>` +
-            `<span>${info.ground} · 高度 ${info.height.toFixed(2)} 层</span>` +
+            `<span>${info.ground} · 高度 ${(info.height - info.platformHeight).toFixed(2)} 层${info.platformHeight ? ' · 塔平台 +' + info.platformHeight.toFixed(2) + ' 层' : ''}</span>` +
             `<span>地表：${info.surfaceLabel} · 地表移速 ${Math.round(info.surfaceSpeed * 100)}%</span>` +
             `<span>${info.slope}${info.movement == null ? '' : ' · 坡速系数 ' + Math.round(info.movement * 100) + '%'}</span>` +
             (info.chargeRestricted ? '<span class="inspection-warning">林中不能蓄力冲锋；出林后重新助跑。</span>' : '') +

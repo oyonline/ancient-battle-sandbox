@@ -21,6 +21,20 @@ export function nearestEnemy(spatial, unit) {
             if (d2 < bestD2 - 1e-9 || (Math.abs(d2 - bestD2) <= 1e-9 && (!best || e.id < best.id))) { bestD2 = d2; best = e; }
         });
         if (best && bestD2 <= r * r) return best;
+        // Across the large territory map, expanding to hundreds of cells visits
+        // tens of thousands of empty buckets per soldier. An exact scan of the
+        // bounded alive list is cheaper once the nearby circles found no answer.
+        // It uses the same distance/id ordering, so this changes work, not targets.
+        if (r >= 24 && Array.isArray(spatial.alive)) {
+            for (const e of spatial.alive) {
+                if (e.team === unit.team || e.dead || e.withdrawn || e.garrisonTowerId || e.type === 'wagon') continue;
+                const dx = e.gx - unit.gx, dy = e.gy - unit.gy, d2 = dx * dx + dy * dy;
+                if (d2 < bestD2 - 1e-9 || (Math.abs(d2 - bestD2) <= 1e-9 && (!best || e.id < best.id))) {
+                    bestD2 = d2; best = e;
+                }
+            }
+            return best;
+        }
         if (r >= maxR) return best;
         r *= 2;
     }

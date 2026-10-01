@@ -104,7 +104,7 @@ test('flow glints stay entirely in real water and leave bridge and simulation un
 test('territory benefits appear once and clear on redeploy or switching to score-only control', () => onMap(() => {
     const labels = [];
     const scene = {
-        battleOptions: { territory: true }, flags: territoryLayout(104,72).sites,
+        battleOptions: { territory: true }, flags: territoryLayout(TERRITORY.W,TERRITORY.H).sites,
         groundPoint: (x,y) => ({ x,y }), cameras: { main: { zoom: 0.4 } },
         add: { text(_x,_y,text) {
             const label = { text, destroyed: false,
@@ -115,12 +115,12 @@ test('territory benefits appear once and clear on redeploy or switching to score
     };
     const overlay = new OverlayRenderer(scene);
     overlay.updateFlagLabels(); overlay.updateFlagLabels();
-    assert.equal(labels.length, 5, 'no per-frame label creation');
+    assert.equal(labels.length, 11, 'no per-frame label creation');
     assert.ok(labels.every(l => l.text.includes('军费 +4/秒')));
     assert.ok(labels.some(l => l.text.includes('弓兵居高俯射')));
-    scene.flags = territoryLayout(104,72).sites;
+    scene.flags = territoryLayout(TERRITORY.W,TERRITORY.H).sites;
     overlay.updateFlagLabels();
-    assert.equal(labels.filter(l => !l.destroyed).length, 5, 'redeploy replaces old labels');
+    assert.equal(labels.filter(l => !l.destroyed).length, 11, 'redeploy replaces old labels');
     scene.battleOptions = { control: true };
     overlay.updateFlagLabels();
     assert.equal(labels.filter(l => !l.destroyed).length, 0, 'score-only mode never claims an income benefit');

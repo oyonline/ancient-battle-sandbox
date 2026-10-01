@@ -1,7 +1,7 @@
 // Material baking is view-only: all surfaces, heights and blockers come from Terrain.
 import { board } from '../board.js';
 import { Terrain } from '../terrain.js';
-import { VIEW_W, VIEW_H, makeNoise } from './metrics.js';
+import { VIEW_W, VIEW_H, OX, OY, TW, TH, makeNoise } from './metrics.js';
 import { buildBankField, bankDistance, bankAppearance, sampleBankWeight, slopeAppearance, rockPlacements } from './terrain-naturalness.js';
 
 const MATERIAL_KEY = 'terrain/materials';
@@ -12,6 +12,7 @@ const MARGIN = 16;
 const CHUNK = 1024;
 const MATERIAL_TILE = 192;
 const noise = makeNoise(73);
+const materialFrames = new WeakMap();
 const hash = (x, y) => Terrain._hash2(Math.round(x * 101), Math.round(y * 101));
 
 function canvas(width, height) {
@@ -31,13 +32,40 @@ function polygon(ctx, points) {
 
 // Crop frames at runtime rather than maintaining six duplicate image files.
 function materialPatterns(ctx, source) {
-    return Array.from({ length: 6 }, (_, index) => {
-        const tile = canvas(MATERIAL_TILE, MATERIAL_TILE);
-        tile.getContext('2d').drawImage(source, index % 3 * source.width / 3,
-            Math.floor(index / 3) * source.height / 2, source.width / 3, source.height / 2,
-            0, 0, tile.width, tile.height);
-        return ctx.createPattern(tile, 'repeat');
+    let frames = materialFrames.get(source);
+    if (!frames) {
+        frames = Array.from({ length: 6 }, (_, index) => {
+            const tile = canvas(MATERIAL_TILE, MATERIAL_TILE);
+            tile.getContext('2d').drawImage(source, index % 3 * source.width / 3,
+                Math.floor(index / 3) * source.height / 2, source.width / 3, source.height / 2,
+                0, 0, tile.width, tile.height);
+            return tile;
+        });
+        materialFrames.set(source, frames);
+    }
+    return frames.map(tile => ctx.createPattern(tile, 'repeat'));
+}
+
+// The source UV plane is baked only for the cells visible in one world chunk.
+// Extra rows cover height displacement and antialiased cell edges without
+// changing the 32px material detail or the 64×32 world projection.
+export function terrainBakeRegion(x, y, width, height) {
+    const corners = [[x,y],[x+width,y],[x,y+height],[x+width,y+height]].map(([sx,sy]) => {
+        const a = (sx - OX) / (TW / 2), b = (sy - OY) / (TH / 2);
+        return { gx: (a + b) / 2, gy: (b - a) / 2 };
     });
+    return {
+        x1: Math.max(-MARGIN, Math.floor(Math.min(...corners.map(p => p.gx))) - 2),
+        y1: Math.max(-MARGIN, Math.floor(Math.min(...corners.map(p => p.gy))) - 2),
+        x2: Math.min(board.W + MARGIN, Math.ceil(Math.max(...corners.map(p => p.gx))) + 8),
+        y2: Math.min(board.H + MARGIN, Math.ceil(Math.max(...corners.map(p => p.gy))) + 8)
+    };
+}
+
+export function intersectBakeRegion(region, bounds) {
+    const clipped = { x1: Math.max(region.x1, bounds.x1), y1: Math.max(region.y1, bounds.y1),
+        x2: Math.min(region.x2, bounds.x2), y2: Math.min(region.y2, bounds.y2) };
+    return clipped.x2 > clipped.x1 && clipped.y2 > clipped.y1 ? clipped : null;
 }
 
 function paintTriangle(ctx, source, sx, sy, points, origin, xAxis, yAxis) {
@@ -70,26 +98,45 @@ export class TerrainMaterialsRenderer {
     }
 
     draw() {
-        const started = performance.now();
-        const scene = this.scene, geometry = Terrain.geometry('territory');
-        const plane = this.paintMaterials(geometry);
-        // This is a one-off CPU bake. Thousands of clipped GPU-canvas operations
-        // can stall texture upload; only the completed chunks are sent to WebGL.
-        const ground = canvas(VIEW_W, VIEW_H), ctx = ground.getContext('2d', { willReadFrequently: true });
-        // Land continues beyond the playable area; the board no longer floats in an ocean.
-        ctx.fillStyle = materialPatterns(ctx, scene.textures.get(MATERIAL_KEY).getSourceImage())[0];
-        ctx.fillRect(0, 0, ground.width, ground.height);
-        // Continuous source UVs avoid tile seams. Both triangles use all four actual
-        // groundPoint heights, including curved hill cells that aren't planar.
-        for (let gy = -MARGIN; gy < board.H + MARGIN; gy++) {
-            for (let gx = -MARGIN; gx < board.W + MARGIN; gx++) {
+        const started = performance.now(), scene = this.scene;
+        const geometry = Terrain.geometry('territory');
+        this.clearGround();
+        scene.groundImage?.destroy();
+        if (scene.textures.exists('groundTex')) scene.textures.remove('groundTex');
+        this.waterField = buildBankField(geometry);
+        this.reliefField = null; this.exteriorWater = null;
+        const rocks=geometry.blockers.filter(block=>block.kind==='rock');
+        this.rockField=buildBankField({blockers:rocks.map(block=>({...block,kind:'water'}))});
+        this.groundShadows = [];
+        this.drawProps(geometry, null);
+        const group = scene.add.group();
+        // A repeated small grass frame supplies the distant land without baking
+        // transparent corners into another map-sized CPU/GPU canvas.
+        const material=scene.textures.get(MATERIAL_KEY),source=material.getSourceImage();
+        if (!material.has('distant-grass')) material.add('distant-grass',0,0,0,source.width/3,source.height/2);
+        group.add(scene.add.tileSprite(0,0,512,512,MATERIAL_KEY,'distant-grass')
+            .setOrigin(0).setDepth(-1).setDisplaySize(VIEW_W,VIEW_H).setTileScale(512/VIEW_W,512/VIEW_H));
+        let maxSourcePixels = 0;
+        for (let y = 0; y < VIEW_H; y += CHUNK) for (let x = 0; x < VIEW_W; x += CHUNK) {
+            const width = Math.min(CHUNK, VIEW_W - x), height = Math.min(CHUNK, VIEW_H - y);
+            const region = terrainBakeRegion(x, y, width, height);
+            if (region.x2 <= region.x1 || region.y2 <= region.y1) continue;
+            const cells = [];
+            for (let gy = region.y1; gy < region.y2; gy++) for (let gx = region.x1; gx < region.x2; gx++) {
                 const a = scene.groundPoint(gx, gy), b = scene.groundPoint(gx + 1, gy);
                 const c = scene.groundPoint(gx + 1, gy + 1), d = scene.groundPoint(gx, gy + 1);
-                // Directional light is baked continuously into the source plane.
-                // Per-cell lighting would reveal a checkerboard on a curved slope.
-                const sx=(gx+MARGIN)*PIXELS,sy=(gy+MARGIN)*PIXELS;
+                if (Math.max(a.x,b.x,c.x,d.x) < x - 1 || Math.min(a.x,b.x,c.x,d.x) > x + width + 1 ||
+                    Math.max(a.y,b.y,c.y,d.y) < y - 1 || Math.min(a.y,b.y,c.y,d.y) > y + height + 1) continue;
+                cells.push({gx,gy,a,b,c,d});
+            }
+            if (!cells.length && !this.exteriorIntersects(x,y,width,height)) continue;
+            const plane = cells.length ? this.paintMaterials(geometry,region) : null;
+            if (plane) maxSourcePixels=Math.max(maxSourcePixels,plane.width*plane.height);
+            const part = canvas(width, height), ctx = part.getContext('2d');
+            ctx.translate(-x, -y);
+            for (const {gx,gy,a,b,c,d} of cells) {
+                const sx=(gx-region.x1)*PIXELS, sy=(gy-region.y1)*PIXELS;
                 if (Math.abs(c.y - (b.y + d.y - a.y)) <= 0.15) {
-                    // Near-planar cells need no clip. Error stays below a world pixel fraction.
                     ctx.save();
                     ctx.transform((b.x-a.x)/PIXELS,(b.y-a.y)/PIXELS,(d.x-a.x)/PIXELS,(d.y-a.y)/PIXELS,a.x,a.y);
                     ctx.drawImage(plane,sx,sy,PIXELS+0.5,PIXELS+0.5,0,0,PIXELS+0.5,PIXELS+0.5);
@@ -100,41 +147,50 @@ export class TerrainMaterialsRenderer {
                         {x:c.x-d.x,y:c.y-d.y},{x:c.x-b.x,y:c.y-b.y});
                 }
             }
-        }
-        plane.width = plane.height = 1;
-        this.paintBridges(ctx, geometry);
-        this.paintCamp(ctx);
-        this.drawProps(geometry, ctx);
-        this.clearGround();
-        scene.groundImage?.destroy();
-        if (scene.textures.exists('groundTex')) scene.textures.remove('groundTex');
-        // Small textures permit camera culling and avoid a GPU-size-dependent mega texture.
-        const group = scene.add.group();
-        for (let y = 0; y < ground.height; y += CHUNK) for (let x = 0; x < ground.width; x += CHUNK) {
-            const part = canvas(Math.min(CHUNK, ground.width - x), Math.min(CHUNK, ground.height - y));
-            part.getContext('2d').drawImage(ground, x, y, part.width, part.height, 0, 0, part.width, part.height);
+            if (plane) plane.width=plane.height=1;
+            this.paintBridges(ctx, geometry);
+            this.paintCamp(ctx);
+            for (const shadow of this.groundShadows) {
+                if (shadow.x + shadow.radius < x || shadow.x - shadow.radius > x + width ||
+                    shadow.y + shadow.radius * shadow.sy < y || shadow.y - shadow.radius * shadow.sy > y + height) continue;
+                this.paintShadow(ctx, shadow);
+            }
             const key = `terrain-ground-${this.chunkKeys.length}`;
             scene.textures.addImage(key, part);
             this.chunkKeys.push(key);
             group.add(scene.add.image(x, y, key).setOrigin(0, 0).setDepth(0));
         }
-        ground.width = ground.height = 1;
+        if (this.exteriorWater) this.exteriorWater.width = this.exteriorWater.height = 1;
+        this.exteriorWater = null; this.reliefField = null; this.groundShadows = [];
         scene.groundImage = group;
         scene._groundTerrain = 'territory';
         scene.terrainLabel?.destroy(); scene.terrainLabel = null;
         scene.terrainVisualStats = { bakeMs: Math.round(performance.now() - started),
-            chunks: this.chunkKeys.length, props: scene.terrainProps.length };
+            chunks: this.chunkKeys.length, props: scene.terrainProps.length, maxSourcePixels,
+            maxTemporaryCanvasPixels: maxSourcePixels + CHUNK * CHUNK };
     }
 
-    paintMaterials(geometry) {
-        const plane = canvas((board.W + MARGIN * 2) * PIXELS, (board.H + MARGIN * 2) * PIXELS);
+    exteriorIntersects() { return false; }
+
+    paintShadow(ctx, shadow) {
+        ctx.save(); ctx.translate(shadow.x,shadow.y); ctx.scale(1,shadow.sy);
+        const shade = ctx.createRadialGradient(0,0,0,0,0,shadow.radius);
+        shade.addColorStop(0,shadow.color); shade.addColorStop(1,'rgba(24,30,16,0)');
+        ctx.fillStyle = shade;
+        ctx.fillRect(-shadow.radius,-shadow.radius,shadow.radius*2,shadow.radius*2);
+        ctx.restore();
+    }
+
+    paintMaterials(geometry, region) {
+        const plane = canvas((region.x2-region.x1)*PIXELS,(region.y2-region.y1)*PIXELS);
         const ctx = plane.getContext('2d');
+        ctx.translate(-region.x1*PIXELS,-region.y1*PIXELS);
         const patterns = materialPatterns(ctx, this.scene.textures.get(MATERIAL_KEY).getSourceImage());
-        const at = value => (value + MARGIN) * PIXELS;
-        ctx.fillStyle = patterns[0]; ctx.fillRect(0, 0, plane.width, plane.height);
+        const at = value => value * PIXELS;
+        ctx.fillStyle = patterns[0]; ctx.fillRect(at(region.x1),at(region.y1),plane.width,plane.height);
         // Broad, softly feathered dry patches vary the meadow without drawing a tile grid.
-        for (let y = -MARGIN; y < board.H + MARGIN; y += 4) {
-            for (let x = -MARGIN; x < board.W + MARGIN; x += 4) {
+        for (let y = Math.floor((region.y1-8)/4)*4; y < region.y2+8; y += 4) {
+            for (let x = Math.floor((region.x1-8)/4)*4; x < region.x2+8; x += 4) {
                 const ax = Math.abs(x - board.W / 2), n = noise(ax * 0.12, y * 0.12);
                 if (n < 0.48) continue;
                 const radius = (2.5 + hash(ax, y) * 4) * PIXELS;
@@ -144,11 +200,11 @@ export class TerrainMaterialsRenderer {
                 ctx.fillStyle = gradient; ctx.fillRect(at(x) - radius, at(y) - radius, radius * 2, radius * 2);
             }
         }
-        this.paintRelief(ctx, patterns, at);
+        this.paintRelief(ctx, patterns, at, region);
         this.paintRoads(ctx, patterns[2], at);
         // Forest-floor material follows the real irregular forest mask.
         for (const zone of geometry.zones.filter(zone => zone.kind === 'forest')) {
-            for (let y = zone.y1; y < zone.y2; y += 0.5) for (let x = zone.x1; x < zone.x2; x += 0.5) {
+            for (let y = Math.max(zone.y1,region.y1); y < Math.min(zone.y2,region.y2); y += 0.5) for (let x = Math.max(zone.x1,region.x1); x < Math.min(zone.x2,region.x2); x += 0.5) {
                 const density = Terrain.blobField(zone, x + 0.25, y + 0.25);
                 if (density <= Terrain.FOREST_EDGE) continue;
                 ctx.globalAlpha = Math.min(0.6, (density - Terrain.FOREST_EDGE) * 0.8);
@@ -158,66 +214,71 @@ export class TerrainMaterialsRenderer {
             }
         }
         ctx.globalAlpha = 1;
-        this.paintRiver(ctx, patterns[4], geometry, at);
-        this.paintRockFootprint(ctx, patterns[5], geometry, at);
+        this.paintRiver(ctx, patterns[4], geometry, at, region);
+        this.paintRockFootprint(ctx, patterns[5], geometry, at, region);
         return plane;
     }
 
-    paintRelief(ctx, patterns, at) {
-        // Interpolate low-frequency weights, then shade each pixel exactly once.
-        // Overlapping dark brushes make a hill read as a crater and exceed the
-        // intended shade budget; this also removes cell-shaped lighting seams.
-        const field = { x1: 0, y1: 0, step: 0.5, cols: board.W * 2 + 2, rows: board.H * 2 + 2 };
-        const weights = ['dry', 'earth', 'stone', 'light'].map(() => new Float32Array(field.cols * field.rows));
-        for (let row = 0; row < field.rows; row++) for (let col = 0; col < field.cols; col++) {
-            const x = (col + 0.5) * field.step, y = (row + 0.5) * field.step;
-            const pose = slopeAppearance('territory', x, y, noise(Math.abs(x - board.W / 2) * 0.8 + 9, y * 0.8));
-            const i = row * field.cols + col;
-            weights[0][i] = pose.dry; weights[1][i] = pose.earth; weights[2][i] = pose.stone; weights[3][i] = pose.light;
+    paintRelief(ctx, patterns, at, region) {
+        const clipped = intersectBakeRegion(region,{x1:1,y1:1,x2:board.W-1,y2:board.H-1});
+        if (!clipped) return;
+        if (!this.reliefField) {
+            const field = { x1:0,y1:0,step:0.5,cols:board.W*2+2,rows:board.H*2+2 };
+            const weights = ['dry','earth','stone','light'].map(() => new Float32Array(field.cols*field.rows));
+            for (let row=0;row<field.rows;row++) for (let col=0;col<field.cols;col++) {
+                const x=(col+0.5)*field.step,y=(row+0.5)*field.step;
+                const pose=slopeAppearance('territory',x,y,noise(Math.abs(x-board.W/2)*0.8+9,y*0.8));
+                const i=row*field.cols+col;
+                weights[0][i]=pose.dry;weights[1][i]=pose.earth;weights[2][i]=pose.stone;weights[3][i]=pose.light;
+            }
+            this.reliefField={field,weights};
         }
-        const tileW = MATERIAL_TILE, tileH = MATERIAL_TILE;
-        const tile = canvas(tileW, tileH), t = tile.getContext('2d');
-        const materials = [patterns[1], patterns[2], patterns[5]].map(pattern => {
-            t.fillStyle = pattern; t.fillRect(0, 0, tileW, tileH);
-            return t.getImageData(0, 0, tileW, tileH).data;
+        const {field,weights}=this.reliefField;
+        const tile=canvas(MATERIAL_TILE,MATERIAL_TILE),t=tile.getContext('2d');
+        const materials=[patterns[1],patterns[2],patterns[5]].map(pattern => {
+            t.fillStyle=pattern;t.fillRect(0,0,MATERIAL_TILE,MATERIAL_TILE);
+            return t.getImageData(0,0,MATERIAL_TILE,MATERIAL_TILE).data;
         });
-        const width = (board.W - 2) * PIXELS, height = (board.H - 2) * PIXELS;
-        const patch = ctx.getImageData(at(1), at(1), width, height), data = patch.data;
-        for (let py = 0; py < height; py += 2) for (let px = 0; px < width; px += 2) {
-            const x = 1 + (px + 1) / PIXELS, y = 1 + (py + 1) / PIXELS;
-            const dry = sampleBankWeight(field, weights[0], x, y), earth = sampleBankWeight(field, weights[1], x, y);
-            const stone = sampleBankWeight(field, weights[2], x, y), light = sampleBankWeight(field, weights[3], x, y);
-            if (Math.abs(light) < 0.003 && dry < 0.003 && earth < 0.003) continue;
-            for (let oy = 0; oy < 2; oy++) for (let ox = 0; ox < 2; ox++) {
-                const i = ((py + oy) * width + px + ox) * 4;
-                const uv = (((at(1) + py + oy) % tileH) * tileW + (at(1) + px + ox) % tileW) * 4;
-                for (let c = 0; c < 3; c++) {
-                    let value = data[i + c];
-                    value += (materials[0][uv + c] - value) * dry;
-                    value += (materials[1][uv + c] - value) * earth;
-                    value += (materials[2][uv + c] - value) * stone;
-                    const shade = light > 0 ? [235, 221, 157][c] : [31, 44, 36][c];
-                    data[i + c] = value + (shade - value) * Math.abs(light) * 0.85;
+        const width=(clipped.x2-clipped.x1)*PIXELS,height=(clipped.y2-clipped.y1)*PIXELS;
+        const offsetX=(clipped.x1-region.x1)*PIXELS,offsetY=(clipped.y1-region.y1)*PIXELS;
+        const patch=ctx.getImageData(offsetX,offsetY,width,height),data=patch.data;
+        for (let py=0;py<height;py+=2) for (let px=0;px<width;px+=2) {
+            const x=clipped.x1+(px+1)/PIXELS,y=clipped.y1+(py+1)/PIXELS;
+            const dry=sampleBankWeight(field,weights[0],x,y),earth=sampleBankWeight(field,weights[1],x,y);
+            const stone=sampleBankWeight(field,weights[2],x,y),light=sampleBankWeight(field,weights[3],x,y);
+            if (Math.abs(light)<0.003 && dry<0.003 && earth<0.003) continue;
+            for (let oy=0;oy<2;oy++) for (let ox=0;ox<2;ox++) {
+                const i=((py+oy)*width+px+ox)*4;
+                // UVs remain global even when neighboring chunks start on different cells.
+                const uv=(((at(clipped.y1)+py+oy)%MATERIAL_TILE)*MATERIAL_TILE+(at(clipped.x1)+px+ox)%MATERIAL_TILE)*4;
+                for (let c=0;c<3;c++) {
+                    let value=data[i+c];
+                    value+=(materials[0][uv+c]-value)*dry;
+                    value+=(materials[1][uv+c]-value)*earth;
+                    value+=(materials[2][uv+c]-value)*stone;
+                    const shade=light>0?[235,221,157][c]:[31,44,36][c];
+                    data[i+c]=value+(shade-value)*Math.abs(light)*0.85;
                 }
             }
         }
-        ctx.putImageData(patch, at(1), at(1)); tile.width = tile.height = 1;
+        ctx.putImageData(patch,offsetX,offsetY);tile.width=tile.height=1;
     }
 
-    paintRiver(ctx, material, geometry, at) {
-        const field = buildBankField(geometry), size = field.cols * field.step * PIXELS;
-        this.waterField = field;
-        if (!size) return;
-        const height = field.rows * field.step * PIXELS;
+    paintRiver(ctx, material, geometry, at, region) {
+        const field = this.waterField;
+        const clipped=intersectBakeRegion(region,{x1:field.x1,y1:field.y1,x2:field.x1+field.cols*field.step,y2:field.y1+field.rows*field.step});
+        if (!clipped) return;
+        const size=(clipped.x2-clipped.x1)*PIXELS,height=(clipped.y2-clipped.y1)*PIXELS;
         const water = canvas(size, height), w = water.getContext('2d');
-        w.translate(-at(field.x1), -at(field.y1));
-        w.fillStyle = material; w.fillRect(at(field.x1), at(field.y1), size, height);
+        w.translate(-at(clipped.x1), -at(clipped.y1));
+        w.fillStyle = material; w.fillRect(at(clipped.x1),at(clipped.y1),size,height);
         const source = w.getImageData(0, 0, size, height).data;
-        const patch = ctx.getImageData(at(field.x1), at(field.y1), size, height), data = patch.data;
+        const ox=(clipped.x1-region.x1)*PIXELS,oy=(clipped.y1-region.y1)*PIXELS;
+        const patch=ctx.getImageData(ox,oy,size,height),data=patch.data;
         // Two source pixels are one world pixel after projection. Continuous UVs
         // and signed shore distance replace the old half-grid rectangular bands.
         for (let py = 0; py < height; py += 2) for (let px = 0; px < size; px += 2) {
-            const gx = field.x1 + (px + 1) / PIXELS, gy = field.y1 + (py + 1) / PIXELS;
+            const gx=clipped.x1+(px+1)/PIXELS,gy=clipped.y1+(py+1)/PIXELS;
             const col = Math.floor((gx - field.x1) / field.step), row = Math.floor((gy - field.y1) / field.step);
             const kind = field.kinds[row * field.cols + col];
             const n = noise(Math.abs(gx - board.W / 2) * 0.9, gy * 0.9);
@@ -240,24 +301,25 @@ export class TerrainMaterialsRenderer {
                 }
             }
         }
-        ctx.putImageData(patch, at(field.x1), at(field.y1)); water.width = water.height = 1;
+        ctx.putImageData(patch,ox,oy);water.width=water.height=1;
     }
 
-    paintRockFootprint(ctx, material, geometry, at) {
-        const rocks = geometry.blockers.filter(block => block.kind === 'rock');
-        const field = buildBankField({ blockers: rocks.map(block => ({ ...block, kind: 'water' })) });
+    paintRockFootprint(ctx, material, geometry, at, region) {
+        const field=this.rockField;
         if (!field.cols) return;
-        const rock = canvas(field.cols * field.step * PIXELS, field.rows * field.step * PIXELS), r = rock.getContext('2d');
-        r.translate(-at(field.x1), -at(field.y1)); r.fillStyle = material;
-        r.fillRect(at(field.x1), at(field.y1), rock.width, rock.height); r.setTransform(1, 0, 0, 1, 0, 0);
+        const clipped=intersectBakeRegion(region,{x1:field.x1,y1:field.y1,x2:field.x1+field.cols*field.step,y2:field.y1+field.rows*field.step});
+        if (!clipped) return;
+        const rock=canvas((clipped.x2-clipped.x1)*PIXELS,(clipped.y2-clipped.y1)*PIXELS),r=rock.getContext('2d');
+        r.translate(-at(clipped.x1),-at(clipped.y1));r.fillStyle=material;
+        r.fillRect(at(clipped.x1),at(clipped.y1),rock.width,rock.height); r.setTransform(1, 0, 0, 1, 0, 0);
         const patch = r.getImageData(0, 0, rock.width, rock.height);
         for (let y = 0; y < rock.height; y++) for (let x = 0; x < rock.width; x++) {
-            const gx = field.x1 + x / PIXELS, gy = field.y1 + y / PIXELS;
+            const gx=clipped.x1+x/PIXELS,gy=clipped.y1+y/PIXELS;
             const d = bankDistance(field, gx, gy), n = noise(gx * 1.6, gy * 1.6);
             const alpha = Math.max(0, Math.min(1, (d + 0.7 + n * 0.45) / 1.4));
             patch.data[(y * rock.width + x) * 4 + 3] = Math.round(alpha * 210);
         }
-        r.putImageData(patch, 0, 0); ctx.drawImage(rock, at(field.x1), at(field.y1)); rock.width = rock.height = 1;
+        r.putImageData(patch, 0, 0); ctx.drawImage(rock,at(clipped.x1),at(clipped.y1)); rock.width = rock.height = 1;
     }
 
     paintRoads(ctx, material, at) {
@@ -326,12 +388,8 @@ export class TerrainMaterialsRenderer {
             const p = scene.groundPoint(x,y);
             const tree = frame < 3, h=tree?split:source.height-split;
             const width = height*(tree?0.27:frame===5?0.55:0.3);
-            ground.save();
-            ground.translate(p.x+width*0.45,p.y+width*0.18);
-            ground.scale(1,0.42);
-            const shade=ground.createRadialGradient(0,0,0,0,0,width);
-            shade.addColorStop(0,'rgba(24,30,16,.35)'); shade.addColorStop(1,'rgba(24,30,16,0)');
-            ground.fillStyle=shade;ground.fillRect(-width,-width,width*2,width*2);ground.restore();
+            const shadow={x:p.x+width*0.45,y:p.y+width*0.18,radius:width,sy:0.42,color:'rgba(24,30,16,.35)'};
+            if (ground) this.paintShadow(ground,shadow); else this.groundShadows.push(shadow);
             const sprite = scene.add.image(p.x,p.y,PROP_KEY,`prop-${frame}`)
                 .setOrigin(0.5,tree?0.95:0.84).setScale(height/h).setFlipX(flip).setDepth((x+y)*100+40);
             scene.terrainProps.push(sprite);
@@ -395,10 +453,8 @@ export class TerrainMaterialsRenderer {
         for (const rock of rockPlacements(geometry)) {
             const p = scene.groundPoint(rock.x, rock.y), frame = texture.get(`rock-${rock.frame}`);
             const scale = rock.height / frame.height, width = frame.width * scale;
-            ground.save(); ground.translate(p.x + width * 0.15, p.y + 3); ground.scale(1, 0.3);
-            const shade = ground.createRadialGradient(0, 0, 0, 0, 0, width * 0.48);
-            shade.addColorStop(0, 'rgba(27,30,23,.48)'); shade.addColorStop(1, 'rgba(27,30,23,0)');
-            ground.fillStyle = shade; ground.fillRect(-width / 2, -width / 2, width, width); ground.restore();
+            const shadow={x:p.x+width*0.15,y:p.y+3,radius:width*0.48,sy:0.3,color:'rgba(27,30,23,.48)'};
+            if (ground) this.paintShadow(ground,shadow); else this.groundShadows.push(shadow);
             const sprite = scene.add.image(p.x, p.y, ROCK_KEY, `rock-${rock.frame}`)
                 .setOrigin(0.5, 0.91).setScale(scale).setDepth((rock.x + rock.y) * 100 + 40);
             scene.terrainProps.push(sprite);

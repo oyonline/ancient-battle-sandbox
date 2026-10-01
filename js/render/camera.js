@@ -117,8 +117,9 @@ export class CameraRig {
             this.applyZoom();
             if (!this.scene._territoryCamInit && this.scene.units.length) {
                 this.scene._territoryCamInit = true;
-                const home = this.scene.groundPoint(board.W * 0.3, board.H / 2);
-                cam.centerOn((home.x + this.scene.mapCenter.x) / 2, (home.y + this.scene.mapCenter.y) / 2);
+                const side = this.scene.netMySide || 'red';
+                const home = this.scene.groundPoint(side === 'blue' ? board.W - 20 : 20, board.H / 2);
+                cam.centerOn(home.x, home.y);
             }
             if (this.scene.ocean) this.scene.render.world.redrawOcean();
             return;

@@ -80,15 +80,22 @@ test('中央高地：仍是制高点，全图缓丘镜像对称，弓兵居高�
     board.W = 70; board.H = 70;
 });
 
-test('五旗落位：全部立于可通行地面，坐标镜像自对称', () => {
+test('十一旗落位：全部立于可通行地面，坐标镜像自对称', () => {
     const scene = terrainScene();
     for (const flag of scene.flags) {
         assert.equal(Terrain.walkable('territory', flag.gx, flag.gy), true, `${flag.name} 应可站立`);
     }
     const flags = scene.flags;
+    assert.equal(flags.length,11);
+    assert.equal(flags.filter(f=>f.owner===null).length,7);
     for (let i = 0; i < 2; i++) {
         assert.ok(Math.abs(flags[i].gx + flags[3 + i].gx - board.W) < 1e-9, '镜像 x 对称');
         assert.equal(flags[i].gy, flags[3 + i].gy, 'y 相等');
+    }
+    for (const [a,b] of [[5,6],[7,8],[9,10]]) {
+        assert.equal(flags[a].gx+flags[b].gx,board.W);
+        assert.equal(flags[a].gy,flags[b].gy);
+        assert.equal(flags[a].owner,null);assert.equal(flags[b].owner,null);
     }
 });
 

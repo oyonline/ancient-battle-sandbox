@@ -27,10 +27,12 @@ export class BattleSpatialIndex {
             const u = units[i];
             if (u.dead || u.withdrawn) continue;
             alive.push(u);
-            const k = quantizeBucketCoord(u.gx, SP_CELL) * 512 + quantizeBucketCoord(u.gy, SP_CELL);
-            let bucket = this.grid.get(k);
-            if (!bucket) { bucket = []; this.grid.set(k, bucket); }
-            bucket.push(u);
+            if (!u.garrisonTowerId) {
+                const k = quantizeBucketCoord(u.gx, SP_CELL) * 512 + quantizeBucketCoord(u.gy, SP_CELL);
+                let bucket = this.grid.get(k);
+                if (!bucket) { bucket = []; this.grid.set(k, bucket); }
+                bucket.push(u);
+            }
             if (u.team === 'red') { rN++; rX += u.gx; rY += u.gy; }
             else { bN++; bX += u.gx; bY += u.gy; }
         }

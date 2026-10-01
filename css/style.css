@@ -99,6 +99,12 @@ button:active { transform: scale(0.94); }
 /* 信息行折叠：只留征兵/营队/集结等操作件，把战场还给玩家 */
 #controlbar.collapsed .hud-info { display: none; }
 #controlbar.collapsed { padding: 5px 10px; }
+body[data-phase="battle"] #controlbar.collapsed { width: min(760px, calc(100% - 16px)); gap: 5px; }
+#controlbar.collapsed .recruit-bar { gap: 5px; }
+#controlbar.collapsed .recruit-btn { padding: 6px 9px; border-width: 1px; border-radius: 7px; gap: 4px; }
+#controlbar.collapsed .recruit-btn .rc-icon { font-size: 15px; }
+#controlbar.collapsed .recruit-btn .rc-name { font-size: 12px; }
+#controlbar.collapsed .order-btn { padding: 5px 8px; border-width: 1px; font-size: 12px; }
 .hud-collapse-btn {
     flex: 0 0 100%;
     align-self: flex-end;
@@ -187,6 +193,19 @@ button:active { transform: scale(0.94); }
 .order-btn.active { border-color: #ffd76e; color: #ffd76e; background: #463a1c; }
 .order-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .order-btn .ob-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+.camp-control-bar { flex: 0 0 100%; padding: 7px 10px; border: 1px solid #88734b;
+    border-radius: 9px; background: #283024e8; color: #eee2c3; font: 12px/1.5 "PingFang SC", sans-serif; }
+.camp-control-title { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.camp-control-title small { color: #bdc7a8; }
+.camp-actions, .camp-workers { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
+.camp-actions:empty, .camp-workers:empty { display: none; }
+.camp-control-bar button { padding: 5px 9px; border: 1px solid #9b875b; border-radius: 6px;
+    background: #3b402c; color: #f4e4bc; font: inherit; cursor: pointer; }
+.camp-control-bar button:hover, .camp-control-bar button.active { border-color: #ecd089; background: #515036; }
+.camp-control-bar button:disabled { opacity: .4; cursor: not-allowed; }
+.camp-workers button { font-size: 11px; padding: 3px 7px; }
+body.camp-targeting canvas { cursor: crosshair; }
 
 /* ==================== 首页看板：继续 / 英雄卡 / 三区 ==================== */
 .continue-btn { display: block; width: 100%; padding: 12px 16px; margin-bottom: 10px;

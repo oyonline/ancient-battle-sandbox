@@ -552,13 +552,7 @@ export class WorldRenderer {
         const deco = [];
         this.scene.edgeProps = [];
         if (this.scene.battleOptions.terrain === 'territory' && this.materials.available()) {
-            // Keep the existing base towers; woodland is now placed by the material renderer.
-            for (const gy of [8, 20, 34, 48, 60]) for (const gx of [2.2, board.W - 3.2]) {
-                const p = this.scene.groundPoint(gx, gy);
-                const sprite = this.scene.add.image(p.x, p.y, 'props/tower')
-                    .setOrigin(0.5, 0.92).setScale(0.48).setDepth((gx + gy) * 100 + 10);
-                this.scene.edgeProps.push({ sprite, gx, gy });
-            }
+            // CampRenderer owns the real home towers and timber palisades.
             return;
         }
         // 双方大本营：箭塔沿基地前沿一字排开（要塞感）

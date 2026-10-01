@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { UnitInspector } from '../js/inspection.js';
 import { makeScene, addUnit, Terrain } from './battle-harness.js';
+import { towerCrewOffset } from '../js/render/camps.js';
 
 function fixture() {
     const panel = { hidden: true, innerHTML: '' };
@@ -22,6 +23,35 @@ function fixture() {
     const inspector = new UnitInspector(scene);
     return { scene, inspector, panel, events, gameEvents, describe: UnitInspector.describe, isDestroyed: () => destroyed };
 }
+
+test('驻塔弓手按平台身体拾取，脚下地面单位仍可分别选中', () => {
+    const { scene, inspector } = fixture();
+    const archer = addUnit(scene, 'red', 'archer', 30, 30);
+    const groundUnit = addUnit(scene, 'blue', 'infantry', 30, 30);
+    const tower = { id: 'tower:red:home', complete: true, dead: false,
+        garrisonIds: [archer.id], garrisonHeight: 82 };
+    scene.territory = { camps: { getBuilding: () => tower } };
+    archer.garrisonTowerId = tower.id; archer.garrisonHeight = 82;
+    const p = scene.groundPoint(30, 30), offset = towerCrewOffset(archer, scene.territory.camps);
+    assert.equal(inspector.pick({ x: p.x + offset.x, y: p.y + offset.y - 18 }), archer);
+    assert.equal(inspector.pick({ x: p.x, y: p.y - 18 }), groundUnit);
+});
+
+test('驻塔观察信息读取真实射程与箭源高度，建筑目标展示名称', () => {
+    const { scene, describe } = fixture();
+    scene.setTerrain('red_hill');
+    const archer = addUnit(scene, 'red', 'archer', 16, 35);
+    const enemy = addUnit(scene, 'blue', 'infantry', 20, 35);
+    archer.garrisonTowerId = 'tower:red:home'; archer.garrisonHeight = 82;
+    scene.rebuildSpatial();
+    const info = describe(scene, archer);
+    assert.equal(info.comparison.range, 14);
+    assert.equal(info.height, Terrain.height('red_hill', 16, 35) + 82 / Terrain.HEIGHT_SCALE);
+    assert.equal(info.comparison.attack, Terrain.attackMultiplier('red_hill', archer, enemy, info.height));
+    const cavalry = addUnit(scene, 'red', 'cavalry', 18, 35);
+    cavalry.target = { team: 'blue', gx: 25, gy: 35, isBuilding: true, type: 'camp', siteId: 'home', typeData: {} };
+    assert.equal(describe(scene, cavalry).comparison.name, '大本营');
+});
 
 test('inspector uses real height, attack and range rules without changing battle state', () => {
     const { scene, describe } = fixture();

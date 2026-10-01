@@ -8,6 +8,7 @@ import { TERRITORY, makeTerritoryFlags } from './battle/economy.js';
 import { setBoardSize, resetBoardSize } from './board.js';
 import { ArenaClient } from './net/arena-client.js';
 import { NetBattle } from './net/lockstep.js';
+import { CampControls } from './camp-controls.js';
 
 
 // ==================== 一键预设配兵（预算 4000） ====================
@@ -66,6 +67,7 @@ export const UI = {
 
     onSceneReady(scene) {
         this.scene = scene;
+        this.campControls = new CampControls(this);
         scene.groundClick = (world, picked) => this.onGroundClick(world, picked);
         if (this.pendingNetStart) {
             this.pendingNetStart = false;
@@ -118,6 +120,10 @@ export const UI = {
     },
 
     setPhase(phase) {
+        if (phase === 'battle' && this.phase !== 'battle' && this.battleOptions.territory) {
+            document.getElementById('controlbar').classList.add('collapsed');
+            document.getElementById('btn-hud-collapse').textContent = '⌄ 展开信息';
+        }
         this.phase = phase;
         document.body.dataset.phase = phase;
         this.syncControls();
@@ -184,6 +190,7 @@ export const UI = {
     },
 
     clearBattle() {
+        this.campControls?.reset();
         this.stopHolds();
         this.countdown = false;
         this.pendingDeploy = this.pendingAutoplay = false;
@@ -247,7 +254,7 @@ export const UI = {
         this.deployArmies();
     },
 
-    // 领土征服：大地图 + 五旗经济 + 老家征兵。双方各带 TERRITORY.OPENING 常备军
+    // 领土征服：十一据点经济、民夫建设与老家征兵。双方各带常备军和民夫。
     // 与启动军费开局（不进配兵界面）；红方手动征兵（战斗中大按钮），蓝方 AI 自动运营。
     startTerritory() {
         this.clearBattle();
@@ -456,7 +463,7 @@ export const UI = {
         const bar = document.getElementById('recruit-bar');
         bar.replaceChildren();
         for (const [key, t] of Object.entries(UNIT_TYPES)) {
-            if (t.hidden) continue;
+            if (t.hidden && !t.territoryOnly) continue;
             const cost = t.cost * TERRITORY.COST_MULT;
             const btn = document.createElement('button');
             btn.className = 'recruit-btn';
@@ -486,6 +493,7 @@ export const UI = {
     updateTerritoryHUD() {
         const hud = document.getElementById('territory-hud');
         const active = this.phase === 'battle' && this.battleOptions.territory && this.scene?.territory;
+        this.campControls?.update();
         if (hud) hud.hidden = !active;
         if (!active) return;
         if (!document.getElementById('recruit-infantry')) this.buildRecruitBar();
@@ -507,7 +515,7 @@ export const UI = {
         rallyBtn.classList.toggle('active', !!this.rallyTargeting);
         rallyBtn.hidden = !active;
         for (const [key, t] of Object.entries(UNIT_TYPES)) {
-            if (t.hidden) continue;
+            if (t.hidden && !t.territoryOnly) continue;
             const btn = document.getElementById('recruit-' + key);
             if (btn) btn.disabled = this.countdown || !territory.econ.canAfford(mine, key) ||
                 territory.recruit.queues[mine].length >= TERRITORY.QUEUE_CAP;
@@ -613,6 +621,7 @@ export const UI = {
 
     // ---------------- 驻守目标模式 / 冲锋令 / 快捷选营 ----------------
     beginHoldTargeting() {
+        this.campControls?.cancel();
         const selected = this.scene?.selectedBattalion;
         if (!selected || selected.team !== (this.mySide || 'red')) return;
         this.holdTargeting = true;
@@ -629,6 +638,7 @@ export const UI = {
 
     // 地面点击回调（inspection 上抛）：目标模式下视为选点下令
     onGroundClick(world, picked) {
+        if (this.campControls?.handleGroundClick(world, picked)) return;
         if (this.rallyTargeting) {
             this.applyGroundOrder(world, (gx, gy) => {
                 this.giveRallyOrder(gx, gy);
@@ -739,6 +749,7 @@ export const UI = {
     },
 
     beginRallyTargeting() {
+        this.campControls?.cancel();
         if (this.phase !== 'battle' || !this.battleOptions.territory || !this.scene?.territory) return;
         this.rallyTargeting = true;
         document.body.classList.add('targeting');
@@ -787,6 +798,7 @@ export const UI = {
     },
 
     updateBattalionBar() {
+        this.campControls?.update();
         const bar = document.getElementById('battalion-bar');
         const selected = this.phase === 'battle' && this.battleOptions.territory ? this.scene?.selectedBattalion : null;
         bar.hidden = !(this.phase === 'battle' && this.battleOptions.territory);
@@ -916,7 +928,7 @@ export const UI = {
         window.addEventListener('beforeunload', () => this.net.client?.bye());
         window.addEventListener('keydown', e => {
             if (this.phase !== 'battle' || !this.battleOptions.territory) return;
-            if (e.key === 'Escape') { this.cancelHoldTargeting(); this.cancelRallyTargeting(); return; }
+            if (e.key === 'Escape') { this.cancelHoldTargeting(); this.cancelRallyTargeting(); this.campControls?.cancel(); return; }
             if (e.key === 'r' || e.key === 'R') { this.beginRallyTargeting(); return; }
             if (e.key === 'Tab') { e.preventDefault(); this.selectNextBattalion(); return; }
             const digit = Number(e.key);

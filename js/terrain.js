@@ -1,5 +1,5 @@
 // 渲染、导航和战斗共用此处的确定性高度场与矩形地表。
-// 棋盘尺寸经 board 读取（默认 70×70；领土征服大地图 130×90）。除 territory 地形
+// 棋盘尺寸经 board 读取（默认 70×70；领土征服大地图 260×180）。除 territory 地形
 // 按棋盘比例布局外，其余地图是 70×70 时代设计、只在默认尺寸下运行，行为不变。
 import { board } from './board.js';
 import { territoryGeometry } from './territory-map.js';
@@ -17,7 +17,7 @@ export const Terrain = {
         river: { name: '三桥河谷', description: '河面不可通行；中央宽桥争正面，两侧桥可绕后，击退不会落水，弓箭可以跨河' },
         // 领土征服专用：纵河分隔上翼，桥头相向；中部高地、下翼林口构成三条路线。
         // cx/cy 必须跟随 economy.js 的 TERRITORY.W/H（渲染层据此画高地轮廓，见 render/world.js）。
-        territory: { name: '山河领土', description: '上翼争桥、中央夺高地、下翼穿林——三条线三种打法', cx: 65, cy: 45, rx: 9, ry: 6.5 }
+        territory: { name: '山河领土', description: '上翼争桥、中央夺高地、下翼穿林——三条线三种打法', cx: 130, cy: 90, rx: 9, ry: 6.5 }
     },
 
     normalize(key) { return Object.hasOwn(this.maps, key) ? key : 'flat'; },
@@ -47,7 +47,11 @@ export const Terrain = {
             const n1 = this._vnoise(ax * 0.065 + 7.3, gy * 0.065 - 4.1) - 0.5;
             const n2 = this._vnoise(ax * 0.16 + 21.7, gy * 0.16 + 13.9) - 0.5;
             const rolling = (n1 * 1.6 + n2 * 0.5) * homeDamp * smooth(edge) * (1 - Math.min(1, hill / 3) * 0.6);
-            return Math.max(-0.5, Math.min(3.4, hill + rolling));
+            // Northern outposts sit on low, broad ridges; their terrain advantage is real.
+            const northX = Math.round(board.W * 0.285), northY = Math.round(board.H * 0.12);
+            const ridgeQ = Math.hypot((Math.min(gx, board.W - gx) - northX) / 10, (gy - northY) / 8);
+            const ridge = ridgeQ < 1 ? 1.8 * (1 - smooth(ridgeQ)) : 0;
+            return Math.max(-0.5, Math.min(3.4, hill + rolling + ridge));
         }
         if (key === 'forest' || key === 'river') return 0;
         if (this.isNaturalSlope(key)) {

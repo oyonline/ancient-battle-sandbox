@@ -31,6 +31,7 @@ function displayObject() {
         setFrame(frame) { this.frame = frame; return this; },
         setPosition(x, y) { this.x = x; this.y = y; return this; },
         setAngle(angle) { this.angle = angle; return this; }, setAlpha(alpha) { this.alpha = alpha; return this; },
+        setText(text) { this.text = text; return this; }, setColor(color) { this.color = color; return this; },
         setTint() { return this; }, clearTint() { return this; }, anims: { stop() {} },
         destroy() { this.destroyed = true; },
         clear() {}, lineStyle() {}, lineBetween() {}, fillStyle() {}, fillCircle() {}, fillRect() {},

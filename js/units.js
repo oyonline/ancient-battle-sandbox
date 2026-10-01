@@ -25,6 +25,11 @@ export const UNIT_TYPES = {
         hp: 160, atk: 30, def: 15, speed: 4.0, atkSpeed: 1500, range: 1.1,
         chargeSpeed: 6.0, charge: true, scale: 1.35, tip: '助跑3格后双倍冲锋，擅长追击弓手'
     },
+    worker: {
+        name: '民夫', icon: '🔨', cost: 3, maxCount: 12, hidden: true, territoryOnly: true,
+        hp: 45, atk: 0, def: 0, speed: 2.4, atkSpeed: 999999, range: 0,
+        scale: 1.0, tip: '建设营寨和箭塔，无战斗力，需部队保护'
+    },
     // 护送模式的辎重车：不可购买、无攻击；贴图运行时生成（见 game.js ensureWagonTextures）
     wagon: {
         name: '辎重车', icon: '🛒', cost: 0, maxCount: 0, hidden: true,
@@ -52,7 +57,7 @@ export const BUDGET = 4000;
 // 两翼放骑兵/长枪；本排兵种耗尽时列内自动替补，保证每行尽量放满不空转。
 export function generateArmyPositions(team, config, formationKey) {
     const formation = FORMATIONS[formationKey] || FORMATIONS.custom;
-    const remaining = { ...config };
+    const remaining = Object.fromEntries(['infantry', 'pikeman', 'archer', 'cavalry'].map(type => [type, config[type] ?? 0]));
     const positions = [];
 
     const total = Object.values(remaining).reduce((a, b) => a + b, 0);
@@ -840,6 +845,7 @@ export function resolveAttack(target, from, options = {}) {
 }
 
 export function applyDamage(target, dmg, from, attackStartedAt) {
+    if (target.isBuilding) return target.scene?.territory?.camps?.damageBuilding(target, dmg, from) ?? 0;
     if (target.dead || target.withdrawn || target.hp <= 0 || !Number.isFinite(dmg) || dmg <= 0) return 0;
     const scene = target.scene;
     if (scene && (target.battleId !== scene.battleId || (from && from.battleId !== scene.battleId))) return 0;

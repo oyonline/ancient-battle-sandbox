@@ -4,6 +4,7 @@ import { TW, TH, gridToScreen } from './metrics.js';
 import { Terrain } from '../terrain.js';
 import { clamp } from '../units.js';
 import { ANIM_ALIGN_K, CAVALRY_PROFILE_SUFFIX, CAVALRY_FLIPPED, cavalryProfile, cavalryRenderSign, cavalryHeadingFromMotion, footProfile, animAlignProfile, shadowTextureKey } from './sprites.js';
+import { ensureWorkerTextures, towerCrewOffset } from './camps.js';
 
 // 接敌姿态参数（毫秒，走模拟时钟，暂停即冻结）：
 // 蓄势窗口——临近冷却终点收定在起手帧，让"下一击"的节奏可读；
@@ -13,9 +14,11 @@ const STANCE_RECOVER_MS = 420;
 
 export class UnitRenderer {
     constructor(scene) { this.scene = scene; }
+    ensureWorkerTextures() { ensureWorkerTextures(this.scene); }
 
     // 注册各单位动画剪辑（重复开局幂等）
     buildUnitAnims() {
+        ensureWorkerTextures(this.scene);
         Object.entries(MANIFEST.anims || {}).forEach(([unit, clips]) => {
             const isCav = unit.includes('cavalry');
             Object.entries(clips).forEach(([clip, c]) => {
@@ -199,7 +202,9 @@ export class UnitRenderer {
 
     syncOne(unit, time, view) {
         if (unit.dead || unit.withdrawn) return;
-        const { x, y } = this.scene.groundPoint(unit.gx, unit.gy);
+        const ground = this.scene.groundPoint(unit.gx, unit.gy);
+        const crew = towerCrewOffset(unit, this.scene.territory?.camps);
+        const x = ground.x + (crew?.x || 0), y = ground.y + (crew?.y || 0);
         // 朝向仍依据地面平面位移，爬坡的视觉抬升不能把马误转成朝北。
         const planar = gridToScreen(unit.gx, unit.gy);
 
@@ -255,11 +260,15 @@ export class UnitRenderer {
         // 辎重车是运行时生成的单帧贴图，无行走/攻击动画可切，跳过状态机
         if (unit.type !== 'wagon' && unit.animState !== 'attack') {
             const stance = this.updateStancePose(unit, this.scene.simulationTime);
-            const want = unit.moving ? 'walk' : 'idle';
+            const construction = unit.type === 'worker' && unit.workerTask?.kind === 'build'
+                ? this.scene.territory?.camps?.getBuilding(unit.workerTask.buildingId) : null;
+            const working = construction && !construction.dead && !construction.complete &&
+                !construction.paused && construction.workerId === unit.id;
+            const want = unit.moving ? 'walk' : working ? 'build' : 'idle';
             if (want !== unit.animState) {
                 unit.animState = want;
-                if (want === 'walk') {
-                    unit.spr.play(this.unitAnimKey(unit, 'walk'), true);
+                if (want === 'walk' || want === 'build') {
+                    unit.spr.play(this.unitAnimKey(unit, want), true);
                 } else {
                     unit.spr.anims.stop();
                     unit.spr.setTexture(this.unitAnimKey(unit, 'walk'), 0); // 当前方向的站姿
@@ -340,11 +349,12 @@ export class UnitRenderer {
         unit.spr.setPosition(x + ox + L.x + ajx, y + unit.footDy + L.y + ajy);
         unit.spr.setAngle(L.angle);
 
-        const depth = (unit.gx + unit.gy) * 100 + 50;
+        const depth = (unit.gx + unit.gy) * 100 + 50 + (crew?.depth || 0);
         unit.spr.setDepth(depth);
         // 影子：贴图镜像随朝向翻转 —— 脚底偏移已烘进贴图，翻转后仍贴在脚掌下
         const shadowSign = unit.type === 'cavalry' ? cavalryRenderSign(unit.visualDir) : unit.faceDir;
         unit.shadow.setPosition(x + ox * 0.55, y).setScale(shadowSign, 1).setDepth(depth - 2);
+        unit.shadow.setVisible(!crew);
 
         // 受击反馈：轻染红（乘法染色保留像素图案，不再全白填充闪白）
         if (this.scene.simulationTime < unit.flashUntil) unit.spr.setTint(0xff7d6e);

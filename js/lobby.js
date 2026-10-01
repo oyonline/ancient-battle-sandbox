@@ -601,9 +601,9 @@ export const lobbyMethods = {
             : this.battleOptions.convoy
             ? '🛒 护送 · 送抵 3 辆辎重车获胜；蓝方劫走 3 辆即得手'
             : this.battleOptions.net
-            ? '🌐 局域网对战 · 对面就是真人——占旗生财、征兵点营，票数耗尽即负'
+            ? '🌐 局域网对战 · 夺旗、筑寨、驻塔；耗尽敌方票数或攻破大本营获胜'
             : this.battleOptions.territory
-            ? '🚩 领土征服 · 占旗生财、征兵增援；票数耗尽即负（全歼对手同样获胜）'
+            ? '🚩 领土征服 · 十一据点、民夫筑寨、弓手驻塔；耗尽敌方票数或攻破大本营获胜'
             : (this.challenge ? this.challenge.title + ' · ' : this.mode === 'tactics' ? '战阵演练 · ' : '') + '拖动看战况 · 点击士兵看地形';
         this.openSheet(false);
         this.scene.startCountdown(() => { this.countdown = false; this.syncControls(); });
@@ -669,6 +669,7 @@ export const lobbyMethods = {
             ? (winner === 'red' ? '蓝方' : '红方') + '已全灭，死斗结束。 '
             : report.endReason === 'control' ? (winner === 'red' ? '红方' : '蓝方') + '掌控旗帜积分达标，占点获胜。 '
             : report.endReason === 'tickets' ? (winner === 'red' ? '红方' : '蓝方') + '掌控多数领土，对方票数耗尽，领土征服获胜。 '
+            : report.endReason === 'camp' ? (winner === 'draw' ? '双方大本营同时被摧毁。 ' : (winner === 'red' ? '红方' : '蓝方') + '摧毁敌方大本营，攻寨获胜。 ')
             : report.endReason === 'convoy' ? (winner === 'red' ? '红方辎重车队突破封锁，护送获胜。' : '蓝方劫掠得手，辎重车队尽数被劫。')
             : report.endReason === 'stalemate' ? '双方持续固守、无人推进，本局相持结束。试着让一方改为进攻。 ' : report.endReason === 'rout' && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '军心瓦解，失去继续作战能力。 '

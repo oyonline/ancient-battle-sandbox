@@ -80,6 +80,7 @@ export function resolveBlockedEngage(scene, unit, target, now, reach) {
 
 export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
         if (unit.dead || unit.withdrawn || unit.moraleState === 'routing') return;
+        if (unit.type === 'worker') return; // 民夫仅由营寨命令驱动，不进行普攻或夺旗
         // 辎重车：有护卫在侧(4格内)且无敌情(3.2格内无敌)才沿路线推进——
         // 逼近的敌人没清完就停车列队，不会自己往敌阵里拱；车不还手（atk 0）。
         // 敌情闸门只挡贴脸威胁：远处胶着的战团不该让车队无限期趴窝。

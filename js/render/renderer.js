@@ -4,10 +4,12 @@ import { UnitRenderer } from './units.js';
 import { EffectsRenderer } from './fx.js';
 import { OverlayRenderer } from './overlay.js';
 import { CameraRig } from './camera.js';
+import { CampRenderer } from './camps.js';
 
 export class BattleRenderer {
     constructor(scene) { this.scene = scene; this.world = new WorldRenderer(scene);
         this.units = new UnitRenderer(scene);
+        this.camps = new CampRenderer(scene);
         this.fx = new EffectsRenderer(scene);
         this.overlay = new OverlayRenderer(scene);
         this.camera = new CameraRig(scene); }

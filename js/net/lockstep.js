@@ -76,6 +76,11 @@ export function battleProjection(scene) {
         parts.push(unit.id, unit.team === 'red' ? 'R' : 'B', unit.type,
             Math.round(unit.gx * 1e4), Math.round(unit.gy * 1e4),
             Math.round(unit.hp * 1e3), unit.moraleState);
+        if (scene.territory?.camps) {
+            parts.push('camp-unit', unit.garrisonTowerId || '', unit.garrisonOrderId || '',
+                unit.orderBuildingId || '', Math.round((unit.garrisonHeight || 0) * 1e3),
+                Math.round(unit.lastAttack * 1e3), JSON.stringify(unit.workerTask || null));
+        }
     }
     parts.push('f');
     for (const flag of scene.flags) {
@@ -87,6 +92,17 @@ export function battleProjection(scene) {
         Math.round(territory.tickets.tickets.red * 1e3), Math.round(territory.tickets.tickets.blue * 1e3),
         territory.recruit.spawned.red, territory.recruit.spawned.blue,
         territory.recruit.queues.red.length, territory.recruit.queues.blue.length);
+    if (territory.camps) {
+        parts.push('camps', JSON.stringify(territory.camps.projection()));
+        parts.push('arrows', JSON.stringify(scene.arrows.map(a => [
+            a.source?.id, a.team, a.buildingId || '', a.sx, a.sy, a.tx, a.ty,
+            a.t, a.dur, a.dmg, a.firedAt, a.sourceHeight, a.targetHeight
+        ])));
+        for (const team of ['red', 'blue']) {
+            parts.push(team, JSON.stringify(territory.recruit.queues[team]),
+                JSON.stringify(territory.rally[team]));
+        }
+    }
     return parts.join(',');
 }
 

@@ -50,8 +50,9 @@ test('五旗布局：双方半场各两面起始归属 + 中场中立，换座�
     board.W = TERRITORY.W; board.H = TERRITORY.H;   // makeTerritoryFlags 读当前棋盘
     const flags = makeTerritoryFlags();
     board.W = 70; board.H = 70;
-    assert.equal(flags.length, 5);
-    assert.deepEqual(flags.map(f => f.owner), ['red', 'red', null, 'blue', 'blue']);
+    assert.equal(flags.length, 11);
+    assert.deepEqual(flags.slice(0,5).map(f=>f.owner),['red','red',null,'blue','blue']);
+    assert.deepEqual(flags.slice(5).map(f=>f.owner),[null,null,null,null,null,null]);
     assert.equal(flags[2].gx, TERRITORY.W / 2);
     // 镜像对：x 之和 = W，y 相等
     for (let i = 0; i < 2; i++) {
@@ -65,7 +66,7 @@ test('五旗布局：双方半场各两面起始归属 + 中场中立，换座�
 test('开局：大地图生效、五旗就位、双方常备军与启动军费', () => {
     const scene = territoryScene();
     assert.equal(board.W, TERRITORY.W);
-    assert.equal(scene.flags.length, 5);
+    assert.equal(scene.flags.length, 11);
     assert.equal(scene.flags.filter(f => f.owner === 'red').length, 2);
     assert.equal(scene.territory.econ.treasury.red, TERRITORY.START_TREASURY);
     const opening = Object.values(TERRITORY.OPENING).reduce((a, b) => a + b, 0);

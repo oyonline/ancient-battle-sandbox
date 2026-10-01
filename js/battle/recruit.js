@@ -16,6 +16,7 @@ export class RecruitSystem {
 
     // 入队即扣费（训练中钱已花掉）；队列满 / 钱不够 / 在场+队列超过兵种上限均拒绝。
     enqueue(team, type) {
+        if (!this.queues[team] || (type === 'worker' && !this.scene.battleOptions?.territory)) return false;
         const econ = this.scene.territory.econ;
         const queue = this.queues[team];
         if (queue.length >= TERRITORY.QUEUE_CAP) return false;
@@ -67,11 +68,12 @@ export class TerritoryAI {
         const counts = {};
         let total = 0;
         for (const unit of scene._aliveArr) {
-            if (unit.team !== this.team) continue;
+            if (unit.team !== this.team || !(unit.type in TerritoryAI.MIX)) continue;
             counts[unit.type] = (counts[unit.type] || 0) + 1;
             total++;
         }
         for (const item of recruit.queues[this.team]) {
+            if (!(item.type in TerritoryAI.MIX)) continue;
             counts[item.type] = (counts[item.type] || 0) + 1;
             total++;
         }
@@ -83,7 +85,9 @@ export class TerritoryAI {
             const deficit = TerritoryAI.MIX[type] * base - (counts[type] || 0);
             if (deficit > bestDeficit + 1e-9) { bestDeficit = deficit; best = type; }
         }
-        if (best && bestDeficit >= 1) recruit.enqueue(this.team, best);
+        // Reserve a pending field fort's cost; continuous troop spending must not starve construction forever.
+        const reserve = scene.territory.camps?.aiSavingsBudget(this.team) ?? 0;
+        if (best && bestDeficit >= 1 && scene.territory.econ.treasury[this.team] >= reserve + scene.territory.econ.costOf(best)) recruit.enqueue(this.team, best);
         else if (scene.territory.econ.treasury[this.team] > 400) recruit.enqueue(this.team, 'infantry');   // 富余：补兵线
     }
 }

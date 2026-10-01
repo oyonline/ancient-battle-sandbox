@@ -3,6 +3,7 @@ import { board } from '../board.js';
 import { Terrain } from '../terrain.js';
 import { clamp, dist, resolveAttack } from '../units.js';
 import { gridToScreen } from './metrics.js';
+import { towerCrewOffset } from './camps.js';
 
 export class EffectsRenderer {
     constructor(scene) { this.scene = scene; }
@@ -15,11 +16,16 @@ export class EffectsRenderer {
         const lead = (v) => v ? clamp(v * flightT, -1.5, 1.5) : 0;
         const tx = clamp(target.gx + lead(target.velX), 0.5, board.W - 0.5);
         const ty = clamp(target.gy + lead(target.velY), 0.5, board.H - 0.5);
+        const crew = towerCrewOffset(from, this.scene.territory?.camps);
         this.scene.arrows.push({
             sx: from.gx, sy: from.gy,
             tx, ty,
-            sourceHeight: this.scene.terrainHeight(from.gx, from.gy),
-            targetHeight: this.scene.terrainHeight(tx, ty),
+            sourceHeight: this.scene.terrainHeight(from.gx, from.gy) + (from.garrisonHeight || 0) / Terrain.HEIGHT_SCALE,
+            targetHeight: this.scene.terrainHeight(tx, ty) + (target.garrisonHeight || 0) / Terrain.HEIGHT_SCALE,
+            sourceOffsetX: crew?.x || 0,
+            sourceOffsetY: crew ? crew.y + (from.garrisonHeight || 0) : 0,
+            sourceLift: 22, targetLift: target.isBuilding ? (target.type === 'tower' ? 64 : 36) : 17,
+            buildingId: target.isBuilding ? target.id : null,
             t: 0, dur: flightT,
             dmg: from.typeData.atk, team: from.team, source: from, firedAt: this.scene.simulationTime
         });
@@ -38,6 +44,8 @@ export class EffectsRenderer {
             const s = gridToScreen(gx, gy);
             // 端点高度插值加抛物线，不让飞行中的箭贴着途经山坡起伏。
             s.y -= ((a.sourceHeight || 0) * (1 - p) + (a.targetHeight || 0) * p) * Terrain.HEIGHT_SCALE;
+            s.x += (a.sourceOffsetX || 0) * (1 - p);
+            s.y += (a.sourceOffsetY || 0) * (1 - p) - ((a.sourceLift || 0) * (1 - p) + (a.targetLift || 0) * p);
             const arcH = Math.sin(p * Math.PI) * 46;
 
             g.lineStyle(1.5, 0x5b4632, 1);
@@ -48,6 +56,16 @@ export class EffectsRenderer {
             g.fillCircle(s.x + dx, s.y + dy - arcH, 1.4);
 
             if (p >= 1) {
+                if (a.buildingId) {
+                    const building = this.scene.territory?.camps?.getBuilding(a.buildingId);
+                    if (building && !building.dead && building.team !== a.team) {
+                        resolveAttack(building, a.source, { rawAttack: a.dmg, attackStartedAt: a.firedAt,
+                            sourceHeight: a.sourceHeight });
+                        if (!this.scene.lowFX) this.scene.impactPuff(s.x, s.y, 0xc4a177);
+                    }
+                    this.scene.arrows.splice(i, 1);
+                    continue;
+                }
                 // 落点找最近的敌人判定命中（空间哈希只查落点周围）
                 let hit = null, hd = 0.75;
                 this.scene.forEachNear(a.tx, a.ty, hd, u => {
@@ -81,6 +99,20 @@ export class EffectsRenderer {
         const sA = this.scene.groundPoint(attacker.gx, attacker.gy);
         const s = this.scene.groundPoint(target.gx, target.gy);
         const ang = Math.atan2((s.y - sA.y) * 2, s.x - sA.x);
+        if (target.isBuilding) {
+            // Timber receives splinters, never a unit knockback tween or blood.
+            if (!this.scene.lowFX && this.scene._fxBudget > 0) {
+                this.scene._fxBudget--;
+                this.sparkBurst(s.x, s.y - (target.type === 'tower' ? 48 : 30), 0xd9b578);
+                if (attacker.lunge) {
+                    const L = attacker.lunge;
+                    this.scene.tweens.add({ targets:L,x:Math.cos(ang)*6,y:Math.sin(ang)*3,duration:70,
+                        onComplete:()=>this.scene.tweens.add({targets:L,x:0,y:0,duration:180}) });
+                }
+            }
+            if (Snd) Snd.play('hit');
+            return;
+        }
 
         // 全局拉远观战时只保留伤害与血（lowFX），近景才放全套打击感
         if (!this.scene.lowFX && this.scene._fxBudget > 0) {
@@ -238,14 +270,16 @@ export class EffectsRenderer {
         const q = this.scene.bloodQueue;
         if (!q.length || !this.scene.scarRT) return;
         const st = this.scene.add.graphics();
+        const bounds = [];
         for (let i = 0; i < q.length; i += 3) {
             const x = q[i], y = q[i + 1], s = q[i + 2] * 1.2;
+            bounds.push({ x:x-s/2,y:y-s*0.3,width:s,height:s*0.55 });
             st.fillStyle(0x6e0f0f, 0.9);
             st.fillRect(x - s / 2, y - s * 0.3, s, s * 0.55);
             st.fillStyle(0x951919, 0.85);
             st.fillRect(x - s * 0.3, y - s * 0.14, s * 0.55, s * 0.28);
         }
-        this.scene.scarRT.draw(st);
+        this.scene.scarRT.draw(st,bounds);
         st.destroy();
         q.length = 0;
     }
@@ -265,7 +299,7 @@ export class EffectsRenderer {
         st.fillStyle(0x991b1b, 0.85);
         st.fillEllipse(s * 0.04, s * 0.02, s * 0.5, s * 0.26);
         st.setPosition(x, y);
-        this.scene.scarRT.draw(st);
+        this.scene.scarRT.draw(st,{x:x-s*0.6,y:y-s*0.4,width:s*1.2,height:s*0.8});
         st.destroy();
     }
 

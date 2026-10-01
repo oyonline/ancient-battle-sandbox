@@ -5,7 +5,7 @@ import { dist, resolveAttack, knockback } from './units.js';
 
 export const CombatRules = {
     canAct(unit) { return this.canBeHit(unit) && unit.moraleState !== 'routing'; },
-    canBeHit(unit) { return !unit.dead && !unit.withdrawn && unit.hp > 0; },
+    canBeHit(unit) { return !unit.dead && !unit.withdrawn && !unit.garrisonTowerId && unit.hp > 0; },
     bodyRadius(unit) { return unit.typeData.bodyRadius ?? 0.36; },
     contactDistance(a, b) { return this.bodyRadius(a) + this.bodyRadius(b); },
     maxContactDistance(units) {

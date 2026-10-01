@@ -1,25 +1,35 @@
 // Shared layout: objective positions, collision geometry and visible routes agree.
-// Keep the five objective indices stable for orders and network commands.
+// Keep the original five objective indices stable for orders and network commands.
 export function territoryLayout(W, H) {
     const cx = W / 2, cy = H / 2;
     const bridgeY = Math.round(H * 2 / 9);
     const bridge = { x1: cx - 6, x2: cx + 6, y1: bridgeY - 3, y2: bridgeY + 3, kind: 'bridge' };
     const upperX = cx - 12, woodX = Math.round(W * 0.404), woodY = Math.round(H * 0.722);
+    const fordY = Math.round(H * 0.378), northX = Math.round(W * 0.285);
+    const sideX = Math.round(W * 0.285), sideY = Math.round(H * 0.83);
     const sites = [
         { gx: upperX, gy: bridgeY, name: '西桥头', role: 'bridge', benefit: '上翼过河通道', owner: 'red', progress: 1 },
         { gx: woodX, gy: woodY, name: '西林口', role: 'forest', benefit: '下翼侧路入口', owner: 'red', progress: 1 },
         { gx: cx, gy: cy, name: '中央高地', role: 'hill', benefit: '弓兵居高俯射', owner: null, progress: 0 },
         { gx: W - upperX, gy: bridgeY, name: '东桥头', role: 'bridge', benefit: '上翼过河通道', owner: 'blue', progress: -1 },
-        { gx: W - woodX, gy: woodY, name: '东林口', role: 'forest', benefit: '下翼侧路入口', owner: 'blue', progress: -1 }
-    ];
+        { gx: W - woodX, gy: woodY, name: '东林口', role: 'forest', benefit: '下翼侧路入口', owner: 'blue', progress: -1 },
+        { gx: northX, gy: Math.round(H * 0.12), name: '西北岗', role: 'ridge', benefit: '北翼制高哨位', owner: null, progress: 0 },
+        { gx: W - northX, gy: Math.round(H * 0.12), name: '东北岗', role: 'ridge', benefit: '北翼制高哨位', owner: null, progress: 0 },
+        { gx: cx - 12, gy: fordY, name: '西渡口', role: 'ford', benefit: '中央浅滩侧路', owner: null, progress: 0 },
+        { gx: cx + 12, gy: fordY, name: '东渡口', role: 'ford', benefit: '中央浅滩侧路', owner: null, progress: 0 },
+        { gx: sideX, gy: sideY, name: '西南路口', role: 'crossroad', benefit: '下翼迂回岔路', owner: null, progress: 0 },
+        { gx: W - sideX, gy: sideY, name: '东南路口', role: 'crossroad', benefit: '下翼迂回岔路', owner: null, progress: 0 }
+    ].map((site, siteId) => ({ ...site, siteId }));
     // The upper route crosses the bridge; the middle route skirts the river's
     // southern ford and climbs the hill; the lower route runs through woodland.
     const routes = [
-        [[7, cy], [24, cy - 10], [upperX, bridgeY], [W - upperX, bridgeY], [W - 24, cy - 10], [W - 7, cy]],
-        [[7, cy], [cx - 18, cy + 1], [cx, cy], [cx + 18, cy + 1], [W - 7, cy]],
-        [[7, cy], [24, woodY - 2], [woodX, woodY], [cx, woodY + 5], [W - woodX, woodY], [W - 24, woodY - 2], [W - 7, cy]]
+        [[7, cy], [northX, Math.round(H * 0.12)], [upperX, bridgeY], [W - upperX, bridgeY], [W - northX, Math.round(H * 0.12)], [W - 7, cy]],
+        [[7, cy], [cx - 12, fordY], [cx, fordY], [cx + 12, fordY], [W - 7, cy]],
+        [[cx - 12, fordY], [cx, fordY + 5], [cx + 12, fordY]],
+        [[cx, fordY + 5], [cx, cy]],
+        [[7, cy], [sideX, sideY], [woodX, woodY], [cx, woodY + 5], [W - woodX, woodY], [W - sideX, sideY], [W - 7, cy]]
     ];
-    return { bridge, sites, routes, fordY: bridgeY + 14 };
+    return { bridge, sites, routes, fordY };
 }
 
 export function territoryGeometry(W, H) {

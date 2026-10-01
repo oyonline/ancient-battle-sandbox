@@ -13,6 +13,7 @@ export const FOOT = {
     pikeman:  { pad: 34, dx:  -7, w: 63, h: 31 },
     archer:   { pad: 11, dx:  -6, w: 67, h: 33 },
     wagon:    { pad:  6, dx:   0, w: 64, h: 30 },
+    worker:   { pad: 14, dx:  -1, w: 58, h: 28 },
     cavalry: {
         east:      { pad:  4, dx: -10, w: 83, h: 41 },
         southeast: { pad: 10, dx: -16, w: 74, h: 36 },
@@ -31,6 +32,7 @@ export const ANIM_ALIGN = {
     infantry: { walk: [[1, 0], [-10, 4], [-9, 3], [-30, 4]], attack: [[5, 0], [10, 0], [-8, 0], [-14, 0]] },
     pikeman:  { walk: [[0, -1], [-1, -2], [-3, -3], [-7, -3]], attack: [[1, 0], [1, 0], [5, 0], [-8, 0]] },
     archer:   { walk: [[0, -3], [-13, 9], [-14, 0], [-19, 0]], attack: [[7, 0], [-11, 0], [-20, 0], [12, 0]] },
+    worker:   { walk: [[0,0],[0,0],[0,0],[0,0]], attack: [[0,0],[0,0],[0,0],[0,0]] },
     cavalry: {
         east:      { walk: [[0, -1], [-9, 0], [-6, 0], [-14, 1]], attack: [[1, 0], [-6, 0], [2, 0], [-12, 0]] },
         southeast: { walk: [[0, 0], [-6, -1], [-16, -8], [-8, -2]], attack: [[-1, 0], [-3, 0], [-2, 0], [-10, 0]] },
@@ -92,4 +94,3 @@ export function shadowTextureKey(team, type, visualDir = 'side') {
     const direction = type === 'cavalry' ? `-${cavalryProfile(visualDir)}` : '';
     return `shadow-${team}-${type}${direction}`;
 }
-
