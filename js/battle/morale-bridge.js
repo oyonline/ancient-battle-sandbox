@@ -103,6 +103,8 @@ export function updateFallingBackUnit(scene, unit, now, dt) {
 }
 
 export function updateRoutedUnit(scene, unit, dt) {
+    // 据点疗伤中的溃兵站定接受治疗（回满才归队），不再逃逸。
+    if (scene.territory?.healing?.holdRouted(unit)) { unit.moving = false; return; }
     // 在安全友军身边停下等待重整，不能边逃边自动回满士气。
     if (unit.moraleSheltered) return;
     const now = scene.simulationTime;
@@ -134,7 +136,8 @@ export function updateRoutedUnit(scene, unit, dt) {
             }
         }
     }
-    const anchor = scene.tactics?.rallyPoint(unit) || unit.rallyTarget;
+    // 疗伤据点优先于接应锚：溃兵按收容循环直奔最近己方据点（无令时）。
+    const anchor = scene.tactics?.rallyPoint(unit) || scene.territory?.healing?.rallyAnchor(unit) || unit.rallyTarget;
     let dx = (anchor ? anchor.gx : unit.team === 'red' ? 0 : board.W) - unit.gx;
     let dy = anchor ? anchor.gy - unit.gy : 0;
     const length = Math.hypot(dx, dy) || 1;

@@ -68,6 +68,30 @@ export function ensureCampTextures(scene) {
             g.lineStyle(3,0xd0af78,1); g.lineBetween(88,157,98,95); g.lineBetween(100,151,110,89);
             for (let i=0;i<8;i++) g.lineBetween(89+i*1.25,153-i*7.5,101+i*1.25,147-i*7.5);
         });
+        // 医帐：白帆布行军帐篷，门口红十字幡——伤兵收容点的可读标识。
+        bake(scene, `camp-tent-${team}`, 170, 150, g => {
+            g.fillStyle(0x162016,0.28); g.fillEllipse(85,128,108,34);
+            polygon(g, [[16,124],[85,140],[154,124],[85,110]], 0x8a815d);
+            // 帐体：两页白帆布拼缝，右页压暗模拟受光面。
+            polygon(g, [[18,122],[84,30],[84,136]], 0xe8e2cf);
+            polygon(g, [[84,30],[150,122],[84,136]], 0xcfc8b2);
+            g.lineStyle(2.5,0xa89f86,1); g.lineBetween(84,32,84,136);
+            // 帐篷门帘半掀，露出内部担架与药柜一角。
+            polygon(g, [[68,124],[84,96],[100,124],[84,132]], 0x6b6353);
+            polygon(g, [[62,124],[74,104],[78,124]], 0xd9d2bb);
+            // 帐顶桩绳
+            g.lineStyle(2.5,0x9b8f74,1);
+            g.lineBetween(84,30,40,118); g.lineBetween(84,30,128,118);
+            g.lineStyle(4,0x74563a,1); g.lineBetween(84,28,84,10);
+            // 红十字幡：队伍色旗面 + 白十字，父女对打时一眼可辨敌我医帐。
+            polygon(g, [[84,10],[122,18],[84,26]], TEAM[team]);
+            g.fillStyle(0xffffff,1);
+            g.fillRect(96,12,4,11); g.fillRect(92,16,12,4);
+            // 门口药箱
+            polygon(g, [[120,132],[138,140],[152,132],[136,124]], 0xb98f60);
+            g.fillStyle(0xffffff,1); g.fillRect(133,131,7,7);
+            g.fillStyle(0xc0392b,1); g.fillRect(135,133,3,3); g.fillRect(134.5,132.5,2,5); g.fillRect(133.5,133.5,4,2);
+        });
     }
     for (const direction of ['x','y']) bake(scene, `camp-wall-${direction}`, 80, 98, g => {
         const sign = direction === 'x' ? 1 : -1;
@@ -124,12 +148,13 @@ export class CampRenderer {
     create(building) {
         const scene=this.scene,p=scene.groundPoint(building.gx,building.gy),parts=[];
         const depth=(building.gx+building.gy)*100;
-        const home=building.siteId==='home',tower=building.type==='tower';
-        const image=scene.add.image(p.x,p.y,`camp-${tower?'tower':'hall'}-${building.team}`)
-            .setOrigin(0.5,tower?158/184:160/200).setDepth(depth+30);
+        const home=building.siteId==='home',tower=building.type==='tower',tent=building.type==='tent';
+        const image=scene.add.image(p.x,p.y,`camp-${tower?'tower':tent?'tent':'hall'}-${building.team}`)
+            .setOrigin(0.5,tower?158/184:tent?136/150:160/200).setDepth(depth+30);
         if(!tower) image.setScale(home?1.12:0.88);
+        if(tent) image.setScale(0.95);
         parts.push(image);
-        if(!tower) {
+        if(!tower && !tent) {
             const r=home?3.5:2.65;
             for(const side of [-1,1]) for(let offset=-r+0.6;offset<r;offset+=1.2) {
                 for(const dir of ['x','y']) {
@@ -146,11 +171,11 @@ export class CampRenderer {
         parts.push(rubble);
         const scaffold=scene.add.graphics().setPosition(p.x,p.y).setDepth(depth+35);
         const status=scene.add.graphics().setPosition(p.x,p.y).setDepth(depth+170);
-        const label=scene.add.text(p.x,p.y-(tower?141:131), '',
+        const label=scene.add.text(p.x,p.y-(tower?141:tent?110:131), '',
             {fontSize:'13px',fontFamily:'sans-serif',color:'#f8edcc',stroke:'#302c20',strokeThickness:3})
             .setOrigin(0.5,1).setDepth(depth+171);
-        const half=tower?74:home?190:151,height=tower?147:143;
-        building.renderBounds={x:p.x-half,y:p.y-height,width:half*2,height:height+(tower?24:79)};
+        const half=tower?74:tent?68:home?190:151,height=tower?147:tent?110:143;
+        building.renderBounds={x:p.x-half,y:p.y-height,width:half*2,height:height+(tower?24:tent?20:79)};
         return {building,parts,image,rubble,scaffold,status,label,p,signature:null};
     }
 
@@ -164,20 +189,23 @@ export class CampRenderer {
         view.rubble.setVisible(!!building.dead);
         const g=view.scaffold;g.clear();view.status.clear();
         if(building.dead) {view.label.setText('废墟');return;}
-        const tower=building.type==='tower',home=building.siteId==='home';
-        const h=tower?120:home?119:100;
+        const tower=building.type==='tower',tent=building.type==='tent',home=building.siteId==='home';
+        const h=tower?120:tent?86:home?119:100;
         if(!building.complete) {
             const progress=Math.max(0,Math.min(1,building.progress||0));
             for(const part of view.parts)if(part!==view.rubble)part.setAlpha(0.2+progress*0.8);
             g.lineStyle(3,0xc6a574,0.95);
-            for(const x of [-43,43]) {g.lineBetween(x,10,x,-h);g.lineBetween(x,10,-x,-h);}
-            for(let y=0;y>-h;y-=24)g.lineBetween(-48,y,48,y);
+            const w=tent?40:48;
+            for(const x of [-w+5,w-5]) {g.lineBetween(x,10,x,-h);g.lineBetween(x,10,-x,-h);}
+            for(let y=0;y>-h;y-=24)g.lineBetween(-w,y,w,y);
             this.bar(view.status,h+11,progress,0xdabb65);
-            view.label.setText(`${tower?'箭塔':'营寨'} ${building.paused?'停工':'施工'} ${Math.floor(progress*100)}%`);
+            view.label.setText(`${tower?'箭塔':tent?'医帐':'营寨'} ${building.paused?'停工':'施工'} ${Math.floor(progress*100)}%`);
         } else {
             for(const part of view.parts) part.setAlpha(1);
             if(building.hp<building.maxHp)this.bar(view.status,h+11,building.hp/building.maxHp,TEAM[building.team]);
-            view.label.setText(tower?`箭塔 ${count}/${building.capacity||4}`:home?'大本营':'前线营寨');
+            view.label.setText(tower?`箭塔 ${count}/${building.capacity||4}`
+                :tent?`医帐 医师${count}/${building.capacity||2}`
+                :home?'大本营':'前线营寨');
         }
     }
 
@@ -232,6 +260,59 @@ export function ensureWorkerTextures(scene) {
             scene.anims.create({key,frames:scene.anims.generateFrameNumbers(key,{start:0,end:3}),frameRate:clip==='walk'?9:8,repeat:clip==='attack'?0:-1});
         }
     }
+}
+
+// 医师行走帧：白袍 + 药箱 + 队伍色腰带，与民夫同一 156px 源高与画法骨架。
+export function ensureMedicTextures(scene) {
+    if(!scene.textures.createCanvas)return;
+    for(const team of ['red','blue']) {
+        for(const clip of ['walk','attack']) {
+            const key=`assets/units/anim/${team}_medic_${clip}`;
+            if(scene.textures.exists(key))continue;
+            const texture=scene.textures.createCanvas(key,158*4,156),ctx=texture.getContext();
+            for(let frame=0;frame<4;frame++) {
+                drawMedic(ctx,frame*158,frame,clip,team);
+                texture.add(frame,0,frame*158,0,158,156);
+            }
+            texture.refresh();
+        }
+        const key=`units/${team}_medic`;
+        if(!scene.textures.exists(key)) {
+            const texture=scene.textures.createCanvas(key,158,156);
+            drawMedic(texture.getContext(),0,0,'walk',team);texture.refresh();
+        }
+        for(const clip of ['walk','attack']) {
+            const key=`assets/units/anim/${team}_medic_${clip}`;
+            if(scene.anims.exists(key))continue;
+            scene.anims.create({key,frames:scene.anims.generateFrameNumbers(key,{start:0,end:3}),frameRate:9,repeat:-1});
+        }
+    }
+}
+
+function drawMedic(ctx,offset,frame,clip,team) {
+    ctx.save();ctx.translate(offset,0);
+    const step=clip==='walk'?[0,7,0,-7][frame]:0,arm=clip==='attack'?[0,-6,-12,0][frame]:step*0.4;
+    const poly=(points,fill)=>{ctx.beginPath();points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));ctx.closePath();ctx.fillStyle=fill;ctx.fill();ctx.strokeStyle='#3c3327';ctx.lineWidth=3;ctx.stroke();};
+    poly([[64,95],[78,96],[73+step,136],[61+step,136]],'#5a5244');
+    poly([[78,96],[92,95],[94-step,134],[81-step,134]],'#6d6454');
+    poly([[59+step,134],[74+step,134],[76+step,142],[55+step,142]],'#443726');
+    poly([[80-step,132],[95-step,132],[99-step,141],[79-step,141]],'#4e3c28');
+    // 白袍长衫，下摆随步伐微摆
+    poly([[59,61],[83,56],[103,68],[94,112],[61,112],[51,78]],'#e9e4d4');
+    poly([[61,100],[95,100],[94,111],[60,111]],team==='red'?'#ad4f41':'#477baa');
+    // 双臂：一手提药箱，一手随急救动作抬起
+    poly([[90,65],[104,69],[110,88+arm],[101,97+arm],[91,80]],'#d8b48c');
+    poly([[55,68],[63,77],[54,98-arm],[44,94-arm],[48,77]],'#c9a177');
+    // 药箱（白底红十字）
+    poly([[38,104+arm*0.4],[58,110+arm*0.4],[58,126+arm*0.4],[38,122+arm*0.4]],'#b98f60');
+    ctx.fillStyle='#ffffff';ctx.fillRect(44,111+arm*0.4,9,9);
+    ctx.fillStyle='#c0392b';ctx.fillRect(47.5,112.5+arm*0.4,3,6);ctx.fillRect(45.5,114.5+arm*0.4,7,3);
+    // 头部 + 白色布巾（医师辨识）
+    ctx.fillStyle='#caab84';ctx.beginPath();ctx.ellipse(77,47,15,18,0,0,Math.PI*2);ctx.fill();
+    poly([[48,38],[68,22],[86,22],[108,40],[98,47],[60,46]],'#f2eee1');
+    ctx.strokeStyle='#b8b09a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(52,39);ctx.lineTo(102,42);ctx.stroke();
+    ctx.fillStyle='#403729';ctx.fillRect(86,48,3,3);
+    ctx.restore();
 }
 
 function drawWorker(ctx,offset,frame,clip,team) {

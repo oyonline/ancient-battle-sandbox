@@ -284,7 +284,9 @@ export class MoraleSystem {
             const rallyThreshold = reserveSupport ? 50 : this.scene.battleOptions?.deathmatch ? 60 : 45;
             let state = snap.state;
             if (state === 'routing') {
-                if (value >= rallyThreshold && unit.moraleSheltered && safeTime >= wait) {
+                // 据点疗伤中的溃兵不在此处重整：疗伤由 HealingSystem 推进，
+                // HP 回满才转 steady 归队（否则士气先回、带伤离场破坏收容循环）。
+                if (value >= rallyThreshold && unit.moraleSheltered && safeTime >= wait && unit.healingAt == null) {
                     state = value >= 50 ? 'steady' : 'wavering';
                     record.lowTime = 0; record.spread = false;
                     reason = '友军接应，重新集结';

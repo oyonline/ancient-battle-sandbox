@@ -4,10 +4,12 @@ import { Terrain } from '../terrain.js';
 import { CombatRules } from '../combat.js';
 import { moveToward } from '../units.js';
 import { quantizeDecision as q } from './determinism.js';
+import { HEALING_RULES } from './healing.js';
 
 export const CAMP_RULES = {
     camp: { cost: 160, seconds: 18, hp: 850, def: 10, radius: 2.2 },
     tower: { cost: 120, seconds: 14, hp: 650, def: 6, radius: 0.9 },
+    tent: { cost: 140, seconds: 15, hp: 550, def: 4, radius: 1.5 },   // 医帐：据点疗伤提速扩容
     HOME_HP: 1800, CAPACITY: 4, TOWER_RANGE: 14, GARRISON_HEIGHT_PX: 82,
     BUILD_REACH: 1.6, ENTER_REACH: 1.15, AI_INTERVAL_MS: 1800
 };
@@ -38,9 +40,13 @@ export class CampSystem {
 
     getBuilding(id) { return this.byId.get(id) ?? null; }
     buildInfo(kind) {
-        if (!['camp', 'tower'].includes(kind)) return null;
+        if (!['camp', 'tower', 'tent'].includes(kind)) return null;
         const r = CAMP_RULES[kind];
-        return r ? { cost: r.cost, buildMs: r.seconds * 1000, maxHp: r.hp, capacity: kind === 'tower' ? CAMP_RULES.CAPACITY : 0 } : null;
+        return r ? {
+            cost: r.cost, buildMs: r.seconds * 1000, maxHp: r.hp,
+            capacity: kind === 'tower' ? CAMP_RULES.CAPACITY
+                : kind === 'tent' ? HEALING_RULES.TENT_MEDIC_SLOTS : 0
+        } : null;
     }
     projection() {
         return {
@@ -64,9 +70,12 @@ export class CampSystem {
         if (!s) return null;
         const mir = team === 'red' ? 1 : -1;
         // Put the compound behind its flag, keeping the capture circle and bridge open.
+        // 医帐放据点北侧（旗圈外沿），不与南侧营寨/箭塔争地。
         const p = type === 'tower'
             ? { gx: s.gx + mir * (siteId === 'home' ? 2.4 : -1), gy: s.gy + (siteId === 'home' ? 0.5 : 1) }
-            : { gx: s.gx - mir * (siteId === 'home' ? 0 : 3.5), gy: s.gy + 3.5 };
+            : type === 'tent'
+                ? { gx: s.gx - mir * (siteId === 'home' ? 0 : 2.4), gy: s.gy - 3.2 }
+                : { gx: s.gx - mir * (siteId === 'home' ? 0 : 3.5), gy: s.gy + 3.5 };
         if (p.gx < 2.5 || p.gx > board.W - 2.5 || p.gy < 3 || p.gy > board.H - 3) return null;
         return Terrain.walkable(this.scene.battleOptions?.terrain, p.gx, p.gy, CAMP_RULES[type].radius) ? p : null;
     }
@@ -79,7 +88,9 @@ export class CampSystem {
             id: this.id(team, type, siteId), type, team, siteId, ...position,
             hp: home ? CAMP_RULES.HOME_HP : rule.hp, maxHp: home ? CAMP_RULES.HOME_HP : rule.hp,
             progress: complete ? 1 : 0, complete, dead: false, workerId: null,
-            paused: false, garrisonIds: [], capacity: type === 'tower' ? CAMP_RULES.CAPACITY : 0,
+            paused: false, garrisonIds: [],
+            capacity: type === 'tower' ? CAMP_RULES.CAPACITY
+                : type === 'tent' ? HEALING_RULES.TENT_MEDIC_SLOTS : 0,
             radius: rule.radius, garrisonHeight: CAMP_RULES.GARRISON_HEIGHT_PX,
             isBuilding: true, typeData: { def: rule.def, atk: 0, range: 0, speed: 0, bodyRadius: rule.radius },
             scene: this.scene, battleId: this.scene.battleId
@@ -94,10 +105,10 @@ export class CampSystem {
 
     requestBuild(team, workerId, kind, siteId) {
         const w = this.unit(workerId), rule = CAMP_RULES[kind];
-        if (!['red', 'blue'].includes(team) || !['camp', 'tower'].includes(kind) || !rule || !ready(w) || w.type !== 'worker' || w.team !== team ||
+        if (!['red', 'blue'].includes(team) || !['camp', 'tower', 'tent'].includes(kind) || !rule || !ready(w) || w.type !== 'worker' || w.team !== team ||
             siteId === 'home' || !this.ownsSite(team, siteId) || !this.placement(team, kind, siteId)) return false;
         const camp = this.getBuilding(this.id(team, 'camp', siteId));
-        if (kind === 'tower' && (!camp?.complete || camp.dead)) return false;
+        if ((kind === 'tower' || kind === 'tent') && (!camp?.complete || camp.dead)) return false;
         let b = this.getBuilding(this.id(team, kind, siteId));
         if (b && !b.dead && (b.complete || (b.workerId != null && b.workerId !== w.id && ready(this.unit(b.workerId))))) return false;
         // A captured flag does not transfer its surviving enemy fortification.
@@ -141,11 +152,13 @@ export class CampSystem {
 
     orderGarrison(team, unitIds, towerId) {
         const b = this.getBuilding(towerId);
-        if (!b || b.team !== team || b.dead || !b.complete || b.type !== 'tower' || !Array.isArray(unitIds)) return false;
+        // 箭塔收弓手；医帐收医师。其它组合一律拒绝。
+        const acceptType = b?.type === 'tower' ? 'archer' : b?.type === 'tent' ? 'medic' : null;
+        if (!b || !acceptType || b.team !== team || b.dead || !b.complete || !Array.isArray(unitIds)) return false;
         let count = this.reserved(b), accepted = false;
         for (const id of [...new Set(unitIds)].sort((a, z) => a - z)) {
             const u = this.unit(id);
-            if (!ready(u) || u.team !== team || u.type !== 'archer' || u.garrisonTowerId || u.garrisonOrderId === towerId || count >= b.capacity) continue;
+            if (!ready(u) || u.team !== team || u.type !== acceptType || u.garrisonTowerId || u.garrisonOrderId === towerId || count >= b.capacity) continue;
             u.orderBuildingId = null;
             u.garrisonOrderId = towerId;
             u.meleeTarget = null;
@@ -170,7 +183,8 @@ export class CampSystem {
         let accepted = false;
         for (const id of [...new Set(unitIds)].sort((a, z) => a - z)) {
             const u = this.unit(id);
-            if (!ready(u) || u.team !== team || u.type === 'worker' || u.type === 'wagon' || u.garrisonTowerId) continue;
+            if (!ready(u) || u.team !== team || u.type === 'worker' || u.type === 'wagon' ||
+                u.type === 'medic' || u.garrisonTowerId) continue;
             u.garrisonOrderId = null;
             u.orderBuildingId = buildingId;
             accepted = true;
@@ -207,7 +221,7 @@ export class CampSystem {
 
     ungarrison(team, towerId) {
         const b = this.getBuilding(towerId);
-        if (!b || b.team !== team || b.type !== 'tower' || b.dead) return false;
+        if (!b || b.team !== team || (b.type !== 'tower' && b.type !== 'tent') || b.dead) return false;
         for (const u of this.scene.units) if (u.garrisonOrderId === b.id) u.garrisonOrderId = null;
         for (let i = 0; i < b.garrisonIds.length; i++) {
             const u = this.unit(b.garrisonIds[i]);
@@ -233,7 +247,7 @@ export class CampSystem {
                 if (u) this.exitUnit(b, u, i);
             }
             b.garrisonIds = [];
-            this.scene.addBattleEvent?.(`building-${b.id}-${Math.floor(this.scene.simulationTime)}`, `${b.team === 'red' ? '红方' : '蓝方'}${b.type === 'tower' ? '箭塔' : b.siteId === 'home' ? '大本营' : '营寨'}被摧毁`, b.team);
+            this.scene.addBattleEvent?.(`building-${b.id}-${Math.floor(this.scene.simulationTime)}`, `${b.team === 'red' ? '红方' : '蓝方'}${b.type === 'tower' ? '箭塔' : b.type === 'tent' ? '医帐' : b.siteId === 'home' ? '大本营' : '营寨'}被摧毁`, b.team);
             this.scene._countsDirty = true;
         }
         return dealt;
@@ -300,13 +314,16 @@ export class CampSystem {
                 return u.dead;
             }
             u.gx = tower.gx; u.gy = tower.gy; u.moving = false;
-            const enemy = this.localEnemy(u, CAMP_RULES.TOWER_RANGE);
-            u.target = enemy;
-            if (enemy && q(now - u.lastAttack) >= u.typeData.atkSpeed) {
-                u.lastAttack = now;
-                this.scene.playAttackAnim?.(u, enemy);
-                this.scene.fireArrow(u, enemy);
-            }
+            // 驻塔弓手按自身冷却射击；驻帐医师只提供疗伤加成（HealingSystem 读取）。
+            if (tower.type === 'tower') {
+                const enemy = this.localEnemy(u, CAMP_RULES.TOWER_RANGE);
+                u.target = enemy;
+                if (enemy && q(now - u.lastAttack) >= u.typeData.atkSpeed) {
+                    u.lastAttack = now;
+                    this.scene.playAttackAnim?.(u, enemy);
+                    this.scene.fireArrow(u, enemy);
+                }
+            } else u.target = null;
             return true;
         }
         if (!ready(u)) return false;
@@ -334,6 +351,9 @@ export class CampSystem {
                 return true;
             }
         }
+        // 医师不由营寨系统驱动（随营行军+急救光环见 healing.updateMedic），
+        // 但也不能落入下面的攻寨分支（无攻击却会摸建筑）。
+        if (u.type === 'medic') return false;
         let b = this.getBuilding(u.orderBuildingId);
         if (b?.dead) { u.orderBuildingId = null; b = null; }
         if (!b) b = this.nearBuilding(u);
@@ -403,7 +423,10 @@ export class CampSystem {
                 .sort((a, b) => distance(w, a.f) - distance(w, b.f) || a.f.gy - b.f.gy || a.i - b.i);
             for (const { i } of owned) {
                 const camp = this.getBuilding(this.id(team, 'camp', i));
-                const kind = !camp || camp.dead || !camp.complete ? 'camp' : 'tower';
+                const tower = this.getBuilding(this.id(team, 'tower', i));
+                // 建设链：营寨 → 箭塔 → 医帐（有医帐的据点收容力翻倍，AI 同样受益）。
+                const kind = !camp || camp.dead || !camp.complete ? 'camp'
+                    : !tower || tower.dead || !tower.complete ? 'tower' : 'tent';
                 if (this.requestBuild(team, w.id, kind, i)) break;
             }
         }
@@ -424,8 +447,10 @@ export class CampSystem {
             if (!this.ownsSite(team, i) || this.buildings.some(b => !b.dead && b.siteId === i && b.team !== team)) continue;
             const camp = this.getBuilding(this.id(team, 'camp', i));
             const tower = this.getBuilding(this.id(team, 'tower', i));
+            const tent = this.getBuilding(this.id(team, 'tent', i));
             if ((!camp || camp.dead) && this.placement(team, 'camp', i)) return CAMP_RULES.camp.cost;
             if (camp?.complete && (!tower || tower.dead) && this.placement(team, 'tower', i)) return CAMP_RULES.tower.cost;
+            if (camp?.complete && tower?.complete && (!tent || tent.dead) && this.placement(team, 'tent', i)) return CAMP_RULES.tent.cost;
         }
         return 0;
     }

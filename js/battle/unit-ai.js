@@ -8,6 +8,7 @@ import { board } from '../board.js';
 import { Terrain } from '../terrain.js';
 import { CombatRules } from '../combat.js';
 import { BATTALION } from './battalion.js';
+import { updateMedic } from './healing.js';
 import { dist, clamp, unitRand, moveToward } from '../units.js';
 
 // 受阻接战节奏（模拟时钟）：冷却就绪却持续打不出去达 BLOCKED_ENGAGE_MS 才解困，
@@ -81,6 +82,8 @@ export function resolveBlockedEngage(scene, unit, target, now, reach) {
 export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
         if (unit.dead || unit.withdrawn || unit.moraleState === 'routing') return;
         if (unit.type === 'worker') return; // 民夫仅由营寨命令驱动，不进行普攻或夺旗
+        // 医师：无攻击无占旗，随营行军 + 战地急救光环（光环治疗在 HealingSystem 推进）。
+        if (unit.type === 'medic') return updateMedic(scene, unit, now, dt);
         // 辎重车：有护卫在侧(4格内)且无敌情(3.2格内无敌)才沿路线推进——
         // 逼近的敌人没清完就停车列队，不会自己往敌阵里拱；车不还手（atk 0）。
         // 敌情闸门只挡贴脸威胁：远处胶着的战团不该让车队无限期趴窝。

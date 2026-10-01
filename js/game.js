@@ -22,6 +22,7 @@ import { BraceQueue } from './battle/core.js';
 import { TERRITORY, makeTerritoryFlags, TerritoryEconomy, TicketSystem } from './battle/economy.js';
 import { RecruitSystem, TerritoryAI } from './battle/recruit.js';
 import { CampSystem } from './battle/camps.js';
+import { HealingSystem } from './battle/healing.js';
 import { CAMP_COMMANDS, applyCampCommand } from './battle/camp-commands.js';
 import { BattalionSystem, BATTALION } from './battle/battalion.js';
 import * as unitAi from './battle/unit-ai.js';
@@ -401,6 +402,7 @@ export class IsoBattleScene extends Phaser.Scene {
                 }
             }
             this.territory.camps = new CampSystem(this);
+            this.territory.healing = new HealingSystem(this);
             this.rebuildSpatial();
         }
         // 营队系统（仅领土征服）：开局常备军按纵向三等分为上/中/下营
@@ -428,6 +430,7 @@ export class IsoBattleScene extends Phaser.Scene {
 
     spawnUnit(team, type, gx, gy) {
         if (type === 'worker') this.render.units.ensureWorkerTextures?.();
+        if (type === 'medic') this.render.units.ensureMedicTextures?.();
         const typeData = UNIT_TYPES[type];
         const key = `units/${team}_${type}`;
         const { x, y } = this.groundPoint(gx, gy);

@@ -4,7 +4,7 @@ import { TW, TH, gridToScreen } from './metrics.js';
 import { Terrain } from '../terrain.js';
 import { clamp } from '../units.js';
 import { ANIM_ALIGN_K, CAVALRY_PROFILE_SUFFIX, CAVALRY_FLIPPED, cavalryProfile, cavalryRenderSign, cavalryHeadingFromMotion, footProfile, animAlignProfile, shadowTextureKey } from './sprites.js';
-import { ensureWorkerTextures, towerCrewOffset } from './camps.js';
+import { ensureWorkerTextures, ensureMedicTextures, towerCrewOffset } from './camps.js';
 
 // 接敌姿态参数（毫秒，走模拟时钟，暂停即冻结）：
 // 蓄势窗口——临近冷却终点收定在起手帧，让"下一击"的节奏可读；
@@ -15,10 +15,12 @@ const STANCE_RECOVER_MS = 420;
 export class UnitRenderer {
     constructor(scene) { this.scene = scene; }
     ensureWorkerTextures() { ensureWorkerTextures(this.scene); }
+    ensureMedicTextures() { ensureMedicTextures(this.scene); }
 
     // 注册各单位动画剪辑（重复开局幂等）
     buildUnitAnims() {
         ensureWorkerTextures(this.scene);
+        ensureMedicTextures(this.scene);
         Object.entries(MANIFEST.anims || {}).forEach(([unit, clips]) => {
             const isCav = unit.includes('cavalry');
             Object.entries(clips).forEach(([clip, c]) => {
@@ -400,6 +402,18 @@ export class UnitRenderer {
                 this.scene.hpGfx.lineBetween(x - 3, my - 7, x - 6, my - 3);
                 this.scene.hpGfx.lineBetween(x + 3, my - 7, x, my - 3);
             }
+        }
+        // 据点疗伤中：绿色治疗条 + 白十字，与溃逃橙条明确区分（血量即治疗进度）。
+        if (unit.healingAt != null) {
+            const width = Math.max(12, 28 * (unit.sizeK || 1));
+            const hy = y + unit.footDy - unit.spr.displayHeight * 0.82 - 21;
+            this.scene.hpGfx.fillStyle(0x201b15, 0.9);
+            this.scene.hpGfx.fillRect(x - width / 2 - 1, hy - 1, width + 2, 5);
+            this.scene.hpGfx.fillStyle(0x72e0ad, 1);
+            this.scene.hpGfx.fillRect(x - width / 2, hy, width * clamp(unit.hp / unit.maxHp, 0, 1), 3);
+            this.scene.hpGfx.fillStyle(0xffffff, 1);
+            this.scene.hpGfx.fillRect(x - 1.5, hy - 8, 3, 5);
+            this.scene.hpGfx.fillRect(x - 2.5, hy - 7, 5, 3);
         }
     }
 

@@ -30,6 +30,13 @@ export const UNIT_TYPES = {
         hp: 45, atk: 0, def: 0, speed: 2.4, atkSpeed: 999999, range: 0,
         scale: 1.0, tip: '建设营寨和箭塔，无战斗力，需部队保护'
     },
+    // 医师（领土征服医疗兵种）：无攻击，战场光环缓慢急救身边伤兵；
+    // 可入驻医帐大幅加速据点疗伤。溃逃时与普通士兵一样进据点疗伤。
+    medic: {
+        name: '医师', icon: '➕', cost: 8, maxCount: 8, hidden: true, territoryOnly: true,
+        hp: 60, atk: 0, def: 2, speed: 2.4, atkSpeed: 999999, range: 0,
+        scale: 1.0, tip: '战地急救：缓慢治疗身边伤兵；入驻医帐可大幅加速据点疗伤'
+    },
     // 护送模式的辎重车：不可购买、无攻击；贴图运行时生成（见 game.js ensureWagonTextures）
     wagon: {
         name: '辎重车', icon: '🛒', cost: 0, maxCount: 0, hidden: true,

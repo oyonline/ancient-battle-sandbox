@@ -45,12 +45,12 @@ export class RecruitSystem {
     }
 }
 
-// 朴素战略 AI：目标配比 步兵45% / 弓25% / 枪20% / 骑10%。
+// 朴素战略 AI：目标配比 步兵45% / 弓25% / 枪20% / 骑10% / 医师5%。
 // 每 AI_INTERVAL_MS 决策一次：按"在场+队列"计数找缺口最大的兵种，
 // 买得起就补一个；买不起就攒钱（不降级乱买）。
 export class TerritoryAI {
-    static MIX = { infantry: 0.45, pikeman: 0.2, archer: 0.25, cavalry: 0.1 };
-    static ORDER = ['infantry', 'archer', 'pikeman', 'cavalry'];   // 缺口并列时的固定决胜序
+    static MIX = { infantry: 0.45, pikeman: 0.2, archer: 0.25, cavalry: 0.1, medic: 0.05 };
+    static ORDER = ['infantry', 'archer', 'pikeman', 'cavalry', 'medic'];   // 缺口并列时的固定决胜序
 
     constructor(scene, team) {
         this.scene = scene;

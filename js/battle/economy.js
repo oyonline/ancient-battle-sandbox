@@ -18,7 +18,7 @@ export const TERRITORY = {
     TICKETS: 900,                     // 双方开局票数
     TICKET_DRAIN: 1.6,                // 票数流失速率 = 旗数差 × 此值（票/秒）
     COST_MULT: 6,                     // 兵种造价系数（剑士30/枪36/弓48/骑72）
-    TRAIN_MS: { infantry: 3000, pikeman: 4000, archer: 5000, cavalry: 8000, worker: 3500 },
+    TRAIN_MS: { infantry: 3000, pikeman: 4000, archer: 5000, cavalry: 8000, worker: 3500, medic: 4500 },
     ALIVE_CAP: 220,                   // 单方在场兵力上限（性能与规模护栏；队列出兵到顶暂停）
     QUEUE_CAP: 8,                     // 单方训练队列上限
     OPENING: { infantry: 14, pikeman: 6, archer: 8, cavalry: 3, worker: 2 },
@@ -26,7 +26,7 @@ export const TERRITORY = {
 };
 
 // 占领力权重：占旗拔河与营队实力评估共用同一张表（人多/兵种强 = 占领力高）。
-export const BATTALION_POWER = { infantry: 10, pikeman: 7, archer: 4, cavalry: 12, worker: 0 };
+export const BATTALION_POWER = { infantry: 10, pikeman: 7, archer: 4, cavalry: 12, worker: 0, medic: 0 };
 
 // 五旗与实际桥头、高地、林口共用同一布局；起始归属与经济规则不变。
 export function makeTerritoryFlags() {

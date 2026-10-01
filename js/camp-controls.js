@@ -43,16 +43,18 @@ export class CampControls {
         if (!this.active || this.ui.countdown) return;
         const worker = this.workers().find(u => u.id === this.workerId);
         const units = this.selectedTroops();
-        if (['camp', 'tower', 'move'].includes(kind) && !worker) return;
+        if (['camp', 'tower', 'tent', 'move'].includes(kind) && !worker) return;
         if (kind === 'garrison' && !units.some(u => u.type === 'archer')) return;
+        if (kind === 'medic-in' && !units.some(u => u.type === 'medic')) return;
         if (kind === 'attack' && !units.length) return;
         this.ui.cancelHoldTargeting();
         this.ui.cancelRallyTargeting();
         this.targeting = { kind, worker: worker?.id,
-            units: units.filter(u => kind !== 'garrison' || u.type === 'archer').map(u => u.id) };
+            units: units.filter(u => (kind === 'garrison' ? u.type === 'archer' : kind === 'medic-in' ? u.type === 'medic' : true)).map(u => u.id) };
         document.body.classList.add('camp-targeting');
-        const prompt = { camp: '点己方据点建营寨', tower: '点己方营寨据点建箭塔', move: '点地面让民夫前往',
-            garrison: '点己方完工箭塔，弓手将走过去入驻', attack: '点敌方建筑，部队将前往攻寨' }[kind];
+        const prompt = { camp: '点己方据点建营寨', tower: '点己方营寨据点建箭塔', tent: '点己方营寨据点建医帐',
+            move: '点地面让民夫前往', garrison: '点己方完工箭塔，弓手将走过去入驻',
+            'medic-in': '点己方完工医帐，医师将走过去入驻', attack: '点敌方建筑，部队将前往攻寨' }[kind];
         this.ui.showNetToast(prompt + ' · Esc 取消');
         this.update();
     }
@@ -91,7 +93,7 @@ export class CampControls {
                 this.ui.applyGroundOrder(world, (gx, gy) => {
                     accepted = this.send({ k: 'worker-move', worker: mode.worker, gx, gy });
                 });
-            } else if (mode.kind === 'camp' || mode.kind === 'tower') {
+            } else if (mode.kind === 'camp' || mode.kind === 'tower' || mode.kind === 'tent') {
                 if (building?.team === this.side) {
                     accepted = this.send({ k: 'build', worker: mode.worker, kind: mode.kind, site: building.siteId });
                 } else {
@@ -101,9 +103,13 @@ export class CampControls {
                             .filter(p => p.f.owner === this.side && p.distance <= 6)
                             .sort((a, b) => a.distance - b.distance || a.index - b.index)[0];
                         if (flag) accepted = this.send({ k: 'build', worker: mode.worker, kind: mode.kind, site: flag.index });
-                        else this.ui.showNetToast('选择已占领的据点；箭塔需要该点先有完工营寨');
+                        else this.ui.showNetToast('选择已占领的据点；箭塔和医帐需要该点先有完工营寨');
                     });
                 }
+            } else if (mode.kind === 'medic-in') {
+                if (building?.team === this.side && building.type === 'tent') {
+                    accepted = this.send({ k: 'garrison', units: mode.units, building: building.id });
+                } else this.ui.showNetToast('请点己方完工医帐');
             } else if (building) {
                 accepted = this.send({ k: mode.kind === 'garrison' ? 'garrison' : 'attack-building',
                     units: mode.units, building: building.id });
@@ -162,32 +168,36 @@ export class CampControls {
         const button = (action, label, disabled = false) =>
             `<button data-camp-action="${action}"${disabled ? ' disabled' : ''}>${label}</button>`;
         let heading = '前线建设';
-        let details = '选民夫筑寨 · 选弓手进塔 · 选营队攻寨';
+        let details = '选民夫筑寨 · 选弓手进塔 · 选医师入帐 · 选营队攻寨';
         let actions = '';
         if (worker) {
             heading = '🧰 民夫 ' + worker.id;
             details = worker.workerTask?.kind === 'build' ? '正在赶赴或建造；可另派民夫续建未完工建筑'
                 : worker.workerTask?.kind === 'move' ? '前往指定位置' : '待命 · 无占旗能力，施工需要护卫';
-            for (const kind of ['camp', 'tower']) {
+            for (const kind of ['camp', 'tower', 'tent']) {
                 const info = this.camps.buildInfo(kind);
                 const resumable = this.camps.buildings.some(b => b.team === this.side && b.type === kind &&
                     !b.dead && !b.complete && this.camps.ownsSite(this.side, b.siteId) &&
                     (b.workerId === worker.id || !workers.some(w => w.id === b.workerId && w.moraleState !== 'routing')));
-                actions += button(kind, `${kind === 'camp' ? '筑/续营寨' : '建/续箭塔'} ${info.cost}军费 · 续建免费`,
+                actions += button(kind, `${kind === 'camp' ? '筑/续营寨' : kind === 'tower' ? '建/续箭塔' : '筑/续医帐'} ${info.cost}军费 · 续建免费`,
                     this.ui.countdown || (!resumable && this.scene.territory.econ.treasury[this.side] < info.cost));
             }
             actions += button('move', '移动民夫') + button('locate', '定位');
         } else if (building && !building.dead) {
             const own = building.team === this.side;
-            const name = building.type === 'tower' ? '箭塔' : building.siteId === 'home' ? '大本营' : '野外营寨';
+            const name = building.type === 'tower' ? '箭塔' : building.type === 'tent' ? '医帐'
+                : building.siteId === 'home' ? '大本营' : '野外营寨';
             heading = (own ? '我方 · ' : '敌方 · ') + name;
             const state = building.complete ? `生命 ${Math.ceil(building.hp)}/${building.maxHp}`
                 : `施工 ${Math.round(building.progress * 100)}% · 需民夫留在现场`;
-            details = state + (building.type === 'tower' ? ` · 驻军 ${building.garrisonIds.length}/${this.camps.buildInfo('tower').capacity}` : '');
+            details = state + (building.type === 'tower' ? ` · 驻军 ${building.garrisonIds.length}/${this.camps.buildInfo('tower').capacity}`
+                : building.type === 'tent' ? ` · 医师 ${building.garrisonIds.length}/${this.camps.buildInfo('tent').capacity} · 据点疗伤提速扩容` : '');
             if (own && building.type === 'tower') actions += button('exit', '弓手出塔', !building.garrisonIds.length);
+            if (own && building.type === 'tent') actions += button('exit', '医师出帐', !building.garrisonIds.length);
             actions += button('locate', '定位');
         }
         if (troops.some(u => u.type === 'archer' && !u.garrisonTowerId)) actions += button('garrison', '🏹 驻入箭塔');
+        if (troops.some(u => u.type === 'medic' && !u.garrisonTowerId)) actions += button('medic-in', '➕ 驻入医帐');
         if (troops.length) actions += button('attack', '⚔ 攻击建筑');
         if (this.targeting) actions += button('cancel', '取消选点');
         const markup = `<div class="camp-control-title"><b>${heading}</b><small>${this.targeting ? '等待选择目标' : details}</small></div>` +

@@ -4,7 +4,7 @@ import { TERRITORY } from './economy.js';
 
 export function updateFlags(scene, dt) {
     const RADIUS = 2.8, RATE = 0.1 / 10;           // 净占领力 10（约一队剑士）10 秒拉满
-    const POWER = { infantry: 10, pikeman: 7, archer: 4, cavalry: 12, worker: 0 };
+    const POWER = { infantry: 10, pikeman: 7, archer: 4, cavalry: 12, worker: 0, medic: 0 };
     for (const flag of scene.flags) {
         let red = 0, blue = 0;
         scene.forEachNear(flag.gx, flag.gy, RADIUS, u => {
@@ -40,6 +40,7 @@ export function updateTerritory(scene, dt) {
     state.econ.tick(dt, owned);
     state.recruit.update();
     state.camps?.update(dt);
+    state.healing?.update(dt);
     scene.battalions.update(scene.simulationTime);
     for (const team of ['red', 'blue']) {
         if (state.autoBuy[team]) state.ai[team].update(scene.simulationTime);
