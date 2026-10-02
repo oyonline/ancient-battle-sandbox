@@ -117,7 +117,9 @@ test('territory benefits appear once and clear on redeploy or switching to score
     overlay.updateFlagLabels(); overlay.updateFlagLabels();
     assert.equal(labels.length, 11, 'no per-frame label creation');
     assert.ok(labels.every(l => l.text.includes('军费 +4/秒')));
-    assert.ok(labels.some(l => l.text.includes('弓兵居高俯射')));
+    // 本轮起旗标分「地形原有 / 占领奖励」两段：高地地形效果仍然上屏，文案取自 site-traits.js。
+    assert.ok(labels.some(l => l.text.includes('地形：') && l.text.includes('居高射程加成')));
+    assert.ok(labels.some(l => l.text.includes('占领：')), '占领奖励单独成段');
     scene.flags = territoryLayout(TERRITORY.W,TERRITORY.H).sites;
     overlay.updateFlagLabels();
     assert.equal(labels.filter(l => !l.destroyed).length, 11, 'redeploy replaces old labels');

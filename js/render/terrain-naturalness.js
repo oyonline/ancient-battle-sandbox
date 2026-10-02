@@ -1,57 +1,87 @@
 // View-only fields: continuous material weights never change the discrete surface.
-import { buildWaterField } from './terrain-boundaries.js';
+import { buildWaterFieldSteps } from './terrain-boundaries.js';
 import { Terrain } from '../terrain.js';
 
+const ROWS_PER_STEP = 8;
 const clamp = value => Math.max(0, Math.min(1, value));
 const smooth = (low, high, value) => {
     const t = clamp((value - low) / (high - low));
     return t * t * (3 - 2 * t);
 };
 
-export function buildBankField(geometry, { step = 0.25, padding = 2 } = {}) {
-    const field = buildWaterField(geometry, { step, padding });
+export function buildBankField(geometry, options) {
+    const steps = buildBankFieldSteps(geometry, options);
+    let result;
+    do { result = steps.next(); } while (!result.done);
+    return result.value;
+}
+
+export function* buildBankFieldSteps(geometry, { step = 0.25, padding = 2 } = {}) {
+    const field = yield* buildWaterFieldSteps(geometry, { step, padding });
     const { cols, rows, kinds, distance } = field;
-    const outside = Float32Array.from(kinds, kind => kind ? 0 : Infinity);
+    const outside = new Float32Array(kinds.length);
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const i = row * cols + col;
+            outside[i] = kinds[i] ? 0 : Infinity;
+        }
+        if ((row + 1) % ROWS_PER_STEP === 0 || row + 1 === rows) yield;
+    }
     const diagonal = step * Math.SQRT2;
-    for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
-        const i = row * cols + col;
-        if (kinds[i]) continue;
-        if (col > 0) outside[i] = Math.min(outside[i], outside[i - 1] + step);
-        if (row > 0) {
-            outside[i] = Math.min(outside[i], outside[i - cols] + step);
-            if (col > 0) outside[i] = Math.min(outside[i], outside[i - cols - 1] + diagonal);
-            if (col + 1 < cols) outside[i] = Math.min(outside[i], outside[i - cols + 1] + diagonal);
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const i = row * cols + col;
+            if (kinds[i]) continue;
+            if (col > 0) outside[i] = Math.min(outside[i], outside[i - 1] + step);
+            if (row > 0) {
+                outside[i] = Math.min(outside[i], outside[i - cols] + step);
+                if (col > 0) outside[i] = Math.min(outside[i], outside[i - cols - 1] + diagonal);
+                if (col + 1 < cols) outside[i] = Math.min(outside[i], outside[i - cols + 1] + diagonal);
+            }
         }
+        if ((row + 1) % ROWS_PER_STEP === 0 || row + 1 === rows) yield;
     }
-    for (let row = rows - 1; row >= 0; row--) for (let col = cols - 1; col >= 0; col--) {
-        const i = row * cols + col;
-        if (kinds[i]) continue;
-        if (col + 1 < cols) outside[i] = Math.min(outside[i], outside[i + 1] + step);
-        if (row + 1 < rows) {
-            outside[i] = Math.min(outside[i], outside[i + cols] + step);
-            if (col > 0) outside[i] = Math.min(outside[i], outside[i + cols - 1] + diagonal);
-            if (col + 1 < cols) outside[i] = Math.min(outside[i], outside[i + cols + 1] + diagonal);
+    for (let row = rows - 1; row >= 0; row--) {
+        for (let col = cols - 1; col >= 0; col--) {
+            const i = row * cols + col;
+            if (kinds[i]) continue;
+            if (col + 1 < cols) outside[i] = Math.min(outside[i], outside[i + 1] + step);
+            if (row + 1 < rows) {
+                outside[i] = Math.min(outside[i], outside[i + cols] + step);
+                if (col > 0) outside[i] = Math.min(outside[i], outside[i + cols - 1] + diagonal);
+                if (col + 1 < cols) outside[i] = Math.min(outside[i], outside[i + cols + 1] + diagonal);
+            }
         }
+        if ((rows - row) % ROWS_PER_STEP === 0 || row === 0) yield;
     }
-    field.signedDistance = Float32Array.from(kinds, (kind, i) =>
-        kind ? distance[i] : -Math.max(step / 2, outside[i] - step / 2));
+    field.signedDistance = new Float32Array(kinds.length);
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const i = row * cols + col;
+            field.signedDistance[i] = kinds[i] ? distance[i] : -Math.max(step / 2, outside[i] - step / 2);
+        }
+        if ((row + 1) % ROWS_PER_STEP === 0 || row + 1 === rows) yield;
+    }
     // Blur material weight inside the channel only; a shallow/water boundary is
     // a sediment transition, not another shoreline or a new terrain category.
     const kernel = [1, 4, 6, 4, 1];
     field.shallowWeight = new Float32Array(kinds.length);
-    for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++) {
-        const i = row * cols + col;
-        if (!kinds[i]) continue;
-        let total = 0, shallow = 0;
-        for (let oy = -2; oy <= 2; oy++) for (let ox = -2; ox <= 2; ox++) {
-            const x = col + ox, y = row + oy;
-            if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
-            const kind = kinds[y * cols + x], weight = kernel[ox + 2] * kernel[oy + 2];
-            if (!kind) continue;
-            total += weight;
-            if (kind === 2) shallow += weight;
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const i = row * cols + col;
+            if (!kinds[i]) continue;
+            let total = 0, shallow = 0;
+            for (let oy = -2; oy <= 2; oy++) for (let ox = -2; ox <= 2; ox++) {
+                const x = col + ox, y = row + oy;
+                if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
+                const kind = kinds[y * cols + x], weight = kernel[ox + 2] * kernel[oy + 2];
+                if (!kind) continue;
+                total += weight;
+                if (kind === 2) shallow += weight;
+            }
+            field.shallowWeight[i] = shallow / total;
         }
-        field.shallowWeight[i] = shallow / total;
+        if ((row + 1) % ROWS_PER_STEP === 0 || row + 1 === rows) yield;
     }
     return field;
 }

@@ -6,7 +6,18 @@ import { gridToScreen } from './metrics.js';
 import { towerCrewOffset } from './camps.js';
 
 export class EffectsRenderer {
-    constructor(scene) { this.scene = scene; }
+    constructor(scene) {
+        this.scene = scene;
+        this.dust = [];
+        this.dustPool = [];
+        this.dustBattleId = null;
+        scene.events?.once('shutdown', () => {
+            this.dustGfx?.destroy();
+            this.dustGfx = null;
+            this.dust.length = 0;
+            this.dustPool.length = 0;
+        });
+    }
 
     // ---------------- 箭矢（全场景合批到一张 Graphics） ----------------
     fireArrow(from, target) {
@@ -33,29 +44,12 @@ export class EffectsRenderer {
     }
 
     updateArrows(dt, now) {
-        const g = this.scene.arrowGfx;
-        g.clear();
         for (let i = this.scene.arrows.length - 1; i >= 0; i--) {
             const a = this.scene.arrows[i];
             a.t += dt;
             const p = clamp(a.t / a.dur, 0, 1);
-            const gx = a.sx + (a.tx - a.sx) * p;
-            const gy = a.sy + (a.ty - a.sy) * p;
-            const s = gridToScreen(gx, gy);
-            // 端点高度插值加抛物线，不让飞行中的箭贴着途经山坡起伏。
-            s.y -= ((a.sourceHeight || 0) * (1 - p) + (a.targetHeight || 0) * p) * Terrain.HEIGHT_SCALE;
-            s.x += (a.sourceOffsetX || 0) * (1 - p);
-            s.y += (a.sourceOffsetY || 0) * (1 - p) - ((a.sourceLift || 0) * (1 - p) + (a.targetLift || 0) * p);
-            const arcH = Math.sin(p * Math.PI) * 46;
-
-            g.lineStyle(1.5, 0x5b4632, 1);
-            const ang = Math.atan2(a.ty - a.sy, a.tx - a.sx);
-            const dx = Math.cos(ang) * 7.5, dy = Math.sin(ang) * 7.5 * 0.5 - 3;
-            g.lineBetween(s.x - dx, s.y - dy - arcH, s.x + dx, s.y + dy - arcH);
-            g.fillStyle(0xd9d9d9, 1);
-            g.fillCircle(s.x + dx, s.y + dy - arcH, 1.4);
-
             if (p >= 1) {
+                const s = this.arrowPoint(a, p);
                 if (a.buildingId) {
                     const building = this.scene.territory?.camps?.getBuilding(a.buildingId);
                     if (building && !building.dead && building.team !== a.team) {
@@ -82,6 +76,34 @@ export class EffectsRenderer {
                 }
                 this.scene.arrows.splice(i, 1);
             }
+        }
+    }
+
+    arrowPoint(a, p) {
+        const s = gridToScreen(a.sx + (a.tx - a.sx) * p, a.sy + (a.ty - a.sy) * p);
+        // Interpolate endpoint heights, not the terrain below the flight path.
+        s.y -= ((a.sourceHeight || 0) * (1 - p) + (a.targetHeight || 0) * p) * Terrain.HEIGHT_SCALE;
+        s.x += (a.sourceOffsetX || 0) * (1 - p);
+        s.y += (a.sourceOffsetY || 0) * (1 - p) - ((a.sourceLift || 0) * (1 - p) + (a.targetLift || 0) * p);
+        return s;
+    }
+
+    // Once per display frame; skipped drawing never skips flight or hit resolution.
+    drawArrows() {
+        const g = this.scene.arrowGfx;
+        if (!g) return;
+        g.clear();
+        const view = this.scene._view;
+        for (const a of this.scene.arrows) {
+            const p = clamp(a.t / a.dur, 0, 1), s = this.arrowPoint(a, p);
+            s.y -= Math.sin(p * Math.PI) * 46;
+            if (view && (s.x < view.x0 || s.x > view.x1 || s.y < view.y0 || s.y > view.y1)) continue;
+            const angle = Math.atan2(a.ty - a.sy, a.tx - a.sx);
+            const dx = Math.cos(angle) * 7.5, dy = Math.sin(angle) * 7.5 * 0.5 - 3;
+            g.lineStyle(1.5, 0x5b4632, 1);
+            g.lineBetween(s.x - dx, s.y - dy, s.x + dx, s.y + dy);
+            g.fillStyle(0xd9d9d9, 1);
+            g.fillCircle(s.x + dx, s.y + dy, 1.4);
         }
     }
 
@@ -304,26 +326,55 @@ export class EffectsRenderer {
     }
 
     chargeDust(unit) {
-        // 三重节流：单位 70ms 一次 + 每帧全局配额 + 拉远观战随机丢弃
-        if (this.scene.time.now - (unit.lastDust || 0) < 70) return;
-        unit.lastDust = this.scene.time.now;
+        if (!this.scene.battleStarted || this.scene.paused || this.scene.battleOver || unit.visualCulled) return;
+        const now = this.scene.time?.now ?? this.scene.simulationTime;
+        if (now - (unit.lastDust || 0) < 70) return;
+        unit.lastDust = now;
         if (!this.scene._dustBudget || this.scene._dustBudget <= 0) return;
         if (this.scene.lowFX && Math.random() < 0.75) return;
         this.scene._dustBudget--;
-        if (Math.random() < 0.65) {
-            const s = this.scene.groundPoint(unit.gx, unit.gy);
-            const dust = this.scene.add.graphics();
-            const ds = Math.max(0.45, unit.sizeK || 1);   // 尘团大小随体型
-            for (let i = 0; i < 2; i++) {
-                dust.fillStyle(0xcbb79a, 0.5);
-                dust.fillCircle((Math.random() - 0.5) * 10 * ds, (Math.random() - 0.5) * 4 * ds, (2.5 + Math.random() * 3.5) * ds);
+        this.resetDustForBattle();
+        if (this.dust.length >= 96 || Math.random() >= 0.65) return;
+        const s = this.scene.groundPoint(unit.gx, unit.gy), view = this.scene._view;
+        if (view && (s.x < view.x0 || s.x > view.x1 || s.y < view.y0 || s.y > view.y1)) return;
+        const cloud = this.dustPool.pop() || {};
+        cloud.x = s.x + (Math.random() - 0.5) * 16;
+        cloud.y = s.y - 2;
+        cloud.at = now;
+        cloud.size = Math.max(0.45, unit.sizeK || 1);
+        cloud.radius = 2.5 + Math.random() * 3.5;
+        this.dust.push(cloud);
+    }
+
+    resetDustForBattle() {
+        if (this.dustBattleId === this.scene.battleId) return;
+        this.dustBattleId = this.scene.battleId;
+        this.dustPool.push(...this.dust);
+        this.dust.length = 0;
+        this.dustGfx?.clear();
+    }
+
+    // Shared draw buffer and bounded reusable records replace per-cloud Graphics/tweens.
+    drawDust(time) {
+        this.resetDustForBattle();
+        if (!this.dust.length && !this.dustGfx) return;
+        if (!this.dustGfx) {
+            this.dustGfx = this.scene.add.graphics();
+            this.scene.groundFX?.add(this.dustGfx);
+        }
+        const g = this.dustGfx, now = this.scene.time?.now ?? time;
+        g.clear();
+        for (let i = this.dust.length - 1; i >= 0; i--) {
+            const cloud = this.dust[i], p = Math.max(0, (now - cloud.at) / 520);
+            if (p >= 1) {
+                this.dustPool.push(cloud);
+                this.dust.splice(i, 1);
+                continue;
             }
-            dust.setPosition(s.x + (Math.random() - 0.5) * 16, s.y - 2);
-            this.scene.groundFX.add(dust);
-            this.scene.tweens.add({
-                targets: dust, alpha: 0, scaleX: 1.9, scaleY: 1.4, y: dust.y - 8,
-                duration: 520, onComplete: () => dust.destroy()
-            });
+            const radius = cloud.radius * cloud.size;
+            g.fillStyle(0xcbb79a, 0.5 * (1 - p));
+            g.fillEllipse(cloud.x, cloud.y - p * 8, radius * 2 * (1 + p * 0.9), radius * 2 * (1 + p * 0.4));
+            g.fillEllipse(cloud.x - radius, cloud.y - p * 8 + 1, radius * 1.5 * (1 + p), radius * 1.3);
         }
     }
 

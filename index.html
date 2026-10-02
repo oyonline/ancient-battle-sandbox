@@ -27,24 +27,27 @@
     </header>
 
     <aside id="unit-inspector" class="unit-inspector" aria-label="士兵地形与指令" aria-live="off" hidden></aside>
+    <div id="terrain-loading" role="status" hidden>准备战场… <span id="terrain-loading-progress">0%</span></div>
 
     <!-- 领土模式分区 HUD：读数上移窄条 / 征兵贴底左 / 建设左下弹出 / 营队右下。
          中央大控制条在领土模式整体隐藏，战场视野让位（非领土模式布局不变）。 -->
     <div id="territory-strip" aria-label="领土征服经济读数与战斗控制" hidden>
         <div id="territory-hud" class="territory-hud" aria-label="领土征服经济与征兵">
             <div class="territory-econ">
-                <span>🔴 军费 <b id="territory-treasury">150</b><small id="territory-income">+13/秒</small></span>
+                <span>我方军费 <b id="territory-treasury">150</b><small id="territory-income">+13/秒</small></span>
                 <span>🎫 票数 <b class="red-c" id="territory-tickets-red">900</b> : <b class="blue-c" id="territory-tickets-blue">900</b></span>
                 <span>🚩 归属旗 <b class="red-c" id="territory-flags-red">2</b> : <b class="blue-c" id="territory-flags-blue">2</b></span>
-                <span>🪖 在场 <b class="red-c" id="territory-army-red">0</b> : <b class="blue-c" id="territory-army-blue">0</b><small id="territory-queue"></small></span>
+                <span>🪖 在场 <b class="red-c" id="territory-army-red">0</b> : <b class="blue-c" id="territory-army-blue">0</b></span>
                 <button class="rally-btn" id="btn-rally" title="设置本方集结点（快捷键 R）：新兵与集结营在此聚兵">📍 集结点</button>
             </div>
             <div id="territory-ctl"></div>
         </div>
+        <small id="territory-ticket-status"></small>
         <div id="territory-hud-rule" class="deathmatch-rule hud-info" hidden>🚩 十一据点产军费，民夫筑寨、弓手驻塔、医师医帐收溃兵；控点耗尽敌方票数，或摧毁敌方大本营获胜</div>
     </div>
 
     <div id="recruit-dock" aria-label="征兵与建设入口" hidden>
+        <div class="recruit-heading"><b>征兵</b><small id="territory-queue">训练队列空闲</small></div>
         <button id="btn-camp-open" title="打开前线建设：选民夫筑寨建塔医帐、派医师入驻">🧰 建设</button>
         <div class="recruit-bar" id="recruit-bar" aria-label="征兵按钮"></div>
     </div>
@@ -53,11 +56,16 @@
     <div id="camp-control-bar" class="camp-control-bar" aria-label="营寨建设与箭塔驻守" hidden></div>
     <div id="battalion-bar" class="battalion-bar" aria-label="营队指挥" hidden>
         <span id="battalion-label">营队</span>
+        <div id="battalion-picker" aria-label="切换我方营队"></div>
         <div class="battalion-orders" id="battalion-orders"></div>
+        <details id="battalion-targets" hidden><summary>选择据点夺旗 <small>夺旗后恢复自主作战</small></summary><div id="battalion-flags" class="battalion-orders"></div></details>
     </div>
 
     <!-- 士气播报：独立顶部 toast（全模式共用，不再挤在控制条里） -->
     <div id="morale-cue" class="morale-cue" role="status" hidden></div>
+    <div id="action-toast" role="status" hidden></div>
+    <div id="command-prompt" role="status" hidden><span id="command-prompt-text"></span><button id="btn-cancel-command">取消 · Esc</button></div>
+    <div id="territory-tip" hidden><span id="territory-tip-text"></span><button id="btn-dismiss-tip" aria-label="知道了，关闭提示">知道了</button></div>
 
     <!-- 底部悬浮控制条（非领土模式战斗中）；.hud-info 为信息类行，折叠时整体隐藏只留操作件 -->
     <div id="controlbar" hidden>
@@ -121,7 +129,7 @@
                             <p>看图选玩法。打完读战报，换个思路再来一局。</p>
                         </div>
                     </div>
-                    <button id="btn-continue" class="continue-btn" hidden>▶ 继续上次：<b id="continue-label">领土征服</b></button>
+                    <button id="btn-continue" class="continue-btn" title="重新开始上次的玩法，不恢复旧战局" hidden>▶ 再玩上次模式：<b id="continue-label">领土征服</b></button>
 
                     <!-- 大会战：英雄卡 -->
                     <div class="mode-hero">

@@ -9,6 +9,7 @@
 
 import { BATTALION_POWER } from './economy.js';
 import { board } from '../board.js';
+import { SITE_AI, traitState } from './site-traits.js';
 
 export const BATTALION = {
     OPENING_LANES: 3,          // 开局常备军分营数（按纵向位置三等分）
@@ -175,11 +176,51 @@ export class BattalionSystem {
         }
     }
 
+    // 据点特色的 AI 需求系数（在既有 2 秒战略节拍里每方算一次；不逐兵、不逐帧扫描）。
+    // 全部取自 site-traits 的参数表，AI 与模拟 / UI 不各写一套数值。
+    siteNeeds(team) {
+        const scene = this.scene, flags = scene.flags || [], camps = scene.territory?.camps;
+        const state = traitState(scene);
+        const needs = {};
+        // 骑兵：没有马场就是刚需（夺场开门）；只有一座时守住它就是整条骑兵线。
+        const ranches = state.ownsRoleCount(team, 'ranch');
+        needs.cavalry = ranches === 0 ? 1 : 0.35;
+        needs.cavalryHold = ranches <= 1 ? 1 : 0.4;
+        // 营建：己方据点还有营寨 / 箭塔 / 医帐没建完时，林口加速的价值更高。
+        let building = 0;
+        if (camps) {
+            for (let i = 0; i < flags.length; i++) {
+                if (!camps.ownsSite(team, i) || camps.buildings.some(b => !b.dead && b.siteId === i && b.team !== team)) continue;
+                const camp = camps.getBuilding(camps.id(team, 'camp', i));
+                if (!camp || camp.dead || !camp.complete) { building++; continue; }
+                const tower = camps.getBuilding(camps.id(team, 'tower', i));
+                if (!tower || tower.dead || !tower.complete) { building++; continue; }
+                const tent = camps.getBuilding(camps.id(team, 'tent', i));
+                if (!tent || tent.dead || !tent.complete) building++;
+            }
+        }
+        needs.build = building > 0 ? 1 : 0.3;
+        // 防线：桥头不在自己手里（或正在被拉锯）时更需要夺桥固守。
+        let bridgeLost = 0;
+        for (const flag of flags) if (flag.role === 'bridge' && flag.owner !== team) bridgeLost++;
+        needs.defense = bridgeLost > 0 ? 1 : 0.4;
+        // 驻守：有富余成建营才值得专门派人驻高地（数值在 aiAssign 里给）。
+        needs.hold = 0.5;
+        // 通行：没有渡口才值得为浅滩过河去抢。
+        needs.crossing = state.owns(team, 'ford') ? 0.3 : 1;
+        // 收容：溃兵成堆时路口的补给容量才有价值。
+        let routing = 0;
+        for (const unit of scene._aliveArr || []) if (unit.team === team && unit.moraleState === 'routing') routing++;
+        needs.healing = routing >= 6 ? 1 : 0.35;
+        return needs;
+    }
+
     // 营级 AI：按五旗敌我实力派营。无随机数；营遍历序 = 创建序，旗序决胜。
     aiAssign() {
         const scene = this.scene;
         const flags = scene.flags;
         if (!flags || !flags.length) return;
+        const state = traitState(scene);      // 派生归属只在归属变化时重建（见 site-traits.js）
         // 实力图：每旗评估半径内双方占领力（与占旗拔河同权）
         const strength = flags.map(flag => {
             const power = { red: 0, blue: 0 };
@@ -194,6 +235,10 @@ export class BattalionSystem {
             const foe = team === 'red' ? 'blue' : 'red';
             const active = this.battalions.filter(b => b.team === team && !b.gathering && b.members.length);
             if (!active.length) continue;
+            // 需求系数：每方每拍算一次；富余营多时高地驻守价值才拉满。
+            const needs = this.siteNeeds(team);
+            const free = active.filter(b => !b.playerOrdered && b.power() > 0).length;
+            needs.hold = free >= 2 ? 1 : 0.5;
             const assignedCount = new Array(flags.length).fill(0);
             // 玩家已指派的营占住目标位，AI 不与之争抢
             for (const b of active) if (b.playerOrdered && b.orderFlag != null) assignedCount[b.orderFlag]++;
@@ -207,14 +252,21 @@ export class BattalionSystem {
                 for (let i = 0; i < flags.length; i++) {
                     const flag = flags[i];
                     const mine = strength[i][team], theirs = strength[i][foe];
+                    // 据点特色权重（克制：基础夺旗分 50，这里只做 3~28 的加减，且按需求折算）
+                    const weight = SITE_AI[flag.role];
+                    const needKey = weight ? ((flag.owner === team ? weight.holdNeed : weight.contestNeed) ?? weight.need) : null;
+                    const need = weight ? (needs[needKey] ?? 1) : 0;
+                    // 同类据点"已经拥有一处"时降低争夺权重：全局效果不叠加（马场/渡口），
+                    // 局部效果虽然每处都要守，但也不让所有营追着同一类奖励跑。
+                    const held = !!(weight && state.owns(team, flag.role));
                     let score;
                     if (flag.owner === team) {
                         // 己方旗：被敌明显进犯才值得派营回援（一旗一营足够）
                         score = theirs > Math.max(12, mine * 1.2) && assignedCount[i] === 0
                             ? 120 + theirs - mine
                             : 4 - mine * 0.1;
-                        // 马场是骑兵来源：己方马场常驻加防（丢场断骑源）
-                        if (flag.role === 'ranch') score += 10;
+                        // 己方据点常驻加防：林口在建、桥头防线、高地驻守、路口收容各有需求
+                        if (weight) score += weight.hold * need;
                     } else {
                         // 非己方旗：把本营战力计入再判断打得过；打不过直接跳过（不送死）
                         const winnable = mine + b.power() * 0.8 >= theirs * 0.85;
@@ -223,9 +275,7 @@ export class BattalionSystem {
                         score = 50 + (neutral ? 8 : 0) + (mine - theirs) * 0.4
                             - (center ? Math.hypot(flag.gx - center.gx, flag.gy - center.gy) : 0) * 0.35
                             - assignedCount[i] * 30;
-                        // 马场争夺加权：自己没马场时优先夺场开门（+28），
-                        // 已有马场时仍给对方马场施压断其骑源（+10）。
-                        if (flag.role === 'ranch') score += this.nearestRanch(team) == null ? 28 : 10;
+                        if (weight) score += (held ? weight.contestHeld : weight.contest) * need;
                     }
                     // 现任目标黏性：没有明显更优选择就别换旗——防止所有营每轮
                     // 重评估都涌向"当前最优"的中央旗（山河图三线被吃成一条线的元凶）
@@ -243,14 +293,6 @@ export class BattalionSystem {
                 }
             }
         }
-    }
-
-    nearestRanch(team) {
-        const flags = this.scene.flags || [];
-        for (let i = 0; i < flags.length; i++) {
-            if (flags[i].role === 'ranch' && flags[i].owner === team) return i;
-        }
-        return null;
     }
 
     nearestOwnFlag(battalion, flags) {

@@ -77,11 +77,14 @@ export const CombatRules = {
             (unit.tacticalRole !== 'guard' || this.inFacing(unit, target)) && this.clearLane(scene, unit, target);
     },
 
-    attack(scene, unit, target, now, reach = unit.typeData.range) {
+    // tolerance：出手判定的距离容差，默认 0（所有既有调用不变）。
+    // 量化决策的调用方（民夫自卫）传 半量子，保证"量化后够得着"的目标不会被
+    // 原始浮点距离卡在名义射程外侧（镜像两侧 0.8999…/0.9000…057 必须同判）。
+    attack(scene, unit, target, now, reach = unit.typeData.range, tolerance = 0) {
         const guard = unit.type === 'pikeman' && unit.tacticalRole === 'guard';
         const prepared = guard && unit.guardReady;
         const cooldown = prepared ? 1000 : unit.typeData.atkSpeed;
-        if (now - unit.lastAttack <= cooldown || !this.canStrike(scene, unit, target, reach)) return;
+        if (now - unit.lastAttack <= cooldown || !this.canStrike(scene, unit, target, reach, tolerance)) return;
         unit.lastAttack = now;
         scene.playAttackAnim(unit, target);
         const epoch = unit.actionEpoch;

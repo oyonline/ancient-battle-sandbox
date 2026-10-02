@@ -1,6 +1,6 @@
 // ==================== 局域网对战：房间流程（并入 UI，this 即 UI） ====================
 import { TERRITORY, makeTerritoryFlags } from './battle/economy.js';
-import { setBoardSize, resetBoardSize } from './board.js';
+import { board, setBoardSize } from './board.js';
 import { CHALLENGES, armyCost, fitArmyToBudget } from './challenges.js';
 import { ArenaClient } from './net/arena-client.js';
 import { NetBattle } from './net/lockstep.js';
@@ -24,17 +24,25 @@ export const lobbyMethods = {
             this.net.client = new ArenaClient(message => this.onNetMessage(message));
         }
         if (!this.net.client.connected) {
+            this.net.serverIdentity = null;
             this.net.client.connect()
-                .then(() => this.netStatus(this.net.client.isArena
-                    ? '已连接对战服务器。创建房间，或输入房间码加入。'
-                    : '已连接，但对方不像对战服务器（若是 vite 开发页请改用 arena 地址 :5300）。'))
+                .then(() => this.updateNetConnectionStatus())
                 .catch(() => this.netStatus('连不上对战服务器——请先在房主电脑运行 npm run arena（并确认本页来自对战服务器地址 :5300）。'));
-        } else this.netStatus(this.net.client.isArena
-            ? '已连接对战服务器。创建房间，或输入房间码加入。'
-            : '已连接，但对方不像对战服务器（若是 vite 开发页请改用 arena 地址 :5300）。');
+        } else this.updateNetConnectionStatus();
     },
 
     netStatus(text) { document.getElementById('net-status').textContent = text; },
+
+    updateNetConnectionStatus() {
+        if (this.net.code || this.net.inBattle || this.phase === 'battle') return;
+        const identity = Object.hasOwn(this.net, 'serverIdentity')
+            ? this.net.serverIdentity : this.net.client?.isArena ? true : null;
+        this.netStatus(identity === true
+            ? '已连接对战服务器。创建房间，或输入房间码加入。'
+            : identity === false
+                ? '已连接，但对方不是对战服务器（若是 vite 开发页请改用 arena 地址 :5300）。'
+                : '已建立连接，正在确认对战服务器…');
+    },
 
     // 发房间请求并带超时守望：没连上/连的不是对战服务器/服务器不应答，都给出明确提示
     netRequest(action, label) {
@@ -44,7 +52,9 @@ export const lobbyMethods = {
             return;
         }
         if (!client.isArena) {
-            this.netStatus('⚠ 当前页面连的不是对战服务器（可能开着 vite 开发页 5173）。请改用房主 arena 地址后再试。');
+            this.netStatus(this.net.serverIdentity === false
+                ? '⚠ 当前页面连的不是对战服务器（可能开着 vite 开发页 5173）。请改用房主 arena 地址后再试。'
+                : '正在确认对战服务器，请稍后再创建或加入房间。');
             return;
         }
         this.netStatus(label + '…');
@@ -66,6 +76,7 @@ export const lobbyMethods = {
     },
 
     netReady() {
+        if (this.scene?.terrainLoading) return;
         if (!this.net.client?.connected) return;
         this.net.myReady = true;
         this.net.client.sendReady();
@@ -82,6 +93,10 @@ export const lobbyMethods = {
 
     onNetMessage(message) {
         switch (message.t) {
+            case 'welcome':
+                this.net.serverIdentity = message.arena === true;
+                this.updateNetConnectionStatus();
+                break;
             case 'room':
                 this.net.side = message.side;
                 this.net.code = message.code;
@@ -169,11 +184,12 @@ export const lobbyMethods = {
     },
 
     showNetToast(text) {
-        const cue = document.getElementById('morale-cue');
+        const cue = document.getElementById('action-toast');
         if (!cue) return;
+        clearTimeout(this._toastTimer);
         cue.hidden = false;
         cue.textContent = text;
-        cue.classList.add('net-toast');
+        this._toastTimer = setTimeout(() => { cue.hidden = true; }, 5000);
     },
 
     // 山河图缩略：临时切到大地图尺寸，读真实地形几何与旗点画进小画布——
@@ -182,57 +198,64 @@ export const lobbyMethods = {
         const canvas = document.getElementById('territory-thumb');
         if (!canvas || !canvas.getContext) return;
         const ctx = canvas.getContext('2d');
-        setBoardSize(TERRITORY.W, TERRITORY.H);
-        const W = TERRITORY.W, H = TERRITORY.H;
-        const sx = canvas.width / W, sy = canvas.height / H;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#7fae62';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        // 草地杂色
-        for (let i = 0; i < 130; i++) {
-            const x = (i * 61.8) % W, y = (i * 37.3) % H;
-            ctx.fillStyle = i % 2 ? 'rgba(120,160,88,0.5)' : 'rgba(96,138,72,0.5)';
-            ctx.fillRect(x * sx, y * sy, 2.4, 2.4);
-        }
-        const geometry = Terrain.geometry('territory');
-        // 林斑（噪声 blob 逐点采样，边缘与游戏一致）
-        for (const zone of geometry.zones) {
-            if (zone.kind !== 'forest') continue;
-            for (let y = zone.y1; y < zone.y2; y += 0.55) for (let x = zone.x1; x < zone.x2; x += 0.55) {
-                if (!Terrain.contains(zone, x + 0.28, y + 0.28)) continue;
-                ctx.fillStyle = (x * 7 + y * 3) % 3 < 1 ? '#3d6a38' : '#335c30';
-                ctx.fillRect(x * sx, y * sy, sx * 0.6, sy * 0.6);
+        if (!ctx) return;
+        const originalBoard = { ...board };
+        // 缩略图同步绘制后必须恢复当前地图（包括画外余量）；异步地形任务
+        // 下一帧仍要读取同一套全局尺寸，不能把它重置为默认小棋盘。
+        try {
+            setBoardSize(TERRITORY.W, TERRITORY.H);
+            const W = TERRITORY.W, H = TERRITORY.H;
+            const sx = canvas.width / W, sy = canvas.height / H;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#7fae62';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // 草地杂色
+            for (let i = 0; i < 130; i++) {
+                const x = (i * 61.8) % W, y = (i * 37.3) % H;
+                ctx.fillStyle = i % 2 ? 'rgba(120,160,88,0.5)' : 'rgba(96,138,72,0.5)';
+                ctx.fillRect(x * sx, y * sy, 2.4, 2.4);
             }
-        }
-        // 中央高地等高圈
-        ctx.beginPath();
-        ctx.ellipse(W / 2 * sx, H / 2 * sy, 9 * sx, 6.5 * sy, 0, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(233,221,172,0.22)';
-        ctx.fill();
-        ctx.lineWidth = 1.8;
-        ctx.strokeStyle = 'rgba(240,225,170,0.85)';
-        ctx.stroke();
-        // 河与桥
-        for (const block of geometry.blockers) {
-            ctx.fillStyle = '#3f7fb2';
-            ctx.fillRect(block.x1 * sx, block.y1 * sy, (block.x2 - block.x1) * sx, (block.y2 - block.y1) * sy);
-        }
-        for (const zone of geometry.zones) {
-            if (zone.kind !== 'bridge') continue;
-            ctx.fillStyle = '#c9a063';
-            ctx.fillRect(zone.x1 * sx, zone.y1 * sy, (zone.x2 - zone.x1) * sx, (zone.y2 - zone.y1) * sy);
-        }
-        // 五面旗
-        for (const flag of makeTerritoryFlags()) {
+            const geometry = Terrain.geometry('territory');
+            // 林斑（噪声 blob 逐点采样，边缘与游戏一致）
+            for (const zone of geometry.zones) {
+                if (zone.kind !== 'forest') continue;
+                for (let y = zone.y1; y < zone.y2; y += 0.55) for (let x = zone.x1; x < zone.x2; x += 0.55) {
+                    if (!Terrain.contains(zone, x + 0.28, y + 0.28)) continue;
+                    ctx.fillStyle = (x * 7 + y * 3) % 3 < 1 ? '#3d6a38' : '#335c30';
+                    ctx.fillRect(x * sx, y * sy, sx * 0.6, sy * 0.6);
+                }
+            }
+            // 中央高地等高圈
             ctx.beginPath();
-            ctx.arc(flag.gx * sx, flag.gy * sy, 4.6, 0, Math.PI * 2);
-            ctx.fillStyle = flag.owner === 'red' ? '#ff5b5b' : flag.owner === 'blue' ? '#57a0ff' : '#ece6d4';
+            ctx.ellipse(W / 2 * sx, H / 2 * sy, 9 * sx, 6.5 * sy, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(233,221,172,0.22)';
             ctx.fill();
-            ctx.lineWidth = 1.4;
-            ctx.strokeStyle = 'rgba(20,20,20,0.8)';
+            ctx.lineWidth = 1.8;
+            ctx.strokeStyle = 'rgba(240,225,170,0.85)';
             ctx.stroke();
+            // 河与桥
+            for (const block of geometry.blockers) {
+                ctx.fillStyle = '#3f7fb2';
+                ctx.fillRect(block.x1 * sx, block.y1 * sy, (block.x2 - block.x1) * sx, (block.y2 - block.y1) * sy);
+            }
+            for (const zone of geometry.zones) {
+                if (zone.kind !== 'bridge') continue;
+                ctx.fillStyle = '#c9a063';
+                ctx.fillRect(zone.x1 * sx, zone.y1 * sy, (zone.x2 - zone.x1) * sx, (zone.y2 - zone.y1) * sy);
+            }
+            // 五面旗
+            for (const flag of makeTerritoryFlags()) {
+                ctx.beginPath();
+                ctx.arc(flag.gx * sx, flag.gy * sy, 4.6, 0, Math.PI * 2);
+                ctx.fillStyle = flag.owner === 'red' ? '#ff5b5b' : flag.owner === 'blue' ? '#57a0ff' : '#ece6d4';
+                ctx.fill();
+                ctx.lineWidth = 1.4;
+                ctx.strokeStyle = 'rgba(20,20,20,0.8)';
+                ctx.stroke();
+            }
+        } finally {
+            setBoardSize(originalBoard.W, originalBoard.H, originalBoard.MARGIN);
         }
-        resetBoardSize();
     },
 
     renderChallenges() {
@@ -437,25 +460,38 @@ export const lobbyMethods = {
         this.holdStops = [];
     },
 
-    bindHold(el, fn) {
+    bindHold(el, fn, afterBatch) {
         let timer, repeat, held = 0;
         const stop = () => { clearTimeout(timer); clearInterval(repeat); held = 0; };
+        const batch = count => {
+            let changed = false;
+            let accepted = true;
+            for (let i = 0; i < count; i++) {
+                if (el.disabled) { accepted = false; stop(); break; }
+                if (fn() === false) { accepted = false; stop(); break; }
+                changed = true;
+            }
+            if (changed) afterBatch?.();
+            if (el.disabled) stop();
+            return accepted && !el.disabled;
+        };
         this.holdStops.push(stop);
         el.addEventListener('pointerdown', e => {
-            if (e.button !== 0) return;
+            if (e.button !== 0 || el.disabled) return;
             e.preventDefault();
+            stop();
             el.setPointerCapture(e.pointerId);
-            fn();
+            if (!batch(1)) return;
             timer = setTimeout(() => {
                 repeat = setInterval(() => {
                     held++;
                     const step = held < 10 ? 1 : held < 30 ? 8 : 25;
-                    for (let i = 0; i < step; i++) fn();
+                    batch(step);
                 }, 60);
             }, 380);
         });
         ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => el.addEventListener(ev, stop));
-        el.addEventListener('click', e => { if (e.detail === 0) fn(); });
+        el.addEventListener('click', e => { if (e.detail === 0 && !el.disabled) batch(1); });
     },
 
     changeCount(team, type, delta) {

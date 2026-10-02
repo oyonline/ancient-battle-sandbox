@@ -94,10 +94,26 @@ test('版本准入：混版本拒绝开战，同版本正常开局', async () =>
         assert.ok(!host.received.some(m => m.t === 'start'), '混版本不开战（房主）');
         assert.ok(!stale.received.some(m => m.t === 'start'), '混版本不开战（旧端）');
 
-        // 同版本重试可正常开局（ready 被消费，重新就绪）
-        const fresh = await openClient(port);
+        // 显式旧版本号同样被拒：本轮投影/模拟口径变化（workerEngageAt 入哈希）后，
+        // 上一批版本 '2026-10-02-site-traits' 与本服务器不再是同一模拟。
+        // 先让旧端离场腾出座位，旧版本客户端才能真正进房走到"双就绪"的版本闸门
+        // （否则会被"房间已满"先行挡下，断言就空转了）。
         stale.ws.close();
         await host.wait(m => m.t === 'peer-left');
+        const older = await openClient(port);
+        older.ws.send(JSON.stringify({ t: 'join', code: room.code, v: '2026-10-02-site-traits' }));
+        await older.wait(m => m.t === 'room');        // 真正入房：座位已空出
+        host.ws.send(JSON.stringify({ t: 'ready' }));
+        older.ws.send(JSON.stringify({ t: 'ready' }));
+        await host.wait(m => m.t === 'error');        // 版本闸门：双就绪拒绝开战
+        await older.wait(m => m.t === 'error');
+        assert.ok(!host.received.some(m => m.t === 'start'), '显式旧版本同样拒绝开局（房主）');
+        assert.ok(!older.received.some(m => m.t === 'start'), '显式旧版本同样拒绝开局（旧版本端）');
+        older.ws.close();
+        await host.wait(m => m.t === 'peer-left');
+
+        // 同版本重试可正常开局（ready 被消费，重新就绪）
+        const fresh = await openClient(port);
         fresh.ws.send(JSON.stringify({ t: 'join', code: room.code, v: SIM_VERSION }));
         await fresh.wait(m => m.t === 'room');
         host.ws.send(JSON.stringify({ t: 'ready' }));

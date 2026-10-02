@@ -38,7 +38,7 @@ test('毁塔后真实续建的新对象接管显示与拾取，不复用旧废�
     const old = camps.createBuilding('red', 'tower', 0, true);
     scene.render.camps.update();
     const priorView = scene.render.camps.views.get(old.id);
-    camps.damageBuilding(old, old.hp, scene.units.find(u => u.team === 'blue'));
+    camps.damageBuilding(old, old.hp * 2, scene.units.find(u => u.team === 'blue'));   // 桥头工事减伤：给足伤害
     scene.territory.econ.treasury.red = 1000;
     const worker = scene.units.find(u => u.team === 'red' && u.type === 'worker');
     assert.equal(camps.requestBuild('red', worker.id, 'tower', 0), true);

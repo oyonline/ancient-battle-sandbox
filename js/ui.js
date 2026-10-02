@@ -9,7 +9,12 @@ import { setBoardSize, resetBoardSize } from './board.js';
 import { ArenaClient } from './net/arena-client.js';
 import { NetBattle } from './net/lockstep.js';
 import { CampControls } from './camp-controls.js';
+import { traitOf } from './battle/site-traits.js';
+import { flagSiteSignature, traitSiteRow } from './render/overlay.js';
 
+function textIfChanged(element, value) {
+    if (element && element.textContent !== String(value)) element.textContent = String(value);
+}
 
 // ==================== 一键预设配兵（预算 4000） ====================
 export const PRESETS = {
@@ -32,6 +37,22 @@ export const UI_CAVALRY_OPTIONS = {
     direct: { name: '正面强冲', description: '直接迎击前方敌军，争取助跑冲锋；可能撞上完整枪阵。' },
     flank_archers: { name: '侧翼袭弓', description: '先沿侧翼绕向敌军弓兵，付出绕行时间；途中被截住仍要正常交战，无弓兵时攻击其他敌军。' }
 };
+
+// ---------------- 据点特色：一次性提示文案 ----------------
+// 名称 / 奖励 / 生效条件都读 js/battle/site-traits.js（模拟与文案同一份来源），
+// 这里只补一句"玩家该做什么"，避免各处再抄一套数字或另写一套说法。
+const SITE_TIP_ACTIONS = {
+    forest: '占下它，',
+    bridge: '占下它，',
+    hill: '占下它，再给营队下「移动并驻守」，',
+    ford: '占下任一渡口，',
+    crossroad: '占下它，'
+};
+function siteTraitTip(role) {
+    const trait = traitOf(role);
+    if (!trait) return '';
+    return `${trait.icon}${trait.name}：${SITE_TIP_ACTIONS[role] ?? ''}${trait.reward}。生效条件：${trait.condition}。`;
+}
 
 // ==================== 战役、配兵与战报 ====================
 export const UI = {
@@ -124,6 +145,11 @@ export const UI = {
     },
 
     setPhase(phase) {
+        if (phase !== 'battle') {
+            this.cancelTargeting();
+            const tip = document.getElementById('territory-tip');
+            if (tip) tip.hidden = true;
+        }
         if (phase === 'battle' && this.phase !== 'battle' && this.battleOptions.territory) {
             document.getElementById('controlbar').classList.add('collapsed');
             document.getElementById('btn-hud-collapse').textContent = '⌄ 展开信息';
@@ -155,8 +181,10 @@ export const UI = {
         document.querySelectorAll('.speed-btn').forEach(b => { b.disabled = netLock; });
         document.getElementById('btn-pause').textContent = this.scene?.paused ? '▶ 继续' : '⏸ 暂停';
         document.getElementById('btn-lock').disabled = !this.scene;
-        document.getElementById('btn-start').disabled = !this.scene || this.phase !== 'ready';
-        document.getElementById('btn-start').textContent = fighting ? '两军交战中…' : '🚀 开战！';
+        document.getElementById('btn-start').disabled = !this.scene || this.phase !== 'ready' || !!this.scene?.terrainLoading;
+        document.getElementById('btn-start').textContent = this.scene?.terrainLoading ? '准备战场…' : fighting ? '两军交战中…' : '🚀 开战！';
+        const ready = document.getElementById('btn-net-ready');
+        if (ready) ready.disabled = !!this.scene?.terrainLoading || !!this.net?.myReady;
         document.getElementById('ready-edit-actions').hidden = fighting;
         document.querySelectorAll('.speed-btn').forEach(b => {
             b.classList.toggle('active', Number(b.dataset.speed) === (this.scene?.gameSpeed || 1));
@@ -194,6 +222,14 @@ export const UI = {
     },
 
     clearBattle() {
+        this.cancelTargeting();
+        this._pendingBuys = [];
+        this._shownTraitEvents = 0;                 // 新局重新计数据点播报
+        clearTimeout(this._toastTimer);
+        for (const id of ['action-toast', 'territory-tip']) {
+            const element = document.getElementById(id);
+            if (element) element.hidden = true;
+        }
         this.campControls?.reset();
         this.stopHolds();
         this.countdown = false;
@@ -204,7 +240,10 @@ export const UI = {
         document.getElementById('recruit-dock')?.setAttribute('hidden', '');
         // 营队条拆出大条后自管显隐：离场必须收起（旧布局由 #controlbar 整体隐藏掩蔽）
         document.getElementById('battalion-bar')?.setAttribute('hidden', '');
-        if (this.scene) this.scene.clearUnits();
+        if (this.scene) {
+            this.scene.commandPreview = null;
+            this.scene.clearUnits(this.scene.battleOptions?.terrain);
+        }
         document.getElementById('overlay').className = 'overlay';
         this.updateCounts();
     },
@@ -469,6 +508,41 @@ export const UI = {
     // 局域网房间流程已拆至 js/lobby.js，经 spread 并入
     ...lobbyMethods,
     // ---------------- 领土征服 HUD：经济读数 + 征兵大按钮 ----------------
+    // 仅用于本地按钮反馈的待执行购买估算；真正扣费/出兵仍只由模拟执行。
+    pendingRecruitOrders() {
+        const lockstep = this.scene?.net?.lockstep;
+        if (!this.battleOptions.net || !lockstep) return [];
+        this._pendingBuys = (this._pendingBuys || []).filter(item => item.turn >= lockstep.execTurn);
+        return this._pendingBuys;
+    },
+
+    recruitBlockReason(type) {
+        if (this.phase !== 'battle' || this.countdown || !this.scene?.territory || this.scene.battleOver) return '等待开战';
+        const mine = this.mySide || 'red';
+        const { recruit, econ } = this.scene.territory;
+        if (type === 'cavalry' && !(this.scene.flags || []).some(f => f.role === 'ranch' && f.owner === mine)) return '需先占马场';
+        const pending = this.pendingRecruitOrders();
+        if (recruit.queues[mine].length + pending.length >= TERRITORY.QUEUE_CAP) return '训练队列已满';
+        const reserved = pending.reduce((sum, item) => sum + UNIT_TYPES[item.type].cost * TERRITORY.COST_MULT, 0);
+        if (econ.treasury[mine] - reserved < UNIT_TYPES[type].cost * TERRITORY.COST_MULT) return '军费不足';
+        const queued = recruit.queues[mine].filter(item => item.type === type).length + pending.filter(item => item.type === type).length;
+        if ((this.scene.aliveCount?.(mine, type) || 0) + queued >= UNIT_TYPES[type].maxCount) return '兵种人数已满';
+        return '';
+    },
+
+    buyRecruit(type) {
+        if (this.recruitBlockReason(type)) return false;
+        const side = this.mySide || 'red';
+        const lockstep = this.battleOptions.net && this.scene.net?.lockstep;
+        if (lockstep) {
+            // act 按原有顺序逐条排入同一回合，批处理只合并界面刷新。
+            lockstep.act({ k: 'buy', side, type });
+            (this._pendingBuys ??= []).push({ type, turn: lockstep.execTurn + lockstep.lookahead });
+            return true;
+        }
+        return this.scene.territory.recruit.enqueue(side, type);
+    },
+
     buildRecruitBar() {
         const bar = document.getElementById('recruit-bar');
         bar.replaceChildren();
@@ -478,23 +552,12 @@ export const UI = {
             const btn = document.createElement('button');
             btn.className = 'recruit-btn';
             btn.id = 'recruit-' + key;
-            btn.title = t.tip + ` · 训练 ${TERRITORY.TRAIN_MS[key] / 1000} 秒`;
-            btn.innerHTML = `<span class="rc-icon">${t.icon}</span><span class="rc-name">${t.name}</span><span class="rc-cost">🪙${cost}</span>`;
-            // 大按钮长按连买（亲子手感）：按下立即买一个，按住每 60ms 继续。
-            // 联机对战：操作进锁步命令队列（经服务器回环后在本回合确定性执行）。
-            this.bindHold(btn, () => {
-                if (this.phase !== 'battle' || this.countdown || !this.scene?.territory) return;
-                const side = this.mySide || 'red';
-                if (this.battleOptions.net && this.scene.net) {
-                    this.scene.net.lockstep.act({ k: 'buy', side, type: key });
-                    Snd.play('buy');
-                    this.updateTerritoryHUD();
-                    return;
-                }
-                if (this.scene.territory.recruit.enqueue(side, key)) {
-                    Snd.play('buy');
-                    this.updateTerritoryHUD();
-                }
+            btn.innerHTML = `<span class="rc-icon">${t.icon}</span><span class="rc-name">${t.name}</span><span class="rc-cost">🪙${cost}</span><small class="rc-reason"></small>`;
+            btn.addEventListener('pointerenter', () => { if (key === 'cavalry') this.showTerritoryTip('ranch'); });
+            btn.addEventListener('focus', () => { if (key === 'cavalry') this.showTerritoryTip('ranch'); });
+            this.bindHold(btn, () => this.buyRecruit(key), () => {
+                Snd.play('buy');
+                this.updateTerritoryHUD();
             });
             bar.appendChild(btn);
         }
@@ -514,69 +577,120 @@ export const UI = {
             const host = active ? document.getElementById('territory-ctl') : document.getElementById('controlbar');
             if (host?.appendChild && ctl.parentElement !== host) host.appendChild(ctl);
         }
-        this.campControls?.update();
-        if (!active) return;
+        if (!active) { this.campControls?.update(); return; }
         if (!document.getElementById('recruit-infantry')) this.buildRecruitBar();
         const territory = this.scene.territory;
         const mine = this.mySide || 'red';
         const owned = { red: 0, blue: 0 };
         for (const flag of this.scene.flags || []) if (flag.owner) owned[flag.owner]++;
-        document.getElementById('territory-treasury').textContent = Math.floor(territory.econ.treasury[mine]);
-        document.getElementById('territory-income').textContent = '+' + territory.econ.incomeRate(owned[mine]) + '/秒';
-        document.getElementById('territory-tickets-red').textContent = Math.ceil(territory.tickets.tickets.red);
-        document.getElementById('territory-tickets-blue').textContent = Math.ceil(territory.tickets.tickets.blue);
-        document.getElementById('territory-flags-red').textContent = owned.red;
-        document.getElementById('territory-flags-blue').textContent = owned.blue;
-        document.getElementById('territory-army-red').textContent = this.scene.redAlive;
-        document.getElementById('territory-army-blue').textContent = this.scene.blueAlive;
-        document.getElementById('territory-queue').textContent =
-            territory.recruit.queues[mine].length ? ` · 训练中 ${territory.recruit.queues[mine].length}` : '';
+        const readouts = {
+            'territory-treasury': Math.floor(territory.econ.treasury[mine]),
+            'territory-income': '+' + territory.econ.incomeRate(owned[mine]) + '/秒',
+            'territory-tickets-red': Math.ceil(territory.tickets.tickets.red),
+            'territory-tickets-blue': Math.ceil(territory.tickets.tickets.blue),
+            'territory-flags-red': owned.red, 'territory-flags-blue': owned.blue,
+            'territory-army-red': this.scene.redAlive, 'territory-army-blue': this.scene.blueAlive
+        };
+        for (const [id, value] of Object.entries(readouts)) textIfChanged(document.getElementById(id), value);
+        const queue = territory.recruit.queues[mine];
+        const pending = this.pendingRecruitOrders().length;
+        const first = queue[0];
+        const remaining = first ? Math.max(0, (first.readyAt - this.scene.simulationTime) / 1000) : 0;
+        const queueText = first ? `${UNIT_TYPES[first.type].name} · ${remaining > 0 ? remaining.toFixed(1) + '秒' : '等待出营空位'} · 共${queue.length}人`
+            : '训练队列空闲';
+        textIfChanged(document.getElementById('territory-queue'), queueText + (pending ? ` · ${pending}道征兵令待执行` : ''));
+        const enemy = mine === 'red' ? 'blue' : 'red';
+        const difference = owned[mine] - owned[enemy];
+        textIfChanged(document.getElementById('territory-ticket-status'), difference < 0
+            ? `少控${-difference}处据点 · 我方持续失分` : difference > 0 ? `多控${difference}处据点 · 敌方持续失分` : '控点相同 · 暂无控点失分');
         const rallyBtn = document.getElementById('btn-rally');
         rallyBtn.classList.toggle('active', !!this.rallyTargeting);
         rallyBtn.hidden = !active;
-        const hasRanch = (this.scene.flags || []).some(f => f.role === 'ranch' && f.owner === mine);
         for (const [key, t] of Object.entries(UNIT_TYPES)) {
             if (t.hidden && !t.territoryOnly) continue;
             const btn = document.getElementById('recruit-' + key);
             if (!btn) continue;
-            const ranchLocked = key === 'cavalry' && !hasRanch;
-            btn.disabled = this.countdown || ranchLocked || !territory.econ.canAfford(mine, key) ||
-                territory.recruit.queues[mine].length >= TERRITORY.QUEUE_CAP;
-            // 马场门禁时按钮灰化并给出原因（亲子可读）
-            btn.title = ranchLocked ? '需先占领一座马场（地图北上翼）才能征骑兵' : t.tip + ` · 训练 ${TERRITORY.TRAIN_MS[key] / 1000} 秒`;
-            btn.classList.toggle('ranch-locked', ranchLocked);
+            const reason = this.recruitBlockReason(key);
+            btn.disabled = !!reason;
+            btn.title = reason ? `${t.name}：${reason}${key === 'cavalry' ? '（地图北上翼）' : ''}` : t.tip + ` · 训练 ${TERRITORY.TRAIN_MS[key] / 1000} 秒 · 可长按连续征兵`;
+            textIfChanged(btn.querySelector('.rc-reason'), reason || `训练 ${TERRITORY.TRAIN_MS[key] / 1000}秒`);
+            btn.classList.toggle('ranch-locked', reason === '需先占马场');
         }
         this.updateBattalionBar();
         this.maybeShowTerritoryTips();
+        this.pollSiteTraitEvents();
     },
 
-    // 开局引导（发现性修复）：每次页面加载只播一轮三条，错峰各显 7 秒。
+    // 首次相关选择时才提示；操作提示、教程、战况通知各有自己的区域。
+    // 每种只讲一次，返回值告诉调用方"这次是不是刚讲过"。
+    showTerritoryTip(kind) {
+        this._seenTerritoryTips ??= new Set();
+        if (this._seenTerritoryTips.has(kind) || this.phase !== 'battle' || !this.battleOptions.territory) return false;
+        const tips = {
+            worker: '建设：选择民夫 → 筑营寨 → 点己方据点。民夫到场施工，记得派兵护卫。',
+            archer: '弓手可驻塔：点「建筑行动」→ 驻入箭塔 → 选择己方完工箭塔。',
+            medic: '医师可驻帐：点「建筑行动」→ 驻入医帐，帮助溃兵疗伤归队。',
+            ranch: '骑兵需要马场。北上翼有两座马场，先派一营夺下其中一座。',
+            command: '夺旗后营队恢复自主作战。要守住桥头或据点，请用「移动并驻守」。',
+            hill: siteTraitTip('hill'),
+            ford: siteTraitTip('ford'),
+            crossroad: siteTraitTip('crossroad'),
+            bridge: siteTraitTip('bridge'),
+            forest: siteTraitTip('forest')
+        };
+        const panel = document.getElementById('territory-tip');
+        if (!panel || !tips[kind]) return false;
+        this._seenTerritoryTips.add(kind);
+        textIfChanged(document.getElementById('territory-tip-text'), tips[kind]);
+        panel.hidden = false;
+        return true;
+    },
+
     maybeShowTerritoryTips() {
-        if (this._tipsShown) return;
-        this._tipsShown = true;
-        const tips = [
-            '🧰 建设入门：点选民夫 → 筑营寨 → 点己方据点；民夫要亲自到场施工',
-            '🏹 弓手可驻塔：选弓手所在营 → 驻入箭塔 → 点己方完工箭塔',
-            '🐎 占领马场（北上翼）才能征骑兵——断掉对方的马场，对面就出不了骑兵了'
-        ];
-        tips.forEach((text, index) => {
-            setTimeout(() => {
-                if (this.phase !== 'battle') return;
-                this.showNetToast(text);
-                setTimeout(() => {
-                    const cue = document.getElementById('morale-cue');
-                    if (cue && cue.textContent === text) { cue.hidden = true; cue.classList.remove('net-toast'); }
-                }, 7000);
-            }, 3000 + index * 8000);
-        });
+        if (this.holdTargeting || this.rallyTargeting || this.campControls?.targeting) return;
+        const selected = this.scene?.selectedBattalion;
+        if (selected?.team !== (this.mySide || 'red')) return;
+        const members = selected.aliveMembers();
+        const basic = members.some(u => u.type === 'archer') ? 'archer'
+            : members.some(u => u.type === 'medic') ? 'medic' : 'command';
+        if (this.showTerritoryTip(basic)) return;    // 基础操作先讲一次
+        this.showSiteTraitTip(selected);             // 再讲正在打交道的据点特色
+    },
+
+    // 选中营与特色据点相关时讲一次：先看这个营正在夺的据点，
+    // 没有明确目标时才看被争夺的己方特色据点（一次只讲一个，不连播）。
+    showSiteTraitTip(battalion) {
+        const flags = this.scene?.flags || [];
+        const mine = this.mySide || 'red';
+        const seen = this._seenTerritoryTips;
+        const target = battalion.orderFlag != null ? flags[battalion.orderFlag] : null;
+        const flag = target?.role ? target : flags.find(candidate => candidate.owner === mine && candidate.contested);
+        if (!flag?.role || seen?.has(flag.role)) return false;
+        return this.showTerritoryTip(flag.role);
+    },
+
+    // 据点特色播报：只认"新出现的"占领/易主事件，游标按事件条数推进（与时间无关），
+    // 所以每条只播一次，也不会因为界面刷新频率而重复播报。
+    pollSiteTraitEvents() {
+        const events = this.scene?.ledger?.events;
+        if (!events?.length) { this._shownTraitEvents = 0; return; }
+        if (!(this._shownTraitEvents >= 0) || this._shownTraitEvents > events.length) this._shownTraitEvents = 0;
+        const inBattle = this.phase === 'battle';
+        for (let i = this._shownTraitEvents; i < events.length; i++) {
+            const event = events[i];
+            if (!inBattle) continue;                       // 非战斗阶段只推进游标，不打扰
+            if (/^(trait|ranch)-/.test(event?.key ?? '')) this.showNetToast(event.text);
+        }
+        this._shownTraitEvents = events.length;
     },
 
     // ---------------- 营队指挥条：选中营后出现，点旗下令/回防 ----------------
     renderBattalionPicker() {
-        const row = document.getElementById('battalion-orders');
+        const row = document.getElementById('battalion-picker');
+        if (!row) return;
         const label = document.getElementById('battalion-label');
         const list = this.myBattalions();
-        label.textContent = '👆 选择营队下令（或直接点战场上的士兵 · 数字键 1-9）';
+        if (!this.scene?.selectedBattalion) label.textContent = '选择营队下令 · 数字键 1–9 / Tab 切换';
         if (!row.querySelector('.battalion-chip')) row.replaceChildren();
         if (row.querySelector('.battalion-chip') && row.childElementCount === list.length &&
             [...row.children].every((chip, i) => chip.dataset.bid === String(list[i]?.id))) {
@@ -585,7 +699,9 @@ export const UI = {
                 const b = list[i];
                 const state = b.gathering ? '集结中' : b.retreat ? '回防' : b.orderPoint ? '驻守'
                     : b.orderFlag != null ? '进军' : '作战';
-                chip.querySelector('.bc-count').textContent = `${b.aliveMembers().length}人·${state}`;
+                textIfChanged(chip.querySelector('.bc-count'), `${b.aliveMembers().length}人·${state}`);
+                chip.classList.toggle('active', this.scene.selectedBattalion === b);
+                chip.setAttribute('aria-pressed', String(this.scene.selectedBattalion === b));
             });
             return;
         }
@@ -597,11 +713,9 @@ export const UI = {
             const state = battalion.gathering ? '集结中' : battalion.retreat ? '回防' : battalion.orderPoint ? '驻守'
                 : battalion.orderFlag != null ? '进军' : '作战';
             chip.innerHTML = `<b>${battalion.id}营</b> <span class="bc-count">${battalion.aliveMembers().length}人·${state}</span>`;
-            chip.onclick = () => {
-                this.scene.selectedBattalion = battalion;
-                Snd.play('tick');
-                this.updateBattalionBar();
-            };
+            chip.classList.toggle('active', this.scene.selectedBattalion === battalion);
+            chip.setAttribute('aria-pressed', String(this.scene.selectedBattalion === battalion));
+            chip.onclick = () => this.selectBattalionByIndex(list.indexOf(battalion));
             row.appendChild(chip);
         }
     },
@@ -609,25 +723,37 @@ export const UI = {
     buildBattalionBar() {
         const row = document.getElementById('battalion-orders');
         row.replaceChildren();
+        const flagRow = document.getElementById('battalion-flags');
+        flagRow.replaceChildren();
         const flags = this.scene?.flags || [];
         flags.forEach((flag, index) => {
             const btn = document.createElement('button');
             btn.className = 'order-btn';
             btn.dataset.flagOrder = index;
-            btn.innerHTML = `<span class="ob-dot"></span>⚑ ${flag.name}`;
+            const dot = document.createElement('span');
+            dot.className = 'ob-dot';
+            const label = document.createElement('span');
+            label.className = 'of-text';    // 折行样式在 css/style.css 的 #battalion-flags 规则里
+            btn.appendChild(dot);
+            btn.appendChild(label);
+            const info = traitSiteRow(flag);
+            textIfChanged(label, info.text);
+            btn.title = info.title;
+            btn.siteSig = info.sig;                 // 归属/角色没变就不再动 DOM
             btn.onclick = () => { this.giveBattalionOrder(index); };
-            row.appendChild(btn);
+            flagRow.appendChild(btn);
         });
         const home = document.createElement('button');
         home.className = 'order-btn';
         home.dataset.orderHome = '';
         home.textContent = '🏠 回防集结';
+        home.title = '回到大本营集结：补充新兵、重整败兵；大本营是老家，没有据点特色加成';
         home.onclick = () => { this.giveBattalionOrder('home'); };
         row.appendChild(home);
         const hold = document.createElement('button');
         hold.className = 'order-btn';
         hold.id = 'order-hold';
-        hold.textContent = '📍 驻守此处';
+        hold.textContent = '📍 移动并驻守';
         hold.title = '点击后到地图上选一个点，全营开过去驻守（桥头/林缘/高地均可设防）';
         hold.onclick = () => this.beginHoldTargeting();
         row.appendChild(hold);
@@ -648,7 +774,7 @@ export const UI = {
         const clearBtn = document.createElement('button');
         clearBtn.className = 'order-btn';
         clearBtn.id = 'order-clear';
-        clearBtn.textContent = '⭕ 解除命令';
+        clearBtn.textContent = '自主作战';
         clearBtn.title = '清除本营旗令/驻点/回防，交还 AI 调度';
         clearBtn.onclick = () => this.giveClearOrder();
         row.appendChild(clearBtn);
@@ -659,48 +785,88 @@ export const UI = {
         nextBtn.title = '循环选择本方营队（快捷键 Tab / 数字键 1-9）';
         nextBtn.onclick = () => this.selectNextBattalion();
         row.appendChild(nextBtn);
+        const locate = document.createElement('button');
+        locate.className = 'order-btn';
+        locate.id = 'order-locate';
+        locate.textContent = '定位本营';
+        locate.title = '镜头定位所选营（F）';
+        locate.onclick = () => this.locateSelectedBattalion();
+        row.appendChild(locate);
+        const building = document.createElement('button');
+        building.className = 'order-btn';
+        building.id = 'order-building';
+        building.textContent = '建筑行动';
+        building.title = '驻入箭塔 / 医帐，或攻击敌方建筑';
+        building.onclick = () => { this.campControls.pinned = true; this.campControls.update(); };
+        row.appendChild(building);
         const deselect = document.createElement('button');
         deselect.className = 'order-btn';
-        deselect.textContent = '✖';
+        deselect.id = 'order-deselect';
+        deselect.textContent = '取消选择';
         deselect.title = '取消选择';
-        deselect.onclick = () => { this.scene?.selectBattalionByUnit(null); this.updateBattalionBar(); };
+        deselect.onclick = () => {
+            this.cancelTargeting();
+            this.scene?.selectBattalionByUnit(null);
+            if (this.scene?.unitInspector) this.scene.unitInspector.selected = null;
+            this.updateBattalionBar();
+        };
         row.appendChild(deselect);
     },
 
     // ---------------- 驻守目标模式 / 冲锋令 / 快捷选营 ----------------
     beginHoldTargeting() {
-        this.campControls?.cancel();
         const selected = this.scene?.selectedBattalion;
-        if (!selected || selected.team !== (this.mySide || 'red')) return;
-        this.holdTargeting = true;
-        document.body.classList.add('targeting');
-        this.showNetToast('📍 点击地图选择驻守位置（按 Esc 取消）');
+        if (this.phase !== 'battle' || this.countdown || !selected || selected.team !== (this.mySide || 'red')) return;
+        this.cancelTargeting();
+        this.holdTargeting = selected;
+        this.updateTargetingPrompt();
+        this.updateBattalionBar();
     },
 
     cancelHoldTargeting() {
-        this.holdTargeting = false;
-        document.body.classList.remove('targeting');
-        const cue = document.getElementById('morale-cue');
-        if (cue) cue.hidden = true;
+        this.holdTargeting = null;
+        this.updateTargetingPrompt();
     },
 
-    // 地面点击回调（inspection 上抛）：目标模式下视为选点下令
+    cancelTargeting() {
+        this.holdTargeting = null;
+        this.rallyTargeting = false;
+        this.campControls?.cancel();
+        this.updateTargetingPrompt();
+    },
+
+    updateTargetingPrompt() {
+        const prompt = this.campControls?.targeting?.prompt || (this.holdTargeting
+            ? `${this.holdTargeting.id}营 · 点地图选择移动并驻守的位置`
+            : this.rallyTargeting ? '点地图设置集结点 · 新兵与集结营将在此聚兵' : '');
+        document.body.classList.toggle('targeting', !!(this.holdTargeting || this.rallyTargeting));
+        document.getElementById('btn-rally')?.classList.toggle('active', !!this.rallyTargeting);
+        const panel = document.getElementById('command-prompt');
+        if (panel) panel.hidden = !prompt;
+        textIfChanged(document.getElementById('command-prompt-text'), prompt);
+        const tip = document.getElementById('territory-tip');
+        if (prompt && tip) tip.hidden = true;
+    },
+
+    // 返回 true 表示该次点击已用于命令/建筑，观察层必须保留原选择。
     onGroundClick(world, picked) {
-        if (this.campControls?.handleGroundClick(world, picked)) return;
+        if (this.campControls?.handleGroundClick(world, picked)) return true;
         if (this.rallyTargeting) {
             this.applyGroundOrder(world, (gx, gy) => {
                 this.giveRallyOrder(gx, gy);
                 this.cancelRallyTargeting();
             });
-            return;
+            return true;
         }
-        if (!this.holdTargeting) return;
-        const selected = this.scene?.selectedBattalion;
-        if (!selected) { this.cancelHoldTargeting(); return; }
+        if (!this.holdTargeting) return false;
+        const selected = this.holdTargeting;
+        if (!selected.aliveMembers().length) { this.cancelHoldTargeting(); return true; }
         this.applyGroundOrder(world, (gx, gy) => {
-            this.giveHoldOrder(gx, gy);
+            this.giveHoldOrder(gx, gy, selected);
             this.cancelHoldTargeting();
+            this.updateBattalionBar();
         });
+        return true;
     },
 
     // 世界坐标 → 网格（两次迭代补偿地形高度；0.1 格量化保联机一致），可走则执行
@@ -726,9 +892,10 @@ export const UI = {
         apply(gx, gy);
     },
 
-    giveHoldOrder(gx, gy) {
-        const selected = this.scene?.selectedBattalion;
-        if (!selected) return;
+    giveHoldOrder(gx, gy, selected = this.scene?.selectedBattalion) {
+        if (!selected || selected.team !== (this.mySide || 'red')) return;
+        this.scene.commandPreview = { kind: 'hold', gx, gy, battalionId: selected.id,
+            at: performance.now(), durationMs: 900 };
         const side = this.mySide || 'red';
         if (this.battleOptions.net && this.scene.net) {
             this.scene.net.lockstep.act({ k: 'hold', side, id: selected.id, gx, gy });
@@ -736,12 +903,13 @@ export const UI = {
             this.scene.applyNetCommand({ k: 'hold', side, id: selected.id, gx, gy });
         }
         Snd.play('lock');
-        this.updateBattalionBar();
+        this.showNetToast(`${selected.id}营 · ${this.battleOptions.net ? '驻守令已接收，等待执行' : '正在前往驻守位置'}`);
     },
 
     giveChargeOrder() {
         const selected = this.scene?.selectedBattalion;
-        if (!selected || !this.scene) return;
+        if (!selected || !this.scene || selected.team !== (this.mySide || 'red')) return;
+        this.cancelTargeting();
         const now = this.scene.simulationTime;
         if (now < (selected.chargeReadyAt || 0)) return;
         const hasCavalry = selected.aliveMembers().some(u => u.type === 'cavalry');
@@ -764,7 +932,10 @@ export const UI = {
     selectBattalionByIndex(index) {
         const list = this.myBattalions();
         if (!list.length) return;
+        this.cancelTargeting();
         this.scene.selectedBattalion = list[Math.max(0, Math.min(list.length - 1, index))];
+        if (this.scene.unitInspector) this.scene.unitInspector.selected = this.scene.selectedBattalion.aliveMembers()[0] || null;
+        if (this.campControls) this.campControls.workerId = this.campControls.buildingId = null;
         Snd.play('tick');
         this.updateBattalionBar();
     },
@@ -786,6 +957,7 @@ export const UI = {
     giveClearOrder() {
         const selected = this.scene?.selectedBattalion;
         if (!selected || selected.team !== (this.mySide || 'red')) return;
+        this.cancelTargeting();
         const side = this.mySide || 'red';
         if (this.battleOptions.net && this.scene.net) {
             this.scene.net.lockstep.act({ k: 'clear', side, id: selected.id });
@@ -797,21 +969,19 @@ export const UI = {
     },
 
     beginRallyTargeting() {
-        this.campControls?.cancel();
-        if (this.phase !== 'battle' || !this.battleOptions.territory || !this.scene?.territory) return;
+        if (this.phase !== 'battle' || this.countdown || !this.battleOptions.territory || !this.scene?.territory) return;
+        this.cancelTargeting();
         this.rallyTargeting = true;
-        document.body.classList.add('targeting');
-        this.showNetToast('📍 点击地图设置本方集结点——新兵与集结营将在此聚兵（Esc 取消）');
+        this.updateTargetingPrompt();
     },
 
     cancelRallyTargeting() {
         this.rallyTargeting = false;
-        document.body.classList.remove('targeting');
-        const cue = document.getElementById('morale-cue');
-        if (cue) cue.hidden = true;
+        this.updateTargetingPrompt();
     },
 
     giveRallyOrder(gx, gy) {
+        this.scene.commandPreview = { kind: 'rally', gx, gy, at: performance.now(), durationMs: 900 };
         const side = this.mySide || 'red';
         if (this.battleOptions.net && this.scene.net) {
             this.scene.net.lockstep.act({ k: 'rally', side, gx, gy });
@@ -819,6 +989,7 @@ export const UI = {
             this.scene.applyNetCommand({ k: 'rally', side, gx, gy });
         }
         Snd.play('lock');
+        this.showNetToast(this.battleOptions.net ? '集结令已接收，等待执行' : '集结点已更新');
     },
 
     selectNextBattalion() {
@@ -826,15 +997,22 @@ export const UI = {
         if (!list.length) return;
         const current = this.scene.selectedBattalion;
         const index = list.indexOf(current);
-        this.scene.selectedBattalion = list[(index + 1) % list.length];
-        Snd.play('tick');
-        this.updateBattalionBar();
+        this.selectBattalionByIndex((index + 1) % list.length);
+    },
+
+    locateSelectedBattalion() {
+        const selected = this.scene?.selectedBattalion;
+        if (!selected?.aliveMembers().length) return;
+        const center = selected.center();
+        const point = this.scene.groundPoint(center.gx ?? center.x, center.gy ?? center.y);
+        this.scene.cameras.main.centerOn(point.x, point.y);
     },
 
     // 下营令：联机进命令队列，单机直接执行
     giveBattalionOrder(order) {
         const selected = this.scene?.selectedBattalion;
-        if (!selected) return;
+        if (!selected || selected.team !== (this.mySide || 'red')) return;
+        this.cancelTargeting();
         const side = this.mySide || 'red';
         if (this.battleOptions.net && this.scene.net) {
             this.scene.net.lockstep.act({ k: 'order', side, id: selected.id, flag: order });
@@ -842,6 +1020,7 @@ export const UI = {
             this.scene.applyNetCommand({ k: 'order', side, id: selected.id, flag: order });
         }
         Snd.play('lock');
+        this.showNetToast(`${selected.id}营 · ${order === 'home' ? '回防令已接收' : '夺旗令已接收，夺旗后恢复自主作战'}`);
         this.updateBattalionBar();
     },
 
@@ -850,7 +1029,11 @@ export const UI = {
         const bar = document.getElementById('battalion-bar');
         const selected = this.phase === 'battle' && this.battleOptions.territory ? this.scene?.selectedBattalion : null;
         bar.hidden = !(this.phase === 'battle' && this.battleOptions.territory);
-        if (!selected) { this.renderBattalionPicker(); return; }   // 未选营：常驻营队选择条（入口可发现）
+        if (bar.hidden) return;
+        this.renderBattalionPicker();
+        document.getElementById('battalion-orders').hidden = !selected;
+        document.getElementById('battalion-targets').hidden = !selected;
+        if (!selected) return;   // 未选营：常驻营队选择条（入口可发现）
         if (!document.querySelector('#order-hold')) this.buildBattalionBar();   // 以驻守按钮为准（营选择 chip 同类名会误判）
         const flags = this.scene.flags || [];
         const own = selected.team === (this.mySide || 'red');
@@ -862,11 +1045,18 @@ export const UI = {
             : selected.orderFlag != null && flags[selected.orderFlag] ? '目标 · ' + flags[selected.orderFlag].name
             : '自主作战';
         document.getElementById('battalion-label').textContent =
-            (own ? '🔴' : '🔵') + `${selected.id}营 · ${selected.aliveMembers().length}人 · ${state}` + (own ? '' : ' · 敌营不可指挥');
-        document.querySelectorAll('#battalion-orders .order-btn').forEach(btn => {
-            btn.disabled = !own;
+            (selected.team === 'red' ? '🔴' : '🔵') + `${selected.id}营 · ${selected.aliveMembers().length}人 · ${state}` + (own ? '' : ' · 敌营不可指挥');
+        document.querySelectorAll('#battalion-orders .order-btn, #battalion-flags .order-btn').forEach(btn => {
+            btn.disabled = !own && !['order-next', 'order-deselect', 'order-locate'].includes(btn.id);
             if (btn.dataset.flagOrder != null) {
                 const flag = flags[Number(btn.dataset.flagOrder)];
+                const sig = flagSiteSignature(flag);
+                if (btn.siteSig !== sig) {                    // 只在归属/角色变化时改文字
+                    const info = traitSiteRow(flag);
+                    btn.siteSig = sig;
+                    textIfChanged(btn.querySelector('.of-text'), info.text);
+                    btn.title = info.title;
+                }
                 const dot = btn.querySelector('.ob-dot');
                 const ownerColor = flag?.owner === 'red' ? '#ff5b5b' : flag?.owner === 'blue' ? '#57a0ff' : '#d8d2c0';
                 if (dot) dot.style.background = ownerColor;
@@ -874,8 +1064,8 @@ export const UI = {
             } else if (btn.dataset.orderHome !== undefined) {
                 btn.classList.toggle('active', own && selected.retreat);
             } else if (btn.id === 'order-hold') {
-                btn.disabled = !own || this.holdTargeting;
-                btn.classList.toggle('active', this.holdTargeting);
+                btn.disabled = !own || !!this.holdTargeting;
+                btn.classList.toggle('active', !!this.holdTargeting);
             } else if (btn.id === 'order-stance') {
                 btn.disabled = !own;
                 const aggressive = selected.stance === 'aggressive';
@@ -887,7 +1077,7 @@ export const UI = {
                 const hasCavalry = own && selected.aliveMembers().some(u => u.type === 'cavalry');
                 const cooldown = Math.max(0, (selected.chargeReadyAt || 0) - now);
                 btn.disabled = !hasCavalry || cooldown > 0;
-                btn.textContent = cooldown > 0 ? `⚡ ${(cooldown / 1000).toFixed(1)}s` : '⚡ 冲锋！';
+                textIfChanged(btn, cooldown > 0 ? `冲锋 · 冷却 ${Math.ceil(cooldown / 1000)}秒` : '⚡ 冲锋！');
                 btn.classList.toggle('active', now < (selected.chargeUntil || 0));
             }
         });
@@ -970,13 +1160,27 @@ export const UI = {
         document.getElementById('btn-net-ready').onclick = () => this.netReady();
         document.getElementById('btn-net-quit').onclick = () => this.netQuit();
         document.getElementById('btn-rally').onclick = () => this.beginRallyTargeting();
+        document.getElementById('btn-cancel-command').onclick = () => { this.cancelTargeting(); this.updateBattalionBar(); };
+        document.getElementById('btn-dismiss-tip').onclick = () => { document.getElementById('territory-tip').hidden = true; };
         document.getElementById('net-code-input').addEventListener('keydown', e => {
             if (e.key === 'Enter') this.netJoin();
         });
         window.addEventListener('beforeunload', () => this.net.client?.bye());
         window.addEventListener('keydown', e => {
-            if (this.phase !== 'battle' || !this.battleOptions.territory) return;
-            if (e.key === 'Escape') { this.cancelHoldTargeting(); this.cancelRallyTargeting(); this.campControls?.cancel(); return; }
+            if (this.phase !== 'battle' || e.repeat || e.altKey || e.ctrlKey || e.metaKey ||
+                e.target?.isContentEditable || e.target?.matches?.('input, textarea, select, [contenteditable="true"]')) return;
+            if (e.code === 'Space' || e.key === ' ') {
+                // 保留焦点按钮、链接和展开控件原生的空格操作。
+                if (e.target?.closest?.('button, a, [role="button"], summary, [contenteditable]')) return;
+                e.preventDefault();
+                if (!this.battleOptions.net && !this.countdown && this.scene) {
+                    this.scene.togglePause(); this.syncControls();
+                }
+                return;
+            }
+            if (!this.battleOptions.territory) return;
+            if (e.key === 'Escape') { this.cancelTargeting(); this.updateBattalionBar(); return; }
+            if (e.key === 'f' || e.key === 'F') { this.locateSelectedBattalion(); return; }
             if (e.key === 'r' || e.key === 'R') { this.beginRallyTargeting(); return; }
             if (e.key === 'Tab') { e.preventDefault(); this.selectNextBattalion(); return; }
             const digit = Number(e.key);
@@ -1008,7 +1212,7 @@ export const UI = {
         document.getElementById('btn-swap').onclick = () => this.rematch(true);
         document.getElementById('btn-restart').onclick = () => this.editArmy('red');
         document.getElementById('btn-pause').onclick = () => {
-            if (this.phase !== 'battle' || this.countdown || !this.scene) return;
+            if (this.phase !== 'battle' || this.countdown || !this.scene || this.battleOptions.net) return;
             this.scene.togglePause(); this.syncControls();
         };
         document.querySelectorAll('.speed-btn').forEach(b => b.onclick = () => {

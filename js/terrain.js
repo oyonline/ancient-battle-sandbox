@@ -164,10 +164,12 @@ export const Terrain = {
         if (blocker) return blocker.kind;
         return geometry.zones.find(r => r.kind !== 'path' && this.contains(r, gx, gy))?.kind || 'grass';
     },
-    surfaceSpeed(key, type, gx, gy) {
+    // 浅滩系数可由调用方覆盖（渡口特色奖励：0.70 → 0.85）。地表规则本身仍是
+    // 全局数据：Terrain 不读归属、不写全局状态，避免影响敌军与其他模式。
+    surfaceSpeed(key, type, gx, gy, shallowSpeed = 0.7) {
         const surface = this.surface(key, gx, gy);
         if (surface === 'forest') return type === 'cavalry' ? 0.55 : 0.85;
-        if (surface === 'shallow') return 0.7;    // 浅滩可通行但蹚水减速
+        if (surface === 'shallow') return shallowSpeed;    // 浅滩可通行但蹚水减速
         return 1;
     },
     walkable(key, gx, gy, radius = 0.36) {

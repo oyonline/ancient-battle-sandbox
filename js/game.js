@@ -23,6 +23,7 @@ import { TERRITORY, makeTerritoryFlags, TerritoryEconomy, TicketSystem } from '.
 import { RecruitSystem, TerritoryAI } from './battle/recruit.js';
 import { CampSystem } from './battle/camps.js';
 import { HealingSystem } from './battle/healing.js';
+import { SiteTraitState } from './battle/site-traits.js';
 import { CAMP_COMMANDS, applyCampCommand } from './battle/camp-commands.js';
 import { BattalionSystem, BATTALION } from './battle/battalion.js';
 import * as unitAi from './battle/unit-ai.js';
@@ -34,6 +35,7 @@ import * as moraleBridge from './battle/morale-bridge.js';
 import * as territoryBridge from './battle/territory-bridge.js';
 import { BattleRenderer } from './render/renderer.js';
 import { ScarLayer } from './render/scars.js';
+import { FrameStats } from './frame-stats.js';
 import { TW, TH, OX, OY, VIEW_W, VIEW_H, refreshWorldMetrics, gridToScreen, sampleGroundRing, lerpColor } from './render/metrics.js';
 import { ANIM_ALIGN_K, CAVALRY_PROFILE_SUFFIX, CAVALRY_FLIPPED, cavalryProfile, cavalryRenderSign, cavalryHeadingFromMotion, footProfile, animAlignProfile, shadowTextureKey } from './render/sprites.js';
 
@@ -131,6 +133,7 @@ export class IsoBattleScene extends Phaser.Scene {
         // FPS 放在顶栏下方的 DOM 层，不受战场镜头的缩放和平移影响。
         this.fpsHud = document.getElementById('performance-hud');
         this._fpsN = 0; this._fpsT = 0;
+        this.performanceStats = new FrameStats();
 
         if (typeof UI !== 'undefined' && UI.onSceneReady) UI.onSceneReady(this);
     }
@@ -154,7 +157,7 @@ export class IsoBattleScene extends Phaser.Scene {
         this.battleOptions.terrain = Terrain.normalize(key);
         this.navigation?.reset(this.battleOptions.terrain, this.battleId);
         // 只有已创建的真实画布需要重烘焙；无绘图的战斗测试仍用同一高度数据。
-        if (this.groundImage && this._groundTerrain !== this.battleOptions.terrain) this.render.world.drawGround();
+        if ((this.groundImage || this.terrainLoading) && this._groundTerrain !== this.battleOptions.terrain) this.render.world.drawGround();
     }
 
     // 棋盘尺寸变更（进入/退出领土征服大地图）：重算世界度量并重建依赖尺寸的渲染层。
@@ -164,7 +167,7 @@ export class IsoBattleScene extends Phaser.Scene {
         this._boardW = board.W;
         this._boardH = board.H;
         this.mapCenter = { x: VIEW_W / 2, y: OY + (board.W + board.H) * TH / 4 };
-        if (this.groundImage) this.render.world.drawGround();                 // 重烘焙地面大贴图（内含销毁重建）
+        if (this.groundImage || this.terrainLoading) this.render.world.drawGround(); // 也取消尚未生成首块的旧地图任务
         if (this.edgeProps?.length) {                            // 大本营箭塔/边缘树林按新尺寸重摆
             for (const { sprite } of this.edgeProps) {
                 this.tweens.killTweensOf(sprite);
@@ -200,6 +203,7 @@ export class IsoBattleScene extends Phaser.Scene {
         this.territory = null;
         this.battalions = null;
         this.selectedBattalion = null;
+        this.siteTraits = null;      // 据点特色派生缓存（每次部署重建，避免跨局残留）
         this.net = null;
         this.netMySide = 'red';
         this.selectionGfx?.clear();
@@ -311,6 +315,7 @@ export class IsoBattleScene extends Phaser.Scene {
     }
 
     cancelCountdown() {
+        this.pendingCountdown = null;
         for (const timer of this.countdownTimers || []) timer.remove(false);
         for (const text of this.countdownTexts || []) {
             this.tweens.killTweensOf(text);
@@ -403,6 +408,8 @@ export class IsoBattleScene extends Phaser.Scene {
             }
             this.territory.camps = new CampSystem(this);
             this.territory.healing = new HealingSystem(this);
+            this.siteTraits = new SiteTraitState(this);   // 开局归属 → 派生状态（此后按归属变化刷新）
+            this.siteTraits.refresh();
             this.rebuildSpatial();
         }
         // 营队系统（仅领土征服）：开局常备军按纵向三等分为上/中/下营
@@ -500,6 +507,10 @@ export class IsoBattleScene extends Phaser.Scene {
 
     startCountdown(onDone) {
         this.cancelCountdown();
+        if (this.terrainLoading) {
+            this.pendingCountdown = { battleId: this.battleId, onDone };
+            return;
+        }
         const battleId = this.battleId;
         const cam = this.cameras.main;
         const steps = ['3', '2', '1', '开战！'];
@@ -575,13 +586,23 @@ export class IsoBattleScene extends Phaser.Scene {
 
     // ---------------- 战斗主循环 ----------------
     update(time, delta) {
+        const frameStarted = performance.now();
+        // Phaser smooths/clamps delta for gameplay. Diagnostics need the actual interval.
+        const frameDelta = this.game?.loop?.rawDelta ?? delta;
+        this.render.world.materials.updateBake();
+        if (this.pendingCountdown && !this.terrainLoading) {
+            const pending = this.pendingCountdown;
+            this.pendingCountdown = null;
+            if (pending.battleId === this.battleId) this.startCountdown(pending.onDone);
+        }
         // FPS 统计（500ms 滚动窗口）
         this._fpsN++;
         if (time - this._fpsT >= 500) {
             const fps = Math.round(this._fpsN * 1000 / (time - this._fpsT));
             if (this.fpsHud) {
                 this.fpsHud.textContent = fps + ' FPS · 存活 ' + (this.redAlive + this.blueAlive) +
-                    (this.net ? ` · 停等${this.net.stalls} 缓存${this.net.peerLead}` : '');
+                    (this.net?.waiting ? ' · 同步等待' : '');
+                this.fpsHud.title = this.performanceStats?.describe(this.net) || '';
                 this.fpsHud.style.color = fps >= 55 ? '#9cf5a0' : fps >= 30 ? '#ffd24a' : '#ff6b6b';
             }
             this._fpsN = 0; this._fpsT = time;
@@ -605,12 +626,21 @@ export class IsoBattleScene extends Phaser.Scene {
         const v = cam.worldView;
         this._view = v ? { x0: v.x - 160, y0: v.y - 220, x1: v.right + 160, y1: v.bottom + 280 } : null;
         this.lowFX = cam.zoom < 0.42;
-        if (!this.battleStarted || this.paused || this.battleOver) { this.render.units.syncRender(time); return; }
+        if (!this.battleStarted || this.paused || this.battleOver) {
+            this.render.fx.drawArrows();
+            this.render.units.syncRender(time);
+            this.performanceStats?.record(frameDelta, performance.now() - frameStarted);
+            return;
+        }
         this._fxBudget = 46;
         this._dustBudget = 8;
 
+        const simulationStarted = performance.now();
         this.advanceBattle(delta);
+        const simulationMs = performance.now() - simulationStarted;
+        this.render.fx.drawArrows();
         this.render.units.syncRender(time);
+        this.performanceStats?.record(frameDelta, performance.now() - frameStarted, simulationMs);
     }
 
     advanceBattle(delta) {
@@ -627,7 +657,7 @@ export class IsoBattleScene extends Phaser.Scene {
         let catchUp = 3;    // 追帧限速：等包后平滑追回（上限 15 步/帧会形成快进式顿挫）
         while (this.simulationAccumulator + 1e-7 >= core.SIMULATION_STEP_MS && !this.battleOver) {
             if (!this.net.lockstep.canStep()) {
-                this.net.noteStall();
+                this.net.noteStall(delta);
                 return;
             }
             const commands = this.net.lockstep.takeCommands();
@@ -636,6 +666,7 @@ export class IsoBattleScene extends Phaser.Scene {
             this.simulationTime += core.SIMULATION_STEP_MS;
             this.stepBattle(core.SIMULATION_STEP_MS / 1000);
             this.net.onTurnDone();
+            this.net.noteProgress();
             this.net.noteBuffer();
             if (--catchUp <= 0) return;    // 本帧追步额度用完，下帧继续
         }

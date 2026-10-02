@@ -45,7 +45,7 @@ export class TerritoryMapRenderer extends TerrainMaterialsRenderer {
     }
 
     updateRiverFlow(now) {
-        if (!this.riverFlow || now - this.flowAt < 100) return;
+        if (!this.riverFlow || !this.waterField || this.scene.terrainLoading || now - this.flowAt < 100) return;
         this.flowAt = now;
         const g = this.riverFlow;
         g.clear();

@@ -2,14 +2,15 @@
 import { board } from '../board.js';
 import { Terrain } from '../terrain.js';
 import { VIEW_W, VIEW_H, OX, OY, TW, TH, makeNoise } from './metrics.js';
-import { buildBankField, bankDistance, bankAppearance, sampleBankWeight, slopeAppearance, rockPlacements } from './terrain-naturalness.js';
+import { buildBankFieldSteps, bankDistance, bankAppearance, sampleBankWeight, slopeAppearance, rockPlacements } from './terrain-naturalness.js';
+import { FrameJob, prioritizeChunks } from './frame-job.js';
 
 const MATERIAL_KEY = 'terrain/materials';
 const PROP_KEY = 'terrain/props';
 const ROCK_KEY = 'terrain/rocks-v2';
 const PIXELS = 32;
 const MARGIN = 16;
-const CHUNK = 1024;
+const CHUNK = 512;
 const MATERIAL_TILE = 192;
 const noise = makeNoise(73);
 const materialFrames = new WeakMap();
@@ -90,7 +91,14 @@ export class TerrainMaterialsRenderer {
     }
 
     clearGround() {
-        if (!this.chunkKeys.length) return;
+        this.bakeJob?.cancel();
+        this.bakeJob = null;
+        this.reliefField = null;
+        this.exteriorWater = null;
+        this.groundShadows = [];
+        this.scene.terrainLoading = false;
+        this.updateLoadingUI();
+        if (!this.chunkKeys.length && !this.scene.groundImage) return;
         this.scene.groundImage?.destroy(true);
         this.scene.groundImage = null;
         this.chunkKeys.forEach(key => this.scene.textures.remove(key));
@@ -98,27 +106,68 @@ export class TerrainMaterialsRenderer {
     }
 
     draw() {
-        const started = performance.now(), scene = this.scene;
-        const geometry = Terrain.geometry('territory');
+        const scene = this.scene;
         this.clearGround();
+        scene.terrainLoading = true;
+        scene.terrainVisualStats = { progress: 0, chunks: 0, bakeMs: 0 };
+        // Set the destination now: another same-map deployment must not restart the job.
+        scene._groundTerrain = 'territory';
+        this.bakeJob = new FrameJob(this.bake());
+        this.updateLoadingUI();
+    }
+
+    updateBake() {
+        if (!this.bakeJob || this.bakeJob.done) return;
+        this.bakeJob.update();
+        this.scene.terrainVisualStats.bakeMs = Math.round(this.bakeJob.workMs);
+        if (this.bakeJob.done) {
+            this.scene.terrainLoading = false;
+            if (typeof UI !== 'undefined') UI.syncControls?.();
+        }
+        this.updateLoadingUI();
+    }
+
+    updateLoadingUI() {
+        if (typeof document === 'undefined') return;
+        const panel = document.getElementById('terrain-loading');
+        if (!panel) return;
+        panel.hidden = !this.scene.terrainLoading;
+        const progress = document.getElementById('terrain-loading-progress');
+        if (progress) {
+            const percent = Math.floor((this.scene.terrainVisualStats?.progress || 0) * 100);
+            if (progress.textContent !== `${percent}%`) progress.textContent = `${percent}%`;
+        }
+    }
+
+    *bake() {
+        const scene = this.scene;
+        const geometry = Terrain.geometry('territory');
         scene.groundImage?.destroy();
         if (scene.textures.exists('groundTex')) scene.textures.remove('groundTex');
-        this.waterField = buildBankField(geometry);
+        this.waterField = yield* buildBankFieldSteps(geometry);
         this.reliefField = null; this.exteriorWater = null;
         const rocks=geometry.blockers.filter(block=>block.kind==='rock');
-        this.rockField=buildBankField({blockers:rocks.map(block=>({...block,kind:'water'}))});
+        this.rockField = yield* buildBankFieldSteps({ blockers: rocks.map(block => ({ ...block, kind: 'water' })) });
         this.groundShadows = [];
         this.drawProps(geometry, null);
         const group = scene.add.group();
+        scene.groundImage = group;
+        yield;
         // A repeated small grass frame supplies the distant land without baking
         // transparent corners into another map-sized CPU/GPU canvas.
         const material=scene.textures.get(MATERIAL_KEY),source=material.getSourceImage();
         if (!material.has('distant-grass')) material.add('distant-grass',0,0,0,source.width/3,source.height/2);
         group.add(scene.add.tileSprite(0,0,512,512,MATERIAL_KEY,'distant-grass')
             .setOrigin(0).setDepth(-1).setDisplaySize(VIEW_W,VIEW_H).setTileScale(512/VIEW_W,512/VIEW_H));
-        let maxSourcePixels = 0;
-        for (let y = 0; y < VIEW_H; y += CHUNK) for (let x = 0; x < VIEW_W; x += CHUNK) {
-            const width = Math.min(CHUNK, VIEW_W - x), height = Math.min(CHUNK, VIEW_H - y);
+        // Relief used to be computed in one long first-tile call. Yield between rows.
+        yield* this.prepareRelief();
+        const camera = scene.cameras.main;
+        const center = camera.getWorldPoint(camera.width / 2, camera.height / 2);
+        const chunks = prioritizeChunks(VIEW_W, VIEW_H, CHUNK, center);
+        let maxSourcePixels = 0, visited = 0;
+        for (const { x, y, width, height } of chunks) {
+            scene.terrainVisualStats.progress = 0.2 + 0.8 * visited++ / chunks.length;
+            yield;
             const region = terrainBakeRegion(x, y, width, height);
             if (region.x2 <= region.x1 || region.y2 <= region.y1) continue;
             const cells = [];
@@ -165,12 +214,31 @@ export class TerrainMaterialsRenderer {
         scene.groundImage = group;
         scene._groundTerrain = 'territory';
         scene.terrainLabel?.destroy(); scene.terrainLabel = null;
-        scene.terrainVisualStats = { bakeMs: Math.round(performance.now() - started),
+        scene.terrainVisualStats = { progress: 1, bakeMs: 0,
             chunks: this.chunkKeys.length, props: scene.terrainProps.length, maxSourcePixels,
             maxTemporaryCanvasPixels: maxSourcePixels + CHUNK * CHUNK };
     }
 
     exteriorIntersects() { return false; }
+
+    *prepareRelief() {
+        const field = { x1: 0, y1: 0, step: 0.5, cols: board.W * 2 + 2, rows: board.H * 2 + 2 };
+        const weights = ['dry', 'earth', 'stone', 'light'].map(() => new Float32Array(field.cols * field.rows));
+        for (let row = 0; row < field.rows; row++) {
+            for (let col = 0; col < field.cols; col++) {
+                const x = (col + 0.5) * field.step, y = (row + 0.5) * field.step;
+                const pose = slopeAppearance('territory', x, y, noise(Math.abs(x - board.W / 2) * 0.8 + 9, y * 0.8));
+                const i = row * field.cols + col;
+                weights[0][i] = pose.dry; weights[1][i] = pose.earth;
+                weights[2][i] = pose.stone; weights[3][i] = pose.light;
+            }
+            if (row % 4 === 3) {
+                this.scene.terrainVisualStats.progress = 0.2 * row / field.rows;
+                yield;
+            }
+        }
+        this.reliefField = { field, weights };
+    }
 
     paintShadow(ctx, shadow) {
         ctx.save(); ctx.translate(shadow.x,shadow.y); ctx.scale(1,shadow.sy);
@@ -188,6 +256,9 @@ export class TerrainMaterialsRenderer {
         const patterns = materialPatterns(ctx, this.scene.textures.get(MATERIAL_KEY).getSourceImage());
         const at = value => value * PIXELS;
         ctx.fillStyle = patterns[0]; ctx.fillRect(at(region.x1),at(region.y1),plane.width,plane.height);
+        // Lower meadow micro-contrast so units and objectives lead the eye.
+        ctx.fillStyle = 'rgba(94,111,57,0.16)';
+        ctx.fillRect(at(region.x1), at(region.y1), plane.width, plane.height);
         // Broad, softly feathered dry patches vary the meadow without drawing a tile grid.
         for (let y = Math.floor((region.y1-8)/4)*4; y < region.y2+8; y += 4) {
             for (let x = Math.floor((region.x1-8)/4)*4; x < region.x2+8; x += 4) {
@@ -223,15 +294,8 @@ export class TerrainMaterialsRenderer {
         const clipped = intersectBakeRegion(region,{x1:1,y1:1,x2:board.W-1,y2:board.H-1});
         if (!clipped) return;
         if (!this.reliefField) {
-            const field = { x1:0,y1:0,step:0.5,cols:board.W*2+2,rows:board.H*2+2 };
-            const weights = ['dry','earth','stone','light'].map(() => new Float32Array(field.cols*field.rows));
-            for (let row=0;row<field.rows;row++) for (let col=0;col<field.cols;col++) {
-                const x=(col+0.5)*field.step,y=(row+0.5)*field.step;
-                const pose=slopeAppearance('territory',x,y,noise(Math.abs(x-board.W/2)*0.8+9,y*0.8));
-                const i=row*field.cols+col;
-                weights[0][i]=pose.dry;weights[1][i]=pose.earth;weights[2][i]=pose.stone;weights[3][i]=pose.light;
-            }
-            this.reliefField={field,weights};
+            // Direct isolated paint callers can still prepare the same field.
+            for (const _ of this.prepareRelief()) { /* normal bake prepares it incrementally */ }
         }
         const {field,weights}=this.reliefField;
         const tile=canvas(MATERIAL_TILE,MATERIAL_TILE),t=tile.getContext('2d');

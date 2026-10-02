@@ -1,4 +1,5 @@
 // Playable camps use the simulation's buildings, never decorative towers.
+import { garrisonStatusLabel, pendingGarrisonCounts } from '../battle/camps.js';
 // Static timberwork is baked once; only construction, health and crew labels update.
 export const TOWER_DECK_HEIGHT = 82;
 const TEAM = { red: 0xc94d3d, blue: 0x437bae };
@@ -128,7 +129,7 @@ export function towerCrewOffset(unit, camps) {
 }
 
 export class CampRenderer {
-    constructor(scene) { this.scene=scene;this.views=new Map();this.system=null; }
+    constructor(scene) { this.scene=scene;this.views=new Map();this.system=null;this._armed=undefined; }
 
     update() {
         const system=this.scene.territory?.camps;
@@ -137,12 +138,18 @@ export class CampRenderer {
         const present=new Set();
         // A rebuilt structure reuses its command id; only its latest object owns the view.
         const latest = new Map(system.buildings.map(building => [building.id, building]));
+        this._armed=undefined;   // 本端选择每帧最多读一次，未变化的帧不重复扫描
+        // 在途预约同样每帧只扫一次单位表；没有完工箭塔的帧完全不付这份成本。
+        let reservations=null;
+        for (const building of latest.values()) {
+            if (building.type==='tower' && building.complete && !building.dead) { reservations=this.pendingReservations(); break; }
+        }
         for (const building of latest.values()) {
             present.add(building.id);
             let view=this.views.get(building.id);
             if (view && view.building !== building) { this.destroyView(view); view = null; }
             if(!view) {view=this.create(building);this.views.set(building.id,view);}
-            this.updateView(building,view);
+            this.updateView(building,view,reservations);
         }
         for(const [id,view] of this.views) if(!present.has(id)) {this.destroyView(view);this.views.delete(id);}
     }
@@ -173,25 +180,74 @@ export class CampRenderer {
         parts.push(rubble);
         const scaffold=scene.add.graphics().setPosition(p.x,p.y).setDepth(depth+35);
         const status=scene.add.graphics().setPosition(p.x,p.y).setDepth(depth+170);
+        // 可驻军提示必须留在建筑自己的深度带（塔身之下、废墟之上）：
+        // 固定深度的世界覆盖层（11980–12125）在本图会被 gx+gy 更大的建筑整体遮住。
+        const highlight=scene.add.graphics().setPosition(p.x,p.y).setDepth(depth+20);
         const label=scene.add.text(p.x,p.y-(tower?141:tent?110:131), '',
             {fontSize:'13px',fontFamily:'sans-serif',color:'#f8edcc',stroke:'#302c20',strokeThickness:3})
             .setOrigin(0.5,1).setDepth(depth+171);
         const half=tower?74:tent?68:home?190:151,height=tower?147:tent?132:143;
         building.renderBounds={x:p.x-half,y:p.y-height,width:half*2,height:height+(tower?24:tent?20:79)};
-        return {building,parts,image,rubble,scaffold,status,label,p,signature:null};
+        return {building,parts,image,rubble,scaffold,status,highlight,label,p,signature:null};
     }
 
-    updateView(building,view) {
+    // 本端阵营：联机取 netMySide，单机/旧场景退回部署时的 mySide，最后才是恒红的默认。
+    get side() { return this.scene.netMySide || this.scene.battleOptions?.mySide || 'red'; }
+
+    // 在途预约计数：每个渲染帧只扫一次单位表，塔读数按 id 查 O(1)
+    // （逐塔调用 reserved() 会退化成"塔数 × 单位数"，随规模放大）。
+    pendingReservations() {
+        const counts=this._pending??(this._pending=new Map());
+        counts.clear();
+        if(this.scene.units) for(const [id,n] of pendingGarrisonCounts(this.scene.units)) counts.set(id,n);
+        return counts;
+    }
+
+    // 驻军读数：读数格式由模拟层的 garrisonStatusLabel 统一给出（单一口径，渲染不另写一套）。
+    // 在途人数来自本帧一次性算好的预约表，绝不在这里逐塔回查模拟（那会退化成塔数 × 单位数）。
+    garrisonStatusOf(building,pending) {
+        const inside=building.garrisonIds?.length||0;
+        const capacity=building.capacity||4;
+        const inTransit=pending?.get(building.id)??0;
+        return garrisonStatusLabel(inside,inside+inTransit,capacity);
+    }
+
+    // 与 camp-controls.selectedTroops 同一口径：营队成员已排除驻塔者，单体选择同样过滤。
+    selectionArmed() {
+        const scene=this.scene,side=this.side,battalion=scene.selectedBattalion;
+        const members=battalion?.team===side&&typeof battalion.aliveMembers==='function'?battalion.aliveMembers():null;
+        if(members?.some(u=>u.type==='archer'&&!u.garrisonTowerId))return true;
+        const unit=scene.unitInspector?.selected;
+        return !!unit&&unit.team===side&&unit.type==='archer'&&!unit.dead&&!unit.withdrawn&&!unit.garrisonTowerId;
+    }
+
+    armed() { if(this._armed===undefined)this._armed=this.selectionArmed(); return this._armed; }
+
+    // 静态高亮：只在状态变化时重画，不做逐帧呼吸/动画。
+    drawHighlight(view,on) {
+        const g=view.highlight;g.clear();
+        if(!on)return;
+        g.fillStyle(0xffe49a,0.16);g.fillEllipse(0,6,96,34);
+        g.lineStyle(2.5,0xffd777,0.9);g.strokeEllipse(0,6,96,34);
+        for(const [x,y] of [[-48,-2],[40,-2],[-48,16],[40,16]]) {g.fillStyle(0xffd777,0.9);g.fillRect(x,y,8,4);}
+    }
+
+    updateView(building,view,reservations) {
         const stage=Math.round((building.progress||0)*20),health=Math.ceil(building.hp||0);
         const count=building.garrisonIds?.length||0;
-        const signature=`${stage}:${health}:${count}:${building.dead}:${building.complete}:${building.paused}`;
+        const tower=building.type==='tower',tent=building.type==='tent',home=building.siteId==='home';
+        // 只有完工且在用的己方箭塔才需要读驻军/选择：读数变化必须进 signature，
+        // 否则"弓手在路上"这类状态会被差异比较吞掉。
+        const garrison=tower&&building.complete&&!building.dead?this.garrisonStatusOf(building,reservations):null;
+        const highlight=!!garrison&&!garrison.full&&building.team===this.side&&this.armed();
+        const signature=`${stage}:${health}:${count}:${garrison?garrison.reserved:0}:${building.dead}:${building.complete}:${building.paused}:${highlight?1:0}`;
         if(signature===view.signature)return;
         view.signature=signature;
         for(const part of view.parts) part.setVisible(!building.dead);
         view.rubble.setVisible(!!building.dead);
         const g=view.scaffold;g.clear();view.status.clear();
+        this.drawHighlight(view,highlight);
         if(building.dead) {view.label.setText('废墟');return;}
-        const tower=building.type==='tower',tent=building.type==='tent',home=building.siteId==='home';
         const h=tower?120:tent?86:home?119:100;
         if(!building.complete) {
             const progress=Math.max(0,Math.min(1,building.progress||0));
@@ -205,7 +261,8 @@ export class CampRenderer {
         } else {
             for(const part of view.parts) part.setAlpha(1);
             if(building.hp<building.maxHp)this.bar(view.status,h+11,building.hp/building.maxHp,TEAM[building.team]);
-            view.label.setText(tower?`箭塔 ${count}/${building.capacity||4}`
+            // 完工箭塔标出"塔内几人 / 共 4 人 / 还有几人在路上"，口径与模拟同一份读数。
+            view.label.setText(tower?`箭塔 弓手 ${(garrison?garrison.label:`${count}/${building.capacity||4}`).replace('（+','（')}`
                 :tent?`医帐 医师${count}/${building.capacity||2}`
                 :home?'大本营':'前线营寨');
         }
@@ -229,7 +286,7 @@ export class CampRenderer {
 
     destroyView(view) {
         for(const part of view.parts)part.destroy();
-        view.scaffold.destroy();view.status.destroy();view.label.destroy();
+        view.scaffold.destroy();view.status.destroy();view.highlight.destroy();view.label.destroy();
         delete view.building.renderBounds;
     }
     reset() {for(const view of this.views.values())this.destroyView(view);this.views.clear();this.system=null;}

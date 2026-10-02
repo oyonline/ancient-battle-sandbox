@@ -53,7 +53,9 @@ export class BattleLedger {
     addEvent(now, key, text, team) {
         if (this.milestones.has(key)) return;
         this.milestones.add(key);
-        this.events.push({ atMs: Math.round(now), text, team });
+        // key 一并入账：UI 只按事件类别（据点特色/营寨/士气）做一次性提示，
+        // 不必匹配文案。纯展示字段，不进锁步投影。
+        this.events.push({ atMs: Math.round(now), key, text, team });
         if (/^(morale-|tactic-rally|tactic-rescue)/.test(key)) {
             this.moraleCue = { text, atMs: now };
         }

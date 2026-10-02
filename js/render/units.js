@@ -68,7 +68,8 @@ export class UnitRenderer {
         unit.faceAcc = 0;
         unit.dirDX = 0;
         unit.dirDY = 0;
-        unit.spr.play(this.unitAnimKey(unit, 'attack'), true);
+        // Offscreen attacks still set their visual lock, but never restart a hidden Sprite.
+        if (!unit.visualCulled) unit.spr.play(this.unitAnimKey(unit, 'attack'), true);
         // 姿态帧缓存作废：攻击动画结束时姿态需按现场重新落帧，
         // 不能误以为贴图还停在缓存的那一帧上。
         unit.stanceTex = null;
@@ -150,6 +151,13 @@ export class UnitRenderer {
                 this.scene.dyingUnits.delete(unit);
                 continue;
             }
+            // A unit can die while culled. Death clips are advanced manually here,
+            // and the final Sprite must remain renderable for the corpse stamp.
+            if (unit.visualCulled) {
+                unit.visualCulled = false;
+                unit.spr.setVisible(true);
+                unit.shadow.setVisible(true);
+            }
             if (!elapsed) continue;
             death.elapsed = Math.min(death.duration, death.elapsed + elapsed);
             const progress = death.elapsed / death.duration;
@@ -200,6 +208,8 @@ export class UnitRenderer {
             if (u.dead || u.withdrawn) continue;
             this.syncOne(u, time, view);
         }
+        this.scene.render?.overlay?.updateBattalionMarkers();
+        this.scene.render?.fx?.drawDust(time);
     }
 
     syncOne(unit, time, view) {
@@ -234,10 +244,36 @@ export class UnitRenderer {
             unit.dirDY = 0;
         }
 
-        // 视口剔除：屏幕外只刷新快照，不碰显示对象（千人规模的主力 LOD）
+        // Hide stale world positions and remove Sprite animation work from Phaser's
+        // update list. Simulation and heading snapshots keep advancing normally.
         if (view && (x < view.x0 || x > view.x1 || y < view.y0 || y > view.y1)) {
+            if (!unit.visualCulled) {
+                unit.visualCulled = true;
+                unit.spr.anims.stop();
+                unit.spr.setActive?.(false);
+                unit.spr.setVisible(false);
+                unit.shadow.setVisible(false);
+            }
+            if (unit.type !== 'cavalry' && unit.animState !== 'attack') {
+                unit.faceAcc += sdx;
+                if (Math.abs(unit.faceAcc) > 2) {
+                    unit.faceDir = unit.faceAcc > 0 ? 1 : -1;
+                    unit.faceAcc = 0;
+                }
+            }
             unit.lastSX = planar.x; unit.lastSY = planar.y;
             return;
+        }
+
+        if (unit.visualCulled) {
+            unit.visualCulled = false;
+            unit.spr.setActive?.(true);
+            unit.spr.setVisible(true);
+            unit.stanceTex = null;
+            unit.stanceFrame = null;
+            if (unit.type !== 'cavalry') unit.spr.setFlipX(unit.faceDir < 0);
+            if (unit.animState === 'attack') unit.spr.play(this.unitAnimKey(unit, 'attack'), true);
+            else unit.animState = null; // Restart the current walk/build clip, not its old frame.
         }
 
         if (unit.type === 'cavalry' && unit.visualDir !== unit.renderedVisualDir) {

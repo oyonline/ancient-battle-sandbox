@@ -1,8 +1,18 @@
 // Render-only water union. Bridges and shallows belong to the same channel, so
 // adjacent terrain rectangles never create an artificial bank inside the river.
 const CHANNEL_KIND = { water: 1, shallow: 2, bridge: 3 };
+const ROWS_PER_STEP = 8;
 
-export function buildWaterField(geometry, { step = 0.5, padding = step } = {}) {
+export function buildWaterField(geometry, options) {
+    const steps = buildWaterFieldSteps(geometry, options);
+    let result;
+    do { result = steps.next(); } while (!result.done);
+    return result.value;
+}
+
+// Yield between row batches without changing the scan order or Float32 writes.
+// The completed field is returned only after all distance passes finish.
+export function* buildWaterFieldSteps(geometry, { step = 0.5, padding = step } = {}) {
     if (!Number.isFinite(step) || step <= 0) throw new RangeError('Water field step must be finite and positive');
     if (!Number.isFinite(padding) || padding < step) throw new RangeError('Water field padding must cover at least one sample');
     const channel = [
@@ -38,6 +48,7 @@ export function buildWaterField(geometry, { step = 0.5, padding = step } = {}) {
             }
             distance[index] = kinds[index] ? Infinity : 0;
         }
+        if ((row + 1) % ROWS_PER_STEP === 0 || row + 1 === rows) yield;
     }
 
     // Two-pass eight-neighbour chamfer distance to land cell centres. Padding
@@ -56,6 +67,7 @@ export function buildWaterField(geometry, { step = 0.5, padding = step } = {}) {
             }
             distance[index] = d;
         }
+        if ((row + 1) % ROWS_PER_STEP === 0 || row + 1 === rows) yield;
     }
     for (let row = rows - 1; row >= 0; row--) {
         for (let col = cols - 1; col >= 0; col--) {
@@ -70,10 +82,15 @@ export function buildWaterField(geometry, { step = 0.5, padding = step } = {}) {
             }
             distance[index] = d;
         }
+        if ((rows - row) % ROWS_PER_STEP === 0 || row === 0) yield;
     }
     // The shore lies between water and land centres, half a sample step closer.
-    for (let index = 0; index < distance.length; index++) {
-        if (kinds[index]) distance[index] = Math.max(step / 2, distance[index] - step / 2);
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const index = row * cols + col;
+            if (kinds[index]) distance[index] = Math.max(step / 2, distance[index] - step / 2);
+        }
+        if ((row + 1) % ROWS_PER_STEP === 0 || row + 1 === rows) yield;
     }
     return { x1, y1, step, cols, rows, kinds, distance };
 }

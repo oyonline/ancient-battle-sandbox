@@ -3,6 +3,7 @@
 import { board } from './board.js';
 import { Terrain } from './terrain.js';
 import { CombatRules } from './combat.js';
+import { shallowSpeedFor, DEFAULT_SHALLOW_SPEED } from './battle/site-traits.js';
 
 export const UNIT_TYPES = {
     infantry: {
@@ -25,10 +26,12 @@ export const UNIT_TYPES = {
         hp: 160, atk: 30, def: 15, speed: 4.0, atkSpeed: 1500, range: 1.1,
         chargeSpeed: 6.0, charge: true, scale: 1.35, tip: '助跑3格后双倍冲锋，擅长追击弓手'
     },
+    // 民夫（领土征服）：有限近战自卫——只还手贴上来的敌人，不追击、不占旗、不驻塔。
+    // 施工与自卫互斥（交战中不涨进度），所以廉价民夫替代不了同规模剑士。
     worker: {
         name: '民夫', icon: '🔨', cost: 3, maxCount: 12, hidden: true, territoryOnly: true,
-        hp: 45, atk: 0, def: 0, speed: 2.4, atkSpeed: 999999, range: 0,
-        scale: 1.0, tip: '建设营寨和箭塔，无战斗力，需部队保护'
+        hp: 45, atk: 12, def: 0, speed: 2.4, atkSpeed: 1400, range: 0.9,
+        scale: 1.0, tip: '建设营寨和箭塔；敌军贴近时会自卫还手，但仍需部队保护'
     },
     // 医师（领土征服医疗兵种）：无攻击，战场光环缓慢急救身边伤兵；
     // 可入驻医帐大幅加速据点疗伤。溃逃时与普通士兵一样进据点疗伤。
@@ -759,7 +762,14 @@ function movementSpeedMultiplier(unit, tx, ty,
     // 动摇时只放缓向前推进；战术后退与溃逃不受这项限制。
     const advancing = dx * (unit.moraleFacingX || 0) + dy * (unit.moraleFacingY || 0) > 0;
     const caution = unit.moraleState === 'wavering' && advancing ? 0.85 : 1;
-    const surface = Terrain.surfaceSpeed(unit.scene?.battleOptions?.terrain, unit.type, unit.gx, unit.gy);
+    // 渡口特色：拥有渡口的一方浅滩系数 0.70 → 0.85（只改系数，不改可通行性）。
+    // 热路径优化：先按地形默认系数取一次，只有真的踩在浅滩上（系数等于默认浅滩值）
+    // 才去查渡口归属——平地/林地行军的单位完全不付这份查询成本。
+    const terrain = unit.scene?.battleOptions?.terrain;
+    let surface = Terrain.surfaceSpeed(terrain, unit.type, unit.gx, unit.gy);
+    if (surface === DEFAULT_SHALLOW_SPEED && terrain) {
+        surface = Terrain.surfaceSpeed(terrain, unit.type, unit.gx, unit.gy, shallowSpeedFor(unit.scene, unit.team));
+    }
     return surface === 1 ? caution * terrainMultiplier : caution * terrainMultiplier * surface;
 }
 

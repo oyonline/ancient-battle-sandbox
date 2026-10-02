@@ -1,6 +1,6 @@
 // ==================== 锁步联机核心（纯逻辑，不碰 Phaser、不碰 DOM） ====================
 // 原理：两端各自跑完全相同的确定性模拟，网络只传命令。命令带"执行回合号"，
-// 落后 12 回合（≈200ms）调度；推进第 T 回合前必须收齐双方第 T 回合的包
+// 按 LOOKAHEAD 回合前瞻调度；推进第 T 回合前必须收齐双方第 T 回合的包
 // （空包也算），否则停等。服务器对每条消息保序双发，两端同回合内命令序一致
 // （红方包在前、蓝方包在后，侧内按发出序）→ 与 docs/DETERMINISM.md 约定闭环。
 //
@@ -15,7 +15,11 @@ export const LOCKSTEP = {
 // 房间服务器用它做开局准入——两端版本不一致（或旧标签页缺版本）时拒绝开战，
 // 否则同一命令在两端产生分歧结果（如本批的 build tent），锁步必然漂移。
 // server/arena.mjs 与 js/net/arena-client.js 共同引用本常量（本模块纯逻辑，node 可直接 import）。
-export const SIM_VERSION = '2026-10-01-healing';
+// 2026-10-02 review-fixes：投影纳入 workerEngageAt（历史交战时刻影响施工暂停），
+// 且民夫出手边界口径统一（量化半量子容差）——两者都会改变状态哈希，混版本必须拒绝。
+// 2026-10-02 review-fixes-r2：量化决策半量子边界统一归属（epsilon 商偏置）+
+// 民夫候选查询覆盖完整接受带——噪声带内的离散决策结果改变，同样需拒绝混版本。
+export const SIM_VERSION = '2026-10-02-review-fixes-r2';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {
@@ -86,6 +90,10 @@ export function battleProjection(scene) {
             parts.push('camp-unit', unit.garrisonTowerId || '', unit.garrisonOrderId || '',
                 unit.orderBuildingId || '', Math.round((unit.garrisonHeight || 0) * 1e3),
                 Math.round(unit.lastAttack * 1e3), JSON.stringify(unit.workerTask || null),
+                // 民夫历史交战时刻：不是派生/展示字段——它单独决定之后 300ms 的施工暂停
+                // （同模拟时刻下 800 与 600 的施工状态不同）。空串 = 从未交战；
+                // 真实的 0ms 是有效值，不能与"未交战"混同。
+                unit.workerEngageAt == null ? '' : Math.round(unit.workerEngageAt * 1e3),
                 // 疗伤字段入哈希：撤退目标/在疗状态/入住时刻任一分歧都能被 2 秒哈希检出
                 unit.healSiteId ?? '', unit.healingAt ?? '', Math.round(unit.healingSince || 0));
         }
@@ -138,13 +146,33 @@ export class NetBattle {
         this.primed = false;
         this.stalls = 0;          // 停等次数（诊断：持续增长=网络抖动超余量）
         this.peerLead = 0;        // 对端包领先的本端执行回合数（缓冲深度）
+        this.waiting = false;
+        this.waitMs = 0;
+        this.currentWaitMs = 0;
+        this.longestWaitMs = 0;
+        this.stallEvents = 0;
     }
 
-    noteStall() { this.stalls++; }
+    noteStall(delta = 0) {
+        this.stalls++;
+        if (!this.waiting) this.stallEvents++;
+        this.waiting = true;
+        const elapsed = Math.max(0, Number.isFinite(delta) ? delta : 0);
+        this.waitMs += elapsed;
+        this.currentWaitMs += elapsed;
+        this.longestWaitMs = Math.max(this.longestWaitMs, this.currentWaitMs);
+        this.noteBuffer();
+    }
+
+    noteProgress() { this.waiting = false; this.currentWaitMs = 0; }
 
     noteBuffer() {
         let lead = 0;
-        for (const exec of this.lockstep.inbox.keys()) lead = Math.max(lead, exec - this.lockstep.execTurn + 1);
+        while (true) {
+            const slot = this.lockstep.inbox.get(this.lockstep.execTurn + lead);
+            if (!slot?.red || !slot?.blue) break;
+            lead++;
+        }
         this.peerLead = lead;
     }
 

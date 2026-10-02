@@ -5,6 +5,8 @@ import { CombatRules } from '../combat.js';
 import { moveToward } from '../units.js';
 import { quantizeDecision as q } from './determinism.js';
 import { HEALING_RULES } from './healing.js';
+import { updateWorkerCombat, workerConstructionPaused } from './worker.js';
+import { buildSpeedScale, buildingDamageScale, buildSiteBonus } from './site-traits.js';
 
 export const CAMP_RULES = {
     camp: { cost: 160, seconds: 18, hp: 850, def: 10, radius: 2.2 },
@@ -14,6 +16,22 @@ export const CAMP_RULES = {
     TENT_GARRISON_HEIGHT_PX: 14,   // 医帐无高台：驻帐医师站在帐篷门口地面，不上 82px 平台
     BUILD_REACH: 1.6, ENTER_REACH: 1.15, AI_INTERVAL_MS: 1800
 };
+
+// 驻军读数（模拟与渲染共用的唯一口径）：reserved 含"已预约入驻"的在途单位。
+export function garrisonStatusLabel(inside, reserved, capacity) {
+    return { inside, reserved, capacity, full: reserved >= capacity,
+        label: `${inside}/${capacity}${reserved > inside ? `（+${reserved - inside} 前往中）` : ''}` };
+}
+
+// 在途预约计数（towerId → 在途人数）：渲染层每帧只扫一次，避免"塔数 × 单位数"逐帧扫描。
+export function pendingGarrisonCounts(units) {
+    const counts = new Map();
+    for (const u of units) {
+        if (!alive(u) || u.moraleState === 'routing' || !u.garrisonOrderId || u.garrisonTowerId) continue;
+        counts.set(u.garrisonOrderId, (counts.get(u.garrisonOrderId) ?? 0) + 1);
+    }
+    return counts;
+}
 
 const alive = u => u && !u.dead && !u.withdrawn && u.hp > 0;
 const ready = u => alive(u) && u.moraleState !== 'routing';
@@ -152,22 +170,62 @@ export class CampSystem {
         return n;
     }
 
-    orderGarrison(team, unitIds, towerId) {
+    // 驻军指令被拒的具体原因（UI 反馈与容量判断共用同一口径，避免两处各写一套）。
+    // 返回 null 表示可以受理。容量计入"已预约入驻"的弓手，防止重复下令超额预订。
+    garrisonRejectReason(team, towerId, unitIds = null) {
         const b = this.getBuilding(towerId);
-        // 箭塔收弓手；医帐收医师。其它组合一律拒绝。
+        if (!b) return '请点选一座建筑';
+        const acceptType = b.type === 'tower' ? 'archer' : b.type === 'tent' ? 'medic' : null;
+        if (!acceptType) return '这里不能驻军：只有箭塔收弓手、医帐收医师';
+        if (b.dead) return '这座建筑已被摧毁';                 // 先看是否还存在，再看归属
+        if (b.team !== team) return `这是敌方${b.type === 'tower' ? '箭塔' : '医帐'}，不能驻军`;
+        if (!b.complete) return `${b.type === 'tower' ? '箭塔' : '医帐'}尚未完工，民夫施工完成后才能驻军`;
+        const cap = b.capacity;
+        if (this.reserved(b) >= cap) return `${b.type === 'tower' ? '箭塔' : '医帐'}已满（${this.reserved(b)}/${cap}，含正在前往的）`;
+        if (Array.isArray(unitIds)) {
+            const candidates = [...new Set(unitIds)].map(id => this.unit(id))
+                .filter(u => ready(u) && u.team === team && u.type === acceptType && !u.garrisonTowerId && u.garrisonOrderId !== towerId);
+            if (!candidates.length) return acceptType === 'archer' ? '选中的部队里没有可入驻的弓箭手' : '选中的部队里没有可入驻的医师';
+        }
+        return null;
+    }
+
+    // 玩家语言的驻军状态：驻军数（含预约）。
+    garrisonStatus(tower) {
+        return garrisonStatusLabel(tower.garrisonIds.length, this.reserved(tower), tower.capacity);
+    }
+
+    // 共享受理口径：这批单位里模拟层真正会接受的子集（按 id 升序、去重，
+    // 过滤溃逃/死亡/撤离/类型不符/已驻塔/已预约本塔，并截断到剩余容量）。
+    // orderGarrison 的执行与 UI 的"多少人会前往"提示都只从这里取数——
+    // 两处共用同一套过滤规则，提示人数永远等于实际受理人数。
+    garrisonAcceptList(team, unitIds, towerId) {
+        const b = this.getBuilding(towerId);
+        // 箭塔收弓手；医帐收医师。其它组合一律不接受。
         const acceptType = b?.type === 'tower' ? 'archer' : b?.type === 'tent' ? 'medic' : null;
-        if (!b || !acceptType || b.team !== team || b.dead || !b.complete || !Array.isArray(unitIds)) return false;
-        let count = this.reserved(b), accepted = false;
+        if (!b || !acceptType || b.team !== team || b.dead || !b.complete || !Array.isArray(unitIds)) return [];
+        let count = this.reserved(b);
+        const accepted = [];
         for (const id of [...new Set(unitIds)].sort((a, z) => a - z)) {
             const u = this.unit(id);
-            if (!ready(u) || u.team !== team || u.type !== acceptType || u.garrisonTowerId || u.garrisonOrderId === towerId || count >= b.capacity) continue;
+            if (!ready(u) || u.team !== team || u.type !== acceptType || u.garrisonTowerId ||
+                u.garrisonOrderId === towerId || count >= b.capacity) continue;
+            accepted.push(u);
+            count++;
+        }
+        return accepted;
+    }
+
+    orderGarrison(team, unitIds, towerId) {
+        const accepted = this.garrisonAcceptList(team, unitIds, towerId);
+        if (!accepted.length) return false;
+        for (const u of accepted) {
             u.orderBuildingId = null;
             u.garrisonOrderId = towerId;
             u.meleeTarget = null;
             u.target = null;
-            count++; accepted = true;
         }
-        return accepted;
+        return true;
     }
 
     cancelUnitOrders(team, unitIds) {
@@ -236,7 +294,11 @@ export class CampSystem {
     damageBuilding(b, damage, source) {
         if (!b || this.getBuilding(b.id) !== b || b.dead || !Number.isFinite(damage) || damage <= 0 ||
             (source && (source.team === b.team || source.battleId !== b.battleId))) return 0;
-        const dealt = Math.min(b.hp, damage);
+        // 桥头工事：本点己方建筑受到伤害 −10%，只在统一结算入口应用一次；
+        // 取整与最低伤害沿用既有口径（向下取整、至少 1 点），易主后立即失效。
+        const scale = buildingDamageScale(this.scene, b);
+        const finalDamage = scale === 1 ? damage : Math.max(1, Math.floor(damage * scale));
+        const dealt = Math.min(b.hp, finalDamage);
         b.hp -= dealt;
         b.flashUntil = this.scene.simulationTime + 130;
         if (b.hp === 0) {
@@ -330,6 +392,8 @@ export class CampSystem {
         }
         if (!ready(u)) return false;
         if (u.type === 'worker') {
+            // 自卫优先：近身有敌就地还手、原地不动；脱离交战才回到原移动 / 施工任务。
+            if (updateWorkerCombat(this.scene, u, now)) return true;
             const task = u.workerTask;
             if (task?.kind === 'move') {
                 if (distance(u, task) <= 0.3) u.workerTask = null;
@@ -402,9 +466,12 @@ export class CampSystem {
             if (b.complete) continue;
             const w = this.unit(b.workerId);
             if (!alive(w)) b.workerId = null;
-            b.paused = !ready(w) || !this.ownsSite(b.team, b.siteId) || w.workerTask?.buildingId !== b.id || distance(w, b) > CAMP_RULES.BUILD_REACH;
+            // 交战停工：民夫近身交战时施工暂停，脱离交战后继续原任务（进度不重置）。
+            b.paused = !ready(w) || !this.ownsSite(b.team, b.siteId) || w.workerTask?.buildingId !== b.id ||
+                distance(w, b) > CAMP_RULES.BUILD_REACH || workerConstructionPaused(w, this.scene.simulationTime);
             if (b.paused) continue;
-            b.progress = Math.min(1, b.progress + dt / CAMP_RULES[b.type].seconds);
+            // 林口营建：本点归属方施工速度 ×1.25（有效施工时间 −20%），只加快施工。
+            b.progress = Math.min(1, b.progress + dt * buildSpeedScale(this.scene, b) / CAMP_RULES[b.type].seconds);
             if (b.progress >= 1 - 1e-9) {
                 b.progress = 1; b.complete = true; b.workerId = null; w.workerTask = null;
                 this.scene._countsDirty = true;
@@ -421,16 +488,19 @@ export class CampSystem {
         if (workers.length + recruit.queues[team].filter(i => i.type === 'worker').length < 2) recruit.enqueue(team, 'worker');
         for (const w of workers) {
             if (w.workerTask) continue;
-            const owned = (this.scene.flags ?? []).map((f, i) => ({ f, i })).filter(({ f }) => f.owner === team)
-                .sort((a, b) => distance(w, a.f) - distance(w, b.f) || a.f.gy - b.f.gy || a.i - b.i);
-            for (const { i } of owned) {
+            const owned = (this.scene.flags ?? []).map((f, i) => ({ f, i })).filter(({ f }) => f.owner === team);
+            // 建设链：营寨 → 箭塔 → 医帐（有医帐的据点收容力翻倍，AI 同样受益）。
+            // 据点特色偏好：同等距离时优先能把建筑放进有奖励的据点（林口加速、路口扩收容、桥头护塔）；
+            // 纯读当前归属，无随机数，红蓝镜像同序。
+            const plans = owned.map(({ f, i }) => {
                 const camp = this.getBuilding(this.id(team, 'camp', i));
                 const tower = this.getBuilding(this.id(team, 'tower', i));
-                // 建设链：营寨 → 箭塔 → 医帐（有医帐的据点收容力翻倍，AI 同样受益）。
                 const kind = !camp || camp.dead || !camp.complete ? 'camp'
                     : !tower || tower.dead || !tower.complete ? 'tower' : 'tent';
-                if (this.requestBuild(team, w.id, kind, i)) break;
-            }
+                return { i, kind, d: distance(w, f), bonus: buildSiteBonus(this.scene, team, i, kind) };
+            }).sort((a, b) => (a.d - a.bonus) - (b.d - b.bonus) ||
+                this.scene.flags[a.i].gy - this.scene.flags[b.i].gy || a.i - b.i);
+            for (const plan of plans) if (this.requestBuild(team, w.id, plan.kind, plan.i)) break;
         }
         const archers = this.scene.units.filter(u => ready(u) && u.team === team && u.type === 'archer' && !u.garrisonTowerId && !u.garrisonOrderId && !u.orderBuildingId && !u.battalion?.playerOrdered).sort((a, b) => a.id - b.id);
         for (const tower of this.buildings) {

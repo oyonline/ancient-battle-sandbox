@@ -16,6 +16,7 @@
 import { board } from '../board.js';
 import { moveToward } from '../units.js';
 import { quantizeDecision as q } from './determinism.js';
+import { healingCapacityBonus } from './site-traits.js';
 
 // 距离比较一律先量化到 0.05 网格再与网格阈值比较（阈值 2.2/3.6/3.2/1.2/4 均为
 // 0.05 整数倍）——镜像坐标的浮点噪声（~1e-15）在量化后归到同一格点，
@@ -62,8 +63,11 @@ export class HealingSystem {
         return this.tentAt(team, siteId)?.garrisonIds.length ?? 0;
     }
 
+    // 容量 = 基础 8 / 医帐 16 + 路口补给（+4，仅该据点归属己方时生效；大本营无旗位不加）。
+    // 不乘算疗伤速度，也不影响驻帐医师加成（那两项在 speed() 里各算一次）。
     capacity(team, siteId) {
-        return this.tentAt(team, siteId) ? HEALING_RULES.TENT_CAPACITY : HEALING_RULES.BASE_CAPACITY;
+        const base = this.tentAt(team, siteId) ? HEALING_RULES.TENT_CAPACITY : HEALING_RULES.BASE_CAPACITY;
+        return base + healingCapacityBonus(this.scene, team, siteId);
     }
 
     // 据点当前占用：正在疗伤 + 已被指定前往该点（含在途）的人数。

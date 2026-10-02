@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CampSystem, CAMP_RULES } from '../js/battle/camps.js';
-import { TerritoryEconomy, TERRITORY } from '../js/battle/economy.js';
+import { TerritoryEconomy, TERRITORY, BATTALION_POWER } from '../js/battle/economy.js';
 import { RecruitSystem, TerritoryAI } from '../js/battle/recruit.js';
 import { BattleSpatialIndex } from '../js/battle/spatial.js';
 import { BattalionSystem } from '../js/battle/battalion.js';
@@ -65,9 +65,15 @@ function run(s, seconds) {
     }
 }
 
-test('民夫：仅领土可训练，无攻击，不计营队配比，不改变军阵部署', () => {
+test('民夫：仅领土可训练，有限自卫但不计营队配比，不改变军阵部署', () => {
     const s = fixture(), worker = add(s, 'red', 'worker', 7, 90);
-    assert.equal(UNIT_TYPES.worker.atk, 0);
+    // 本轮起民夫拥有有限近战自卫（只还手贴身的敌人，见 tests/worker-defense.test.js）
+    assert.equal(UNIT_TYPES.worker.atk, 12);
+    assert.equal(UNIT_TYPES.worker.range, 0.9);
+    assert.equal(UNIT_TYPES.worker.atkSpeed, 1400);
+    assert.equal(UNIT_TYPES.worker.hp, 45);
+    assert.equal(UNIT_TYPES.worker.def, 0);
+    assert.equal(BATTALION_POWER.worker, 0, '民夫占领力仍为 0：不能占旗');
     assert.equal(s.territory.recruit.enqueue('red', 'worker'), true);
     assert.equal(s.territory.econ.treasury.red, TERRITORY.START_TREASURY - 18);
     s.battleOptions.territory = false;

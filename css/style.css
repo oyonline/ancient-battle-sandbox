@@ -890,3 +890,91 @@ body.territory-battle #controlbar { display: none !important; }
 /* 马场未占领时的骑兵按钮：灰化+金色提示边，亲子一眼可读 */
 .recruit-btn.ranch-locked { border-color: #6a5a34; background: #2a2418; color: #9a8f74; }
 .recruit-btn.ranch-locked .rc-cost { color: #8d7f5a; }
+
+/* 指挥层级：读数在顶端，征兵与营队在底边，选点提示独立且持续可见。 */
+#recruit-dock { max-width: calc(100vw - 440px); background: rgba(32, 28, 20, .94); }
+.recruit-heading { display: flex; flex: 0 0 100%; gap: 12px; align-items: baseline; color: #f2dbab; font-size: 13px; }
+.recruit-heading small { color: #c8c0aa; font-size: 11px; }
+#recruit-dock .recruit-btn { min-width: 63px; padding: 7px 9px; gap: 3px; border-width: 1px; border-radius: 8px; }
+#recruit-dock .recruit-btn .rc-name { display: block; font-size: 12px; font-weight: 700; }
+#recruit-dock .recruit-btn .rc-icon { font-size: 18px; }
+.recruit-btn .rc-reason { font-size: 10px; color: #d4c9b0; white-space: nowrap; }
+.recruit-btn:disabled { opacity: .62; }
+#btn-camp-open { padding: 8px 10px; font-size: 13px; border-width: 1px; }
+#battalion-bar { width: min(410px, calc(100vw - 24px)); max-height: min(44vh, 370px); overflow-y: auto; align-items: stretch; justify-content: flex-start; gap: 8px; padding: 11px; background: rgba(32, 28, 20, .94); border: 1px solid #8c7750; border-radius: 12px; }
+#battalion-label { flex: 0 0 100%; white-space: normal; }
+#battalion-picker { display: flex; flex: 0 0 100%; gap: 5px; overflow-x: auto; padding-bottom: 3px; }
+#battalion-picker .battalion-chip { flex: 0 0 auto; padding: 5px 7px; font-size: 11px; }
+#battalion-picker .bc-count { display: block; font-size: 10px; color: #c6c3ac; }
+#battalion-orders { gap: 5px; }
+#battalion-orders .order-btn { padding: 6px 8px; font-size: 12px; }
+#order-hold { color: #effbdc; border-color: #9bb575; background: #3c5030; }
+#order-clear, #order-deselect, #order-next, #order-locate { background: transparent; border-color: #635f4f; }
+#battalion-targets { width: 100%; border-top: 1px solid #625638; padding-top: 6px; font-size: 12px; color: #ddd1b5; }
+#battalion-targets summary { cursor: pointer; padding: 3px 0; }
+#battalion-targets summary small { color: #b5aa90; font-size: 10px; margin-left: 4px; }
+#battalion-flags { margin-top: 7px; }
+#battalion-flags .order-btn { padding: 4px 6px; font-size: 11px; }
+/* 据点特色奖励文案较长：允许折行，不撑破营队面板 */
+#battalion-flags .of-text { white-space: normal; line-height: 1.35; text-align: left; }
+#camp-control-bar { bottom: 147px; max-height: 37vh; overflow-y: auto; background: rgba(32, 36, 26, .96); }
+#territory-ticket-status { color: #d4c5a4; font-size: 11px; }
+.unit-inspector details { border-top: 1px solid #667451; margin-top: 8px; padding-top: 5px; }
+.unit-inspector summary { cursor: pointer; color: #c0c6ad; }
+.unit-inspector details span, .unit-inspector details small { display: block; }
+.inspection-task { color: #c8e8a7; font-weight: 600; }
+#command-prompt, #territory-tip, #action-toast, #terrain-loading { position: fixed; left: 50%; transform: translateX(-50%); z-index: 31; border: 1px solid #aa905a; border-radius: 9px; padding: 9px 12px; max-width: min(580px, calc(100vw - 28px)); background: rgba(35, 32, 23, .96); color: #fae9bf; box-shadow: 0 5px 18px #0005; font: 13px/1.55 "PingFang SC", sans-serif; }
+#command-prompt { top: 134px; display: flex; align-items: center; gap: 12px; border-color: #adcb81; }
+#command-prompt button, #territory-tip button { flex-shrink: 0; color: #eee2c2; border: 1px solid #887855; background: #45412e; border-radius: 5px; padding: 4px 7px; cursor: pointer; font-size: 12px; }
+#territory-tip { top: 134px; display: flex; align-items: center; gap: 12px; color: #d6dfc4; font-size: 12px; }
+#action-toast { top: 198px; pointer-events: none; color: #f3dab0; z-index: 32; }
+#terrain-loading { top: 138px; pointer-events: none; }
+#morale-cue { top: 256px; pointer-events: none; font-size: 11px; }
+#terrain-loading[hidden], #command-prompt[hidden], #territory-tip[hidden], #action-toast[hidden], #battalion-picker[hidden], #battalion-orders[hidden], #battalion-targets[hidden], #battalion-bar[hidden], #camp-control-bar[hidden] { display: none !important; }
+button:focus-visible, summary:focus-visible { outline: 2px solid #f5d07d; outline-offset: 3px; }
+body.territory-battle .unit-inspector { top: 145px; max-height: 30vh; }
+@media (max-width: 1100px) {
+    #recruit-dock { max-width: calc(100vw - 404px); }
+    #battalion-bar { width: 370px; }
+    #recruit-dock .recruit-btn { min-width: 57px; padding: 5px 7px; }
+}
+@media (max-width: 900px) {
+    #territory-strip { top: 64px; width: calc(100vw - 24px); padding: 5px 8px; box-sizing: border-box; }
+    #territory-strip .territory-econ { gap: 4px 12px; }
+    #territory-hud-rule { display: none; }
+    #recruit-dock { left: 8px; right: 8px; bottom: 8px; max-width: none; padding: 5px 6px; flex-wrap: nowrap; align-items: center; }
+    .recruit-heading { display: flex; position: absolute; bottom: 100%; left: 0; right: 0; padding: 4px 8px; background: rgba(32, 28, 20, .94); border-radius: 7px 7px 0 0; }
+    #recruit-dock .recruit-bar { flex-wrap: nowrap; overflow-x: auto; gap: 4px; }
+    #recruit-dock .recruit-btn { min-width: 60px; padding: 4px 6px; }
+    #battalion-bar { right: 8px; bottom: 132px; width: min(380px, calc(100vw - 16px)); max-height: 27vh; padding: 8px; }
+    #camp-control-bar { left: 8px; bottom: 132px; width: min(320px, calc(100vw - 16px)); max-height: 30vh; z-index: 22; }
+    #command-prompt, #territory-tip { top: 166px; width: max-content; max-width: calc(100vw - 42px); }
+    #action-toast { top: 238px; }
+    #morale-cue { top: 294px; }
+    body.territory-battle .unit-inspector { top: 172px; left: 8px; right: auto; width: 215px; max-height: 24vh; }
+}
+@media (max-width: 600px) {
+    #territory-strip { top: 88px; }
+    #territory-strip .territory-econ { font-size: 11px; }
+    #territory-strip .territory-econ b { font-size: 12px; }
+    #battalion-bar { width: calc(100vw - 16px); box-sizing: border-box; }
+    #battalion-targets summary small { display: block; }
+    #command-prompt, #territory-tip { top: 206px; font-size: 11px; padding: 6px 8px; }
+    #action-toast { top: 278px; font-size: 11px; }
+    #morale-cue { top: 334px; }
+    #terrain-loading { top: 206px; }
+    body.territory-battle .unit-inspector { top: 214px; max-height: 22vh; width: 190px; }
+    #recruit-dock .recruit-btn { min-width: 55px; }
+    #btn-camp-open { padding: 7px; font-size: 12px; }
+}
+@media (max-height: 620px) and (min-width: 901px) {
+    #battalion-bar { max-height: 40vh; }
+    #camp-control-bar { max-height: 30vh; }
+    #territory-hud-rule { display: none; }
+}
+@media (max-width: 740px) {
+    body.camp-panel-open #battalion-bar, body.camp-panel-open .unit-inspector { display: none; }
+    body:has(#command-prompt:not([hidden])) .unit-inspector,
+    body:has(#territory-tip:not([hidden])) .unit-inspector { display: none; }
+    #camp-control-bar { width: calc(100vw - 16px); box-sizing: border-box; }
+}

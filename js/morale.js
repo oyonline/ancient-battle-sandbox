@@ -1,4 +1,6 @@
 // 士气只读帧首快照，所有状态在伤害结算后一起提交；不移动单位、不操作画面。
+import { moraleLossScale } from './battle/site-traits.js';
+
 export class MoraleSystem {
     constructor(scene) {
         this.scene = scene;
@@ -264,6 +266,10 @@ export class MoraleSystem {
             const pressure = record.pressure * Math.max(0, pressureSeconds);
             const impactLoss = casualty + charge;
             const realLoss = impactLoss + pressure;
+            // 中央高地稳固军心：归属方 + 明确驻守令的营队成员 + 旗点 8 格内 → 士气损失 −10%。
+            // 只缩放负向损失，不加生命 / 攻击 / 射程，也不影响恢复速度。
+            const lossScale = moraleLossScale(this.scene, unit);
+            const totalLoss = lossScale === 1 ? realLoss + contagion : (realLoss + contagion) * lossScale;
             let reason = loss.reason;
             if (casualty > Math.max(charge, contagion, pressure)) reason = loss.deaths ? '附近友军伤亡惨重' : '持续遭到打击';
             else if (contagion > Math.max(casualty, charge, pressure)) reason = '附近友军溃逃';
@@ -280,7 +286,7 @@ export class MoraleSystem {
             const wait = reserveSupport ? 1.5 : 3;
             const recoveredSeconds = Math.max(0, safeTime - wait) - Math.max(0, previousTime - wait);
             const recovery = realLoss + contagion > 0 ? 0 : (reserveSupport ? 8 : 3) * Math.max(0, recoveredSeconds);
-            const value = Math.max(0, Math.min(100, unit.morale - realLoss - contagion + recovery));
+            const value = Math.max(0, Math.min(100, unit.morale - totalLoss + recovery));
             const rallyThreshold = reserveSupport ? 50 : this.scene.battleOptions?.deathmatch ? 60 : 45;
             let state = snap.state;
             if (state === 'routing') {

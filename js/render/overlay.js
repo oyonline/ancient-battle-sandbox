@@ -4,9 +4,80 @@ import { Terrain } from '../terrain.js';
 import { clamp, dist } from '../units.js';
 import { TW, TH, OX, OY, gridToScreen, sampleGroundRing, lerpColor } from './metrics.js';
 import { TERRITORY } from '../battle/economy.js';
+import { traitOf } from '../battle/site-traits.js';
+
+// Match the compact economic strip without measuring DOM layout every frame.
+const minimapTop = width => width <= 600 ? 212 : width <= 900 ? 162 : 74;
+
+// ---------------- 据点特色文案（参数与措辞的唯一来源：js/battle/site-traits.js） ----------------
+// 玩家语言把两件事分开讲：占领后能拿到什么 / 地形本来就有但双方都吃到的效果。
+// 大本营（siteId === 'home'）没有旗位，任何地方都不显示据点特色。
+const OWNER_MARK = { red: '🔴', blue: '🔵' };
+const OWNER_NAME = { red: '红方', blue: '蓝方' };
+const NEUTRAL_CUE = '（中立）';
+const NEUTRAL_CUE_FULL = '（中立，占领后归占领方）';
+// 奖励本身就长（路口）的据点只标"中立"，不再追加解释，避免旗标被撑得过宽。
+const NEUTRAL_CUE_MAX = 36;
+
+function siteOwnerMark(owner) { return OWNER_MARK[owner] ?? '⚪'; }
+function siteOwnerName(owner) { return OWNER_NAME[owner] ?? '中立'; }
+
+// 只有有旗位、有角色的据点才有特色；大本营恒为 null。
+function siteTraitOf(flag) {
+    return flag && flag.siteId !== 'home' ? traitOf(flag.role) : null;
+}
+
+// "工事：本点建筑受到伤害 −10%" → "工事 · 本点建筑受到伤害 −10%"（只换标点，不改措辞）。
+function traitRewardBrief(role) {
+    const trait = traitOf(role);
+    if (!trait) return '';
+    const at = trait.reward.indexOf('：');
+    return at < 0 ? trait.reward : `${trait.reward.slice(0, at)} · ${trait.reward.slice(at + 1)}`;
+}
+
+// 旗标/据点行只在归属或角色变化时需要重写文字，签名比对代替每帧重建。
+export function flagSiteSignature(flag) {
+    return flag ? `${flag.name}|${flag.role ?? ''}|${flag.owner ?? 'none'}` : '';
+}
+
+// 旗标三行：①归属 + 军费 ②占领后归谁、拿到什么 ③地形原本就有的效果。
+export function flagLabelText(flag) {
+    if (!flag) return '';
+    const lines = [`${siteOwnerMark(flag.owner)} ${flag.name} · 军费 +${TERRITORY.FLAG_INCOME}/秒`];
+    const trait = siteTraitOf(flag);
+    if (!trait) return lines[0];
+    const owned = flag.owner === 'red' || flag.owner === 'blue' ? flag.owner : null;
+    let capture = `占领：${owned ? OWNER_NAME[owned] : ''}${traitRewardBrief(flag.role)}`;
+    if (!owned) capture += capture.length + NEUTRAL_CUE_FULL.length <= NEUTRAL_CUE_MAX ? NEUTRAL_CUE_FULL : NEUTRAL_CUE;
+    lines.push(capture, `地形：${trait.terrain}`);
+    return lines.join('\n');
+}
+
+// 据点列表一行（营队夺旗按钮）：归属 + 占领奖励；悬停说明给全奖励、生效条件与地形。
+export function traitSiteRow(flag) {
+    const sig = flagSiteSignature(flag);
+    if (!flag) return { sig, text: '', title: '' };
+    const owner = `${siteOwnerMark(flag.owner)}${siteOwnerName(flag.owner)}`;
+    const trait = siteTraitOf(flag);
+    const text = `⚑ ${flag.name} · ${owner}${trait ? ` · ${traitRewardBrief(flag.role)}` : ''}`;
+    const title = [`${flag.name} · ${owner}`];
+    if (trait) title.push(`占领奖励：${trait.reward}`, `生效条件：${trait.condition}`, `地形：${trait.terrain}`);
+    return { sig, text, title: title.join('\n') };
+}
 
 export class OverlayRenderer {
-    constructor(scene) { this.scene = scene; }
+    constructor(scene) {
+        this.scene = scene;
+        this.flagGeometry = new WeakMap();
+        this.battalionMarkers = new Map();
+        this.previewBattleId = scene.battleId;
+        scene.events?.once('shutdown', () => {
+            this.clearFlagLabels();
+            this.clearBattalionMarkers();
+            this.previewGfx?.destroy();
+            this.previewGfx = null;
+        });
+    }
 
     drawTactics() {
         if (!this.scene.tactics) return;
@@ -114,7 +185,7 @@ export class OverlayRenderer {
     buildMinimap() {
         const cam = this.scene.cameras.main;
         const h = 108, w = Math.round(h * board.W / board.H);
-        const x = cam.width - w - 14, y = 74;
+        const x = cam.width - w - 14, y = minimapTop(cam.width);
         const gfx = this.scene.add.graphics().setScrollFactor(0).setDepth(150010);
         const zone = this.scene.add.rectangle(x + w / 2, y + h / 2, w, h, 0x000000, 0.01)
             .setOrigin(0.5).setScrollFactor(0).setDepth(150011).setInteractive();
@@ -154,6 +225,7 @@ export class OverlayRenderer {
 
     destroyMinimap() {
         this.clearFlagLabels();
+        this.clearBattalionMarkers();
         if (this._minimapRelease) {
             this.scene.input.off('pointerup', this._minimapRelease);
             this.scene.input.off('pointerupoutside', this._minimapRelease);
@@ -178,6 +250,7 @@ export class OverlayRenderer {
         const scale = 1 / cam.zoom;
         const ox = cam.width * cam.originX * (1 - scale), oy = cam.height * cam.originY * (1 - scale);
         mini.x = cam.width - mini.w - 14;
+        mini.y = minimapTop(cam.width);
         mini.gfx.setScale(scale).setPosition(ox, oy);
         mini.zone.setScale(scale).setPosition(ox + (mini.x + mini.w / 2) * scale, oy + (mini.y + mini.h / 2) * scale);
         const now = this.scene.time?.now || this.scene.simulationTime;
@@ -286,15 +359,17 @@ export class OverlayRenderer {
     }
 
     drawFlags() {
+        this.drawCommandPreview();
         if (!this.scene.flags) { this.clearFlagLabels(); return; }
         this.scene.render?.world?.materials?.updateRiverFlow?.(this.scene.time?.now ?? this.scene.simulationTime);
         this.updateFlagLabels();
         if (!this.scene.flagGfx) this.scene.flagGfx = this.scene.add.graphics().setDepth(11990);
         const g = this.scene.flagGfx;
         g.clear();
-        const t = this.scene.simulationTime;
+        const now = this.scene.simulationTime, t = now / 1000;
         for (const flag of this.scene.flags) {
-            const base = this.scene.groundPoint(flag.gx, flag.gy);
+            const geometry = this.getFlagGeometry(flag);
+            const base = geometry.base;
             const RED = 0xff5b5b, BLUE = 0x57a0ff, NEUTRAL = 0xd8d2c0;
             const targetColor = flag.owner === 'red' ? RED : flag.owner === 'blue' ? BLUE : NEUTRAL;
             // 旗面显示色向目标色平滑过渡（归属切换不再是瞬变）
@@ -304,21 +379,20 @@ export class OverlayRenderer {
 
             // ---- 地面争夺圈：等距椭圆（groundPoint 采样），归属染色，争夺时呼吸 ----
             const breathe = flag.contested ? 0.5 + 0.5 * Math.sin(t * 5) : 0;
-            const ringPts = sampleGroundRing(this.scene, flag.gx, flag.gy, 2.8, 26);
+            const ringPts = geometry.ring;
             g.fillStyle(color, flag.contested ? 0.10 + 0.08 * breathe : 0.13);
             g.fillPoints(ringPts, true);
             g.lineStyle(2, color, flag.contested ? 0.5 + 0.35 * breathe : 0.45);
             g.strokePoints(ringPts, true, true);
             // 马场：金色外圈标记骑兵来源点，与普通据点一眼区分
             if (flag.role === 'ranch') {
-                const ranchRing = sampleGroundRing(this.scene, flag.gx, flag.gy, 3.6, 26);
                 g.lineStyle(2, 0xe8c766, 0.6);
-                g.strokePoints(ranchRing, true, true);
+                g.strokePoints(geometry.ranchRing, true, true);
             }
 
             // ---- 占领/易主的扩散脉冲（1.2 秒）----
-            if (flag.pulseAt != null && t - flag.pulseAt < 1.2) {
-                const k = (t - flag.pulseAt) / 1.2;
+            if (flag.pulseAt != null && now >= flag.pulseAt && now - flag.pulseAt < 1200) {
+                const k = (now - flag.pulseAt) / 1200;
                 const pulsePts = sampleGroundRing(this.scene, flag.gx, flag.gy, 2.8 + k * 5, 26);
                 g.lineStyle(4, color, 0.75 * (1 - k));
                 g.strokePoints(pulsePts, true, true);
@@ -359,6 +433,121 @@ export class OverlayRenderer {
         }
     }
 
+    // Local input acknowledgement only. Its clock is deliberately independent of
+    // lockstep/simulation time, so an awaiting network turn cannot freeze the cue.
+    drawCommandPreview(now = performance.now()) {
+        const scene = this.scene;
+        if (this.previewBattleId !== scene.battleId) {
+            this.previewBattleId = scene.battleId;
+            scene.commandPreview = null;
+        }
+        const preview = scene.commandPreview;
+        const duration = preview?.durationMs ?? 900;
+        const age = preview ? now - preview.at : Infinity;
+        const valid = scene.battleOptions?.territory && preview && duration > 0 && age >= 0 && age < duration &&
+            Number.isFinite(preview.gx) && Number.isFinite(preview.gy) && ['hold', 'rally'].includes(preview.kind);
+        if (!valid) {
+            if (this.previewDrawn) this.previewGfx?.clear();
+            this.previewDrawn = false;
+            return;
+        }
+        if (!this.previewGfx) this.previewGfx = scene.add.graphics().setDepth(12125);
+        const g = this.previewGfx, p = age / duration;
+        const point = scene.groundPoint(preview.gx, preview.gy);
+        const scale = 1 / Math.max(0.15, scene.cameras?.main?.zoom ?? 1);
+        const radius = (14 + p * 10) * scale, alpha = 0.95 * (1 - p);
+        const rally = preview.kind === 'rally', color = rally ? 0xf6cc68 : 0x9de3af;
+        g.clear();
+        g.lineStyle(2 * scale, color, alpha);
+        g.strokeEllipse(point.x, point.y, radius * 2, radius);
+        if (rally) {
+            g.lineBetween(point.x, point.y, point.x, point.y - 21 * scale);
+            g.fillStyle(color, alpha);
+            g.fillTriangle(point.x, point.y - 21 * scale, point.x + 11 * scale,
+                point.y - 17 * scale, point.x, point.y - 12 * scale);
+        } else {
+            g.lineBetween(point.x - 5 * scale, point.y, point.x + 5 * scale, point.y);
+            g.lineBetween(point.x, point.y - 3 * scale, point.x, point.y + 3 * scale);
+        }
+        this.previewDrawn = true;
+    }
+
+    getFlagGeometry(flag) {
+        const key = `${this.scene.battleOptions?.terrain}:${board.W}:${board.H}:${OX}:${OY}:${flag.gx}:${flag.gy}:${flag.role}`;
+        let geometry = this.flagGeometry.get(flag);
+        if (!geometry || geometry.key !== key) {
+            geometry = { key, base: this.scene.groundPoint(flag.gx, flag.gy),
+                ring: sampleGroundRing(this.scene, flag.gx, flag.gy, 2.8, 26),
+                ranchRing: flag.role === 'ranch' ? sampleGroundRing(this.scene, flag.gx, flag.gy, 3.6, 26) : null };
+            this.flagGeometry.set(flag, geometry);
+        }
+        return geometry;
+    }
+
+    clearBattalionMarkers() {
+        for (const marker of this.battalionMarkers.values()) marker.label.destroy();
+        this.battalionMarkers.clear();
+        this.markerAt = -Infinity;
+    }
+
+    // Strategic zoom shows at most 24 friendly formations, not hundreds of unit
+    // labels. Enemy orders and rally destinations are never part of these markers.
+    updateBattalionMarkers() {
+        const scene = this.scene, zoom = scene.cameras?.main?.zoom ?? 1;
+        if (!scene.battleOptions?.territory || !scene.battalions) {
+            if (this.battalionMarkers.size) this.clearBattalionMarkers();
+            return;
+        }
+        if (this.markerBattleId !== scene.battleId) {
+            this.clearBattalionMarkers();
+            this.markerBattleId = scene.battleId;
+        }
+        if (zoom > 0.55) {
+            for (const marker of this.battalionMarkers.values()) marker.label.setVisible(false);
+            this.markerAt = -Infinity;
+            return;
+        }
+        const now = scene.time?.now ?? scene.simulationTime;
+        const selected = scene.selectedBattalion;
+        if (now - (this.markerAt ?? -Infinity) < 160 && this.markerZoom === zoom && this.markerSelected === selected) return;
+        this.markerAt = now; this.markerZoom = zoom; this.markerSelected = selected;
+        const side = scene.netMySide || 'red', active = new Set(), view = scene._view;
+        // Keep the selected battalion first when the display cap is reached.
+        const battalions = selected ? [selected, ...scene.battalions.battalions.filter(b => b !== selected)] : scene.battalions.battalions;
+        for (const battalion of battalions) {
+            if (battalion.team !== side || active.size >= 24) continue;
+            let count = 0, gx = 0, gy = 0;
+            for (const u of battalion.members) {
+                if (u.dead || u.withdrawn || u.garrisonTowerId) continue;
+                count++; gx += u.gx; gy += u.gy;
+            }
+            if (!count) continue;
+            const p = scene.groundPoint(gx / count, gy / count);
+            if (view && (p.x < view.x0 || p.x > view.x1 || p.y < view.y0 || p.y > view.y1)) continue;
+            active.add(battalion.id);
+            let marker = this.battalionMarkers.get(battalion.id);
+            if (!marker) {
+                const label = scene.add.text(0, 0, '', { fontFamily: '"PingFang SC", sans-serif', fontSize: '14px',
+                    align: 'center', color: '#fff0c7', stroke: '#211d15', strokeThickness: 3,
+                    backgroundColor: '#211d15c9', padding: { x: 5, y: 3 } }).setOrigin(0.5, 1).setDepth(12120);
+                marker = { label, text: null };
+                this.battalionMarkers.set(battalion.id, marker);
+            }
+            const state = battalion.gathering ? '集结' : battalion.retreat ? '回防' : battalion.orderPoint ? '驻守'
+                : battalion.orderFlag != null ? '进军' : '自主作战';
+            const text = `⚑ ${battalion.id}营 · ${count}人\n${state}`;
+            if (marker.text !== text) { marker.label.setText(text); marker.text = text; }
+            marker.label.setPosition(p.x, p.y - 28 / zoom).setScale(1 / zoom).setVisible(true);
+            const color = battalion === selected ? '#ffe49a' : side === 'blue' ? '#b9dcff' : '#ffd2c6';
+            if (marker.color !== color) { marker.label.setColor(color); marker.color = color; }
+        }
+        for (const [id, marker] of this.battalionMarkers) {
+            if (active.has(id)) continue;
+            marker.label.destroy();
+            this.battalionMarkers.delete(id);
+        }
+    }
+
     clearFlagLabels() {
         for (const label of this.flagLabels || []) label.destroy();
         this.flagLabels = null;
@@ -368,22 +557,33 @@ export class OverlayRenderer {
     updateFlagLabels() {
         if (!this.scene.battleOptions?.territory) { this.clearFlagLabels(); return; }
         if (!this.scene.add?.text) return;
-        if (this.labelFlags !== this.scene.flags) {
+        const flags = this.scene.flags;
+        if (!flags?.length) { if (this.flagLabels) this.clearFlagLabels(); return; }
+        if (this.labelFlags !== flags || this.flagLabels?.length !== flags.length) {
             this.clearFlagLabels();
-            this.labelFlags = this.scene.flags;
-            this.flagLabels = this.scene.flags.map(flag => {
+            this.labelFlags = flags;
+            this.flagLabels = flags.map(flag => {
                 const p = this.scene.groundPoint(flag.gx, flag.gy);
-                return this.scene.add.text(p.x, p.y - 76,
-                    `${flag.name} · 军费 +${TERRITORY.FLAG_INCOME}/秒\n${flag.benefit || ''}`, {
-                        fontFamily: '"PingFang SC", sans-serif', fontSize: '22px', align: 'center',
-                        color: '#fff0c7', stroke: '#29291f', strokeThickness: 4,
-                        backgroundColor: '#303222b8', padding: { x: 7, y: 4 }
-                    }).setOrigin(0.5, 1).setDepth(11995);
+                const label = this.scene.add.text(p.x, p.y - 76, flagLabelText(flag), {
+                    fontFamily: '"PingFang SC", sans-serif', fontSize: '22px', align: 'center',
+                    color: '#fff0c7', stroke: '#29291f', strokeThickness: 4,
+                    backgroundColor: '#303222b8', padding: { x: 7, y: 4 }
+                }).setOrigin(0.5, 1).setDepth(11995);
+                label.siteSig = flagSiteSignature(flag);   // 只在归属/角色变化时重写文字
+                return label;
             });
         }
         // Zoom compensation keeps strategic names readable in the overview.
         const scale = Math.min(2.4, Math.max(0.8, 0.62 / this.scene.cameras.main.zoom));
-        for (const label of this.flagLabels) label.setScale(scale);
+        for (let i = 0; i < this.flagLabels.length; i++) {
+            const label = this.flagLabels[i], flag = flags[i];
+            const sig = flagSiteSignature(flag);
+            if (label.siteSig !== sig) {
+                label.siteSig = sig;
+                label.setText(flagLabelText(flag));
+            }
+            label.setScale(scale);
+        }
     }
 
     // ---------------- 护送模式 ----------------
