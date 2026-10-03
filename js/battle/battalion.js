@@ -1,21 +1,25 @@
 // ==================== 营队系统（纯模拟，不碰渲染；仅领土征服模式启用） ====================
-// 军队按营组织：开局常备军确定性三等分为上/中/下营；新兵入集结营，攒满一波
-// 整营激活推进（消灭单兵逐个溜达）；营级 AI 按五旗敌我实力多线派营（打得过
-// 才打、家旗被犯最近营回援、多营不挤同一目标）；行军步速取营内最慢兵种同步。
-// 玩家令优先于 AI 令：选营点旗，夺旗后交还 AI。
+// 军队按营组织：开局常备军确定性分编——骑兵整编独立骑队（营心=自身，行军不被
+// 步战营拖住），其余步战兵三等分为上/中/下营；新兵入集结营（骑兵与步战分池），
+// 攒满一波整营激活推进（消灭单兵逐个溜达）；营级 AI 按五旗敌我实力多线派营
+// （打得过才打、家旗被犯最近营回援、多营不挤同一目标）；行军步速取营内最慢兵种
+// 同步。玩家令优先于 AI 令：选营点旗，夺旗后交还 AI。
 //
 // 确定性铁律：无 Math.random；遍历序固定（team 序、营创建序、旗序、id 决胜），
 // 与 docs/DETERMINISM.md 的换座镜像 / 锁步约定兼容。
 
 import { BATTALION_POWER } from './economy.js';
+import { UNIT_TYPES } from '../units.js';
 import { board } from '../board.js';
 import { SITE_AI, traitState } from './site-traits.js';
 
 export const BATTALION = {
-    OPENING_LANES: 3,          // 开局常备军分营数（按纵向位置三等分）
-    WAVE_SIZE: 8,              // 集结营满员激活阈值
+    OPENING_LANES: 3,          // 开局步战营分营数（按纵向位置三等分）
+    WAVE_SIZE: 8,              // 步战集结营满员激活阈值
     WAVE_MIN_AGE_MS: 25000,    // 集结超时也激活的门槛（低收入的慢战线不至于永远蹲家）
-    WAVE_MIN_SIZE: 5,          // 超时激活的最低人数
+    WAVE_MIN_SIZE: 5,          // 步战超时激活的最低人数
+    CAV_WAVE_SIZE: 3,          // 骑队满员激活阈值：3骑成队（骑兵贵而少，不沿用攒8人）
+    CAV_WAVE_MIN_SIZE: 1,      // 骑队超时激活的最低人数：单骑保底出发（马场断续出骑时不永远蹲家）
     AI_INTERVAL_MS: 2000,      // 营级 AI 评估间隔
     ASSESS_RADIUS: 9,          // 旗附近敌我实力评估半径（格）
     GATHER_HOLD_RADIUS: 3,     // 集结营成员围绕集结点的驻留半径
@@ -30,6 +34,7 @@ export class Battalion {
         this.team = team;
         this.kind = kind;                 // 'line'（成建制作战营）| 'gathering'（集结中）
         this.gathering = kind === 'gathering';
+        this.cavalry = false;             // 纯骑队营：独立集结池与激活阈值，步速取骑兵自身
         this.createdAt = 0;               // 场景模拟时钟（集结超时判定用）
         this.members = [];
         this.orderFlag = null;            // 目标旗 index；null = 无令
@@ -67,7 +72,8 @@ export class Battalion {
             if (u.type === 'cavalry') continue;      // 骑兵不拴步速（缰绳另行约束）
             pace = Math.min(pace, u.typeData.speed);
         }
-        this.pace = Number.isFinite(pace) ? pace : 2.2;
+        // 纯骑队营心=骑兵自身：步速回落到骑兵速度，而不是步战兜底 2.2
+        this.pace = Number.isFinite(pace) ? pace : (this.cavalry ? UNIT_TYPES.cavalry.speed : 2.2);
     }
 }
 
@@ -75,7 +81,8 @@ export class BattalionSystem {
     constructor(scene) {
         this.scene = scene;                 // 场景钩子：flags / forEachNear / simulationTime
         this.battalions = [];               // 营创建序（确定性）
-        this.pool = { red: null, blue: null };   // 各方现役集结营
+        this.pool = { red: null, blue: null };       // 各方现役步战集结营
+        this.cavPool = { red: null, blue: null };    // 各方现役骑队集结营（骑兵独立分池，不与步战混编）
         this.nextThink = 0;
         this.seq = 1;                       // 营号从每场战斗重新计数——联机两端 id 逐一对齐（网络令按 id 寻址）
     }
@@ -94,20 +101,41 @@ export class BattalionSystem {
         return rally ? { gx: rally.gx, gy: rally.gy } : this.homeRally(team);
     }
 
-    // 开局分编：按 gy 稳定排序后三等分（id 决胜），形成上/中/下三个成建制营。
+    // 开局分编：骑兵整编独立骑队（按 gy 稳定排序后按 CAV_WAVE_SIZE 均分，
+    // 默认 3 骑成一队；营心=骑兵自身，行军与接敌不再被步战营心拖住）；
+    // 其余步战兵按 gy 稳定排序后三等分（id 决胜），保留上/中/下三个成建制营。
+    // 无骑兵不建空骑队；纯骑兵开局不建空步战营。
     splitOpening(units) {
         for (const team of ['red', 'blue']) {
             const mine = units.filter(u => u.team === team && !u.dead && !u.withdrawn && u.type !== 'worker');
             if (!mine.length) continue;
-            mine.sort((a, b) => a.gy - b.gy || a.id - b.id);
-            const lanes = Math.min(BATTALION.OPENING_LANES, mine.length);
+            const foot = mine.filter(u => u.type !== 'cavalry');
+            const horses = mine.filter(u => u.type === 'cavalry');
+            foot.sort((a, b) => a.gy - b.gy || a.id - b.id);
+            horses.sort((a, b) => a.gy - b.gy || a.id - b.id);
+            const lanes = Math.min(BATTALION.OPENING_LANES, foot.length);
             for (let lane = 0; lane < lanes; lane++) {
                 const battalion = this.createBattalion(team, 'line');
-                const from = Math.floor(lane * mine.length / lanes);
-                const to = Math.floor((lane + 1) * mine.length / lanes);
+                const from = Math.floor(lane * foot.length / lanes);
+                const to = Math.floor((lane + 1) * foot.length / lanes);
                 for (let i = from; i < to; i++) {
-                    battalion.members.push(mine[i]);
-                    mine[i].battalion = battalion;
+                    battalion.members.push(foot[i]);
+                    foot[i].battalion = battalion;
+                }
+                battalion.refreshPace();
+                this.battalions.push(battalion);
+            }
+            // 独立骑队：每队约 CAV_WAVE_SIZE 骑（与增援骑队池同一成队口径），
+            // 上限 OPENING_LANES 队——大编制也不拆成单骑营。
+            const troops = Math.min(BATTALION.OPENING_LANES, Math.ceil(horses.length / BATTALION.CAV_WAVE_SIZE));
+            for (let t = 0; t < troops; t++) {
+                const battalion = this.createBattalion(team, 'line');
+                battalion.cavalry = true;
+                const from = Math.floor(t * horses.length / troops);
+                const to = Math.floor((t + 1) * horses.length / troops);
+                for (let i = from; i < to; i++) {
+                    battalion.members.push(horses[i]);
+                    horses[i].battalion = battalion;
                 }
                 battalion.refreshPace();
                 this.battalions.push(battalion);
@@ -115,17 +143,21 @@ export class BattalionSystem {
         }
     }
 
-    // 新兵入集结营：满一波（或超时）整营激活并另开新集结营。
+    // 新兵入集结营：骑兵进独立骑队池（3骑成队 / 25秒超时单骑保底），其余进
+    // 步战集结池（满8人一波 / 超时5人保底）；满员或超时整营激活并另开新池。
     assignReinforcement(unit) {
         if (unit.type === 'worker' || unit.garrisonTowerId) return;
         const team = unit.team;
-        if (!this.pool[team]) {
-            this.pool[team] = this.createBattalion(team, 'gathering');
-            this.pool[team].gatherPoint = this.gatherRally(team);
-            this.pool[team].createdAt = this.scene.simulationTime;
-            this.battalions.push(this.pool[team]);
+        const cavalry = unit.type === 'cavalry';
+        const pools = cavalry ? this.cavPool : this.pool;
+        if (!pools[team]) {
+            pools[team] = this.createBattalion(team, 'gathering');
+            pools[team].cavalry = cavalry;
+            pools[team].gatherPoint = this.gatherRally(team);
+            pools[team].createdAt = this.scene.simulationTime;
+            this.battalions.push(pools[team]);
         }
-        const pool = this.pool[team];
+        const pool = pools[team];
         pool.members.push(unit);
         unit.battalion = pool;
         pool.refreshPace();
@@ -143,21 +175,24 @@ export class BattalionSystem {
         this.battalions = this.battalions.filter(b => b.members.length > 0);
         for (const team of ['red', 'blue']) {
             if (this.pool[team] && this.pool[team].members.length === 0) this.pool[team] = null;
+            if (this.cavPool[team] && this.cavPool[team].members.length === 0) this.cavPool[team] = null;
         }
-        // 集结激活：满员或超时
+        // 集结激活：满员或超时（骑队与步战池各自阈值）
         for (const team of ['red', 'blue']) {
-            const pool = this.pool[team];
-            if (!pool || pool.gathering) continue;
-            this.pool[team] = null;      // 已激活的营不再是集结池
+            if (this.pool[team] && !this.pool[team].gathering) this.pool[team] = null;       // 已激活的营不再是集结池
+            if (this.cavPool[team] && !this.cavPool[team].gathering) this.cavPool[team] = null;
         }
         for (const battalion of this.battalions) {
             if (!battalion.gathering) continue;
             const size = battalion.members.length;
             const age = now - battalion.createdAt;
-            if (size >= BATTALION.WAVE_SIZE || (age >= BATTALION.WAVE_MIN_AGE_MS && size >= BATTALION.WAVE_MIN_SIZE)) {
+            const waveSize = battalion.cavalry ? BATTALION.CAV_WAVE_SIZE : BATTALION.WAVE_SIZE;
+            const minSize = battalion.cavalry ? BATTALION.CAV_WAVE_MIN_SIZE : BATTALION.WAVE_MIN_SIZE;
+            if (size >= waveSize || (age >= BATTALION.WAVE_MIN_AGE_MS && size >= minSize)) {
                 battalion.gathering = false;
                 battalion.kind = 'line';
                 if (this.pool[battalion.team] === battalion) this.pool[battalion.team] = null;
+                if (this.cavPool[battalion.team] === battalion) this.cavPool[battalion.team] = null;
             }
         }
         // 夺旗交还：目标旗已被本方占领 → 指令完成，营回归 AI（玩家令解除）
@@ -368,7 +403,12 @@ export class BattalionSystem {
         return true;
     }
 
-    // 骑兵冲锋令：6 秒自由冲锋窗口，15 秒冷却（营级，模拟时钟裁决——联机两端一致）
+    // 骑兵冲锋令（遗留手动路径）：6 秒自由冲锋窗口，15 秒冷却（营级，模拟时钟
+    // 裁决——联机两端一致）。正常玩法已不依赖（S2 意图制自动冲锋：接敌/助跑/
+    // 冲锋由营接管钩子自动交还冲锋状态机完成）；保留用途：① 网络命令 'charge'
+    // 的兼容——部署切换期间对端/旧标签页仍在途的命令包不致失效；② 高级玩家的
+    // 主动 override——无视 6 格交还半径强令自由出击（仍有窗口+冷却约束，不会
+    // 成为无限冲锋的碾压开关）。
     orderCharge(battalion, now) {
         if (!battalion || now < (battalion.chargeReadyAt || 0)) return false;
         battalion.chargeUntil = now + 6000;

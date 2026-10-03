@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runBattle, runPair, pureArmy } from '../tools/balance-report.js';
-import { makeScene } from './battle-harness.js';
+import { makeScene, addUnit, UNIT_TYPES, calculateAttackDamage } from './battle-harness.js';
 
 // Test the stated counters at equal cost, in both player seats and two army sizes.
 // These are behavioral bounds, not snapshots of exact casualties or tuning values.
@@ -15,6 +15,21 @@ for (const budget of [240, 600]) {
         });
     }
 }
+
+test('cavalry tuning: defense 10 lets swords deal real attrition; charge identity untouched', () => {
+    const scene = makeScene();
+    const sword = addUnit(scene, 'red', 'infantry');
+    const cavalry = addUnit(scene, 'blue', 'cavalry');
+    // 最小平衡方案（2026-10-03）：只降骑兵防御 15→10——剑士普通命中从 1（磨不动）
+    // 升到 6（真实战损）；其余身份参数（生命/速度/攻击/攻速/造价/冲锋速度）钉住不动。
+    assert.equal(calculateAttackDamage(sword, cavalry), 6, '剑士普通命中 16-10=6（旧 15 甲下仅 1）');
+    assert.equal(calculateAttackDamage(cavalry, sword), 20, '骑兵普通命中 30-10 不变');
+    const data = UNIT_TYPES.cavalry;
+    assert.deepEqual(
+        { hp: data.hp, atk: data.atk, def: data.def, speed: data.speed, atkSpeed: data.atkSpeed, cost: data.cost, chargeSpeed: data.chargeSpeed },
+        { hp: 160, atk: 30, def: 10, speed: 4.0, atkSpeed: 1500, cost: 12, chargeSpeed: 6.0 },
+        '首轮只动防御：其余骑兵参数不得漂移');
+});
 
 test('mirrored identical mixed armies finish with comparable remaining strength', () => {
     const army = { infantry: 12, pikeman: 10, archer: 15, cavalry: 5 };
@@ -66,7 +81,11 @@ test('spears in front delay cavalry reaching archers and improve the same army�
         const protectedArmy = protectionBattle('pikeman', mirror);
         const exposedArmy = protectionBattle('archer', mirror);
         assert.equal(protectedArmy.winner, protectedArmy.team);
-        assert.notEqual(exposedArmy.winner, exposedArmy.team);
+        // 骑兵防御 15→10 后不再能磨穿枪基军队：弓手裸布的同军也常惨胜——判据从
+        // "裸布必败"改为"胜也惨胜"（存活不及受保护布阵的一半），且时间/输出/存活
+        // 三项保护收益仍各有硬断言。
+        assert.ok(exposedArmy.alive <= Math.floor(protectedArmy.alive / 2),
+            `archers exposed to the charge cost the army over half its survivors (exposed ${exposedArmy.alive} vs protected ${protectedArmy.alive})`);
         assert.ok(protectedArmy.firstHit >= exposedArmy.firstHit + 2000, 'a real screen buys time to shoot');
         assert.ok(protectedArmy.archerDamage > exposedArmy.archerDamage,
             'the screen buys real ranged output even if later morale collapse exposes the archers');

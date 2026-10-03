@@ -1,5 +1,5 @@
 // 全字段镜像追踪：找出第一处"决策字段"发散（士气、状态、计时等应逐位一致的字段）
-import { makeScene } from '../tests/battle-harness';
+import { makeScene } from '../tests/battle-harness.js';
 
 const forward = makeScene(), reversed = makeScene();
 forward.deployUnits({ infantry: 72 }, { archer: 45 }, 'custom', 'custom');

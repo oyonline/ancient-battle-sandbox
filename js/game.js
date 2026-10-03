@@ -472,7 +472,7 @@ export class IsoBattleScene extends Phaser.Scene {
             lastAttack: -typeData.atkSpeed, lastContact: 0,
             state: 'charge', stateTime: 0, reformX: null, target: null,
             chargeDistance: 0, chargeLastX: null, lastRetarget: -Infinity, lastBrace: -Infinity,
-            chargeMomentum: 0, chargeImpactId: null,
+            chargeMomentum: 0, chargeImpactId: null, corpsManaged: false, leashReturning: false,
             braceTime: 0, braceReady: false, braceHold: false, braceSupport: 0, braceDepth: 0,
             braceFacingX: team === 'red' ? 1 : -1, braceFacingY: 0,
             moving: false, dead: false, withdrawn: false, flashUntil: 0, actionEpoch: 0,
@@ -887,25 +887,58 @@ export class IsoBattleScene extends Phaser.Scene {
         return this.battalions.orderSelected(flagIndex, this);
     }
 
-    // 营队接管骑兵（仅领土征服）：集结跟集结点、回防跟老家、有令跟旗——骑兵与
-    // 全营同目标行军，不再单骑冲阵，也不再来回"冲锋出去-缰绳拉回"造成贴图闪烁。
-    // 贴脸有敌（≤6格）时交还冲锋状态机就近作战；守已占旗时贴旗游弋待命。
+    // 营队接管骑兵（仅领土征服）：集结跟集结点、回撤跟老家、驻守跟驻点、有令跟旗。
+    // 意图制自动冲锋：贴脸有敌（≤6格）一律交还冲锋状态机就近作战——包括旗边
+    // （修复：原距目标旗≤4.5格的贴旗待命提前返回早于敌情检查且不区分旗归属，
+    // 中立/敌旗旁敌兵贴近时压住接敌，还会中途取消已起跑的冲锋）。
+    // 回撤令与驻守缰绳（稳健7格/好战14格，与步战营同一纪律）优先于敌情：
+    // 回撤能中断缠斗，防线骑兵追敌不脱防区；接管转换处的冲锋动量清理见 core.js。
     battalionDirectCavalry(unit) {
         if (!this.battleOptions.territory || !this.battalions) return null;
         const battalion = unit.battalion;
         if (!battalion) return null;
         // 冲锋窗口：该营骑兵全部交还冲锋状态机自由出击（窗口结束自动归队护送）
         if (this.simulationTime < battalion.chargeUntil) return null;
+        // F13：返程承诺只属于当前驻守令——任何非驻守路径（回撤/改旗令/清令/集结）
+        // 都先复位，不跨令存活。必须放在回撤提前 return 之前（回撤会清驻点；先前
+        // 复位写在驻守分支的 else 里被回撤 return 绕过，旧承诺跨令压制新驻守接敌）。
+        if (!battalion.orderPoint) unit.leashReturning = false;
+        // 回撤令优先：中断交战整队撤回老家集结点（骑兵步速 4.0 甩开追兵，不再缠斗）
+        if (!battalion.gathering && battalion.retreat) return this.battalions.homeRally(unit.team);
+        // 驻守缰绳：追敌不得脱防区——超过缰绳即回驻点（好战营追得更远才回位）。
+        // 滞回承诺（F1）：出缰触发的返程必须走完到"释放半径"（缰绳×0.65）才允许
+        // 再次交还接敌——否则缰绳边界逐帧切换追敌/返回（实测 3 秒 129+ 次换向、
+        // 敌弓零战损）。死区取 35% 缰绳（稳健 ~2.45 格 / 好战 ~4.9 格）：远大于
+        // 单步位移（~0.07 格）与接触推挤（1~2 格），逐帧振荡几何上不可能；释放后
+        // 重新出击构成秒级的"出击-回防"战术循环而非贴图抖动。纯几何死区，无时间
+        // 常数。承诺生命周期见上方 F13 复位：只在驻守令存续期间有效。
+        if (!battalion.gathering && battalion.orderPoint) {
+            const post = battalion.orderPoint;
+            const leash = battalion.stance === 'aggressive' ? 14 : 7;
+            const fromPost = Math.hypot(post.gx - unit.gx, post.gy - unit.gy);
+            if (fromPost > leash) unit.leashReturning = true;
+            if (unit.leashReturning) {
+                if (fromPost > leash * 0.65) return post;   // 返程承诺：未达释放半径不接敌
+                unit.leashReturning = false;                // 已回位：恢复接敌资格
+            }
+        }
+        // 敌情优先于一切行军接管：贴脸有敌（≤6格）交还冲锋状态机
+        let enemyNear = false;
+        this.forEachNear(unit.gx, unit.gy, 6, u => {
+            if (u.team !== unit.team && !u.dead && !u.withdrawn && u.moraleState !== 'routing' &&
+                Math.hypot(u.gx - unit.gx, u.gy - unit.gy) <= 6) enemyNear = true;
+        });
+        if (enemyNear) return null;
         let target = null;
         if (battalion.gathering) target = battalion.gatherPoint;
-        else if (battalion.retreat) target = this.battalions.homeRally(unit.team);
         else if (battalion.orderPoint) {
             target = battalion.orderPoint;
         }
         else if (battalion.orderFlag != null && this.flags[battalion.orderFlag]) {
             const flag = this.flags[battalion.orderFlag];
             if (Math.hypot(flag.gx - unit.gx, flag.gy - unit.gy) <= 4.5) {
-                // 旗已在手：贴旗待命（按 id 定角度散开，确定性且不抖动）
+                // 旗边待命（此处已过敌情检查，不再吞掉接敌）：按 id 定角度贴旗散开，
+                // 确定性且不抖动；待命点椭圆半轴 2.2×1.6（最大半径 2.2，在占领圈 2.8 内），骑力照常参与占领
                 const angle = (unit.id % 12) / 12 * Math.PI * 2;
                 return { gx: flag.gx + Math.cos(angle) * 2.2, gy: flag.gy + Math.sin(angle) * 1.6 };
             }
@@ -920,12 +953,7 @@ export class IsoBattleScene extends Phaser.Scene {
                 target = { gx: center.gx + dx / len * lead, gy: center.gy + dy / len * lead };
             } else target = flag;
         } else return null;    // 无令无集结：自由作战
-        let enemyNear = false;
-        this.forEachNear(unit.gx, unit.gy, 6, u => {
-            if (u.team !== unit.team && !u.dead && !u.withdrawn && u.moraleState !== 'routing' &&
-                Math.hypot(u.gx - unit.gx, u.gy - unit.gy) <= 6) enemyNear = true;
-        });
-        return enemyNear ? null : target;
+        return target;
     }
 
     updateConvoy(dt) {

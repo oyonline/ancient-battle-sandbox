@@ -156,11 +156,17 @@ test('双端锁步：据点特色与民夫自卫下仍逐位一致，且两端�
 });
 
 test('模拟版本随本轮行为变化更新，旧页面无法混用', () => {
-    // 第二批（r2）：量化半量子边界统一归属 + 民夫候选查询覆盖完整接受带，
-    // 噪声带内离散决策结果改变 → 状态哈希整体改变，混版本必须拒绝。
-    assert.equal(SIM_VERSION, '2026-10-02-review-fixes-r2');
+    // 2026-10-03 rework-r2c（用户复验 F13）：leashReturning 复位移至回撤早退之前，
+    // 覆盖回撤/改旗令/清令/集结全部非驻守路径——旧承诺不再跨令压制新驻守接敌。
+    assert.equal(SIM_VERSION, '2026-10-03-rework-r2c');
+    assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2b', '相对 F8 批次必须递增');
+    assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2', '相对返修轮主体必须递增');
+    assert.notEqual(SIM_VERSION, '2026-10-03-cavalry-def10', '相对 S3 批次必须递增');
+    assert.notEqual(SIM_VERSION, '2026-10-03-cavalry-auto-charge', '相对 S2 批次必须递增');
+    assert.notEqual(SIM_VERSION, '2026-10-03-cavalry-corps', '相对 S1 批次必须递增');
+    assert.notEqual(SIM_VERSION, '2026-10-02-review-fixes-r2', '相对第二批必须递增');
     assert.notEqual(SIM_VERSION, '2026-10-02-review-fixes', '相对第一批必须递增');
-    assert.notEqual(SIM_VERSION, '2026-10-02-site-traits', '相对上一批必须递增，混版本会被拒绝');
+    assert.notEqual(SIM_VERSION, '2026-10-02-site-traits', '相对更早批次必须递增，混版本会被拒绝');
 });
 
 test('纯派生缓存与展示状态不进哈希：只改缓存不改模拟结果', () => {

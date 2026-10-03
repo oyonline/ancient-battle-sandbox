@@ -25,14 +25,19 @@ function redBattalions(scene) {
     return scene.battalions.battalions.filter(b => b.team === 'red');
 }
 
-test('开局分编：双方各三营，战斗兵全员入营，民夫独立施工', () => {
+test('开局分编：双方各三步战营+一独立骑队，战斗兵全员入营，民夫独立施工', () => {
     const scene = territoryScene();
-    assert.equal(scene.battalions.battalions.length, 6, '红蓝各三营');
+    assert.equal(scene.battalions.battalions.length, 8, '红蓝各三步战营+一骑队');
     const opening = Object.entries(TERRITORY.OPENING).filter(([type]) => type !== 'worker').reduce((sum, [, count]) => sum + count, 0);
     for (const team of ['red', 'blue']) {
         const mine = scene.battalions.battalions.filter(b => b.team === team);
         const total = mine.reduce((sum, b) => sum + b.members.length, 0);
         assert.equal(total, opening, `${team} 战斗兵全员入营`);
+        const cavTroops = mine.filter(b => b.members.length && b.members.every(u => u.type === 'cavalry'));
+        assert.equal(cavTroops.length, 1, `${team} 开局骑兵整编一个独立骑队`);
+        for (const b of mine.filter(x => x !== cavTroops[0])) {
+            assert.ok(b.members.every(u => u.type !== 'cavalry'), '步战营不混骑兵');
+        }
         const workers = scene.units.filter(u => u.team === team && u.type === 'worker');
         assert.equal(workers.length, 2, '每方有两名开局民夫');
         assert.ok(workers.every(u => !u.battalion), '民夫没有战斗营归属');

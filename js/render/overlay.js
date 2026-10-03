@@ -70,6 +70,9 @@ export class OverlayRenderer {
         this.scene = scene;
         this.flagGeometry = new WeakMap();
         this.battalionMarkers = new Map();
+        this.markerRects = [];          // 营旗世界空间命中矩形（营旗可见时维护）
+        this._markerHoverId = null;     // 悬停预览的营（仅本地高亮）
+        this._markerPaintSeq = 0;       // 营旗绘制序：与 label 的 display list 插入序一致
         this.previewBattleId = scene.battleId;
         scene.events?.once('shutdown', () => {
             this.clearFlagLabels();
@@ -488,6 +491,9 @@ export class OverlayRenderer {
         for (const marker of this.battalionMarkers.values()) marker.label.destroy();
         this.battalionMarkers.clear();
         this.markerAt = -Infinity;
+        this.markerRects = [];       // 营旗命中矩形随旗一并清空
+        this._markerHoverId = null;
+        this._markerPaintSeq = 0;    // 全部 label 将重建：绘制序与 display list 一并从头计数
     }
 
     // Strategic zoom shows at most 24 friendly formations, not hundreds of unit
@@ -496,6 +502,7 @@ export class OverlayRenderer {
         const scene = this.scene, zoom = scene.cameras?.main?.zoom ?? 1;
         if (!scene.battleOptions?.territory || !scene.battalions) {
             if (this.battalionMarkers.size) this.clearBattalionMarkers();
+            else this.markerRects = [];
             return;
         }
         if (this.markerBattleId !== scene.battleId) {
@@ -505,6 +512,7 @@ export class OverlayRenderer {
         if (zoom > 0.55) {
             for (const marker of this.battalionMarkers.values()) marker.label.setVisible(false);
             this.markerAt = -Infinity;
+            this.markerRects = [];   // 旗不可见时不是点击入口，避免近景误食点击
             return;
         }
         const now = scene.time?.now ?? scene.simulationTime;
@@ -512,6 +520,7 @@ export class OverlayRenderer {
         if (now - (this.markerAt ?? -Infinity) < 160 && this.markerZoom === zoom && this.markerSelected === selected) return;
         this.markerAt = now; this.markerZoom = zoom; this.markerSelected = selected;
         const side = scene.netMySide || 'red', active = new Set(), view = scene._view;
+        const rects = this.markerRects = [];
         // Keep the selected battalion first when the display cap is reached.
         const battalions = selected ? [selected, ...scene.battalions.battalions.filter(b => b !== selected)] : scene.battalions.battalions;
         for (const battalion of battalions) {
@@ -530,7 +539,9 @@ export class OverlayRenderer {
                 const label = scene.add.text(0, 0, '', { fontFamily: '"PingFang SC", sans-serif', fontSize: '14px',
                     align: 'center', color: '#fff0c7', stroke: '#211d15', strokeThickness: 3,
                     backgroundColor: '#211d15c9', padding: { x: 5, y: 3 } }).setOrigin(0.5, 1).setDepth(12120);
-                marker = { label, text: null };
+                // 绘制序 = label 创建/重建时的 display list 插入序（同 depth 后插者在上）。
+                // 选中重排只改本函数的遍历序，不改显示序——命中决胜必须用 paint（F7/R2）。
+                marker = { label, text: null, paint: ++this._markerPaintSeq };
                 this.battalionMarkers.set(battalion.id, marker);
             }
             const state = battalion.gathering ? '集结' : battalion.retreat ? '回防' : battalion.orderPoint ? '驻守'
@@ -538,14 +549,43 @@ export class OverlayRenderer {
             const text = `⚑ ${battalion.id}营 · ${count}人\n${state}`;
             if (marker.text !== text) { marker.label.setText(text); marker.text = text; }
             marker.label.setPosition(p.x, p.y - 28 / zoom).setScale(1 / zoom).setVisible(true);
-            const color = battalion === selected ? '#ffe49a' : side === 'blue' ? '#b9dcff' : '#ffd2c6';
+            const color = battalion === selected ? '#ffe49a' : battalion.id === this._markerHoverId ? '#fff3cf'
+                : side === 'blue' ? '#b9dcff' : '#ffd2c6';
             if (marker.color !== color) { marker.label.setColor(color); marker.color = color; }
+            // 世界空间命中矩形（origin 0.5/1、scale 1/zoom）：远景营旗是可靠的大点击入口，
+            // 由观察层在抬起时查询，不依赖 Phaser 对象事件顺序。无渲染尺寸时给足默认宽度。
+            const w = ((marker.label.width ?? 96) + 12) / zoom, h = ((marker.label.height ?? 40) + 10) / zoom;
+            rects.push({ battalion, x: p.x - w / 2, y: p.y - 28 / zoom - h, w, h, paint: marker.paint });
         }
         for (const [id, marker] of this.battalionMarkers) {
             if (active.has(id)) continue;
             marker.label.destroy();
             this.battalionMarkers.delete(id);
         }
+    }
+
+    // 营旗命中查询：返回包含该世界坐标的矩形，重叠时取绘制序（paint）最大——即
+    // label 在 display list 中插入最晚、显示叠在最上层的旗。命中必须与玩家看见的
+    // 层级一致：选中重排与懒重建都只改 paint 对应的显示序，不改本判定（F7/R2）。
+    // 只读本地渲染状态，不触碰模拟，也不产生任何网络命令。
+    battalionMarkerAt(world) {
+        const rects = this.markerRects;
+        if (!rects?.length || !Number.isFinite(world?.x) || !Number.isFinite(world?.y)) return null;
+        let best = null;
+        for (const rect of rects) {
+            if (world.x < rect.x || world.x > rect.x + rect.w || world.y < rect.y || world.y > rect.y + rect.h) continue;
+            if (!best || (rect.paint ?? -Infinity) > (best.paint ?? -Infinity)) best = rect;
+        }
+        return best ? { battalion: best.battalion, rect: best } : null;
+    }
+
+    // 悬停预览高亮（观察层调用）：只改本地标签颜色，下一轮 160ms 刷新自然复位。
+    setBattalionMarkerHover(id) {
+        const next = id ?? null;
+        if (this._markerHoverId === next) return;
+        this._markerHoverId = next;
+        const marker = this.battalionMarkers.get(next);
+        if (marker) { marker.label.setColor('#fff3cf'); marker.color = '#fff3cf'; }
     }
 
     clearFlagLabels() {

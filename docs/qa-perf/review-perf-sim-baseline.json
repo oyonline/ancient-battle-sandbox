@@ -1,0 +1,46 @@
+{
+  "kind": "review A/B simulation benchmark: sustained combat + construction + garrison + auto-recruit",
+  "seconds": 20,
+  "warmupSeconds": 5,
+  "steps": 1200,
+  "node": "v22.23.2",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpu": "Apple M4",
+  "scenario": {
+    "mode": "territory 260x180",
+    "opening": {
+      "infantry": 40,
+      "pikeman": 16,
+      "archer": 16,
+      "cavalry": 8,
+      "worker": 4
+    },
+    "autoBuy": true
+  },
+  "warm": {
+    "units": 302,
+    "wounded": 40,
+    "damage": 2180,
+    "firstContactMs": 867,
+    "buildings": 8,
+    "underConstruction": 4,
+    "garrisoned": 4,
+    "treasury": 7082
+  },
+  "final": {
+    "units": 325,
+    "buildings": 9,
+    "underConstruction": 5,
+    "garrisoned": 4,
+    "treasury": 6012,
+    "dead": 2
+  },
+  "simStepMs": {
+    "mean": 13.782568056666674,
+    "p50": 13.13983300000109,
+    "p95": 19.288666000000376,
+    "p99": 22.162000000000262,
+    "max": 64.89891700000226
+  }
+}

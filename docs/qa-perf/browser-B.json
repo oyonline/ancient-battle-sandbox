@@ -1,0 +1,70 @@
+{
+  "kind": "review A/B desktop-browser benchmark: rendering frames + real game loop",
+  "label": "B",
+  "url": "http://127.0.0.1:5300/",
+  "seconds": 20,
+  "measuredWallS": 20.039,
+  "series": [
+    {
+      "samples": 153,
+      "fps": 30.59877604895806,
+      "p95Ms": 66.69999999999709,
+      "maxMs": 159.90000000000146,
+      "longFrames": 28,
+      "updateMs": 15.15228758171639,
+      "simulationMs": 13.86405228749161
+    },
+    {
+      "samples": 303,
+      "fps": 30.24767152825613,
+      "p95Ms": 66.69999999999709,
+      "maxMs": 159.90000000000146,
+      "longFrames": 48,
+      "updateMs": 14.094719471926293,
+      "simulationMs": 12.959735973538345
+    },
+    {
+      "samples": 446,
+      "fps": 29.665300909913277,
+      "p95Ms": 66.69999999999709,
+      "maxMs": 159.90000000000146,
+      "longFrames": 75,
+      "updateMs": 13.252017937174626,
+      "simulationMs": 12.189686098570347
+    },
+    {
+      "samples": 599,
+      "fps": 29.897977519116743,
+      "p95Ms": 66.69999999999709,
+      "maxMs": 159.90000000000146,
+      "longFrames": 99,
+      "updateMs": 12.147245408957808,
+      "simulationMs": 11.158096827980199
+    }
+  ],
+  "browser": "Chromium (Playwright chrome-mac-arm64, headed window)",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "pageErrors": [],
+  "result": {
+    "snapshot": {
+      "samples": 599,
+      "fps": 29.897977519116743,
+      "p95Ms": 66.69999999999709,
+      "maxMs": 159.90000000000146,
+      "longFrames": 99,
+      "updateMs": 12.147245408957808,
+      "simulationMs": 11.158096827980199
+    },
+    "simTimeS": 28,
+    "units": 158,
+    "wounded": 20,
+    "damage": 9174,
+    "buildings": 8,
+    "underConstruction": 4,
+    "garrisoned": 4,
+    "dead": 8
+  }
+}

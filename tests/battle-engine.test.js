@@ -153,13 +153,13 @@ test('counter and brace multipliers precede one armor deduction; final damage is
     const scene = makeScene();
     const pike = addUnit(scene, 'red', 'pikeman');
     const cavalry = addUnit(scene, 'blue', 'cavalry');
-    assert.equal(calculateAttackDamage(pike, cavalry), 30); // 18 * 2.5 - 15
-    assert.equal(calculateAttackDamage(pike, cavalry, { multiplier: 1.5 }), 52);
-    assert.equal(resolveAttack(cavalry, pike), 30);
-    assert.equal(cavalry.hp, 130);
+    assert.equal(calculateAttackDamage(pike, cavalry), 35); // 18 * 2.5 - 10
+    assert.equal(calculateAttackDamage(pike, cavalry, { multiplier: 1.5 }), 57);
+    assert.equal(resolveAttack(cavalry, pike), 35);
+    assert.equal(cavalry.hp, 125);
     assert.equal(applyDamage(cavalry, 6, pike), 6, 'applyDamage accepts already-final damage');
-    assert.equal(cavalry.hp, 124);
-    assert.equal(scene.getBattleReport().teams.red.damage, 36);
+    assert.equal(cavalry.hp, 119);
+    assert.equal(scene.getBattleReport().teams.red.damage, 41);
 });
 
 test('cavalry needs three actual traveled cells before its double-damage charge', () => {
@@ -242,7 +242,7 @@ test('a prepared frontal pike formation resists the charge while both impact and
     scene.advanceBattle(1000 / 60);
     assert.equal(cavalry.state, 'melee');
     assert.equal(cavalry.chargeDistance, 0);
-    assert.equal(cavalry.hp, 108);
+    assert.equal(cavalry.hp, 103);   // 迎击 18*1.5*2.5-10=57：160-57
     assert.equal(spear.hp, 28, 'resistance must not swallow the cavalry first-impact damage');
     assert.equal(archer.hp, 50);
     assert.ok(cavalry.gx < spear.gx);
@@ -375,8 +375,8 @@ test('a spear lethally hit in a step still delivers a valid brace from that same
     scene.scheduleBattleAction(0, () => resolveAttack(spear, cavalry, { rawAttack: 1000 }));
     scene.advanceBattle(1000 / 60);
     assert.equal(spear.dead, true);
-    assert.equal(cavalry.hp, 108);
-    assert.equal(scene.getBattleReport().teams.blue.byType.pikeman.damage, 52);
+    assert.equal(cavalry.hp, 103);   // 迎击 18*1.5*2.5-10=57：160-57
+    assert.equal(scene.getBattleReport().teams.blue.byType.pikeman.damage, 57);
 });
 
 test('intercepted cavalry must disengage before it can build a new charge', () => {

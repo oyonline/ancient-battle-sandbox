@@ -117,13 +117,20 @@ export function stepBattle(scene, dt) {
         if (scene.updateFallingBackUnit(unit, now, dt)) continue;
         if (scene.tactics?.updateGroundGuard(unit, now, dt)) continue;
         if (unit.type === 'cavalry') {
-            // 营队接管（可选场景钩子，仅领土征服）：集结/回防/有令时骑兵与全营
-            // 同目标行军，不再单骑冲阵；贴脸有敌（钩子返回 null）才交还冲锋状态机。
+            // 营队接管（可选场景钩子，仅领土征服）：回撤/驻守/集结/有令时骑兵受营
+            // 接管行军；贴脸有敌（钩子返回 null）才交还冲锋状态机。交战→接管的
+            // 转换点重置冲锋状态机：助跑距离/动量/穿透状态不带入行军——回撤中断
+            // 缠斗后不得带着旧冲锋动量换向，再次接敌必须重新真实助跑。
             const rally = scene.battalionDirectCavalry?.(unit);
             if (rally) {
+                if (!unit.corpsManaged) {
+                    scene.cavalryAI.beginCharge(unit);
+                    unit.corpsManaged = true;
+                }
                 moveToward(unit, rally.gx, rally.gy, unit.typeData.speed, dt);
                 continue;
             }
+            unit.corpsManaged = false;
             if (scene.cavalryAI.update(unit, now, dt)) continue;
         }
         if (scene.tactics && scene.tactics.updateUnit(unit, now, dt)) continue;

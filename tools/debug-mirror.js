@@ -1,5 +1,5 @@
 // 调试：360 金镜像局，找出第一处发散的配对单位（走 harness，保持与真实测试同环境）
-import { makeScene } from '../tests/battle-harness';
+import { makeScene } from '../tests/battle-harness.js';
 
 const forward = makeScene(), reversed = makeScene();
 forward.deployUnits({ infantry: 72 }, { archer: 45 }, 'custom', 'custom');

@@ -23,7 +23,7 @@ export const UNIT_TYPES = {
     },
     cavalry: {
         name: '重骑士', icon: '🐴', cost: 12, maxCount: 150,
-        hp: 160, atk: 30, def: 15, speed: 4.0, atkSpeed: 1500, range: 1.1,
+        hp: 160, atk: 30, def: 10, speed: 4.0, atkSpeed: 1500, range: 1.1,
         chargeSpeed: 6.0, charge: true, scale: 1.35, tip: '助跑3格后双倍冲锋，擅长追击弓手'
     },
     // 民夫（领土征服）：有限近战自卫——只还手贴上来的敌人，不追击、不占旗、不驻塔。

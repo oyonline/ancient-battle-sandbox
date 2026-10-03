@@ -1,0 +1,431 @@
+{
+  "kind": "headless fixed-step simulation; excludes rendering/network",
+  "node": "v22.23.2",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpu": "Apple M4",
+  "composition": {
+    "infantry": 0.5,
+    "pikeman": 0.2,
+    "archer": 0.2,
+    "cavalry": 0.1
+  },
+  "phase": "opening deployment; normal army movement; no artificial target placement",
+  "results": [
+    {
+      "terrain": "flat",
+      "total": 200,
+      "steps": 120,
+      "warmup": 20,
+      "repeats": 3,
+      "sameHashes": true,
+      "before": [
+        {
+          "meanMs": 4.132312133333335,
+          "p95Ms": 7.715458000000012,
+          "maxMs": 12.678875000000062,
+          "warmupHash": "1xensfn",
+          "finalHash": "2plvfb",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 200,
+          "finalAlive": 200
+        },
+        {
+          "meanMs": 3.60772958333334,
+          "p95Ms": 7.035333000000037,
+          "maxMs": 7.914084000000003,
+          "warmupHash": "1xensfn",
+          "finalHash": "2plvfb",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 200,
+          "finalAlive": 200
+        },
+        {
+          "meanMs": 3.7923461583333182,
+          "p95Ms": 6.907832999999755,
+          "maxMs": 22.06708299999991,
+          "warmupHash": "1xensfn",
+          "finalHash": "2plvfb",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 200,
+          "finalAlive": 200
+        }
+      ],
+      "after": [
+        {
+          "meanMs": 2.1146763916666687,
+          "p95Ms": 4.071957999999995,
+          "maxMs": 4.858375000000024,
+          "warmupHash": "1xensfn",
+          "finalHash": "2plvfb",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 200,
+          "finalAlive": 200
+        },
+        {
+          "meanMs": 2.0763666750000067,
+          "p95Ms": 4.224500000000035,
+          "maxMs": 5.164249999999811,
+          "warmupHash": "1xensfn",
+          "finalHash": "2plvfb",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 200,
+          "finalAlive": 200
+        },
+        {
+          "meanMs": 2.0150795333333233,
+          "p95Ms": 4.031374999999571,
+          "maxMs": 5.131917000000158,
+          "warmupHash": "1xensfn",
+          "finalHash": "2plvfb",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 200,
+          "finalAlive": 200
+        }
+      ],
+      "medianMeanMs": {
+        "before": 3.7923461583333182,
+        "after": 2.0763666750000067
+      },
+      "speedup": 1.826433743131283
+    },
+    {
+      "terrain": "flat",
+      "total": 500,
+      "steps": 120,
+      "warmup": 20,
+      "repeats": 3,
+      "sameHashes": true,
+      "before": [
+        {
+          "meanMs": 14.553533683333358,
+          "p95Ms": 19.692875000000186,
+          "maxMs": 20.68733400000019,
+          "warmupHash": "6o0cmu",
+          "finalHash": "v3is9g",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 500,
+          "finalAlive": 500
+        },
+        {
+          "meanMs": 14.425883008333335,
+          "p95Ms": 19.52824999999939,
+          "maxMs": 20.38549999999941,
+          "warmupHash": "6o0cmu",
+          "finalHash": "v3is9g",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 500,
+          "finalAlive": 500
+        },
+        {
+          "meanMs": 15.568007283333326,
+          "p95Ms": 20.892792000000554,
+          "maxMs": 36.88724999999977,
+          "warmupHash": "6o0cmu",
+          "finalHash": "v3is9g",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 500,
+          "finalAlive": 500
+        }
+      ],
+      "after": [
+        {
+          "meanMs": 7.2218503166666554,
+          "p95Ms": 12.034832999999708,
+          "maxMs": 23.62670799999978,
+          "warmupHash": "6o0cmu",
+          "finalHash": "v3is9g",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 500,
+          "finalAlive": 500
+        },
+        {
+          "meanMs": 6.6386427166666335,
+          "p95Ms": 11.40900000000056,
+          "maxMs": 13.189916999999696,
+          "warmupHash": "6o0cmu",
+          "finalHash": "v3is9g",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 500,
+          "finalAlive": 500
+        },
+        {
+          "meanMs": 7.605568066666744,
+          "p95Ms": 12.61212500000147,
+          "maxMs": 48.88062499999978,
+          "warmupHash": "6o0cmu",
+          "finalHash": "v3is9g",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 500,
+          "finalAlive": 500
+        }
+      ],
+      "medianMeanMs": {
+        "before": 14.553533683333358,
+        "after": 7.2218503166666554
+      },
+      "speedup": 2.015208436229504
+    },
+    {
+      "terrain": "flat",
+      "total": 1000,
+      "steps": 120,
+      "warmup": 20,
+      "repeats": 3,
+      "sameHashes": true,
+      "before": [
+        {
+          "meanMs": 46.01990179166645,
+          "p95Ms": 52.52950000000055,
+          "maxMs": 56.434000000001106,
+          "warmupHash": "4xozu6",
+          "finalHash": "tse7nh",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 1000,
+          "finalAlive": 1000
+        },
+        {
+          "meanMs": 48.29692014166655,
+          "p95Ms": 62.47024999999849,
+          "maxMs": 98.41441599999962,
+          "warmupHash": "4xozu6",
+          "finalHash": "tse7nh",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 1000,
+          "finalAlive": 1000
+        },
+        {
+          "meanMs": 53.94732572500025,
+          "p95Ms": 69.96208299999853,
+          "maxMs": 116.54899999999907,
+          "warmupHash": "4xozu6",
+          "finalHash": "tse7nh",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 1000,
+          "finalAlive": 1000
+        }
+      ],
+      "after": [
+        {
+          "meanMs": 18.082605575000162,
+          "p95Ms": 22.909999999999854,
+          "maxMs": 35.73508299999958,
+          "warmupHash": "4xozu6",
+          "finalHash": "tse7nh",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 1000,
+          "finalAlive": 1000
+        },
+        {
+          "meanMs": 18.648140950000045,
+          "p95Ms": 24.03229100000317,
+          "maxMs": 27.190166999997018,
+          "warmupHash": "4xozu6",
+          "finalHash": "tse7nh",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 1000,
+          "finalAlive": 1000
+        },
+        {
+          "meanMs": 20.11578714166717,
+          "p95Ms": 26.24699999999575,
+          "maxMs": 37.20004200000403,
+          "warmupHash": "4xozu6",
+          "finalHash": "tse7nh",
+          "warmupNetworkHash": null,
+          "finalNetworkHash": null,
+          "initialUnits": 1000,
+          "finalAlive": 1000
+        }
+      ],
+      "medianMeanMs": {
+        "before": 48.29692014166655,
+        "after": 18.648140950000045
+      },
+      "speedup": 2.5899053568482615
+    },
+    {
+      "terrain": "territory",
+      "total": 200,
+      "steps": 30,
+      "warmup": 20,
+      "repeats": 3,
+      "sameHashes": true,
+      "before": [
+        {
+          "meanMs": 7.852304133333139,
+          "p95Ms": 12.819499999997788,
+          "maxMs": 13.269582999993872,
+          "warmupHash": "a8l0qa",
+          "finalHash": "1jlucp4",
+          "warmupNetworkHash": "8a4q9j",
+          "finalNetworkHash": "bhn02o",
+          "initialUnits": 200,
+          "finalAlive": 200
+        },
+        {
+          "meanMs": 8.170648400000209,
+          "p95Ms": 11.963332999999693,
+          "maxMs": 13.650207999999111,
+          "warmupHash": "a8l0qa",
+          "finalHash": "1jlucp4",
+          "warmupNetworkHash": "8a4q9j",
+          "finalNetworkHash": "bhn02o",
+          "initialUnits": 200,
+          "finalAlive": 200
+        },
+        {
+          "meanMs": 8.356292799999695,
+          "p95Ms": 13.491666000001715,
+          "maxMs": 18.236750000003667,
+          "warmupHash": "a8l0qa",
+          "finalHash": "1jlucp4",
+          "warmupNetworkHash": "8a4q9j",
+          "finalNetworkHash": "bhn02o",
+          "initialUnits": 200,
+          "finalAlive": 200
+        }
+      ],
+      "after": [
+        {
+          "meanMs": 6.244047333332613,
+          "p95Ms": 9.91279200000281,
+          "maxMs": 10.3759579999969,
+          "warmupHash": "a8l0qa",
+          "finalHash": "1jlucp4",
+          "warmupNetworkHash": "8a4q9j",
+          "finalNetworkHash": "bhn02o",
+          "initialUnits": 200,
+          "finalAlive": 200
+        },
+        {
+          "meanMs": 6.481381866666925,
+          "p95Ms": 10.8495000000039,
+          "maxMs": 11.094000000004598,
+          "warmupHash": "a8l0qa",
+          "finalHash": "1jlucp4",
+          "warmupNetworkHash": "8a4q9j",
+          "finalNetworkHash": "bhn02o",
+          "initialUnits": 200,
+          "finalAlive": 200
+        },
+        {
+          "meanMs": 6.432997233333541,
+          "p95Ms": 9.969791999996232,
+          "maxMs": 10.946917000001122,
+          "warmupHash": "a8l0qa",
+          "finalHash": "1jlucp4",
+          "warmupNetworkHash": "8a4q9j",
+          "finalNetworkHash": "bhn02o",
+          "initialUnits": 200,
+          "finalAlive": 200
+        }
+      ],
+      "medianMeanMs": {
+        "before": 8.170648400000209,
+        "after": 6.432997233333541
+      },
+      "speedup": 1.270115329393081
+    },
+    {
+      "terrain": "territory",
+      "total": 440,
+      "steps": 30,
+      "warmup": 20,
+      "repeats": 3,
+      "sameHashes": true,
+      "before": [
+        {
+          "meanMs": 22.834438933332663,
+          "p95Ms": 25.830333999998402,
+          "maxMs": 38.42041700000118,
+          "warmupHash": "ctwjpi",
+          "finalHash": "1xgnbq1",
+          "warmupNetworkHash": "1b4yfor",
+          "finalNetworkHash": "gwea8z",
+          "initialUnits": 440,
+          "finalAlive": 440
+        },
+        {
+          "meanMs": 21.53002763333352,
+          "p95Ms": 25.09020800000144,
+          "maxMs": 26.7711249999993,
+          "warmupHash": "ctwjpi",
+          "finalHash": "1xgnbq1",
+          "warmupNetworkHash": "1b4yfor",
+          "finalNetworkHash": "gwea8z",
+          "initialUnits": 440,
+          "finalAlive": 440
+        },
+        {
+          "meanMs": 22.528458466667022,
+          "p95Ms": 28.506750000000466,
+          "maxMs": 39.77562499999476,
+          "warmupHash": "ctwjpi",
+          "finalHash": "1xgnbq1",
+          "warmupNetworkHash": "1b4yfor",
+          "finalNetworkHash": "gwea8z",
+          "initialUnits": 440,
+          "finalAlive": 440
+        }
+      ],
+      "after": [
+        {
+          "meanMs": 14.756012566665353,
+          "p95Ms": 19.893874999994296,
+          "maxMs": 21.5812919999953,
+          "warmupHash": "ctwjpi",
+          "finalHash": "1xgnbq1",
+          "warmupNetworkHash": "1b4yfor",
+          "finalNetworkHash": "gwea8z",
+          "initialUnits": 440,
+          "finalAlive": 440
+        },
+        {
+          "meanMs": 15.20267500000021,
+          "p95Ms": 19.073333000000275,
+          "maxMs": 20.460791000004974,
+          "warmupHash": "ctwjpi",
+          "finalHash": "1xgnbq1",
+          "warmupNetworkHash": "1b4yfor",
+          "finalNetworkHash": "gwea8z",
+          "initialUnits": 440,
+          "finalAlive": 440
+        },
+        {
+          "meanMs": 14.948843200000557,
+          "p95Ms": 18.908709000003,
+          "maxMs": 19.09633400000166,
+          "warmupHash": "ctwjpi",
+          "finalHash": "1xgnbq1",
+          "warmupNetworkHash": "1b4yfor",
+          "finalNetworkHash": "gwea8z",
+          "initialUnits": 440,
+          "finalAlive": 440
+        }
+      ],
+      "medianMeanMs": {
+        "before": 22.528458466667022,
+        "after": 14.948843200000557
+      },
+      "speedup": 1.507036910164807
+    }
+  ]
+}

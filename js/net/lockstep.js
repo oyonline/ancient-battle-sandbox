@@ -19,7 +19,23 @@ export const LOCKSTEP = {
 // 且民夫出手边界口径统一（量化半量子容差）——两者都会改变状态哈希，混版本必须拒绝。
 // 2026-10-02 review-fixes-r2：量化决策半量子边界统一归属（epsilon 商偏置）+
 // 民夫候选查询覆盖完整接受带——噪声带内的离散决策结果改变，同样需拒绝混版本。
-export const SIM_VERSION = '2026-10-02-review-fixes-r2';
+// 2026-10-03 cavalry-corps：开局骑兵整编独立骑队、增援骑兵独立集结池（3骑成队/
+// 超时单骑保底）——营 id 编号与营成员映射改变，营令网络命令在混版本下必然错位。
+// 2026-10-03 cavalry-auto-charge：旗边敌情优先/回撤中断缠斗/驻守缰绳/接管转换清
+// 冲锋动量——骑兵接敌与撤退轨迹整体改变，混版本必然漂移。
+// 2026-10-03 cavalry-def10：骑兵防御 15→10（最小平衡方案）——所有对骑伤害数值
+// 改变（剑士普通命中 1→6），混版本状态哈希必然分歧。
+// 2026-10-03 rework-r2（用户复验返修轮终名，覆盖全轮）：F1 驻守缰绳滞回承诺
+// 改变骑兵驻守行为；F3 状态投影纳入营队摘要（营令/池归属/corpsManaged/
+// leashReturning/chargeDistance），投影格式本身变化；F4 回撤令抢占攻寨自动
+// 接管。三者混版本必然分歧或误报，必须拒绝混入。
+// 2026-10-03 rework-r2b（R2 复审附注 F8）：leashReturning 在驻点清空时显式
+// 复位——实测存在可观测行为差异（改令后再设驻守点，旧承诺跨令压制接敌 vs
+// 立即恢复接敌资格），按纪律递增。
+// 2026-10-03 rework-r2c（用户复验 F13）：复位移至回撤早退之前，覆盖回撤/改旗
+// 令/清令/集结全部非驻守路径——"驻守出界→回撤→新驻守"序列下旧承诺不再跨令
+// 存活压制接敌（用户对照实测 3 秒敌 100 不动 vs 降到 60），行为差异实测成立。
+export const SIM_VERSION = '2026-10-03-rework-r2c';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {
@@ -86,6 +102,13 @@ export function battleProjection(scene) {
         parts.push(unit.id, unit.team === 'red' ? 'R' : 'B', unit.type,
             Math.round(unit.gx * 1e4), Math.round(unit.gy * 1e4),
             Math.round(unit.hp * 1e3), unit.moraleState);
+        // 骑兵接管/滞回标记与量化助跑距离（F3）：三项直接决定下一步是否交还冲锋
+        // 状态机，分叉不一定立刻体现在坐标上（如驻点静置），必须直接入哈希。
+        // chargeDistance 按 0.05 量子取整（与 units.js 镜像量化同纪律，防浮点尘）。
+        if (unit.type === 'cavalry' && scene.battalions) {
+            parts.push('cav', unit.corpsManaged ? 1 : 0, unit.leashReturning ? 1 : 0,
+                Math.round((unit.chargeDistance || 0) * 20));
+        }
         if (scene.territory?.camps) {
             parts.push('camp-unit', unit.garrisonTowerId || '', unit.garrisonOrderId || '',
                 unit.orderBuildingId || '', Math.round((unit.garrisonHeight || 0) * 1e3),
@@ -101,6 +124,21 @@ export function battleProjection(scene) {
     parts.push('f');
     for (const flag of scene.flags) {
         parts.push(flag.owner ? (flag.owner === 'red' ? 'R' : 'B') : 'n', Math.round(flag.progress * 1e4));
+    }
+    // 营队状态入投影（F3）：营决定领土模式下所有单位的行为（集结/回撤/驻守/交还），
+    // 此处分叉可能暂不改变坐标（用户探针：一侧单骑出发、一侧继续集结，哈希仍一致）
+    // 却必然在后续漂移——直接纳入 2 秒哈希补上检测缺口。遍历序 = 营创建序（两端
+    // 一致）；chargeDistance/时间戳取整、orderPoint 按坐标 1e4 取整，与既有投影同纪律。
+    if (scene.battalions) {
+        parts.push('b', scene.battalions.battalions.length);
+        for (const b of scene.battalions.battalions) {
+            parts.push(b.id, b.team === 'red' ? 'R' : 'B', b.gathering ? 1 : 0, b.cavalry ? 1 : 0,
+                b.orderFlag ?? '', b.orderPoint ? Math.round(b.orderPoint.gx * 1e4) + ':' + Math.round(b.orderPoint.gy * 1e4) : '',
+                b.retreat ? 1 : 0, b.stance, Math.round(b.chargeUntil || 0), Math.round(b.createdAt || 0),
+                b.members.map(u => u.id).join('.'));
+        }
+        parts.push('pool', scene.battalions.pool.red?.id ?? '', scene.battalions.pool.blue?.id ?? '',
+            scene.battalions.cavPool.red?.id ?? '', scene.battalions.cavPool.blue?.id ?? '');
     }
     const territory = scene.territory;
     parts.push('e',

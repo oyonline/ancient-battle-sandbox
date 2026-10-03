@@ -390,6 +390,10 @@ export class CampSystem {
             } else u.target = null;
             return true;
         }
+        // F4：骑兵营队回撤令优先于攻寨自动接管——正在打建筑的骑兵收到回撤令必须
+        // 立即脱战（交还 battalionDirectCavalry 的回撤分支行军）。只豁免"骑兵+营队
+        // 回撤"这一条路径：民夫自卫、驻塔、施工、医师与其余兵种的攻寨行为不变。
+        if (u.type === 'cavalry' && u.battalion?.retreat && !u.battalion.gathering) return false;
         if (!ready(u)) return false;
         if (u.type === 'worker') {
             // 自卫优先：近身有敌就地还手、原地不动；脱离交战才回到原移动 / 施工任务。

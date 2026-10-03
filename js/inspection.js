@@ -3,6 +3,7 @@ import { Terrain } from './terrain.js';
 import { towerCrewOffset } from './render/camps.js';
 import { CAMP_RULES } from './battle/camps.js';
 import { shallowSpeedFor, DEFAULT_SHALLOW_SPEED } from './battle/site-traits.js';
+import { TW, TH, OX, OY } from './render/metrics.js';
 
 // 地表文案单一处维护：数值与文字都对得上同一份地形规则。
 const SURFACE_LABELS = { grass: '草地 / 道路', forest: '林地', water: '水域（不可通行）',
@@ -16,34 +17,54 @@ function isCanceledPointer(p) {
     return type === 'touchcancel' || type === 'pointercancel';
 }
 
+// 悬停/点选共用参数：预览与最终选择必须出自同一条管线，保证"所见即所选"。
+const HOVER_INTERVAL_MS = 90;     // 悬停拾取节流：指针移动事件远高于帧率也不反复扫描
+const CREW_CACHE_MS = 500;        // 驻塔弓手不在空间桶里，用短周期缓存补进候选
+
+// 候选覆盖界的抬升不确定全幅（px）＝全图高度域跨度 × HEIGHT_SCALE（当前地形域
+// [-0.5, 5] 层 × 24 = 132px）。与地形规则耦合：高度域若扩大，必须同步改大此常数——
+// tests/selection-fixes.test.js 的"高度域守卫"测试会先失败提醒（变更即断）。
+export const LIFT_SPAN_PX = 132;
+
 export class UnitInspector {
     constructor(scene) {
         this.scene = scene;
         this.panel = document.getElementById('unit-inspector');
         this.selected = null;
         this.pointer = null;
+        this.hover = null;             // 悬停预览目标 { unit, battalion }｜null
+        this._hoverAt = 0;
+        this._hoverGfx = null;
+        this._crewCache = null;
+        this._crewAt = -Infinity;
         this.lastMarkup = '';
         this.lastUnit = null;
         this.nextTextAt = 0;
         this.ring = scene.add.graphics().setDepth(12100);
         this.onDown = p => {
-            this.pointer = { id: p.id, x: p.x, y: p.y, dragged: false };
+            // 按下瞬间定靶：部队随后轻微移动、邻近部队滑到指针下，抬起仍选按压目标。
+            this.pointer = { id: p.id, x: p.x, y: p.y, dragged: false, picked: this.pickWithMarker(p) };
+            this.setHover(null);   // 按下即撤悬停预览，结果交由点击决定
         };
         this.onMove = p => {
             if (this.pointer && (p.id !== this.pointer.id ||
                 Math.hypot(p.x - this.pointer.x, p.y - this.pointer.y) > 6)) this.pointer.dragged = true;
+            this.updateHover(p);
         };
         this.onUp = p => {
             const start = this.pointer;
             this.pointer = null;
             if (!start || p.id !== start.id || isCanceledPointer(p) || start.dragged || scene._pinching ||
                 Math.hypot(p.x - start.x, p.y - start.y) > 6) return;
-            const picked = this.pick(p);
+            const picked = start.picked;
             // 选点命令先消费点击，不能先清空/换掉原营队或建设者。
-            const consumed = scene.groundClick?.(scene.cameras.main.getWorldPoint(p.x, p.y), picked);
+            // 第三个参数透传营旗命中（marker 营），供 UI 区分普通态拾取与命令消费（F2）。
+            const consumed = scene.groundClick?.(scene.cameras.main.getWorldPoint(p.x, p.y),
+                picked?.unit ?? null, picked?.battalion ?? null);
             if (consumed !== true) {
-                this.selected = picked;
-                scene.selectBattalionByUnit?.(picked);
+                // 营旗入口与单兵入口同一落点：选中代表成员即选中整营。
+                this.selected = picked?.unit ?? null;
+                scene.selectBattalionByUnit?.(this.selected);
             }
             this.update(true);
         };
@@ -58,25 +79,125 @@ export class UnitInspector {
         scene.events.once('shutdown', () => this.destroy());
     }
 
-    pick(pointer) {
+    // 营旗优先的完整拾取：命中营旗 → 整营 + 代表成员；否则单兵拾取。
+    // 供按下定靶与悬停预览共用（options.fallback 关闭战前全军兜底，悬停不扫全军）。
+    pickWithMarker(pointer, options = {}) {
         const camera = this.scene.cameras.main;
         const world = camera.getWorldPoint(pointer.x, pointer.y);
-        let best = null, bestDistance = Infinity;
-        for (const unit of this.scene.units) {
+        const marker = this.scene.render?.overlay?.battalionMarkerAt?.(world);
+        if (marker) {
+            const member = marker.battalion.aliveMembers?.()?.[0] ?? null;
+            return member ? { unit: member, battalion: marker.battalion } : { unit: null, battalion: null };
+        }
+        return { unit: this.pickUnitAt(world, camera, options), battalion: null };
+    }
+
+    pick(pointer) {
+        return this.pickUnitAt(this.scene.cameras.main.getWorldPoint(pointer.x, pointer.y), this.scene.cameras.main);
+    }
+
+    // 单兵拾取候选：空间桶优先（悬停/点击都不全军扫描）；驻塔弓手不在桶里，走短周期缓存。
+    // 战前布防阶段索引未建（无存活索引）时，点击拾取仍允许一次全军兜底。
+    pickCandidates(world, radius, fallback) {
+        const scene = this.scene;
+        if (typeof scene.forEachNear === 'function') {
+            // 逆投影带两次地形抬升补偿（与 UI 下令选点同一套换算），只影响查询中心的精度。
+            const key = scene.battleOptions?.terrain;
+            let gx = 0, gy = 0;
+            for (let pass = 0; pass < 2; pass++) {
+                const lift = Terrain.height(key, gx, gy) * Terrain.HEIGHT_SCALE;
+                const dx = (world.x - OX) / (TW / 2), dy = (world.y + lift - OY) / (TH / 2);
+                gx = (dx + dy) / 2; gy = (dy - dx) / 2;
+            }
+            // 覆盖界（每轴格数）= 拾取半径的网格投影 0.055R + 身体中心上移 ≤24px
+            // + 地形抬升不确定全幅 LIFT_SPAN_PX（见顶部常量与守卫测试）。
+            // 高度迭代只是估锚点：坡缘/坡顶的锚点可能落在残差任意一侧，覆盖必须按全幅兜底。
+            // 桶覆盖是方形的，宁可多查几个桶，不可漏掉候选（F2 高地漏选；测试全图扫描守护）。
+            const gridRadius = radius * 0.055 + 24 / 32 + LIFT_SPAN_PX / 32 + 0.25;
+            const found = [];
+            scene.forEachNear(gx, gy, gridRadius, unit => found.push(unit));
+            if (found.length || scene._aliveArr?.length) return [...found, ...this.garrisonCrew()];
+        }
+        return fallback === false ? [] : this.scene.units;
+    }
+
+    // 驻塔/驻帐成员缓存：只读模拟字段，短周期刷新，避免每次拾取都全军过滤。
+    garrisonCrew() {
+        const now = performance.now();
+        if (!this._crewCache || now - this._crewAt > CREW_CACHE_MS) {
+            this._crewCache = this.scene.units.filter(u => !u.dead && !u.withdrawn && u.garrisonTowerId);
+            this._crewAt = now;
+        }
+        return this._crewCache;
+    }
+
+    pickUnitAt(world, camera, options = {}) {
+        const scene = this.scene;
+        // 领土模式普通指挥点选优先己方可控部队：混战中敌兵不再抢走己方选中；
+        // 点击点附近没有己方部队时敌军仍可观察（观察入口保留）。
+        const mine = scene.battleOptions?.territory ? (scene.netMySide || 'red') : null;
+        // 小比例下允许约 9 屏幕像素的点选；仍以最近的可见身体中心决胜。
+        const radius = Math.max(18, 9 / (camera.zoom ?? 1));
+        let any = null, anyDistance = Infinity, own = null, ownDistance = Infinity;
+        for (const unit of this.pickCandidates(world, radius, options.fallback)) {
             if (unit.dead || unit.withdrawn) continue;
-            const foot = this.scene.groundPoint(unit.gx, unit.gy);
-            const crew = towerCrewOffset(unit, this.scene.territory?.camps);
-            // 小比例下允许约 9 屏幕像素的点选；仍以最近的可见身体中心决胜。
-            const radius = Math.max(18, 9 / camera.zoom);
+            const foot = scene.groundPoint(unit.gx, unit.gy);
+            const crew = towerCrewOffset(unit, scene.territory?.camps);
             const dx = world.x - (foot.x + (crew?.x || 0));
             const dy = world.y - (foot.y + (crew?.y || 0) - (unit.type === 'cavalry' ? 24 : 18));
             const distance = Math.hypot(dx, dy * 0.8);
-            if (distance <= radius && (distance < bestDistance - 1e-9 ||
-                (Math.abs(distance - bestDistance) <= 1e-9 && unit.id < best.id))) {
-                best = unit; bestDistance = distance;
-            }
+            if (distance > radius) continue;
+            const better = (best, bestDistance) => distance < bestDistance - 1e-9 ||
+                (Math.abs(distance - bestDistance) <= 1e-9 && unit.id < best.id);
+            if (better(any, anyDistance)) { any = unit; anyDistance = distance; }
+            if (mine && unit.team === mine && better(own, ownDistance)) { own = unit; ownDistance = distance; }
         }
-        return best;
+        return mine && own ? own : any;
+    }
+
+    // 悬停预览：与点击同一条拾取管线；节流 + 空间桶，不逐事件全军扫描。
+    updateHover(pointer) {
+        if (this.pointer || this.scene._pinching) { this.setHover(null); return; }
+        const now = performance.now();
+        if (now < this._hoverAt) return;
+        this._hoverAt = now + HOVER_INTERVAL_MS;
+        this.setHover(this.pickWithMarker(pointer, { fallback: false }));
+    }
+
+    setHover(target) {
+        if (target && !target.unit && !target.battalion) target = null;
+        const unit = target?.unit ?? null, battalion = target?.battalion ?? null;
+        const current = this.hover;
+        if (((current?.unit ?? null) === unit) && ((current?.battalion ?? null) === battalion)) return;
+        this.hover = target;
+        // 营旗高亮是纯本地表现：只改自己一端的标签颜色。
+        this.scene.render?.overlay?.setBattalionMarkerHover?.(battalion?.id ?? null);
+    }
+
+    // 悬停环逐帧跟随（不重新拾取）：白色细环区别于金色选中环。
+    drawHover() {
+        const hover = this.hover;
+        if (hover?.unit && (hover.unit.dead || hover.unit.withdrawn)) { this.setHover({ unit: null, battalion: hover.battalion }); }
+        const target = this.hover;
+        if (!target && !this._hoverGfx) return;
+        if (!this._hoverGfx) this._hoverGfx = this.scene.add.graphics().setDepth(12060);
+        const g = this._hoverGfx;
+        g.clear();
+        if (!target) return;
+        const camera = this.scene.cameras.main;
+        if (target.battalion) {
+            const rect = this.scene.render?.overlay?.markerRects?.find(r => r.battalion === target.battalion);
+            if (!rect) return;
+            g.lineStyle(1.6 / Math.max(0.4, camera.zoom), 0xffffff, 0.55);
+            g.strokeEllipse(rect.x + rect.w / 2, rect.y + rect.h / 2, rect.w * 0.96, rect.h * 0.9);
+            return;
+        }
+        const unit = target.unit;
+        if (!unit) return;
+        const foot = this.scene.groundPoint(unit.gx, unit.gy);
+        const crew = towerCrewOffset(unit, this.scene.territory?.camps);
+        g.lineStyle(1.6 / Math.max(0.4, camera.zoom), 0xffffff, 0.5);
+        g.strokeEllipse(foot.x + (crew?.x || 0), foot.y + (crew?.y || 0) - (unit.type === 'cavalry' ? 24 : 18) + 6, 30, 15);
     }
 
     static describe(scene, unit) {
@@ -134,6 +255,7 @@ export class UnitInspector {
     }
 
     update(force = false) {
+        this.drawHover();
         if (!this.panel) return;
         const unit = this.selected;
         this.ring.clear();
@@ -202,10 +324,15 @@ export class UnitInspector {
     reset() {
         this.selected = null;
         this.pointer = null;
+        this.hover = null;
+        this._hoverAt = 0;
+        this._crewCache = null;
+        this._crewAt = -Infinity;
         this.lastMarkup = '';
         this.lastUnit = null;
         this.nextTextAt = 0;
         this.ring.clear();
+        this._hoverGfx?.clear();
         if (this.panel) { this.panel.hidden = true; this.panel.innerHTML = ''; }
     }
 
@@ -217,5 +344,7 @@ export class UnitInspector {
         this.scene.input.off('pointerupoutside', this.onOutside);
         this.scene.game?.events?.off('blur', this.onBlur);
         this.ring.destroy();
+        this._hoverGfx?.destroy();
+        this._hoverGfx = null;
     }
 }

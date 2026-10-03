@@ -76,7 +76,7 @@ test('rallied pike brace damage counts as real return-to-combat without changing
         scene.resolveBrace(guard, horse);
         if (queued) scene.flushBattleImpacts();
         assert.equal(guard.lastAttack, previousAttack);
-        assert.equal(scene.battleStats.blue.postRallyDamage, 52);
+        assert.equal(scene.battleStats.blue.postRallyDamage, 57);   // 18*1.5*2.5-10（骑兵防御15→10）
         assert.equal(scene.battleStats.blue.reengaged, 1);
         assert.equal(guard.moralePhase, null);
     }

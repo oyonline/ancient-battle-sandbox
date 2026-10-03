@@ -93,7 +93,7 @@ export const UI = {
         document.getElementById('btn-camp-open')?.addEventListener('click', () => {
             this.campControls?.togglePin();
         });
-        scene.groundClick = (world, picked) => this.onGroundClick(world, picked);
+        scene.groundClick = (world, picked, markerBattalion) => this.onGroundClick(world, picked, markerBattalion);
         if (this.pendingNetStart) {
             this.pendingNetStart = false;
             this.launchNetBattle();
@@ -225,6 +225,7 @@ export const UI = {
         this.cancelTargeting();
         this._pendingBuys = [];
         this._shownTraitEvents = 0;                 // 新局重新计数据点播报
+        this._battalionSlots = null;                 // 新局营号从头编起，快捷键槽位一并清空
         clearTimeout(this._toastTimer);
         for (const id of ['action-toast', 'territory-tip']) {
             const element = document.getElementById(id);
@@ -685,39 +686,84 @@ export const UI = {
     },
 
     // ---------------- 营队指挥条：选中营后出现，点旗下令/回防 ----------------
+    // 兵种组成只读自营数据（公共 API aliveMembers + UNIT_TYPES 名称），展示序沿用 UNIT_TYPES 键序。
+    battalionComposition(battalion) {
+        if (!battalion?.aliveMembers) return '';
+        const counts = new Map();
+        for (const unit of battalion.aliveMembers()) {
+            if (unit.dead || unit.withdrawn) continue;
+            counts.set(unit.type, (counts.get(unit.type) || 0) + 1);
+        }
+        const parts = [];
+        for (const [type, info] of Object.entries(UNIT_TYPES)) {
+            const count = counts.get(type);
+            if (count) parts.push(`${info.name}${count}`);
+        }
+        return parts.join('／');
+    },
+
+    // 稳定快捷键槽位：营亡解散释放槽位、新营领最低空槽，幸存营键号不漂移。
+    // 数字键与营卡显示共用这份映射，卡片上标的 [N] 就是真实的按键。
+    battalionSlots() {
+        const list = this.myBattalions();
+        const slots = this._battalionSlots ?? (this._battalionSlots = new Map());
+        for (const id of [...slots.keys()]) {
+            if (!list.some(b => b.id === id)) slots.delete(id);
+        }
+        const used = new Set(slots.values());
+        for (const battalion of list) {
+            if (slots.has(battalion.id) || used.size >= 9) continue;
+            let slot = 1;
+            while (used.has(slot)) slot++;
+            slots.set(battalion.id, slot);
+            used.add(slot);
+        }
+        return slots;
+    },
+
     renderBattalionPicker() {
         const row = document.getElementById('battalion-picker');
         if (!row) return;
         const label = document.getElementById('battalion-label');
         const list = this.myBattalions();
+        const slots = this.battalionSlots();
         if (!this.scene?.selectedBattalion) label.textContent = '选择营队下令 · 数字键 1–9 / Tab 切换';
-        if (!row.querySelector('.battalion-chip')) row.replaceChildren();
         if (row.querySelector('.battalion-chip') && row.childElementCount === list.length &&
-            [...row.children].every((chip, i) => chip.dataset.bid === String(list[i]?.id))) {
+            [...row.children].every((chip, i) => chip.dataset.bid === String(list[i]?.id) &&
+                chip.dataset.slot === String(slots.get(list[i]?.id) ?? ''))) {
             // 只刷新数字，不重建（保持点击稳定）
             [...row.children].forEach((chip, i) => {
                 const b = list[i];
                 const state = b.gathering ? '集结中' : b.retreat ? '回防' : b.orderPoint ? '驻守'
                     : b.orderFlag != null ? '进军' : '作战';
-                textIfChanged(chip.querySelector('.bc-count'), `${b.aliveMembers().length}人·${state}`);
+                textIfChanged(chip.querySelector('.bc-count'),
+                    `${this.battalionComposition(b)} · ${b.aliveMembers().length}人 · ${state}`);
                 chip.classList.toggle('active', this.scene.selectedBattalion === b);
                 chip.setAttribute('aria-pressed', String(this.scene.selectedBattalion === b));
             });
             return;
         }
+        // 重建分支：replaceChildren 清空内容会把横向滚动位置夹回 0——用户滚到右侧
+        // 看 4-6 号营卡时，一次营亡/新营重建不应把视口拽回左端（F12 顺带加固）。
+        const keepScroll = row.scrollLeft;
         row.replaceChildren();
         for (const battalion of list) {
+            const slot = slots.get(battalion.id);
             const chip = document.createElement('button');
             chip.className = 'order-btn battalion-chip';
             chip.dataset.bid = String(battalion.id);
+            chip.dataset.slot = String(slot ?? '');
             const state = battalion.gathering ? '集结中' : battalion.retreat ? '回防' : battalion.orderPoint ? '驻守'
                 : battalion.orderFlag != null ? '进军' : '作战';
-            chip.innerHTML = `<b>${battalion.id}营</b> <span class="bc-count">${battalion.aliveMembers().length}人·${state}</span>`;
+            chip.innerHTML = `<b>${slot ? `[${slot}] ` : ''}${battalion.id}营</b> ` +
+                `<span class="bc-count">${this.battalionComposition(battalion)} · ${battalion.aliveMembers().length}人 · ${state}</span>`;
             chip.classList.toggle('active', this.scene.selectedBattalion === battalion);
             chip.setAttribute('aria-pressed', String(this.scene.selectedBattalion === battalion));
-            chip.onclick = () => this.selectBattalionByIndex(list.indexOf(battalion));
+            // 按确定营ID选中：列表增删后不因索引漂移选错营。
+            chip.onclick = () => this.selectBattalionById(battalion.id);
             row.appendChild(chip);
         }
+        row.scrollLeft = keepScroll;   // 浏览器按新内容宽度自动夹紧
     },
 
     buildBattalionBar() {
@@ -757,13 +803,13 @@ export const UI = {
         hold.title = '点击后到地图上选一个点，全营开过去驻守（桥头/林缘/高地均可设防）';
         hold.onclick = () => this.beginHoldTargeting();
         row.appendChild(hold);
-        const charge = document.createElement('button');
-        charge.className = 'order-btn order-charge';
-        charge.id = 'order-charge';
-        charge.textContent = '⚡ 冲锋！';
-        charge.title = '本营骑兵自由冲锋 6 秒（15 秒冷却）';
-        charge.onclick = () => this.giveChargeOrder();
-        row.appendChild(charge);
+        // 手动冲锋按钮已移除：骑兵接敌自动助跑冲锋（U1）。这里只读真实状态，
+        // 不再提供需要玩家反复点击的冲锋入口；net 'charge' 兼容路径归模拟侧。
+        const chargeNote = document.createElement('span');
+        chargeNote.className = 'order-note';
+        chargeNote.id = 'order-charge-note';
+        chargeNote.title = '骑兵接敌后自动助跑冲锋，无需手动下令';
+        row.appendChild(chargeNote);
         const stanceBtn = document.createElement('button');
         stanceBtn.className = 'order-btn';
         stanceBtn.id = 'order-stance';
@@ -849,7 +895,22 @@ export const UI = {
     },
 
     // 返回 true 表示该次点击已用于命令/建筑，观察层必须保留原选择。
-    onGroundClick(world, picked) {
+    // markerBattalion：观察层透传的营旗命中（普通态拾取优先的判据之一，F2）。
+    onGroundClick(world, picked, markerBattalion) {
+        // 普通态（未开任何选点/下令模式）：营旗与部队画在建筑之上，是玩家看到的可点目标——
+        // 拾取命中优先选营/选兵，不被脚下建筑吞掉；己方民夫仍交建设面板选择。
+        // 驻守/集结/施工等选点模式保持命令优先消费（既有测试守护）。
+        if (!this.campControls?.targeting && !this.holdTargeting && !this.rallyTargeting) {
+            const unit = picked ?? null;
+            const ownWorker = unit?.type === 'worker' && unit.team === (this.mySide || 'red');
+            if (markerBattalion || (unit && !ownWorker)) {
+                if (this.campControls) {
+                    this.campControls.workerId = this.campControls.buildingId = null;
+                    this.campControls.update();
+                }
+                return false;
+            }
+        }
         if (this.campControls?.handleGroundClick(world, picked)) return true;
         if (this.rallyTargeting) {
             this.applyGroundOrder(world, (gx, gy) => {
@@ -906,38 +967,37 @@ export const UI = {
         this.showNetToast(`${selected.id}营 · ${this.battleOptions.net ? '驻守令已接收，等待执行' : '正在前往驻守位置'}`);
     },
 
-    giveChargeOrder() {
-        const selected = this.scene?.selectedBattalion;
-        if (!selected || !this.scene || selected.team !== (this.mySide || 'red')) return;
-        this.cancelTargeting();
-        const now = this.scene.simulationTime;
-        if (now < (selected.chargeReadyAt || 0)) return;
-        const hasCavalry = selected.aliveMembers().some(u => u.type === 'cavalry');
-        if (!hasCavalry) { this.showNetToast('本营没有骑兵——把骑兵编进来再冲锋'); return; }
-        const side = this.mySide || 'red';
-        if (this.battleOptions.net && this.scene.net) {
-            this.scene.net.lockstep.act({ k: 'charge', side, id: selected.id });
-        } else {
-            this.scene.applyNetCommand({ k: 'charge', side, id: selected.id });
-        }
-        Snd.play('go');
-        this.updateBattalionBar();
-    },
-
     myBattalions() {
         const side = this.mySide || 'red';
         return (this.scene?.battalions?.battalions || []).filter(b => b.team === side && b.members.length);
     },
 
-    selectBattalionByIndex(index) {
-        const list = this.myBattalions();
-        if (!list.length) return;
+    // 营选择统一入口：数字键、营卡点击、Tab 循环都走这里，互不漂移。
+    applyBattalionSelection(battalion) {
+        if (!battalion) return;
         this.cancelTargeting();
-        this.scene.selectedBattalion = list[Math.max(0, Math.min(list.length - 1, index))];
-        if (this.scene.unitInspector) this.scene.unitInspector.selected = this.scene.selectedBattalion.aliveMembers()[0] || null;
+        this.scene.selectedBattalion = battalion;
+        if (this.scene.unitInspector) this.scene.unitInspector.selected = battalion.aliveMembers()[0] || null;
         if (this.campControls) this.campControls.workerId = this.campControls.buildingId = null;
         Snd.play('tick');
         this.updateBattalionBar();
+    },
+
+    // 按确定营ID选中：营卡点击入口，列表增删后不因索引漂移选错营。
+    selectBattalionById(id) {
+        this.applyBattalionSelection(this.myBattalions().find(b => b.id === id));
+    },
+
+    // 数字键按营卡显示的真实快捷键选营：槽位空缺时不改变当前选择。
+    selectBattalionSlot(slot) {
+        const slots = this.battalionSlots();
+        this.applyBattalionSelection(this.myBattalions().find(b => slots.get(b.id) === slot));
+    },
+
+    selectBattalionByIndex(index) {
+        const list = this.myBattalions();
+        if (!list.length) return;
+        this.applyBattalionSelection(list[Math.max(0, Math.min(list.length - 1, index))]);
     },
 
     toggleStance() {
@@ -1037,9 +1097,7 @@ export const UI = {
         if (!document.querySelector('#order-hold')) this.buildBattalionBar();   // 以驻守按钮为准（营选择 chip 同类名会误判）
         const flags = this.scene.flags || [];
         const own = selected.team === (this.mySide || 'red');
-        const now = this.scene.simulationTime || 0;
         const state = selected.gathering ? '集结中'
-            : now < (selected.chargeUntil || 0) ? '⚡ 冲锋中'
             : selected.retreat ? '回防'
             : selected.orderPoint ? '📍 驻守'
             : selected.orderFlag != null && flags[selected.orderFlag] ? '目标 · ' + flags[selected.orderFlag].name
@@ -1073,14 +1131,18 @@ export const UI = {
                 btn.classList.toggle('active', aggressive);
             } else if (btn.id === 'order-clear') {
                 btn.disabled = !own || !(selected.orderFlag != null || selected.orderPoint || selected.retreat);
-            } else if (btn.id === 'order-charge') {
-                const hasCavalry = own && selected.aliveMembers().some(u => u.type === 'cavalry');
-                const cooldown = Math.max(0, (selected.chargeReadyAt || 0) - now);
-                btn.disabled = !hasCavalry || cooldown > 0;
-                textIfChanged(btn, cooldown > 0 ? `冲锋 · 冷却 ${Math.ceil(cooldown / 1000)}秒` : '⚡ 冲锋！');
-                btn.classList.toggle('active', now < (selected.chargeUntil || 0));
             }
         });
+        // 自动冲锋真实读数（只读模拟字段）：有骑营显示状态，无骑营不占位。
+        // 助跑 ≥3 格即视为冲击中（与骑兵"助跑3格双倍冲锋"规则同口径）。
+        const chargeNote = document.getElementById('order-charge-note');
+        if (chargeNote) {
+            const riders = own ? selected.aliveMembers().filter(u => u.type === 'cavalry') : [];
+            const charging = riders.filter(u => (u.chargeDistance ?? 0) >= 3).length;
+            textIfChanged(chargeNote, riders.length
+                ? (charging ? `⚡ 自动冲锋 · ${charging}骑冲击中` : '⚡ 骑兵自动冲锋') : '');
+            chargeNote.hidden = !riders.length;
+        }
     },
 
     updateTactics() {
@@ -1184,7 +1246,8 @@ export const UI = {
             if (e.key === 'r' || e.key === 'R') { this.beginRallyTargeting(); return; }
             if (e.key === 'Tab') { e.preventDefault(); this.selectNextBattalion(); return; }
             const digit = Number(e.key);
-            if (Number.isInteger(digit) && digit >= 1 && digit <= 9) this.selectBattalionByIndex(digit - 1);
+            // 数字键按营卡标注的真实快捷键（稳定槽位）选营，而非列表位置。
+            if (Number.isInteger(digit) && digit >= 1 && digit <= 9) this.selectBattalionSlot(digit);
         });
         document.querySelectorAll('[data-terrain]').forEach(button => {
             button.onclick = () => this.selectTerrain(button.dataset.terrain);
