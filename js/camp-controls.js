@@ -1,6 +1,7 @@
 // Selection and targeting stay local; commands always enter the simulation API.
 // 据点特色的文案与参数只从 js/battle/site-traits.js 取（模拟、AI、UI 同一份来源）。
 import { describeTrait, ownsRole } from './battle/site-traits.js';
+import { ownsFlag, sameSide, sideLabel, teamName } from './factions.js';
 export class CampControls {
     constructor(ui) {
         this.ui = ui;
@@ -151,7 +152,7 @@ export class CampControls {
                     this.ui.applyGroundOrder(world, (gx, gy) => {
                         const flag = (this.scene.flags || []).map((f, index) => ({ f, index,
                             distance: Math.hypot(f.gx - gx, f.gy - gy) }))
-                            .filter(p => p.f.owner === this.side && p.distance <= 6)
+                            .filter(p => ownsFlag(this.scene, this.side, p.f) && p.distance <= 6)
                             .sort((a, b) => a.distance - b.distance || a.index - b.index)[0];
                         if (flag) accepted = this.send({ k: 'build', worker: mode.worker, kind: mode.kind, site: flag.index });
                         else this.ui.showNetToast('选择已占领的据点；箭塔和医帐需要该点先有完工营寨');
@@ -289,32 +290,34 @@ export class CampControls {
             const siteFlag = Number.isInteger(building.siteId) ? this.scene.flags?.[building.siteId] : null;
             const trait = describeTrait(siteFlag?.role);
             if (trait) {
-                const teamName = building.team === 'red' ? '红方' : '蓝方';
-                const holderName = siteFlag.owner === 'red' ? '红方' : siteFlag.owner === 'blue' ? '蓝方' : null;
+                const ownerTeamName = teamName(building.team);
+                const holderName = siteFlag.owner == null ? null : sideLabel(this.scene, siteFlag.owner);
+                // 归属判定按同盟共享：盟友占下的据点同样算本建筑受益。
+                const ownerIsBuilder = siteFlag.owner != null && sameSide(this.scene, siteFlag.owner, building.team);
                 let holder;
                 if (trait.scope === 'global') {
                     // 渡口/马场是全局奖励：看该建筑归属方是否仍拥有任一同类据点。
                     holder = this.scene && ownsRole(this.scene, building.team, siteFlag.role)
-                        ? `${teamName}仍拥有${trait.name}，全局奖励生效中`
-                        : holderName ? `该点已归${holderName}，${teamName}无任何${trait.name}，奖励未生效`
-                            : `该点中立；${teamName}拥有任一${trait.name}即生效`;
+                        ? `${ownerTeamName}仍拥有${trait.name}，全局奖励生效中`
+                        : holderName ? `该点已归${holderName}，${ownerTeamName}无任何${trait.name}，奖励未生效`
+                            : `该点中立；${ownerTeamName}拥有任一${trait.name}即生效`;
                 } else {
                     // 局部奖励按受益对象分化：林口/桥头作用于本点建筑（施工/减伤）；
                     // 高地作用于"归属方有驻守令且在旗点 8 格内的营队成员"（士气损失），
                     // 与建筑无关，也不能据此宣称附近营队已经满足条件；
                     // 路口作用于本据点的伤兵收容容量，不是建筑属性。
                     if (siteFlag.role === 'hill') {
-                        holder = siteFlag.owner === building.team
-                            ? `${teamName}拥有高地：有驻守令且在旗点 8 格内的营队成员士气损失 −10%（作用于营队，不作用于建筑）`
+                        holder = ownerIsBuilder
+                            ? `${ownerTeamName}拥有高地：有驻守令且在旗点 8 格内的营队成员士气损失 −10%（作用于营队，不作用于建筑）`
                             : holderName ? `高地已归${holderName}，其营队满足条件时享受减损（与本建筑无关）`
                                 : '该点中立，占领后其营队满足条件时可享受减损（与本建筑无关）';
                     } else if (siteFlag.role === 'crossroad') {
-                        holder = siteFlag.owner === building.team
-                            ? `${teamName}拥有该点：本据点伤兵收容 +4（作用于据点收容容量，非建筑属性）`
+                        holder = ownerIsBuilder
+                            ? `${ownerTeamName}拥有该点：本据点伤兵收容 +4（作用于据点收容容量，非建筑属性）`
                             : holderName ? `据点已归${holderName}，本据点收容提升对${holderName}生效`
                                 : '该点中立，占领后本据点收容提升生效';
                     } else {
-                        holder = siteFlag.owner === building.team ? `${teamName}拥有该点，奖励对此建筑生效`
+                        holder = ownerIsBuilder ? `${ownerTeamName}拥有该点，奖励对此建筑生效`
                             : holderName ? `据点已归${holderName}，此建筑不再受益`
                                 : '该点中立，占领后生效';
                     }

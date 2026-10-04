@@ -5,6 +5,7 @@
 import { board } from '../board.js';
 import { dist } from '../units.js';
 import { CombatRules } from '../combat.js';
+import { isHostile } from '../factions.js';
 
 // 最近敌人：环形扩张搜索；查到半径 r 内的最佳解即全局最近（圆内 ⊆ 查询方形）。
 // 辎重车不可被攻击（劫持玩法）：战斗围绕车身控制权，不围绕拆车——
@@ -15,7 +16,7 @@ export function nearestEnemy(spatial, unit) {
     const maxR = board.W + board.H;
     while (true) {
         const visit = e => {
-            if (e.team === unit.team || e.dead || e.withdrawn || e.type === 'wagon') return;
+            if (!isHostile(unit.scene, unit.team, e.team) || e.dead || e.withdrawn || e.type === 'wagon') return;
             const dx = e.gx - unit.gx, dy = e.gy - unit.gy;
             const d2 = dx * dx + dy * dy;
             if (d2 < bestD2 - 1e-9 || (Math.abs(d2 - bestD2) <= 1e-9 && (!best || e.id < best.id))) { bestD2 = d2; best = e; }
@@ -32,7 +33,7 @@ export function nearestEnemy(spatial, unit) {
                 return spatial.nearestGroundEnemy(unit, best, bestD2);
             }
             for (const e of spatial.alive) {
-                if (e.team === unit.team || e.dead || e.withdrawn || e.garrisonTowerId || e.type === 'wagon') continue;
+                if (!isHostile(unit.scene, unit.team, e.team) || e.dead || e.withdrawn || e.garrisonTowerId || e.type === 'wagon') continue;
                 const dx = e.gx - unit.gx, dy = e.gy - unit.gy, d2 = dx * dx + dy * dy;
                 if (d2 < bestD2 - 1e-9 || (Math.abs(d2 - bestD2) <= 1e-9 && (!best || e.id < best.id))) {
                     bestD2 = d2; best = e;
@@ -80,7 +81,7 @@ export function stickyTarget(spatial, unit) {
 export function incomingCharge(spatial, unit, radius) {
     let threat = null;
     spatial.forEachNear(unit.gx, unit.gy, radius, e => {
-        if (e.team === unit.team || e.dead || e.withdrawn || e.type !== 'cavalry') return;
+        if (!isHostile(unit.scene, unit.team, e.team) || e.dead || e.withdrawn || e.type !== 'cavalry') return;
         const view = e.chargeViewState;
         if (view !== 'charge' && view !== 'pierce') return;
         const dx = unit.gx - e.gx, dy = unit.gy - e.gy, d = Math.hypot(dx, dy);

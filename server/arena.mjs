@@ -77,11 +77,12 @@ wss.on('connection', ws => {
         switch (message.t) {
             case 'create': {
                 const code = newCode();
-                rooms.set(code, { players: [ws, null], ready: [false, false] });
+                rooms.set(code, { players: [ws, null], ready: [false, false],
+                    mode: message.mode === 'coop' ? 'coop' : 'territory' });
                 ws.__room = code;
                 ws.__side = 0;
                 ws.__sim = message.v ?? null;
-                send(ws, { t: 'room', code, side: 'red' });
+                send(ws, { t: 'room', code, side: 'red', mode: message.mode === 'coop' ? 'coop' : 'territory' });
                 send(ws, { t: 'info', text: '房间已创建。对方在同一局域网浏览器打开本地址，输入房间码即可加入。' });
                 break;
             }
@@ -94,7 +95,8 @@ wss.on('connection', ws => {
                 ws.__room = String(message.code).toUpperCase().trim();
                 ws.__side = 1;
                 ws.__sim = message.v ?? null;
-                send(ws, { t: 'room', code: ws.__room, side: 'blue' });
+                // 玩法以房主创建时为准，透传给加入方——两端必须跑同一套规则，否则锁步必分歧。
+                send(ws, { t: 'room', code: ws.__room, side: 'blue', mode: room.mode });
                 send(room.players[0], { t: 'peer', side: 'blue' });
                 break;
             }

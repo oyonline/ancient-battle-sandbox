@@ -174,7 +174,7 @@ test('restart clears morale events, withdrawal and the collapse grace clock', ()
     scene.checkWin();
     scene.withdrawUnit(old);
     scene.deployUnits({ infantry: 2 }, { infantry: 2 }, 'custom', 'custom');
-    assert.deepEqual(snapshot(scene.collapseSince), { red: null, blue: null });
+    assert.deepEqual(snapshot(scene.collapseSince), { red: null, blue: null, black: null });
     assert.equal(scene.resolvingOutcome, false);
     assert.equal(scene.getBattleReport().events.length, 0);
     assert.equal(scene.getBattleReport().teams.red.withdrawn, 0);

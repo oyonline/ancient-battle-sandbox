@@ -212,11 +212,11 @@ test('据点行只在归属或角色变化时改一次 DOM，其余刷新不动�
 
 test('大本营不显示任何据点特色：行文案、旗标与回防按钮都只讲集结', t => {
     const home = { siteId: 'home', name: '大本营', role: 'bridge', owner: 'red' };
-    const row = traitSiteRow(home);
+    const row = traitSiteRow(null, home);
     assert.equal(row.text, '⚑ 大本营 · 🔴红方');
     assert.doesNotMatch(row.text, /工事|占领|−10%/);
     assert.equal(row.title, '大本营 · 🔴红方');
-    const label = flagLabelText(home);
+    const label = flagLabelText(null, home);
     assert.equal(label.split('\n').length, 1);
     assert.doesNotMatch(label, /占领：|地形：/);
     const { ui, dom } = uiFixture(t, [{ gx: 30, gy: 20, name: '西桥头', role: 'bridge', owner: 'red' }]);

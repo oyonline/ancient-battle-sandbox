@@ -6,6 +6,7 @@
 // 事件一律内联按发生顺序推入，now 由调用方传场景模拟时钟。
 
 import { UNIT_TYPES } from '../units.js';
+import { TEAMS, isHostile, teamName } from '../factions.js';
 
 export class BattleLedger {
     constructor(battleId) {
@@ -13,7 +14,7 @@ export class BattleLedger {
         this.stats = {};
         const emptyStats = () => ({ initial: 0, alive: 0, lost: 0, kills: 0, damage: 0,
             withdrawn: 0, routed: 0, rallied: 0, reengaged: 0, postRallyDamage: 0 });
-        for (const team of ['red', 'blue']) {
+        for (const team of TEAMS) {
             this.stats[team] = {
                 ...emptyStats(),
                 byType: Object.fromEntries(Object.keys(UNIT_TYPES).map(type => [type, emptyStats()]))
@@ -35,7 +36,7 @@ export class BattleLedger {
 
     // attackStartedAt 默认取自攻击者 lastAttack，由调用方传入（单位字段属模拟层）
     recordDamage(now, target, damage, from, attackStartedAt = from?.lastAttack) {
-        if (!from || from.battleId !== this.battleId || from.team === target.team) return;
+        if (!from || from.battleId !== this.battleId || !isHostile(from.scene, from.team, target.team)) return;
         if (damage > 0 && this.firstContactMs == null) this.firstContactMs = Math.round(now);
         const team = this.stats[from.team];
         team.damage += damage;
@@ -69,25 +70,25 @@ export class BattleLedger {
             stats.alive--;
             stats.lost++;
         }
-        if (from && from.battleId === battleId && from.team !== unit.team) {
+        if (from && from.battleId === battleId && isHostile(from.scene, from.team, unit.team)) {
             const attacker = this.stats[from.team];
             attacker.kills++;
             attacker.byType[from.type].kills++;
-            const side = from.team === 'red' ? '红方' : '蓝方';
+            const side = teamName(from.team);
             this.addEvent(now, 'first-kill', `${side}${UNIT_TYPES[from.type].name}取得首杀`, from.team);
             if (from.type === 'cavalry' && unit.type === 'archer') {
                 this.addEvent(now, 'cavalry-archer', `${side}骑兵首次击杀弓箭手`, from.team);
             }
         }
         if (team.initial > 0 && team.lost * 2 >= team.initial) {
-            this.addEvent(now, `half-${unit.team}`, `${unit.team === 'red' ? '红方' : '蓝方'}损失达到初始兵力的一半`, unit.team);
+            this.addEvent(now, `half-${unit.team}`, `${teamName(unit.team)}损失达到初始兵力的一半`, unit.team);
         }
         return team.alive;
     }
 
     moraleSummary() {
         const result = {};
-        for (const team of ['red', 'blue']) {
+        for (const team of TEAMS) {
             const stats = this.stats[team];
             result[team] = { steady: 0, wavering: 0, routing: 0, withdrawn: stats.withdrawn,
                 rallied: stats.rallied, reengaged: stats.reengaged, postRallyDamage: stats.postRallyDamage };

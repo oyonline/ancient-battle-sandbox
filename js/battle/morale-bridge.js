@@ -3,10 +3,11 @@ import { board } from '../board.js';
 import { Terrain } from '../terrain.js';
 import { CombatRules } from '../combat.js';
 import { dist, moveToward } from '../units.js';
+import { TEAMS, isHostile, sameSide, teamName } from '../factions.js';
 
 export function getMoraleSummary(scene) {
     const result = {};
-    for (const team of ['red', 'blue']) {
+    for (const team of TEAMS) {
         const stats = scene.battleStats[team];
         result[team] = { steady: 0, wavering: 0, routing: 0, withdrawn: stats.withdrawn,
             rallied: stats.rallied, reengaged: stats.reengaged, postRallyDamage: stats.postRallyDamage,
@@ -33,7 +34,7 @@ export function getMoraleSummary(scene) {
 }
 
 export function onMoraleStateChange(scene, unit, previousState, reason) {
-    const side = unit.team === 'red' ? '红方' : '蓝方';
+    const side = teamName(unit.team);
     const state = unit.moraleState;
     const stats = scene.battleStats[unit.team];
     if (state === 'routing') {
@@ -116,8 +117,8 @@ export function updateRoutedUnit(scene, unit, dt) {
             scene.forEachNear(other.gx, other.gy, 6, neighbor => {
                 if (neighbor.dead || neighbor.withdrawn || neighbor.moraleState === 'routing') return;
                 const distance = dist(other, neighbor);
-                if (neighbor.team !== other.team && distance <= 6) threatened = true;
-                if (neighbor.team === other.team && neighbor.moraleState === 'steady' && distance <= 5) support++;
+                if (isHostile(scene, neighbor.team, other.team) && distance <= 6) threatened = true;
+                if (sameSide(scene, neighbor.team, other.team) && neighbor.moraleState === 'steady' && distance <= 5) support++;
             });
             // 接应点可包含锚点自己：三名预备队足以接应，不能误要求第四人。
             return !threatened && support >= 3;
@@ -129,7 +130,7 @@ export function updateRoutedUnit(scene, unit, dt) {
         unit.rallyTarget = null;
         let best = 18 * 18;
         for (const other of scene._rallyAnchors) {
-            if (other.team !== unit.team || other.dead || other.withdrawn || other.moraleState !== 'steady') continue;
+            if (!sameSide(scene, other.team, unit.team) || other.dead || other.withdrawn || other.moraleState !== 'steady') continue;
             const distance = (other.gx - unit.gx) ** 2 + (other.gy - unit.gy) ** 2;
             if (distance < best - 1e-9 || (unit.rallyTarget && Math.abs(distance - best) <= 1e-9 && other.id < unit.rallyTarget.id)) {
                 best = distance; unit.rallyTarget = other;
@@ -138,27 +139,32 @@ export function updateRoutedUnit(scene, unit, dt) {
     }
     // 疗伤据点优先于接应锚：溃兵按收容循环直奔最近己方据点（无令时）。
     const anchor = scene.tactics?.rallyPoint(unit) || scene.territory?.healing?.rallyAnchor(unit) || unit.rallyTarget;
-    let dx = (anchor ? anchor.gx : unit.team === 'red' ? 0 : board.W) - unit.gx;
-    let dy = anchor ? anchor.gy - unit.gy : 0;
+    // 无指定接应点时回撤向"自家出生方向"：红西、蓝东、黑南（合作模式）。
+    const homeX = unit.team === 'black' ? board.W / 2 : unit.team === 'red' ? 0 : board.W;
+    const homeY = unit.team === 'black' ? board.H : unit.gy;
+    let dx = (anchor ? anchor.gx : homeX) - unit.gx;
+    let dy = anchor ? anchor.gy - unit.gy : homeY - unit.gy;
     const length = Math.hypot(dx, dy) || 1;
     dx /= length; dy /= length;
     // 邻近敌人使逃跑方向偏离危险处，仍保留回撤方向，防止原地左右振荡。
     scene.forEachNear(unit.gx, unit.gy, 4, enemy => {
-        if (enemy.team === unit.team || enemy.dead || enemy.withdrawn || enemy.moraleState === 'routing') return;
+        if (!isHostile(scene, unit.team, enemy.team) || enemy.dead || enemy.withdrawn || enemy.moraleState === 'routing') return;
         const ex = unit.gx - enemy.gx, ey = unit.gy - enemy.gy, d = Math.hypot(ex, ey);
         if (d <= 0.001 || d > 4) return;
         const weight = (4 - d) / 4;
         dx += ex / d * weight; dy += ey / d * weight;
     });
     const direction = Math.hypot(dx, dy);
-    if (direction < 0.001) { dx = unit.team === 'red' ? -1 : 1; dy = 0; }
+    if (direction < 0.001) { dx = unit.team === 'black' ? 0 : unit.team === 'red' ? -1 : 1; dy = unit.team === 'black' ? 1 : 0; }
     const normalize = Math.hypot(dx, dy);
     const closeEnemy = now - (unit.routStartedAt ?? -Infinity) < 900 ? scene.nearestEnemy(unit) : null;
     const breaking = closeEnemy && dist(unit, closeEnemy) < 3;
     if (Terrain.hasBarriers(scene.battleOptions.terrain)) {
         // 隔岸时保留全局接应点；三格的局部躲避点可能落水，不能用它取代回撤路线。
-        moveToward(unit, anchor ? anchor.gx : unit.team === 'red' ? 0.6 : board.W - 0.6,
-            anchor ? anchor.gy : unit.gy, unit.typeData.speed * (breaking ? 0.7 : 1), dt);
+        const fallbackX = unit.team === 'black' ? board.W / 2 : unit.team === 'red' ? 0.6 : board.W - 0.6;
+        const fallbackY = unit.team === 'black' ? board.H - 0.6 : unit.gy;
+        moveToward(unit, anchor ? anchor.gx : fallbackX,
+            anchor ? anchor.gy : fallbackY, unit.typeData.speed * (breaking ? 0.7 : 1), dt);
         return;
     }
     moveToward(unit, unit.gx + dx / normalize * 3, unit.gy + dy / normalize * 3,
@@ -172,10 +178,9 @@ export function withdrawUnit(scene, unit) {
     unit.actionEpoch = (unit.actionEpoch || 0) + 1;
     const team = scene.battleStats[unit.team];
     for (const stats of [team, team.byType[unit.type]]) { stats.alive--; stats.withdrawn++; }
-    if (unit.team === 'red') scene.redAlive = team.alive;
-    else scene.blueAlive = team.alive;
+    scene.setAlive?.(unit.team, team.alive);
     scene.tweens.killTweensOf(unit.spr); scene.tweens.killTweensOf(unit.lunge);
     unit.spr.destroy(); unit.shadow.destroy();
     scene._countsDirty = true;
-    scene.addBattleEvent(`withdraw-${unit.team}`, `${unit.team === 'red' ? '红方' : '蓝方'}溃兵开始撤离战场`, unit.team);
+    scene.addBattleEvent(`withdraw-${unit.team}`, `${teamName(unit.team)}溃兵开始撤离战场`, unit.team);
 }

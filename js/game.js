@@ -15,6 +15,7 @@ import { TacticsSystem } from './tactics.js';
 import { UnitInspector } from './inspection.js';
 import { MANIFEST } from './manifest.js';
 import { BattleSpatialIndex } from './battle/spatial.js';
+import { enemiesOf, isHostile, RELATIONS_COOP, DEFAULT_TEAMS, activeTeams, assetTeam, teamTint } from './factions.js';
 import * as targeting from './battle/targeting.js';
 import { BattleLedger } from './battle/report.js';
 import * as core from './battle/core.js';
@@ -94,9 +95,12 @@ export class IsoBattleScene extends Phaser.Scene {
         this.nextId = 1;
         this.redAlive = 0;
         this.blueAlive = 0;
+        this.blackAlive = 0;
+        this.aliveByTeam = { red: 0, blue: 0, black: 0 };
         this.centroid = {
             red: { x: board.W / 2, y: board.H / 2 },
-            blue: { x: board.W / 2, y: board.H / 2 }
+            blue: { x: board.W / 2, y: board.H / 2 },
+            black: { x: board.W / 2, y: board.H / 2 }
         };
         this.deadCount = 0;
         this._countsDirty = false;
@@ -223,8 +227,8 @@ export class IsoBattleScene extends Phaser.Scene {
         this.battleStats = this.ledger.stats;
         this.dyingUnits = new Set();
         this.morale = new MoraleSystem(this);
-        this.collapseSince = { red: null, blue: null };
-        this.moraleLastReason = { red: '', blue: '' };
+        this.collapseSince = { red: null, blue: null, black: null };
+        this.moraleLastReason = { red: '', blue: '', black: '' };
         this.endReason = null;
         this.resolvingOutcome = false;
         this._rallyAnchors = [];
@@ -251,13 +255,47 @@ export class IsoBattleScene extends Phaser.Scene {
 
     recordDeath(unit, from) {
         const alive = this.ledger.recordDeath(this.simulationTime, unit, from, this.battleId);
-        if (unit.team === 'red') this.redAlive = alive;
-        else this.blueAlive = alive;
+        this.setAlive(unit.team, alive);
+    }
+
+    // 逐队存活数：aliveByTeam 为三方通用存储，redAlive/blueAlive/blackAlive 为兼容别名。
+    setAlive(team, alive) {
+        (this.aliveByTeam ||= { red: 0, blue: 0, black: 0 });
+        if (Object.hasOwn(this.aliveByTeam, team)) this.aliveByTeam[team] = alive;
+        if (team === 'red') this.redAlive = alive;
+        else if (team === 'blue') this.blueAlive = alive;
+        else if (team === 'black') this.blackAlive = alive;
+    }
+
+    // 指定阵营全部敌对阵营的存活总和（两方模式等同旧口径；三方下黑方=红+蓝）。
+    hostileAlive(team) {
+        const counts = this.aliveByTeam;
+        let total = 0;
+        for (const other of enemiesOf(this, team)) {
+            total += counts ? (counts[other] || 0)
+                : (other === 'red' ? this.redAlive : other === 'blue' ? this.blueAlive : this.blackAlive) || 0;
+        }
+        return total;
+    }
+
+    // 指定阵营的敌人合力重心（三方下黑方=红蓝两军联合重心）；无敌人时回地图中心。
+    enemyCentroid(team) {
+        const spatial = this.spatial;
+        if (typeof spatial.enemyCentroid === 'function') return spatial.enemyCentroid(this, team);
+        // 兜底：测试替身空间索引无此方法时，用各队存活数加权合并各队重心。
+        const counts = this.aliveByTeam || {}, centroid = this.centroid || {};
+        let n = 0, x = 0, y = 0;
+        for (const other of enemiesOf(this, team)) {
+            const c = counts[other] || 0, point = centroid[other];
+            if (!c || !point) continue;
+            n += c; x += point.x * c; y += point.y * c;
+        }
+        return n ? { x: x / n, y: y / n } : { x: board.W / 2, y: board.H / 2 };
     }
 
     getBattleReport() {
         const teams = JSON.parse(JSON.stringify(this.battleStats));
-        for (const team of ['red', 'blue']) {
+        for (const team of Object.keys(teams)) {
             teams[team].routing = 0;
             for (const stats of Object.values(teams[team].byType)) stats.routing = 0;
         }
@@ -266,23 +304,23 @@ export class IsoBattleScene extends Phaser.Scene {
             teams[unit.team].routing++;
             teams[unit.team].byType[unit.type].routing++;
         }
+        const roster = this.activeTeams || DEFAULT_TEAMS;
         return {
-            red: this.battleStats.red.alive,
-            blue: this.battleStats.blue.alive,
+            ...Object.fromEntries(roster.map(t => [t, this.battleStats[t]?.alive ?? 0])),
             durationMs: Math.round(this.simulationTime),
             terrain: this.battleOptions.terrain,
-            orders: { red: this.tactics?.orders.red || 'advance', blue: this.tactics?.orders.blue || 'advance' },
+            orders: Object.fromEntries(roster.map(t => [t, this.tactics?.orders?.[t] || 'advance'])),
             cavalryOrders: { ...this.battleOptions.cavalryOrders },
             firstContactMs: this.ledger.firstContactMs,
             teams,
             morale: this.getMoraleSummary(),
             deathmatch: this.battleOptions.deathmatch,
             territory: this.battleOptions.territory && this.territory ? {
-                tickets: { red: Math.round(this.territory.tickets.tickets.red), blue: Math.round(this.territory.tickets.tickets.blue) },
+                tickets: Object.fromEntries(roster.map(t => [t, Math.round(this.territory.tickets.tickets[t])])),
                 flags: this.flags.map(f => ({ name: f.name, owner: f.owner })),
-                earned: { red: Math.round(this.territory.econ.earned.red), blue: Math.round(this.territory.econ.earned.blue) },
-                spent: { red: Math.round(this.territory.econ.spent.red), blue: Math.round(this.territory.econ.spent.blue) },
-                recruited: { red: this.territory.recruit.spawned.red, blue: this.territory.recruit.spawned.blue }
+                earned: Object.fromEntries(roster.map(t => [t, Math.round(this.territory.econ.earned[t])])),
+                spent: Object.fromEntries(roster.map(t => [t, Math.round(this.territory.econ.spent[t])])),
+                recruited: Object.fromEntries(roster.map(t => [t, this.territory.recruit.spawned[t]]))
             } : null,
             tactics: this.getTacticsSummary(),
             endReason: this.endReason,
@@ -326,6 +364,20 @@ export class IsoBattleScene extends Phaser.Scene {
     }
 
     deployUnits(redConfig, blueConfig, redFormation, blueFormation, orders = {}, options = {}) {
+        // 合作模式：红蓝联军 vs 黑方 AI——参战三方、关系表为同盟分组；否则沿用红蓝二元。
+        if (options.coop === true) {
+            this.activeTeams = ['red', 'blue', 'black'];
+            this.relationGroups = RELATIONS_COOP;
+        } else {
+            this.activeTeams = DEFAULT_TEAMS;
+            this.relationGroups = null;
+        }
+        // 按参与阵营补齐容器：既有两方模式仍是 red/blue 两键（结构不变），
+        // 合作模式才追加 black——避免改动既有战报/选项结构。
+        for (const team of this.activeTeams) {
+            if (!(team in this.battleOptions.reserves)) this.battleOptions.reserves[team] = 0;
+            if (!(team in this.battleOptions.cavalryOrders)) this.battleOptions.cavalryOrders[team] = 'auto';
+        }
         // 棋盘尺寸：领土征服用大地图，其余模式回默认；尺寸变化时重建依赖尺寸的渲染层。
         if (options.territory) setBoardSize(TERRITORY.W, TERRITORY.H, 5); else resetBoardSize();
         if (this._boardW !== board.W || this._boardH !== board.H) {
@@ -339,6 +391,8 @@ export class IsoBattleScene extends Phaser.Scene {
             ['red', redConfig, redFormation],
             ['blue', blueConfig, blueFormation]
         ];
+        // 黑方第三势力：纯 AI，由 options.black 提供开局配兵。
+        if (options.coop === true && options.black) armies.push(['black', options.black, options.blackFormation || 'custom']);
         armies.forEach(([team, cfg, formation]) => {
             generateArmyPositions(team, cfg, formation).forEach(p => this.spawnUnit(team, p.type, p.gx, p.gy));
         });
@@ -368,8 +422,11 @@ export class IsoBattleScene extends Phaser.Scene {
             Terrain.isNaturalSlope(this.battleOptions.terrain)) {
             this.tactics = new TacticsSystem(this, effectiveOrders);
         }
-        this.redAlive = this.units.filter(u => u.team === 'red').length;
-        this.blueAlive = this.units.filter(u => u.team === 'blue').length;
+        this.aliveByTeam = { red: 0, blue: 0, black: 0 };
+        for (const unit of this.units) if (Object.hasOwn(this.aliveByTeam, unit.team)) this.aliveByTeam[unit.team]++;
+        this.redAlive = this.aliveByTeam.red;
+        this.blueAlive = this.aliveByTeam.blue;
+        this.blackAlive = this.aliveByTeam.black;
         this.deadCount = 0;
         this._view = null;      // 重新部署后先全量同步渲染
         this.battleStarted = false;
@@ -383,27 +440,30 @@ export class IsoBattleScene extends Phaser.Scene {
                 { gx: 35, gy: board.H * 0.5, name: '中路' },
                 { gx: 35, gy: board.H * 0.76, name: '下翼' }
             ].map(f => ({ ...f, owner: null, progress: 0, contested: false })) : null;
-        this.controlScore = { red: 0, blue: 0 };
+        this.controlScore = Object.fromEntries((this.activeTeams || DEFAULT_TEAMS).map(t => [t, 0]));
         // 领土征服运行态：经济 / 征兵队列 / 票数 / 建造与驻守 / 战略 AI。
         // 蓝方默认自动征兵（红方玩家手动大按钮）；territoryAI:true 双方自动（观战/测试），
-        // territoryAI:false 双方停手（隔离变量测经济/票数）；联机对战双方都是真人（AI 只调度无令营）。
+        // territoryAI:false 双方停手（隔离变量测经济/票数）；联机对战双方都是真人（AI 只调度无令营）；
+        // 合作模式下黑方恒为 AI（autoBuy=true），红蓝由两名真人操作。
+        const activeRoster = this.activeTeams || DEFAULT_TEAMS;
         this.territory = this.battleOptions.territory ? {
             econ: new TerritoryEconomy(),
             recruit: new RecruitSystem(this),
             tickets: new TicketSystem(),
-            rally: { red: null, blue: null },   // 玩家集结旗（null=老家集结）
-            ai: { red: new TerritoryAI(this, 'red'), blue: new TerritoryAI(this, 'blue') },
-            autoBuy: {
-                red: options.territoryAI === true,
-                blue: options.net ? false : options.territoryAI !== false
-            }
+            rally: Object.fromEntries(activeRoster.map(t => [t, null])),   // 玩家集结旗（null=老家集结）
+            ai: Object.fromEntries(activeRoster.map(t => [t, new TerritoryAI(this, t)])),
+            autoBuy: Object.fromEntries(activeRoster.map(t => [t,
+                t === 'black' ? true
+                    : t === 'red' ? options.territoryAI === true
+                    : options.net ? false : options.territoryAI !== false]))
         } : null;
         if (this.territory) {
             for (const [team, cfg] of armies) {
                 const count = Math.min(12, Math.max(0, Math.floor(cfg.worker || 0)));
                 for (let i = 0; i < count; i++) {
-                    this.spawnUnit(team, 'worker', team === 'red' ? 9.5 : board.W - 9.5,
-                        board.H / 2 + (i - (count - 1) / 2) * 1.2);
+                    const wx = team === 'black' ? board.W / 2 : team === 'red' ? 9.5 : board.W - 9.5;
+                    const wy = (team === 'black' ? board.H - 9.5 : board.H / 2) + (i - (count - 1) / 2) * 1.2;
+                    this.spawnUnit(team, 'worker', wx, wy);
                 }
             }
             this.territory.camps = new CampSystem(this);
@@ -439,7 +499,7 @@ export class IsoBattleScene extends Phaser.Scene {
         if (type === 'worker') this.render.units.ensureWorkerTextures?.();
         if (type === 'medic') this.render.units.ensureMedicTextures?.();
         const typeData = UNIT_TYPES[type];
-        const key = `units/${team}_${type}`;
+        const key = `units/${assetTeam(team)}_${type}`;   // 黑方复用蓝方贴图 + 基色染色
         const { x, y } = this.groundPoint(gx, gy);
         const depth = (gx + gy) * 100;
 
@@ -447,7 +507,7 @@ export class IsoBattleScene extends Phaser.Scene {
         const sizeK = type === 'cavalry' ? 0.37 : 0.30;
         const fx = sizeK / 0.55;   // 特效幅度基准：1 = 原体型
         const sc = typeData.scale * sizeK;      // 贴图最终显示缩放
-        const visualDir = type === 'cavalry' ? (team === 'red' ? 'east' : 'west') : 'side';
+        const visualDir = type === 'cavalry' ? (team === 'black' ? 'north' : team === 'red' ? 'east' : 'west') : 'side';
 
         // 接地基准：把角色“踩”到地面线上，阴影圆心与脚底重合
         // pad = 素材底边到脚底的像素距离（AI 出图底部留白 4~34px 不等，不补偿就会悬浮）
@@ -455,13 +515,13 @@ export class IsoBattleScene extends Phaser.Scene {
         const footDy = F.pad * sc;              // 贴图底边 → 脚底 的显示距离
 
         // 烘焙阴影贴图（椭圆脚底偏移已烘进贴图，翻转即镜像，见 syncOne）
-        const shadowKey = shadowTextureKey(team, type, visualDir);
+        const shadowKey = shadowTextureKey(assetTeam(team), type, visualDir);
         const shadow = this.add.image(x, y, shadowKey);
         shadow.setDepth(depth + 48);
 
         const spr = this.add.sprite(x, y + footDy, key).setOrigin(0.5, 1);
         spr.setScale(sc);
-        spr.setFlipX(type === 'cavalry' ? CAVALRY_FLIPPED.has(visualDir) : team === 'blue');
+        spr.setFlipX(type === 'cavalry' ? CAVALRY_FLIPPED.has(visualDir) : assetTeam(team) === 'blue');
         spr.setDepth(depth + 50);
 
         const unit = {
@@ -474,7 +534,7 @@ export class IsoBattleScene extends Phaser.Scene {
             chargeDistance: 0, chargeLastX: null, lastRetarget: -Infinity, lastBrace: -Infinity,
             chargeMomentum: 0, chargeImpactId: null, corpsManaged: false, leashReturning: false,
             braceTime: 0, braceReady: false, braceHold: false, braceSupport: 0, braceDepth: 0,
-            braceFacingX: team === 'red' ? 1 : -1, braceFacingY: 0,
+            braceFacingX: team === 'black' ? 0 : team === 'red' ? 1 : -1, braceFacingY: team === 'black' ? -1 : 0,
             moving: false, dead: false, withdrawn: false, flashUntil: 0, actionEpoch: 0,
             pressX: 0, pressY: 0,                        // 通行意图方向（推挤传导用，每帧由 moveToward 刷新）
             strafeX: 0, strafeY: 0, strafeUntil: 0,     // 微走位：绕目标换角度的目的地与截止时间
@@ -487,7 +547,8 @@ export class IsoBattleScene extends Phaser.Scene {
             sizeK: fx,                                  // 特效幅度系数（1 = 原体型）
             baseScale: sc,                              // 贴图显示缩放（待机呼吸在其上做微缩放）
             footDy,                                     // 贴图底边 → 脚底 的下压距离（对齐地面线）
-            faceDir: team === 'red' ? 1 : -1,           // 当前贴图镜像符号：1=原图 / -1=水平镜像
+            faceDir: team === 'black' ? 1 : team === 'red' ? 1 : -1,           // 当前贴图镜像符号：1=原图 / -1=水平镜像
+            baseTint: teamTint(team),                   // 阵营基色染色（黑方复用蓝方贴图时为深色，其余 null）
             faceAcc: 0,                                  // 朝向判定的累计位移
             dirDX: 0, dirDY: 0,                         // 骑兵方向判定的平滑屏幕位移
             visualDir,                                  // 骑兵八向 heading；普通兵种固定为 side
@@ -571,6 +632,8 @@ export class IsoBattleScene extends Phaser.Scene {
         if (this.hpGfx) this.hpGfx.clear();
         this.redAlive = 0;
         this.blueAlive = 0;
+        this.blackAlive = 0;
+        this.aliveByTeam = { red: 0, blue: 0, black: 0 };
         this.deadCount = 0;
         if (this.winnerText) { this.winnerText.destroy(); this.winnerText = null; }
         this.battleOver = false;
@@ -600,7 +663,7 @@ export class IsoBattleScene extends Phaser.Scene {
         if (time - this._fpsT >= 500) {
             const fps = Math.round(this._fpsN * 1000 / (time - this._fpsT));
             if (this.fpsHud) {
-                this.fpsHud.textContent = fps + ' FPS · 存活 ' + (this.redAlive + this.blueAlive) +
+                this.fpsHud.textContent = fps + ' FPS · 存活 ' + (this.redAlive + this.blueAlive + this.blackAlive) +
                     (this.net?.waiting ? ' · 同步等待' : '');
                 this.fpsHud.title = this.performanceStats?.describe(this.net) || '';
                 this.fpsHud.style.color = fps >= 55 ? '#9cf5a0' : fps >= 30 ? '#ffd24a' : '#ff6b6b';
@@ -734,6 +797,10 @@ export class IsoBattleScene extends Phaser.Scene {
         this._aliveArr = spatial.alive;
         this.redAlive = spatial.redAlive;
         this.blueAlive = spatial.blueAlive;
+        this.blackAlive = spatial.blackAlive || 0;
+        // 测试替身空间索引可能不提供 aliveByTeam，从各队别名兜底，保证三方计数始终可用。
+        this.aliveByTeam = spatial.aliveByTeam
+            || { red: spatial.redAlive || 0, blue: spatial.blueAlive || 0, black: spatial.blackAlive || 0 };
         this.centroid = spatial.centroid;
     }
 
@@ -816,10 +883,10 @@ export class IsoBattleScene extends Phaser.Scene {
         const s = this.groundPoint(unit.gx, unit.gy);
         const isCav = unit.type === 'cavalry';
         const dk = Math.max(0.6, unit.sizeK || 1);
-        const def = typeof MANIFEST !== 'undefined' && MANIFEST.deaths?.[`${unit.team}_${unit.type}`];
+        const def = typeof MANIFEST !== 'undefined' && MANIFEST.deaths?.[`${assetTeam(unit.team)}_${unit.type}`];
         const key = def && def.file.replace('.png', '');
         const clip = key && this.textures.exists(key) ? def : null;
-        const corpseKey = `units/corpse_${unit.team}_${unit.type}`;
+        const corpseKey = `units/corpse_${assetTeam(unit.team)}_${unit.type}`;
         const hasCorpse = !clip && this.textures.exists(corpseKey);
         const spr = unit.spr;
         const flipX = (unit.faceDir || 1) < 0;
@@ -836,7 +903,7 @@ export class IsoBattleScene extends Phaser.Scene {
         this.tweens.killTweensOf(spr);
         this.tweens.killTweensOf(unit.lunge);
         spr.anims.stop();
-        spr.clearTint();
+        if (unit.baseTint != null) spr.setTint(unit.baseTint); else spr.clearTint();
         spr.setAngle(0).setAlpha(1).setFlipX(flipX).setScale(sc);
         if (clip) {
             spr.setTexture(key, 0).setOrigin(clip.anchorX, clip.anchorY).setPosition(s.x, s.y);

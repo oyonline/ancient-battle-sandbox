@@ -3,6 +3,7 @@ import { MANIFEST } from '../manifest.js';
 import { TW, TH, gridToScreen } from './metrics.js';
 import { Terrain } from '../terrain.js';
 import { clamp } from '../units.js';
+import { assetTeam } from '../factions.js';
 import { ANIM_ALIGN_K, CAVALRY_PROFILE_SUFFIX, CAVALRY_FLIPPED, cavalryProfile, cavalryRenderSign, cavalryHeadingFromMotion, footProfile, animAlignProfile, shadowTextureKey } from './sprites.js';
 import { ensureWorkerTextures, ensureMedicTextures, towerCrewOffset } from './camps.js';
 
@@ -138,7 +139,8 @@ export class UnitRenderer {
     unitAnimKey(unit, clip) {
         const profile = unit.type === 'cavalry' ? cavalryProfile(unit.visualDir) : null;
         const direction = profile ? CAVALRY_PROFILE_SUFFIX[profile] : '';
-        return 'assets/units/anim/' + unit.team + '_' + unit.type + direction + '_' + clip;
+        // 黑方复用蓝方帧条（assetTeam），配合基色染色区分敌我。
+        return 'assets/units/anim/' + assetTeam(unit.team) + '_' + unit.type + direction + '_' + clip;
     }
 
     updateDeathVisuals(delta) {
@@ -395,8 +397,10 @@ export class UnitRenderer {
         unit.shadow.setVisible(!crew);
 
         // 受击反馈：轻染红（乘法染色保留像素图案，不再全白填充闪白）
+        // 基色染色（黑方复用蓝方贴图）优先级最低：不反馈时回落阵营基色。
         if (this.scene.simulationTime < unit.flashUntil) unit.spr.setTint(0xff7d6e);
         else if (unit.moraleBoostUntil > this.scene.simulationTime) unit.spr.setTint(0xffe9a9);
+        else if (unit.baseTint != null) unit.spr.setTint(unit.baseTint);
         else unit.spr.clearTint();
 
         // 血条：画进共享 hpGfx（全场景一张，深度压在所有单位之上）。
@@ -407,7 +411,7 @@ export class UnitRenderer {
             const px = x, py = y + unit.footDy;
             this.scene.hpGfx.fillStyle(0x000000, 0.55);
             this.scene.hpGfx.fillRect(px - w / 2 - 1, py + hy, w + 2, 6);
-            this.scene.hpGfx.fillStyle(unit.team === 'red' ? 0xff4444 : 0x3d7be8, 1);
+            this.scene.hpGfx.fillStyle(unit.team === 'red' ? 0xff4444 : unit.team === 'blue' ? 0x3d7be8 : 0x9a9aa8, 1);
             this.scene.hpGfx.fillRect(px - w / 2, py + hy + 1, w * ratio, 4);
         }
         // 颜色和形状一起区分脱离、恢复与返场，所有进度跟随模拟时钟。

@@ -2,10 +2,12 @@
 // 从 game.js IsoBattleScene 抽出（第 0 批后续拆分：convoy）。
 // 车 3 格内只有劫掠方时拉劫持进度，护卫在场冻结/夺回；车不可被攻击。
 // 铁律：不 import Phaser；表现经 scene 钩子（addBattleEvent）。
+import { isHostile, sameSide } from '../factions.js';
 
 export function updateConvoy(scene, dt) {
         const c = scene.convoy;
-        if (scene.blueAlive > 0) c.lastFoeAt = scene.simulationTime;   // 敌人存活时刻：全灭后等车队进站的窗口计时
+        const foesAlive = scene.hostileAlive ? scene.hostileAlive(c.team) : scene.blueAlive;
+        if (foesAlive > 0) c.lastFoeAt = scene.simulationTime;   // 敌人存活时刻：全灭后等车队进站的窗口计时
         // 劫持拔河：车 3 格内只有劫掠方(蓝)时拉劫持进度，拉满车被劫走；
         // 护卫(红)在场则冻结，独占时较快夺回，双方都不在缓慢回落。
         // 圈 3.0 > 护卫集结偏移 2.6：站桩护航的护卫明确算"在场冻结"，
@@ -25,7 +27,8 @@ export function updateConvoy(scene, dt) {
             scene.forEachNear(wagon.gx, wagon.gy, 3, u => {
                 if (u === wagon || u.type === 'wagon' || u.dead || u.withdrawn || u.moraleState === 'routing') return;
                 if (Math.hypot(u.gx - wagon.gx, u.gy - wagon.gy) > 3) return;
-                if (u.team === wagon.team) reds++; else blues++;
+                if (sameSide(scene, u.team, wagon.team)) reds++;
+                else if (isHostile(scene, u.team, wagon.team)) blues++;
             });
             const HIJACK_SECONDS = 6;
             const pull = Math.min(2, Math.sqrt(blues));

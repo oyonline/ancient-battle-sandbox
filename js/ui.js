@@ -11,6 +11,7 @@ import { NetBattle } from './net/lockstep.js';
 import { CampControls } from './camp-controls.js';
 import { traitOf } from './battle/site-traits.js';
 import { flagSiteSignature, traitSiteRow } from './render/overlay.js';
+import { ownsFlag, ownerDisplayCss } from './factions.js';
 
 function textIfChanged(element, value) {
     if (element && element.textContent !== String(value)) element.textContent = String(value);
@@ -521,7 +522,7 @@ export const UI = {
         if (this.phase !== 'battle' || this.countdown || !this.scene?.territory || this.scene.battleOver) return '等待开战';
         const mine = this.mySide || 'red';
         const { recruit, econ } = this.scene.territory;
-        if (type === 'cavalry' && !(this.scene.flags || []).some(f => f.role === 'ranch' && f.owner === mine)) return '需先占马场';
+        if (type === 'cavalry' && !(this.scene.flags || []).some(f => f.role === 'ranch' && ownsFlag(this.scene, mine, f))) return '需先占马场';
         const pending = this.pendingRecruitOrders();
         if (recruit.queues[mine].length + pending.length >= TERRITORY.QUEUE_CAP) return '训练队列已满';
         const reserved = pending.reduce((sum, item) => sum + UNIT_TYPES[item.type].cost * TERRITORY.COST_MULT, 0);
@@ -583,7 +584,11 @@ export const UI = {
         const territory = this.scene.territory;
         const mine = this.mySide || 'red';
         const owned = { red: 0, blue: 0 };
-        for (const flag of this.scene.flags || []) if (flag.owner) owned[flag.owner]++;
+        // 归属按同盟共享：红蓝联军下盟友占下的据点同时计入双方（既有二元模式结果不变）。
+        for (const flag of this.scene.flags || []) {
+            if (ownsFlag(this.scene, 'red', flag)) owned.red++;
+            if (ownsFlag(this.scene, 'blue', flag)) owned.blue++;
+        }
         const readouts = {
             'territory-treasury': Math.floor(territory.econ.treasury[mine]),
             'territory-income': '+' + territory.econ.incomeRate(owned[mine]) + '/秒',
@@ -665,7 +670,7 @@ export const UI = {
         const mine = this.mySide || 'red';
         const seen = this._seenTerritoryTips;
         const target = battalion.orderFlag != null ? flags[battalion.orderFlag] : null;
-        const flag = target?.role ? target : flags.find(candidate => candidate.owner === mine && candidate.contested);
+        const flag = target?.role ? target : flags.find(candidate => ownsFlag(this.scene, mine, candidate) && candidate.contested);
         if (!flag?.role || seen?.has(flag.role)) return false;
         return this.showTerritoryTip(flag.role);
     },
@@ -782,7 +787,7 @@ export const UI = {
             label.className = 'of-text';    // 折行样式在 css/style.css 的 #battalion-flags 规则里
             btn.appendChild(dot);
             btn.appendChild(label);
-            const info = traitSiteRow(flag);
+            const info = traitSiteRow(this.scene, flag);
             textIfChanged(label, info.text);
             btn.title = info.title;
             btn.siteSig = info.sig;                 // 归属/角色没变就不再动 DOM
@@ -1110,13 +1115,13 @@ export const UI = {
                 const flag = flags[Number(btn.dataset.flagOrder)];
                 const sig = flagSiteSignature(flag);
                 if (btn.siteSig !== sig) {                    // 只在归属/角色变化时改文字
-                    const info = traitSiteRow(flag);
+                    const info = traitSiteRow(this.scene, flag);
                     btn.siteSig = sig;
                     textIfChanged(btn.querySelector('.of-text'), info.text);
                     btn.title = info.title;
                 }
                 const dot = btn.querySelector('.ob-dot');
-                const ownerColor = flag?.owner === 'red' ? '#ff5b5b' : flag?.owner === 'blue' ? '#57a0ff' : '#d8d2c0';
+                const ownerColor = flag?.owner == null ? '#d8d2c0' : (ownerDisplayCss(this.scene, flag.owner) || '#d8d2c0');
                 if (dot) dot.style.background = ownerColor;
                 btn.classList.toggle('active', own && selected.orderFlag === Number(btn.dataset.flagOrder));
             } else if (btn.dataset.orderHome !== undefined) {
@@ -1218,6 +1223,7 @@ export const UI = {
             button.onclick = () => { this.openNetLobby(); Snd.play('tick'); };
         });
         document.getElementById('btn-net-create').onclick = () => this.netCreate();
+        document.getElementById('btn-net-coop').onclick = () => this.netCreateCoop();
         document.getElementById('btn-net-join').onclick = () => this.netJoin();
         document.getElementById('btn-net-ready').onclick = () => this.netReady();
         document.getElementById('btn-net-quit').onclick = () => this.netQuit();

@@ -9,6 +9,7 @@ import { UNIT_TYPES, FORMATIONS, BUDGET } from './units.js';
 
 import { Snd } from './snd.js';
 import { UI_TACTIC_OPTIONS, UI_CAVALRY_OPTIONS, PRESETS } from './ui.js';
+import { ownerDisplayCss } from './factions.js';
 
 export const lobbyMethods = {
     // ---------------- 局域网对战：房间流程 ----------------
@@ -66,7 +67,12 @@ export const lobbyMethods = {
     },
 
     netCreate() {
-        this.netRequest(() => this.net.client.createRoom(), '正在创建房间');
+        this.netRequest(() => this.net.client.createRoom('territory'), '正在创建房间');
+    },
+
+    // 合作模式建房：房主以 coop 规则创建，加入方由服务器透传同一规则。
+    netCreateCoop() {
+        this.netRequest(() => this.net.client.createRoom('coop'), '正在创建合作房间');
     },
 
     netJoin() {
@@ -100,6 +106,7 @@ export const lobbyMethods = {
             case 'room':
                 this.net.side = message.side;
                 this.net.code = message.code;
+                this.net.mode = message.mode || 'territory';   // 玩法由房主创建时决定，服务器透传
                 this.net.myReady = this.net.peerReady = false;
                 document.getElementById('net-join-step').hidden = true;
                 document.getElementById('net-lobby').hidden = false;
@@ -157,8 +164,12 @@ export const lobbyMethods = {
         this.battleOptions.terrain = 'territory';
         this.battleOptions.net = true;
         this.battleOptions.mySide = this.mySide;
+        // 合作模式：红蓝联军（两名真人）对黑方 AI——黑方为纯 AI 不占网络座位，两端各自确定性演算。
+        const coop = this.net.mode === 'coop';
+        this.battleOptions.coop = coop;
+        if (coop) this.battleOptions.black = { ...TERRITORY.OPENING, infantry: 18, pikeman: 8, archer: 10, cavalry: 3, worker: 3 };
         this.net.inBattle = true;
-        this.rememberMode('🌐 局域网对战', 'net');
+        this.rememberMode(coop ? '🤝 合作模式（红蓝联军打黑方）' : '🌐 局域网对战', 'net');
         if (!this.scene) { this.pendingNetStart = true; return; }
         this.scene.netClient = { send: packet => this.net.client.send(packet) };
         this.deployArmies();
@@ -247,7 +258,7 @@ export const lobbyMethods = {
             for (const flag of makeTerritoryFlags()) {
                 ctx.beginPath();
                 ctx.arc(flag.gx * sx, flag.gy * sy, 4.6, 0, Math.PI * 2);
-                ctx.fillStyle = flag.owner === 'red' ? '#ff5b5b' : flag.owner === 'blue' ? '#57a0ff' : '#ece6d4';
+                ctx.fillStyle = flag.owner == null ? '#ece6d4' : (ownerDisplayCss(this.scene, flag.owner) || '#ece6d4');
                 ctx.fill();
                 ctx.lineWidth = 1.4;
                 ctx.strokeStyle = 'rgba(20,20,20,0.8)';
@@ -585,13 +596,15 @@ export const lobbyMethods = {
         const territory = this.battleOptions.territory === true;
         const net = this.battleOptions.net === true;
         const mySide = this.battleOptions.mySide || 'red';
+        const coop = this.battleOptions.coop === true;      // 合作模式：红蓝联军对黑方 AI
+        const black = this.battleOptions.black || null;
         const reserves = Object.fromEntries(['red', 'blue'].map(team => [team,
             Math.min(this.battleOptions.reserves[team] || 0, Math.max(0, (this.configs[team].infantry || 0) - 1))]));
         const terrain = ['sandbox', 'terrain'].includes(this.mode) ? Terrain.normalize(this.battleOptions.terrain)
             : this.mode === 'territory' ? 'territory' : 'flat';
         const cavalryOrders = Object.fromEntries(['red', 'blue'].map(team => [team,
             ['sandbox', 'terrain'].includes(this.mode) ? this.cavalryOrder(team) : 'auto']));
-        this.battleOptions = { deathmatch, control, convoy, territory, net, mySide, reserves, terrain, cavalryOrders };
+        this.battleOptions = { deathmatch, control, convoy, territory, net, mySide, coop, black, reserves, terrain, cavalryOrders };
         this.scene?.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue,
             { ...this.orders }, { ...this.battleOptions, reserves: { ...reserves }, cavalryOrders: { ...cavalryOrders } });
         this.setPhase('ready');
@@ -695,13 +708,18 @@ export const lobbyMethods = {
         const wonChallenge = this.mode === 'challenge' && winner === 'red';
         if (wonChallenge) this.saveWin();
         document.getElementById('result-eyebrow').textContent = this.challenge ? this.challenge.title + ' · 本局战报'
+            : this.battleOptions.coop ? '🤝 合作模式（红蓝联军）· 本局战报'
             : this.battleOptions.territory ? '领土征服 · 本局战报'
             : (report.deathmatch ? '预备队死斗' : this.mode === 'terrain' ? '地形演练' : this.mode === 'tactics' ? '战阵演练' : '自由对战') + ' · 本局战报';
         const title = document.getElementById('result-title');
         title.className = 'result-title ' + winner;
-        title.textContent = winner === 'draw' ? '势均力敌 · 平局' : this.challenge ? (wonChallenge ? '挑战成功！' : '再试一种解法') : (winner === 'red' ? '🔴 红方胜利！' : '🔵 蓝方胜利！');
+        title.textContent = winner === 'draw' ? '势均力敌 · 平局' : this.challenge ? (wonChallenge ? '挑战成功！' : '再试一种解法')
+            : this.battleOptions.coop ? (winner === 'red' ? '🤝 红蓝联军胜利！' : '⚫ 黑方获胜 · 再战一局')
+            : (winner === 'red' ? '🔴 红方胜利！' : '🔵 蓝方胜利！');
         document.getElementById('phase-hint').textContent = '读一读战报，准备下一次出击';
-        const endReason = report.deathmatch && winner !== 'draw'
+        const endReason = report.endReason === 'coop-win' ? '黑方全军覆没且营寨尽毁，联军达成歼灭目标。 '
+            : report.endReason === 'coop-loss' ? '红蓝联军双双溃败，未能拔除黑方营寨。 '
+            : report.deathmatch && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '已全灭，死斗结束。 '
             : report.endReason === 'control' ? (winner === 'red' ? '红方' : '蓝方') + '掌控旗帜积分达标，占点获胜。 '
             : report.endReason === 'tickets' ? (winner === 'red' ? '红方' : '蓝方') + '掌控多数领土，对方票数耗尽，领土征服获胜。 '

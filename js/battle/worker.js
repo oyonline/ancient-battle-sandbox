@@ -12,6 +12,7 @@
 
 import { CombatRules } from '../combat.js';
 import { quantizeDecision as q, DECISION_QUANTUM } from './determinism.js';
+import { isHostile } from '../factions.js';
 
 export const WORKER_RULES = {
     // 交战回滞：出手在 95ms 后结算，加一点余量保证"最后一击"落账期间施工仍是停的。
@@ -33,7 +34,7 @@ export function workerMeleeTarget(scene, unit) {
     const queryReach = reach + WORKER_RULES.STRIKE_TOLERANCE;
     let best = null, bestD = Infinity;
     scene.forEachNear(unit.gx, unit.gy, queryReach, other => {
-        if (other === unit || other.team === unit.team) return;
+        if (other === unit || !isHostile(scene, unit.team, other.team)) return;
         if (other.dead || other.withdrawn || other.hp <= 0 || other.isBuilding) return;
         if (other.type === 'wagon' || other.moraleState === 'routing') return;
         const distance = q(Math.hypot(other.gx - unit.gx, other.gy - unit.gy));

@@ -11,6 +11,7 @@
 // 确定性：本模块无随机数；距离阈值比较先量化（见 docs/DETERMINISM.md）。
 
 import { quantizeDecision as q } from './determinism.js';
+import { TEAMS, sameSide } from '../factions.js';
 
 // 地形本身的默认浅滩系数（渡口奖励未生效时的基准，与 terrain.js 一致）。
 export const DEFAULT_SHALLOW_SPEED = 0.7;
@@ -87,7 +88,7 @@ export class SiteTraitState {
         this.scene = scene;
         this.signature = null;
         this.flagCount = -1;
-        this.roles = { red: {}, blue: {} };
+        this.roles = { red: {}, blue: {}, black: {} };
         this.index = {};
         this.revision = 0;
     }
@@ -97,13 +98,14 @@ export class SiteTraitState {
         let signature = 0;
         for (let i = 0; i < flags.length; i++) {
             const owner = flags[i].owner;
-            signature = signature * 3 + (owner === 'red' ? 1 : owner === 'blue' ? 2 : 0);
+            // 四进制编码（0 中立 / 1 红 / 2 蓝 / 3 黑），三方归属都能进签名。
+            signature = signature * 4 + (owner === 'red' ? 1 : owner === 'blue' ? 2 : owner === 'black' ? 3 : 0);
         }
         if (signature === this.signature && flags.length === this.flagCount) return false;
         this.signature = signature;
         this.flagCount = flags.length;
         this.revision++;
-        this.roles = { red: {}, blue: {} };
+        this.roles = { red: {}, blue: {}, black: {} };
         this.index = {};
         for (let i = 0; i < flags.length; i++) {
             const flag = flags[i];
@@ -113,7 +115,15 @@ export class SiteTraitState {
         return true;
     }
 
-    owns(team, role) { return this.roles[team]?.[role] === true; }
+    // 是否拥有某类据点：盟友共享（合作模式下红蓝任一持有即算双方拥有）。
+    // 二元模式下 sameSide 只在同队成立，结果与旧实现逐位一致。
+    owns(team, role) {
+        if (this.roles[team]?.[role] === true) return true;
+        for (const other of TEAMS) {
+            if (other !== team && sameSide(this.scene, team, other) && this.roles[other]?.[role] === true) return true;
+        }
+        return false;
+    }
 
     // 角色是地图静态数据；若被就地改写（测试或未来模式），索引会自愈而不是读陈旧值。
     roleIndex(role) {
@@ -130,7 +140,9 @@ export class SiteTraitState {
     invalidate() { this.signature = null; this.flagCount = -1; this.hillRef = null; }
     ownsRoleCount(team, role) {
         let count = 0;
-        for (const flag of this.scene?.flags ?? []) if (flag.role === role && flag.owner === team) count++;
+        for (const flag of this.scene?.flags ?? []) {
+            if (flag.role === role && flag.owner != null && sameSide(this.scene, team, flag.owner)) count++;
+        }
         return count;
     }
 }
@@ -158,7 +170,7 @@ export function siteFlag(scene, siteId) {
 // 局部效果：仅当该据点"当前归属 team"且角色匹配时返回特色表，否则 null。
 export function localTrait(scene, team, siteId) {
     const flag = siteFlag(scene, siteId);
-    if (!flag || flag.owner !== team) return null;
+    if (!flag || flag.owner == null || !sameSide(scene, team, flag.owner)) return null;
     return SITE_TRAITS[flag.role] ?? null;
 }
 
@@ -207,7 +219,7 @@ export function moraleLossScale(scene, unit) {
     const trait = SITE_TRAITS.hill;
     const flag = hillFlag(scene);
     if (!flag) return 1;
-    if (flag.owner !== unit.team) return 1;
+    if (flag.owner == null || !sameSide(scene, unit.team, flag.owner)) return 1;
     if (!unit.battalion?.orderPoint) return 1;
     if (q(Math.hypot(flag.gx - unit.gx, flag.gy - unit.gy)) > trait.radius) return 1;
     return trait.moraleLoss;
