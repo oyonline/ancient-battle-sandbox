@@ -177,7 +177,7 @@ test('民夫自卫参数与营寨跳过战斗的旧分支已打通：真实出�
     assert.equal(UNIT_TYPES.worker.range, 0.9);
     assert.equal(UNIT_TYPES.worker.hp, 45);
     assert.equal(UNIT_TYPES.worker.def, 0);
-    assert.equal(UNIT_TYPES.worker.speed, 2.4);
+    assert.equal(UNIT_TYPES.worker.speed, 1.8);
     assert.equal(UNIT_TYPES.worker.cost, 3);
 
     const scene = workerScene();

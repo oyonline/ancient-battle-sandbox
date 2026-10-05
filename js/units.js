@@ -12,6 +12,11 @@ export const UNIT_TYPES = {
         hp: 100, atk: 16, def: 10, speed: 2.2, atkSpeed: 1000, range: 0.95,
         scale: 1.0, tip: '均衡耐用，人数就是正义'
     },
+    axe: {
+        name: '斧兵', icon: '🪓', cost: 7, maxCount: 120,
+        hp: 60, atk: 28, def: 2, speed: 1.8, atkSpeed: 1600, range: 0.95,
+        towerAttack: 2, scale: 1.0, tip: '高伤低血，挥斧较慢；攻击箭塔翻倍，需要前排掩护'
+    },
     pikeman: {
         name: '长枪兵', icon: '🔱', cost: 6, maxCount: 150,
         hp: 80, atk: 18, def: 8, speed: 1.6, atkSpeed: 2400, range: 1.35,
@@ -31,7 +36,7 @@ export const UNIT_TYPES = {
     // 施工与自卫互斥（交战中不涨进度），所以廉价民夫替代不了同规模剑士。
     worker: {
         name: '民夫', icon: '🔨', cost: 3, maxCount: 12, hidden: true, territoryOnly: true,
-        hp: 45, atk: 12, def: 0, speed: 2.4, atkSpeed: 1400, range: 0.9,
+        hp: 45, atk: 12, def: 0, speed: 1.8, atkSpeed: 1400, range: 0.9,
         scale: 1.0, tip: '建设营寨和箭塔；敌军贴近时会自卫还手，但仍需部队保护'
     },
     // 医师（领土征服医疗兵种）：无攻击，战场光环缓慢急救身边伤兵；
@@ -51,11 +56,11 @@ export const UNIT_TYPES = {
 
 // ==================== 阵型定义（rows: 前排→后排的兵种优先级） ====================
 export const FORMATIONS = {
-    custom:  { name: '自由队形', rows: ['infantry', 'pikeman', 'archer', 'cavalry'] },
-    square:  { name: '方阵',   rows: ['infantry', 'cavalry', 'pikeman', 'archer'] },
-    wedge:   { name: '锋矢阵', rows: ['cavalry', 'infantry', 'pikeman', 'archer'] },
-    mixed:   { name: '混合阵', rows: ['infantry', 'cavalry', 'archer', 'pikeman'] },
-    line:    { name: '长蛇阵', rows: ['infantry', 'pikeman', 'cavalry', 'archer'] }
+    custom:  { name: '自由队形', rows: ['infantry', 'axe', 'pikeman', 'archer', 'cavalry'] },
+    square:  { name: '方阵',   rows: ['infantry', 'axe', 'cavalry', 'pikeman', 'archer'] },
+    wedge:   { name: '锋矢阵', rows: ['cavalry', 'infantry', 'axe', 'pikeman', 'archer'] },
+    mixed:   { name: '混合阵', rows: ['infantry', 'axe', 'cavalry', 'archer', 'pikeman'] },
+    line:    { name: '长蛇阵', rows: ['infantry', 'axe', 'pikeman', 'cavalry', 'archer'] }
 };
 
 // 千人军团预算：满配 500 人约 3200 金
@@ -68,7 +73,7 @@ export const BUDGET = 4000;
 // 两翼放骑兵/长枪；本排兵种耗尽时列内自动替补，保证每行尽量放满不空转。
 export function generateArmyPositions(team, config, formationKey) {
     const formation = FORMATIONS[formationKey] || FORMATIONS.custom;
-    const remaining = Object.fromEntries(['infantry', 'pikeman', 'archer', 'cavalry'].map(type => [type, config[type] ?? 0]));
+    const remaining = Object.fromEntries(['infantry', 'axe', 'pikeman', 'archer', 'cavalry'].map(type => [type, config[type] ?? 0]));
     const positions = [];
 
     const total = Object.values(remaining).reduce((a, b) => a + b, 0);
@@ -864,7 +869,7 @@ export function knockback(target, from, amount) {
 // 所有攻击都先由原始攻击力结算一次倍率、一次护甲；applyDamage 只接收最终伤害。
 export function calculateAttackDamage(from, target, { multiplier = 1, rawAttack = from.typeData.atk } = {}) {
     const counter = from.type === 'pikeman' && target.type === 'cavalry' ? UNIT_TYPES.pikeman.antiCav : 1;
-    return Math.max(1, Math.floor(rawAttack * multiplier * counter - target.typeData.def));
+    return Math.max(1, Math.floor(rawAttack * multiplier * counter * (target.isBuilding && target.type === 'tower' ? from.typeData.towerAttack ?? 1 : 1) - target.typeData.def));
 }
 
 export function resolveAttack(target, from, options = {}) {

@@ -38,7 +38,7 @@ export function assetPrefix(team) { return FACTIONS[team]?.asset ?? team; }
 export function assetTeam(team) { return team === 'black' ? 'blue' : team; }
 
 // 阵营基色染色（null = 不染色，直接用原图）——黑方靠它在共享贴图上区分敌我。
-export function teamTint(team) { return team === 'black' ? 0x555566 : null; }
+export function teamTint(team) { return team === 'black' ? 0xb9b4a0 : null; }
 
 // 关系表解析缓存：同一分组数组只解析一次（WeakMap 以数组身份为键）。
 const GROUP_CACHE = new WeakMap();

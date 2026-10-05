@@ -21,22 +21,39 @@ test('every real UI preset fits every challenge budget without changing its save
         for (const budget of [0, ...CHALLENGES.map(challenge => challenge.budget), 4000]) {
             const fitted = fitArmyToBudget(preset.config, budget);
             assertLegalArmy(fitted, budget);
-            if (armyCost(preset.config) <= budget) assert.deepEqual(snapshot(fitted), original);
+            if (armyCost(preset.config) <= budget) {
+                const normalized = Object.fromEntries(Object.entries(UNIT_TYPES).filter(([, type]) => !type.hidden)
+                    .map(([key]) => [key, original[key] ?? 0]));
+                assert.deepEqual(snapshot(fitted), normalized);
+                assert.equal(armyCost(fitted), armyCost(original));
+            }
         }
         assert.deepEqual(snapshot(preset.config), original);
     }
 });
 
 test('budget fitting enforces unit caps and normalizes fractional, negative, or invalid counts', () => {
-    const capped = fitArmyToBudget({ infantry: 99999, pikeman: 99999, archer: 99999, cavalry: 99999 }, 100000);
+    const everyType = Object.fromEntries(Object.entries(UNIT_TYPES).filter(([, type]) => !type.hidden).map(([key]) => [key, 99999]));
+    const capped = fitArmyToBudget(everyType, 100000);
     for (const [type, data] of Object.entries(UNIT_TYPES)) {
         if (data.hidden) continue;   // 辎重车等系统单位不进入军队配置
         assert.equal(capped[type], data.maxCount);
     }
     assert.deepEqual(snapshot(fitArmyToBudget({ infantry: 9.8, pikeman: -1, archer: Infinity, cavalry: NaN }, 100)), {
-        infantry: 9, pikeman: 0, archer: 0, cavalry: 0
+        infantry: 9, axe: 0, pikeman: 0, archer: 0, cavalry: 0
     });
     assertLegalArmy(fitArmyToBudget(capped, 300), 300);
+});
+
+test('budget fitting preserves legacy composition and includes axes only when requested', () => {
+    const legacy = { infantry: 400, pikeman: 150, archer: 200, cavalry: 150 };
+    const unchanged = fitArmyToBudget(legacy, 100000);
+    assert.equal(unchanged.axe, 0, '旧四兵种不能凭空产生斧兵');
+    for (const [key, count] of Object.entries(legacy)) assert.equal(unchanged[key], count);
+    assert.equal(armyCost(unchanged), armyCost(legacy));
+    const mixed = fitArmyToBudget({ infantry: 20, axe: 20 }, 100);
+    assert.ok(mixed.infantry > 0 && mixed.axe > 0);
+    assertLegalArmy(mixed, 100);
 });
 
 test('challenge identities and fixed enemy armies are valid', () => {

@@ -345,7 +345,7 @@ export class MoraleSystem {
             result.unit.moraleState = result.state;
             result.unit.moraleReason = result.reason;
             if (result.state !== 'wavering') result.unit.moraleFallBackUntil = 0;
-            else if (result.value < 38 && result.physicalImpact && ['infantry', 'pikeman'].includes(result.unit.type) &&
+            else if (result.value < 38 && result.physicalImpact && ['infantry', 'axe', 'pikeman'].includes(result.unit.type) &&
                 this.now >= result.unit.nextMoraleFallBackAt) {
                 result.unit.moraleFallBackUntil = this.now + 900;
                 result.unit.nextMoraleFallBackAt = this.now + 5000;

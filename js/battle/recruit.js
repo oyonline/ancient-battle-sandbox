@@ -60,10 +60,10 @@ export class RecruitSystem {
 // 每 AI_INTERVAL_MS 决策一次：按"在场+队列"计数找缺口最大的兵种，
 // 买得起就补一个；买不起就攒钱（不降级乱买）。
 export class TerritoryAI {
-    static MIX = { infantry: 0.45, pikeman: 0.2, archer: 0.25, cavalry: 0.1, medic: 0.05 };
+    static MIX = { infantry: 0.35, axe: 0.10, pikeman: 0.2, archer: 0.25, cavalry: 0.1, medic: 0.05 };
     // 反骑兵阵：敌方骑兵占比高时的自适应配比（枪墙是唯一硬克星，见 units.js 反骑加成）。
-    static ANTI_CAV_MIX = { infantry: 0.35, pikeman: 0.45, archer: 0.15, cavalry: 0.0, medic: 0.05 };
-    static ORDER = ['infantry', 'archer', 'pikeman', 'cavalry', 'medic'];   // 缺口并列时的固定决胜序
+    static ANTI_CAV_MIX = { infantry: 0.30, axe: 0.05, pikeman: 0.45, archer: 0.15, cavalry: 0.0, medic: 0.05 };
+    static ORDER = ['infantry', 'axe', 'archer', 'pikeman', 'cavalry', 'medic'];   // 缺口并列时的固定决胜序
 
     constructor(scene, team) {
         this.scene = scene;
@@ -99,8 +99,13 @@ export class TerritoryAI {
         // 缺口按配比 × 兵力基数计算。基数下限 24：战损后 army 缩水时不停止采购
         // （否则缺口恒小于 1，军费堆到几千也不补兵——平衡探针实测的囤钱问题）。
         const base = Math.max(total, 24);
+        // New siege troops must not displace medical replenishment. Pending medics
+        // satisfy this gate too, so the next purchase can return to axes immediately.
+        const medics = (counts.medic || 0) + recruit.queues[this.team].filter(item => item.type === 'medic').length;
+        const needsMedic = medics < UNIT_TYPES.medic.maxCount && mix.medic * base - medics >= 1;
         let best = null, bestDeficit = 0;
         for (const type of TerritoryAI.ORDER) {
+            if (type === 'axe' && needsMedic) continue;
             // 兵种已到上限（在场+队列）时不再产生缺口：否则每拍都挑中它、
             // enqueue 拒绝且不试次选，其余兵种被永久饿死（医师 8 人上限即触发）。
             if ((counts[type] || 0) >= UNIT_TYPES[type].maxCount) continue;

@@ -214,6 +214,8 @@ test('医师无攻击不占旗；征兵 AI 按配比买医师；营寨 AI 建设
     s.territory.econ.treasury.red = 1000;
     const ai = new TerritoryAI(s, 'red'); ai.update(0);
     assert.equal(s.territory.recruit.queues.red[0].type, 'medic');
+    ai.update(1200);
+    assert.equal(s.territory.recruit.queues.red[1].type, 'axe', '医师已在训练后恢复补充斧兵，不重复阻塞新增兵种');
     // 营寨 AI：营寨+箭塔完工后，空闲民夫接着建医帐
     c.createBuilding('red', 'camp', 0, true);
     c.createBuilding('red', 'tower', 0, true);

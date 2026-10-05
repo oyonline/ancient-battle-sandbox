@@ -38,7 +38,8 @@ export const LOCKSTEP = {
 // 2026-10-04 coop-black：引入第三阵营「黑方」与红蓝同盟（合作模式）——敌我判定
 // 改走关系表、旗帜拉锯按同盟组合并、投影新增 K 阵营编码与经济/票数/征兵/池黑方分量。
 // 即使既有两方对局行为逐位不变，模拟语义与投影结构已扩展，混版本必须拒绝。
-export const SIM_VERSION = '2026-10-04-coop-black';
+// Free tower coordinates/IDs, axe combat and tower balance change simulation state.
+export const SIM_VERSION = '2026-10-05-free-towers-axe';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {

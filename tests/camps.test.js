@@ -103,13 +103,12 @@ test('开局营寨与箭塔成对预建，空塔从不自行射击', () => {
     assert.equal(camps.winner(), null);
 });
 
-test('施工：先扣军费，到位才推进，营寨完成后才能建塔；重复与越权均拒绝', () => {
+test('施工：先扣军费，到位才推进；营寨与塔重复和越权均拒绝', () => {
     const s = fixture(), c = s.territory.camps, w = add(s, 'red', 'worker', 45, 63.5);
     s.territory.econ.treasury.red = 1000;
     assert.equal(c.requestBuild('blue', w.id, 'camp', 1), false);
     assert.equal(c.requestBuild('red', w.id, 'camp', 2), false);
     assert.equal(c.requestBuild('red', w.id, 'camp', 'home'), false);
-    assert.equal(c.requestBuild('red', w.id, 'tower', 0), false);
     assert.equal(c.requestBuild('red', w.id, 'constructor', 0), false);
     s.territory.econ.treasury.red = CAMP_RULES.camp.cost - 0.01;
     assert.equal(c.requestBuild('red', w.id, 'camp', 0), false, '不足造价时不透支军费');
@@ -197,7 +196,7 @@ test('出塔与毁塔：驻军回到可行走地面，民夫与驻军不占旗',
     a.gx = tower.gx; a.gy = tower.gy;
     c.orderGarrison('red', [a.id], tower.id); run(s, 0.1);
     const enemy = add(s, 'blue', 'infantry', 9, 86);
-    assert.equal(applyDamage(tower, 9999, enemy), 650);
+    assert.equal(applyDamage(tower, 9999, enemy), 1200);
     assert.equal(tower.dead, true);
     assert.equal(a.garrisonTowerId, null);
     assert.equal(a.garrisonHeight, 0);
@@ -205,7 +204,7 @@ test('出塔与毁塔：驻军回到可行走地面，民夫与驻军不占旗',
     assert.equal(w.hp, UNIT_TYPES.worker.hp);
 });
 
-test('攻寨指令：真实行军和延迟出手，敌军贴身时交回自卫，普通令可取消', () => {
+test('攻寨指令：真实行军和延迟出手，显式令保持目标，取消后自动攻寨交回自卫', () => {
     const s = fixture(), c = s.territory.camps, b = c.getBuilding('camp:blue:home');
     const u = add(s, 'red', 'infantry', b.gx - 7, b.gy);
     assert.equal(c.orderAttackBuilding('blue', [u.id], b.id), false);
@@ -216,10 +215,12 @@ test('攻寨指令：真实行军和延迟出手，敌军贴身时交回自卫�
     run(s, 2);
     assert.ok(b.hp < CAMP_RULES.HOME_HP);
     const foe = add(s, 'blue', 'infantry', u.gx + 0.8, u.gy);
-    assert.equal(c.updateUnit(u, s.simulationTime, 1 / 60), false, '贴身敌人可截击攻寨部队');
-    foe.dead = true;
+    assert.equal(c.updateUnit(u, s.simulationTime, 1 / 60), true, '显式目标不被近敌自动覆盖');
+    assert.equal(u.target, b);
     c.cancelUnitOrders('red', [u.id]);
     assert.equal(u.orderBuildingId, null);
+    assert.equal(c.updateUnit(u, s.simulationTime, 1 / 60), false, '解除显式令后近敌使自动攻寨交回自卫');
+    foe.dead = true;
 });
 
 test('大本营胜负与双毁平局；建筑不接受友军或旧战场的伤害', () => {
@@ -261,7 +262,7 @@ test('镜像：两方施工进度、扣费、民夫行军与入塔决定相同',
     assert.equal(r.gy, b.gy);
     assert.equal(c.getBuilding('camp:red:0').progress, c.getBuilding('camp:blue:1').progress);
     assert.equal(s.territory.econ.treasury.red, s.territory.econ.treasury.blue);
-    assert.deepEqual(c.buildInfo('tower'), { cost: 120, buildMs: 14000, maxHp: 650, capacity: 4 });
+    assert.deepEqual(c.buildInfo('tower'), { cost: 120, buildMs: 14000, maxHp: 1200, capacity: 4 });
 });
 
 test('低收入 AI 留出建寨军费，不会被持续征兵花费饿死', () => {

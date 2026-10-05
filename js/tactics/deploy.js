@@ -54,7 +54,7 @@ export const DeployMethods = {
         // 只占己方高地；平地和敌方高地仍守己方出发区，不跨场抢占敌人的山顶。
         const cx = hill?.cx ?? (team === 'red' ? 20 : 50), cy = hill?.cy ?? board.H / 2;
         const f = this.forward(team);
-        const front = members.filter(unit => unit.type === 'pikeman').concat(members.filter(unit => unit.type === 'infantry'));
+        const front = members.filter(unit => unit.type === 'pikeman').concat(members.filter(unit => unit.type === 'infantry' || unit.type === 'axe'));
         const archers = members.filter(unit => unit.type === 'archer');
         const cavalry = members.filter(unit => unit.type === 'cavalry');
         const placements = [];
@@ -94,7 +94,7 @@ export const DeployMethods = {
 
     deployPassGuards(team, members, layout) {
         const terrain = this.scene.battleOptions.terrain, f = this.forward(team), spacing = 0.86;
-        const front = members.filter(u => u.type === 'pikeman').concat(members.filter(u => u.type === 'infantry'));
+        const front = members.filter(u => u.type === 'pikeman').concat(members.filter(u => u.type === 'infantry' || u.type === 'axe'));
         const archers = members.filter(u => u.type === 'archer'), cavalry = members.filter(u => u.type === 'cavalry');
         const assigned = new Set(members), occupied = new Map();
         const remember = unit => {

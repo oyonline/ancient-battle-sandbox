@@ -2,7 +2,7 @@
 import { board } from '../board.js';
 import { Terrain } from '../terrain.js';
 import { CombatRules } from '../combat.js';
-import { moveToward } from '../units.js';
+import { moveToward, calculateAttackDamage } from '../units.js';
 import { quantizeDecision as q } from './determinism.js';
 import { HEALING_RULES } from './healing.js';
 import { updateWorkerCombat, workerConstructionPaused } from './worker.js';
@@ -11,9 +11,9 @@ import { RELATIONS_MUTUAL, activeTeams, isHostile, sameSide, canonicalOf, teamNa
 
 export const CAMP_RULES = {
     camp: { cost: 160, seconds: 18, hp: 850, def: 10, radius: 2.2 },
-    tower: { cost: 120, seconds: 14, hp: 650, def: 6, radius: 0.9 },
+    tower: { cost: 120, seconds: 14, hp: 1200, def: 6, radius: 0.9 },
     tent: { cost: 140, seconds: 15, hp: 550, def: 4, radius: 1.5 },   // 医帐：据点疗伤提速扩容
-    HOME_HP: 1800, CAPACITY: 4, TOWER_RANGE: 14, GARRISON_HEIGHT_PX: 82,
+    HOME_HP: 1800, FIELD_TOWER_CAP: 8, ENEMY_HOME_CLEARANCE: 12, TOWER_ATTACK: 1.20, CAPACITY: 4, TOWER_RANGE: 14, GARRISON_HEIGHT_PX: 82,
     TENT_GARRISON_HEIGHT_PX: 14,   // 医帐无高台：驻帐医师站在帐篷门口地面，不上 82px 平台
     BUILD_REACH: 1.6, ENTER_REACH: 1.15, AI_INTERVAL_MS: 1800
 };
@@ -43,6 +43,7 @@ export class CampSystem {
         this.scene = scene;
         this.buildings = [];
         this.nextThink = 0;
+        this.nextBuildingSeq = 1;
         this.byId = new Map();
         this.grid = new Map();
         this.unitsById = new Map();
@@ -70,7 +71,7 @@ export class CampSystem {
     }
     projection() {
         return {
-            nextThink: this.nextThink,
+            nextThink: this.nextThink, nextBuildingSeq: this.nextBuildingSeq,
             buildings: this.buildings.map(b => ({ id: b.id, type: b.type, team: b.team, siteId: b.siteId,
                 gx: b.gx, gy: b.gy, hp: b.hp, maxHp: b.maxHp, progress: b.progress,
                 complete: b.complete, dead: b.dead, workerId: b.workerId, paused: b.paused,
@@ -106,12 +107,12 @@ export class CampSystem {
         return Terrain.walkable(this.scene.battleOptions?.terrain, p.gx, p.gy, CAMP_RULES[type].radius) ? p : null;
     }
 
-    createBuilding(team, type, siteId, complete = false) {
-        const position = this.placement(team, type, siteId);
+    createBuilding(team, type, siteId, complete = false, positionOverride = null) {
+        const position = positionOverride ?? this.placement(team, type, siteId);
         if (!position) return null;
         const rule = CAMP_RULES[type], home = type === 'camp' && siteId === 'home';
         const b = {
-            id: this.id(team, type, siteId), type, team, siteId, ...position,
+            id: siteId == null ? `${type}:${team}:field-${this.nextBuildingSeq++}` : this.id(team, type, siteId), type, team, siteId, ...position,
             hp: home ? CAMP_RULES.HOME_HP : rule.hp, maxHp: home ? CAMP_RULES.HOME_HP : rule.hp,
             progress: complete ? 1 : 0, complete, dead: false, workerId: null,
             paused: false, garrisonIds: [],
@@ -130,17 +131,66 @@ export class CampSystem {
         return b;
     }
 
+    // Buildings remain outside dynamic navigation; bridge mouths stay clear by placement rules.
+    towerPlacement(team, gx, gy) {
+        const position = { gx: Number.isFinite(gx) ? q(gx) : gx, gy: Number.isFinite(gy) ? q(gy) : gy };
+        const reject = reason => ({ ...position, ok: false, reason });
+        if (!activeTeams(this.scene).includes(team)) return reject('无效阵营');
+        const radius = CAMP_RULES.tower.radius, terrain = this.scene.battleOptions?.terrain;
+        if (!Terrain.walkable(terrain, position.gx, position.gy, radius)) return reject('箭塔需要完整可通行的陆地');
+        const zones = Terrain.geometry(terrain).zones;
+        if (zones.some(zone => ['bridge', 'shallow', 'water'].includes(zone.kind) &&
+            Terrain.contains(zone, position.gx, position.gy, radius + (zone.kind === 'bridge' ? 1 : 0)))) {
+            return reject('桥面、桥口与浅滩需要保持通行');
+        }
+        if (this.buildings.some(b => !b.dead && distance(b, position) < b.radius + radius + 0.5)) return reject('与已有建筑距离太近');
+        if (activeTeams(this.scene).some(enemy => isHostile(this.scene, team, enemy) &&
+            distance(position, this.site(enemy, 'home')) < CAMP_RULES.ENEMY_HOME_CLEARANCE + radius)) return reject('距离敌方大本营至少12格');
+        if (this.buildings.filter(b => !b.dead && b.team === team && b.type === 'tower' && b.siteId !== 'home').length >= CAMP_RULES.FIELD_TOWER_CAP) {
+            return reject('每方最多8座野外箭塔（含施工中）');
+        }
+        return { ...position, ok: true, reason: '' };
+    }
+
+    requestBuildAt(team, workerId, kind, gx, gy, buildingId = null) {
+        const w = this.unit(workerId);
+        if (kind !== 'tower' || !activeTeams(this.scene).includes(team) || !ready(w) || w.type !== 'worker' || w.team !== team) return false;
+        let b = buildingId ? this.getBuilding(buildingId) : null;
+        if (buildingId) {
+            if (!b || b.dead || b.type !== 'tower' || b.team !== team || b.complete ||
+                (b.workerId != null && b.workerId !== w.id && ready(this.unit(b.workerId)))) return false;
+        } else {
+            const p = this.towerPlacement(team, gx, gy);
+            if (!p.ok) return false;
+            const terrain = this.scene.battleOptions?.terrain, radius = CombatRules.bodyRadius(w);
+            if (!Terrain.segmentClear(terrain, w.gx, w.gy, p.gx, p.gy, radius) &&
+                !this.scene.ensureNavigation().plan(w, p, radius).length) return false;
+            const econ = this.scene.territory.econ, rule = CAMP_RULES.tower;
+            if (Math.floor((econ.treasury[team] + 1e-7) * 20) / 20 < rule.cost) return false;
+            b = this.createBuilding(team, 'tower', null, false, { gx: p.gx, gy: p.gy });
+            econ.treasury[team] -= rule.cost;
+            econ.spent[team] += rule.cost;
+        }
+        this.releaseWorker(w);
+        b.workerId = w.id;
+        w.workerTask = { kind: 'build', buildingId: b.id };
+        return true;
+    }
+
+    canConstruct(b) { return b.siteId == null || this.ownsSite(b.team, b.siteId); }
+
     requestBuild(team, workerId, kind, siteId) {
         const w = this.unit(workerId), rule = CAMP_RULES[kind];
         if (!activeTeams(this.scene).includes(team) || !['camp', 'tower', 'tent'].includes(kind) || !rule || !ready(w) || w.type !== 'worker' || w.team !== team ||
             siteId === 'home' || !this.ownsSite(team, siteId) || !this.placement(team, kind, siteId)) return false;
         const camp = this.getBuilding(this.id(team, 'camp', siteId));
-        if ((kind === 'tower' || kind === 'tent') && (!camp?.complete || camp.dead)) return false;
+        if (kind === 'tent' && (!camp?.complete || camp.dead)) return false;
         let b = this.getBuilding(this.id(team, kind, siteId));
         if (b && !b.dead && (b.complete || (b.workerId != null && b.workerId !== w.id && ready(this.unit(b.workerId))))) return false;
         // A captured flag does not transfer its surviving enemy fortification.
         if (this.buildings.some(other => !other.dead && other.siteId === siteId && other.team !== team)) return false;
         if (!b || b.dead) {
+            if (kind === 'tower' && this.buildings.filter(b => !b.dead && b.type === 'tower' && b.team === team && b.siteId !== 'home').length >= CAMP_RULES.FIELD_TOWER_CAP) return false;
             const econ = this.scene.territory.econ;
             if (Math.floor((econ.treasury[team] + 1e-7) * 20) / 20 < rule.cost) return false;
             econ.treasury[team] -= rule.cost;
@@ -400,15 +450,14 @@ export class CampSystem {
                 if (enemy && q(now - u.lastAttack) >= u.typeData.atkSpeed) {
                     u.lastAttack = now;
                     this.scene.playAttackAnim?.(u, enemy);
-                    this.scene.fireArrow(u, enemy);
+                    this.scene.fireArrow(u, enemy, { rawAttack: u.typeData.atk * CAMP_RULES.TOWER_ATTACK });
                 }
             } else u.target = null;
             return true;
         }
-        // F4：骑兵营队回撤令优先于攻寨自动接管——正在打建筑的骑兵收到回撤令必须
-        // 立即脱战（交还 battalionDirectCavalry 的回撤分支行军）。只豁免"骑兵+营队
-        // 回撤"这一条路径：民夫自卫、驻塔、施工、医师与其余兵种的攻寨行为不变。
-        if (u.type === 'cavalry' && u.battalion?.retreat && !u.battalion.gathering) return false;
+        // Explicit building attacks stay committed through nearby defenders; a battalion
+        // retreat still cancels them immediately for every combat troop.
+        if (u.battalion?.retreat && !u.battalion.gathering) { u.orderBuildingId = null; return false; }
         if (!ready(u)) return false;
         if (u.type === 'worker') {
             // 自卫优先：近身有敌就地还手、原地不动；脱离交战才回到原移动 / 施工任务。
@@ -420,7 +469,7 @@ export class CampSystem {
             } else if (task?.kind === 'build') {
                 const b = this.getBuilding(task.buildingId);
                 if (!b || b.dead || b.complete) this.releaseWorker(u);
-                else if (this.ownsSite(u.team, b.siteId) && distance(u, b) > CAMP_RULES.BUILD_REACH) moveToward(u, b.gx, b.gy, u.typeData.speed, dt);
+                else if (this.canConstruct(b) && distance(u, b) > CAMP_RULES.BUILD_REACH) moveToward(u, b.gx, b.gy, u.typeData.speed, dt);
             }
             return true;
         }
@@ -442,7 +491,7 @@ export class CampSystem {
         let b = this.getBuilding(u.orderBuildingId);
         if (b?.dead) { u.orderBuildingId = null; b = null; }
         if (!b) b = this.nearBuilding(u);
-        if (!b || this.localEnemy(u, u.typeData.ranged ? 5 : 4)) return false;
+        if (!b || (!u.orderBuildingId && this.localEnemy(u, u.typeData.ranged ? 5 : 4))) return false;
         const reach = u.typeData.range + b.radius;
         u.target = b;
         if (distance(u, b) > reach) moveToward(u, b.gx, b.gy, u.typeData.speed, dt);
@@ -458,7 +507,7 @@ export class CampSystem {
                 this.scene.scheduleBattleAction(95, () => {
                     if (this.scene.battleOver || u.actionEpoch !== epoch || !ready(u) || b.dead || distance(u, b) > reach + 0.15 ||
                         !CombatRules.clearLane(this.scene, u, b)) return;
-                    this.damageBuilding(b, Math.max(1, u.typeData.atk - b.typeData.def), u);
+                    this.damageBuilding(b, calculateAttackDamage(u, b), u);
                     this.scene.meleeImpact?.(u, b);
                 });
             }
@@ -486,7 +535,7 @@ export class CampSystem {
             const w = this.unit(b.workerId);
             if (!alive(w)) b.workerId = null;
             // 交战停工：民夫近身交战时施工暂停，脱离交战后继续原任务（进度不重置）。
-            b.paused = !ready(w) || !this.ownsSite(b.team, b.siteId) || w.workerTask?.buildingId !== b.id ||
+            b.paused = !ready(w) || !this.canConstruct(b) || w.workerTask?.buildingId !== b.id ||
                 distance(w, b) > CAMP_RULES.BUILD_REACH || workerConstructionPaused(w, this.scene.simulationTime);
             if (b.paused) continue;
             // 林口营建：本点归属方施工速度 ×1.25（有效施工时间 −20%），只加快施工。

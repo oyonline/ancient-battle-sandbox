@@ -633,7 +633,7 @@ export const UI = {
         this._seenTerritoryTips ??= new Set();
         if (this._seenTerritoryTips.has(kind) || this.phase !== 'battle' || !this.battleOptions.territory) return false;
         const tips = {
-            worker: '建设：选择民夫 → 筑营寨 → 点己方据点。民夫到场施工，记得派兵护卫。',
+            worker: '建设：选择自己的民夫 → 建箭塔 → 点陆地选址；绿框可建，红框说明原因。营寨仍建在己方据点。',
             archer: '弓手可驻塔：点「建筑行动」→ 驻入箭塔 → 选择己方完工箭塔。',
             medic: '医师可驻帐：点「建筑行动」→ 驻入医帐，帮助溃兵疗伤归队。',
             ranch: '骑兵需要马场。北上翼有两座马场，先派一营夺下其中一座。',
@@ -936,7 +936,7 @@ export const UI = {
     },
 
     // 世界坐标 → 网格（两次迭代补偿地形高度；0.1 格量化保联机一致），可走则执行
-    applyGroundOrder(world, apply) {
+    groundOrderPoint(world, clampToBoard = true) {
         const scene = this.scene;
         if (!scene || !scene.board_W) return;
         const W = scene.board_W(), H = scene.board_H();
@@ -949,8 +949,16 @@ export const UI = {
             const dx = (world.x - OX) / (TW / 2), dy = (world.y + lift - OY) / (TH / 2);
             gx = (dx + dy) / 2; gy = (dy - dx) / 2;
         }
-        gx = Math.round(Math.max(2, Math.min(W - 2, gx)) * 10) / 10;
-        gy = Math.round(Math.max(2, Math.min(H - 2, gy)) * 10) / 10;
+        gx = Math.round((clampToBoard ? Math.max(2, Math.min(W - 2, gx)) : gx) * 10) / 10;
+        gy = Math.round((clampToBoard ? Math.max(2, Math.min(H - 2, gy)) : gy) * 10) / 10;
+        return { gx, gy };
+    },
+
+    applyGroundOrder(world, apply) {
+        const point = this.groundOrderPoint(world);
+        if (!point) return;
+        const { gx, gy } = point;
+        const key = this.scene.battleOptions.terrain;
         if (!Terrain.walkable(key, gx, gy)) {
             this.showNetToast('⚠ 那里不能去（水面/出界）——换一个点');
             return;

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { EventEmitter } from 'node:events';
 import assert from 'node:assert/strict';
 import { CampControls } from '../js/camp-controls.js';
 import { CAMP_RULES } from '../js/battle/camps.js';
@@ -239,4 +240,90 @@ test('面板按特色区分受益类别：建筑（林口/桥头）、营队（�
     assert.match(crossMarkup, /收容/, '路口：作用于据点收容容量');
     assert.match(crossMarkup, /非建筑/, '路口明确说不是建筑属性');
     assert.doesNotMatch(crossMarkup, /此建筑生效/, '路口不再套用建筑口径');
+});
+
+test('自由选址箭塔：选中自己的民夫，点击陆地下令一次并退出选点', t => {
+    const { scene, worker, controls } = fixture(t);
+    controls.selectWorker(worker.id);
+    controls.begin('tower');
+    assert.equal(controls.targeting.worker, worker.id);
+    const before = scene.territory.econ.treasury.red;
+    controls.handleGroundClick({ x: worker.gx + 5, y: worker.gy + 5 }, null);
+    const field = scene.territory.camps.buildings.find(b => b.siteId === null);
+    assert.ok(field);
+    assert.equal(field.workerId, worker.id);
+    assert.equal(scene.territory.econ.treasury.red, before - CAMP_RULES.tower.cost);
+    assert.equal(controls.targeting, null);
+});
+
+test('非法塔选址保留选点与原民夫，展示统一拒绝理由且不扣费', t => {
+    const { scene, worker, controls } = fixture(t);
+    const messages = [];controls.ui.showNetToast = message => messages.push(message);
+    controls.selectWorker(worker.id);controls.begin('tower');
+    const before = scene.territory.econ.treasury.red;
+    controls.handleGroundClick({ x: -5, y: -5 }, null);
+    assert.ok(controls.targeting);
+    assert.equal(controls.targeting.worker, worker.id);
+    assert.match(messages.at(-1), /陆地/);
+    assert.equal(scene.territory.econ.treasury.red, before);
+    controls.cancel();assert.equal(controls.targeting, null);
+});
+
+test('自由塔续建按建筑ID受理，零军费且原工人阵亡时不重复扣费', t => {
+    const { scene, worker, controls } = fixture(t);
+    const camps = scene.territory.camps;
+    assert.equal(camps.requestBuildAt('red', worker.id, 'tower', worker.gx + 5, worker.gy + 5), true);
+    const tower = camps.buildings.find(b => b.siteId === null);
+    worker.dead = true;
+    const replacement = addUnit(scene,'red','worker',tower.gx,tower.gy);
+    scene.territory.econ.treasury.red = 0;
+    scene.render.camps.pick = () => tower;
+    controls.selectWorker(replacement.id);controls.begin('tower');
+    controls.handleGroundClick({x:tower.gx,y:tower.gy},null);
+    assert.equal(tower.workerId,replacement.id);
+    assert.equal(scene.territory.econ.treasury.red,0);
+    assert.equal(controls.targeting,null);
+});
+
+test('盟友民夫不能成为自己的施工者，选址取消不改变模拟状态', t => {
+    const { scene, worker, controls } = fixture(t);
+    const ally = addUnit(scene,'blue','worker',worker.gx+1,worker.gy);
+    controls.selectWorker(ally.id);assert.equal(controls.workerId,null);
+    controls.selectWorker(worker.id);controls.begin('tower');
+    const before = scene.territory.camps.buildings.length;
+    controls.cancel();
+    assert.equal(scene.territory.camps.buildings.length,before);
+    assert.ok(worker.workerTask == null);
+});
+
+test('塔选址预览复用统一判定：可建绿框、不可建红框及取消清除', t => {
+    const { scene, worker, controls } = fixture(t);
+    const colors=[], footprint=[];
+    let cleared=0;
+    const graphics={setDepth(){return this;},clear(){cleared++;},fillStyle(color){colors.push(color);},lineStyle(){},fillPoints(points){footprint.push(points);},strokePoints(){}};
+    scene.add={graphics:()=>graphics};scene.input={activePointer:{x:500,y:300}};
+    scene.scale={width:1280,height:720};scene.cameras={main:{getWorldPoint:()=>({x:0,y:0})}};
+    scene.groundPoint=(gx,gy)=>({x:gx,y:gy});
+    let point={gx:worker.gx+5,gy:worker.gy+5};
+    controls.ui.groundOrderPoint=()=>point;
+    controls.selectWorker(worker.id);controls.begin('tower');
+    controls.updatePlacementPreview();
+    assert.equal(colors.at(-1),0x8ae58a);assert.match(controls.targeting.prompt,/可建/);
+    assert.ok(Math.abs(footprint.at(-1)[0].x-point.gx-CAMP_RULES.tower.radius)<1e-9);
+    point={gx:-5,gy:-5};controls.updatePlacementPreview();
+    assert.equal(colors.at(-1),0xff6b62);assert.match(controls.targeting.prompt,/陆地/);
+    const before=cleared;controls.cancel();assert.ok(cleared>before);
+});
+
+
+test('暂停期间每帧刷新选址；reset不重复订阅，场景关闭解除监听', t => {
+    const { scene, controls: original } = fixture(t);
+    scene.events = new EventEmitter();scene.paused = true;
+    const controls = new CampControls(original.ui);
+    let refreshes = 0;controls.updatePlacementPreview = () => { refreshes++; };
+    scene.events.emit('prerender');assert.equal(refreshes,1);
+    for(let i=0;i<3;i++) controls.reset();
+    assert.equal(scene.events.listenerCount('prerender'),1);
+    scene.events.emit('prerender');assert.equal(refreshes,2);
+    scene.events.emit('shutdown');assert.equal(scene.events.listenerCount('prerender'),0);
 });

@@ -1,3 +1,4 @@
+import { ensureAxeTextures } from './render/axe-textures.js';
 // ==================== 等距视角战斗场景 ====================
 // 帝国时代2 风格：斜45°菱形地块 + Kenney 兵种贴图 + y轴深度排序
 // UI/Snd 是 ui.js 运行时挂到全局的（模块加载序 game→ui），此处只做运行时引用。
@@ -496,10 +497,11 @@ export class IsoBattleScene extends Phaser.Scene {
     getTacticsSummary() { return this.tactics ? this.tactics.summary() : null; }
 
     spawnUnit(team, type, gx, gy) {
+        if (type === 'axe') ensureAxeTextures(this);
         if (type === 'worker') this.render.units.ensureWorkerTextures?.();
         if (type === 'medic') this.render.units.ensureMedicTextures?.();
         const typeData = UNIT_TYPES[type];
-        const key = `units/${assetTeam(team)}_${type}`;   // 黑方复用蓝方贴图 + 基色染色
+        const key = `units/${type === 'axe' ? team : assetTeam(team)}_${type}`;   // 黑方复用蓝方贴图 + 基色染色
         const { x, y } = this.groundPoint(gx, gy);
         const depth = (gx + gy) * 100;
 
@@ -515,7 +517,7 @@ export class IsoBattleScene extends Phaser.Scene {
         const footDy = F.pad * sc;              // 贴图底边 → 脚底 的显示距离
 
         // 烘焙阴影贴图（椭圆脚底偏移已烘进贴图，翻转即镜像，见 syncOne）
-        const shadowKey = shadowTextureKey(assetTeam(team), type, visualDir);
+        const shadowKey = shadowTextureKey(team, type, visualDir);
         const shadow = this.add.image(x, y, shadowKey);
         shadow.setDepth(depth + 48);
 
@@ -548,7 +550,7 @@ export class IsoBattleScene extends Phaser.Scene {
             baseScale: sc,                              // 贴图显示缩放（待机呼吸在其上做微缩放）
             footDy,                                     // 贴图底边 → 脚底 的下压距离（对齐地面线）
             faceDir: team === 'black' ? 1 : team === 'red' ? 1 : -1,           // 当前贴图镜像符号：1=原图 / -1=水平镜像
-            baseTint: teamTint(team),                   // 阵营基色染色（黑方复用蓝方贴图时为深色，其余 null）
+            baseTint: type === 'axe' ? null : teamTint(team),                   // 阵营基色染色（黑方复用蓝方贴图时为深色，其余 null）
             faceAcc: 0,                                  // 朝向判定的累计位移
             dirDX: 0, dirDY: 0,                         // 骑兵方向判定的平滑屏幕位移
             visualDir,                                  // 骑兵八向 heading；普通兵种固定为 side
@@ -842,7 +844,7 @@ export class IsoBattleScene extends Phaser.Scene {
     }
 
     // ---- sim/渲染→render 视觉钩子（battle/、测试与其他渲染层经场景调用，单行委托） ----
-    fireArrow(from, target) { return this.render.fx.fireArrow(from, target); }
+    fireArrow(from, target, options) { return this.render.fx.fireArrow(from, target, options); }
     updateArrows(dt, now) { return this.render.fx.updateArrows(dt, now); }
     meleeImpact(attacker, target, kind) { return this.render.fx.meleeImpact(attacker, target, kind); }
     slashArc(x, y, ang, k = 1) { return this.render.fx.slashArc(x, y, ang, k); }

@@ -1,4 +1,5 @@
 // 世界层渲染：海面/地貌底图烘焙/地形要素/装饰/飞鸟/出生区/阴影与辎重贴图（原场景渲染方法，调用面经 scene.render.world）。
+import { TEAMS, teamColor } from '../factions.js';
 import { board } from '../board.js';
 import { Terrain } from '../terrain.js';
 import { clamp, UNIT_TYPES } from '../units.js';
@@ -650,7 +651,7 @@ export class WorldRenderer {
     // 阴影预烘焙：每个（阵营×兵种）的软椭圆+队伍圈烘成一张小贴图，
     // 千人同屏时阴影走普通精灵合批，而不是一千个 Graphics 各画一遍
     makeShadowTextures() {
-        for (const team of ['red', 'blue']) {
+        for (const team of TEAMS) {
             for (const type of Object.keys(UNIT_TYPES)) {
                 for (const visualDir of unitVisualDirections(type)) {
                     const key = shadowTextureKey(team, type, visualDir);
@@ -667,7 +668,7 @@ export class WorldRenderer {
                     g.fillEllipse(cx + footDx, cy, F.w * sc, F.h * sc);
                     g.fillStyle(0x0c1206, 0.26);
                     g.fillEllipse(cx + footDx, cy, F.w * sc * 0.62, F.h * sc * 0.62);
-                    g.lineStyle(2.2, team === 'red' ? 0xff3b30 : 0x2f7bff, 0.85);
+                    g.lineStyle(2.2, team === 'black' ? teamColor(team) : team === 'red' ? 0xff3b30 : 0x2f7bff, 0.85);
                     g.strokeEllipse(cx + footDx, cy, F.w * sc * 0.78, F.h * sc * 0.78);
                     g.generateTexture(key, w, h);
                     g.destroy();

@@ -20,7 +20,7 @@ export class EffectsRenderer {
     }
 
     // ---------------- 箭矢（全场景合批到一张 Graphics） ----------------
-    fireArrow(from, target) {
+    fireArrow(from, target, options = {}) {
         const d = dist(from, target);
         const flightT = clamp(d / 12, 0.3, 0.75);
         // 预判提前量：瞄目标飞行期间的预估位置
@@ -38,7 +38,7 @@ export class EffectsRenderer {
             sourceLift: 22, targetLift: target.isBuilding ? (target.type === 'tower' ? 64 : 36) : 17,
             buildingId: target.isBuilding ? target.id : null,
             t: 0, dur: flightT,
-            dmg: from.typeData.atk, team: from.team, source: from, firedAt: this.scene.simulationTime
+            dmg: options.rawAttack ?? from.typeData.atk, team: from.team, source: from, firedAt: this.scene.simulationTime
         });
         if (Snd) Snd.play('arrow');
     }

@@ -7,6 +7,7 @@ import { NetBattle } from './net/lockstep.js';
 import { Terrain } from './terrain.js';
 import { UNIT_TYPES, FORMATIONS, BUDGET } from './units.js';
 
+import { axePortraitDataUrl } from './render/axe-textures.js';
 import { Snd } from './snd.js';
 import { UI_TACTIC_OPTIONS, UI_CAVALRY_OPTIONS, PRESETS } from './ui.js';
 import { ownerDisplayCss } from './factions.js';
@@ -375,7 +376,7 @@ export const lobbyMethods = {
             if (t.hidden) continue;   // 辎重车等系统单位不进入配兵界面
             const card = document.createElement('div');
             card.className = 'ucard';
-            card.innerHTML = `<img class="uc-img" src="assets/units/${team}_${key}.png" alt="${t.name}">
+            card.innerHTML = `<img class="uc-img" src="${key === 'axe' ? axePortraitDataUrl(team) : `assets/units/${team}_${key}.png`}" alt="${t.name}">
                 <div class="uc-body"><div class="uc-top"><span class="uc-name">${t.name}</span><span class="uc-cost">🪙${t.cost}</span></div>
                 <div class="uc-stats">⚔️${t.atk} · 🛡️${t.def} · ❤️${t.hp}</div><div class="uc-tip">${t.tip}</div></div>
                 <div class="uc-step"><button class="step-btn minus" aria-label="减少${t.name}">－</button>

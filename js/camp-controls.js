@@ -1,6 +1,7 @@
 // Selection and targeting stay local; commands always enter the simulation API.
 // 据点特色的文案与参数只从 js/battle/site-traits.js 取（模拟、AI、UI 同一份来源）。
 import { describeTrait, ownsRole } from './battle/site-traits.js';
+import { CAMP_RULES } from './battle/camps.js';
 import { ownsFlag, sameSide, sideLabel, teamName } from './factions.js';
 export class CampControls {
     constructor(ui) {
@@ -12,6 +13,12 @@ export class CampControls {
         this.dismissedSelection = null;
         this.lastMarkup = '';
         this.panel = null;
+        this.previewUpdate = () => this.updatePlacementPreview();
+        ui.scene?.events?.on?.('prerender', this.previewUpdate);
+        ui.scene?.events?.once?.('shutdown', () => {
+            ui.scene.events.off?.('prerender', this.previewUpdate);
+            this.placementPreview?.destroy();this.placementPreview = null;
+        });
     }
 
     get scene() { return this.ui.scene; }
@@ -53,6 +60,7 @@ export class CampControls {
 
     cancel() {
         this.targeting = null;
+        this.placementPreview?.clear();
         document.body.classList.remove('camp-targeting');
         this.ui.updateTargetingPrompt?.();
     }
@@ -73,6 +81,7 @@ export class CampControls {
         const worker = this.workers().find(u => u.id === this.workerId);
         const units = this.selectedTroops();
         if (['camp', 'tower', 'tent', 'move'].includes(kind) && !worker) return;
+        if (worker && (worker.moraleState === 'routing' || worker.moraleState === 'withdrawn')) { this.ui.showNetToast('民夫正在撤离，暂时不能施工');return; }
         if (kind === 'garrison' && !units.some(u => u.type === 'archer')) {
             // 入口今天只在有弓手时可用；仍要给"选了兵但没弓手"一个具体原因，而不是静默返回。
             this.ui.showNetToast(this.selectionRejectReason(units) || '选中的部队里没有可入驻的弓箭手：先选中弓手再点「驻入箭塔」');
@@ -85,7 +94,7 @@ export class CampControls {
         this.targeting = { kind, worker: worker?.id,
             units: units.filter(u => (kind === 'garrison' ? u.type === 'archer' : kind === 'medic-in' ? u.type === 'medic' : true)).map(u => u.id) };
         document.body.classList.add('camp-targeting');
-        const prompt = { camp: '点己方据点建营寨', tower: '点己方营寨据点建箭塔', tent: '点己方营寨据点建医帐',
+        const prompt = { camp: '点己方据点建营寨', tower: '点陆地建箭塔 · 绿框可建，红框不可建 · Esc取消', tent: '点己方营寨据点建医帐',
             move: '点地面让民夫前往', garrison: '点己方完工箭塔，弓手将走过去入驻',
             'medic-in': '点己方完工医帐，医师将走过去入驻', attack: '点敌方建筑，部队将前往攻寨' }[kind];
         this.targeting.prompt = prompt;
@@ -145,7 +154,17 @@ export class CampControls {
                 this.ui.applyGroundOrder(world, (gx, gy) => {
                     accepted = this.send({ k: 'worker-move', worker: mode.worker, gx, gy });
                 });
-            } else if (mode.kind === 'camp' || mode.kind === 'tower' || mode.kind === 'tent') {
+            } else if (mode.kind === 'tower') {
+                if (building?.team === this.side && building.type === 'tower' && !building.complete && !building.dead) {
+                    accepted = this.send({ k: 'build', worker: mode.worker, kind: 'tower', building: building.id });
+                } else {
+                    const point = this.ui.groundOrderPoint?.(world, false) || { gx: world.x, gy: world.y };
+                    const placement = this.camps.towerPlacement(this.side, point.gx, point.gy);
+                    if (!placement.ok) this.ui.showNetToast(placement.reason);
+                    else accepted = this.send({ k: 'build', worker: mode.worker, kind: 'tower', gx: placement.gx, gy: placement.gy });
+                }
+                if (accepted && !this.ui.battleOptions.net) this.ui.showNetToast('箭塔施工令已接收，民夫将前往选址；离场后可选民夫点击塔续建');
+            } else if (mode.kind === 'camp' || mode.kind === 'tent') {
                 if (building?.team === this.side) {
                     accepted = this.send({ k: 'build', worker: mode.worker, kind: mode.kind, site: building.siteId });
                 } else {
@@ -215,7 +234,38 @@ export class CampControls {
             : `弓手 ${garrison.label}`;
     }
 
+    updatePlacementPreview() {
+        const scene = this.scene;
+        if (!this.active || this.targeting?.kind !== 'tower') { this.placementPreview?.clear(); return; }
+        const pointer = scene.input?.activePointer;
+        if (!pointer || pointer.y < 50 || pointer.x < 0 || pointer.y < 0 || pointer.x > scene.scale.width || pointer.y > scene.scale.height) {
+            this.placementPreview?.clear(); return;
+        }
+        const element = document.elementFromPoint?.(pointer.x, pointer.y);
+        if (element && element.tagName !== 'CANVAS') { this.placementPreview?.clear();return; }
+        const world = scene.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        const point = this.ui.groundOrderPoint?.(world, false);
+        if (!point || !this.camps.towerPlacement) return;
+        const unfinished = scene.render.camps.pick(world.x, world.y);
+        const resume = unfinished?.team === this.side && unfinished.type === 'tower' && !unfinished.complete && !unfinished.dead;
+        const assigned = resume && this.workers().find(w => w.id === unfinished.workerId && w.moraleState !== 'routing');
+        const placement = resume
+            ? { gx: unfinished.gx, gy: unfinished.gy, ok: !assigned || assigned.id === this.targeting.worker, reason: '另一名民夫正在施工' }
+            : this.camps.towerPlacement(this.side, point.gx, point.gy);
+        const color = placement.ok ? 0x8ae58a : 0xff6b62;
+        const g = this.placementPreview ||= scene.add.graphics().setDepth(1000000);
+        g.clear(); g.fillStyle(color, 0.18); g.lineStyle(2, color, 0.95);
+        const footprint = Array.from({ length: 20 }, (_, i) => {
+            const angle = i * Math.PI / 10, radius = CAMP_RULES.tower.radius;
+            return scene.groundPoint(placement.gx + Math.cos(angle) * radius, placement.gy + Math.sin(angle) * radius);
+        });
+        g.fillPoints(footprint,true);g.strokePoints(footprint,true);
+        const prompt = placement.ok ? (resume ? '点击免费续建这座箭塔 · Esc取消' : '此处可建箭塔 · 点击确认 · Esc取消') : `${placement.reason} · 换一处陆地 · Esc取消`;
+        if (this.targeting.prompt !== prompt) { this.targeting.prompt = prompt;this.ui.updateTargetingPrompt?.(); }
+    }
+
     update() {
+        this.updatePlacementPreview();
         if (!this.panel) {
             this.panel = document.getElementById('camp-control-bar');
             if (!this.panel) return;
@@ -268,7 +318,7 @@ export class CampControls {
             for (const kind of ['camp', 'tower', 'tent']) {
                 const info = this.camps.buildInfo(kind);
                 const resumable = this.camps.buildings.some(b => b.team === this.side && b.type === kind &&
-                    !b.dead && !b.complete && this.camps.ownsSite(this.side, b.siteId) &&
+                    !b.dead && !b.complete && (kind === 'tower' || this.camps.ownsSite(this.side, b.siteId)) &&
                     (b.workerId === worker.id || !workers.some(w => w.id === b.workerId && w.moraleState !== 'routing')));
                 actions += button(kind, `${kind === 'camp' ? '筑/续营寨' : kind === 'tower' ? '建/续箭塔' : '筑/续医帐'} ${info.cost}军费 · 续建免费`,
                     this.ui.countdown || (!resumable && this.scene.territory.econ.treasury[this.side] < info.cost));
@@ -324,7 +374,7 @@ export class CampControls {
                 }
                 details += ` · ${trait.icon}${trait.name}：${trait.reward}（${holder}）`;
             }
-            if (own && this.scene.territory.healing) {
+            if (own && building.siteId != null && this.scene.territory.healing) {
                 const healing = this.scene.territory.healing;
                 details += ` · 疗伤 ${healing.healingCount(this.side, building.siteId)}/${healing.capacity(this.side, building.siteId)}`;
             }

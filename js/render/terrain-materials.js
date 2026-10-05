@@ -257,7 +257,7 @@ export class TerrainMaterialsRenderer {
         const at = value => value * PIXELS;
         ctx.fillStyle = patterns[0]; ctx.fillRect(at(region.x1),at(region.y1),plane.width,plane.height);
         // Lower meadow micro-contrast so units and objectives lead the eye.
-        ctx.fillStyle = 'rgba(94,111,57,0.16)';
+        ctx.fillStyle = 'rgba(94,111,57,0.25)';
         ctx.fillRect(at(region.x1), at(region.y1), plane.width, plane.height);
         // Broad, softly feathered dry patches vary the meadow without drawing a tile grid.
         for (let y = Math.floor((region.y1-8)/4)*4; y < region.y2+8; y += 4) {

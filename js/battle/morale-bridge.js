@@ -81,7 +81,7 @@ export function moraleSector(scene, unit) {
 
 export function updateFallingBackUnit(scene, unit, now, dt) {
     if (unit.moraleState !== 'wavering' || !(unit.moraleFallBackUntil > now) ||
-        !['infantry', 'pikeman'].includes(unit.type)) return false;
+        !['infantry', 'axe', 'pikeman'].includes(unit.type)) return false;
     const slot = unit.formationSlot;
     if (unit.tacticalRole === 'guard' && scene.tactics?.formations[unit.team] &&
         slot?.unit === unit && unit.guardSupport >= 2 && Math.hypot(unit.gx - slot.gx, unit.gy - slot.gy) <= 0.81) {

@@ -1,4 +1,5 @@
 // 单位层渲染：动画注册/攻击动画/守卫朝向/逐帧同步与倒地视觉（sim 钩子经场景单行委托，调用面不变）。
+import { ensureAxeTextures } from './axe-textures.js';
 import { MANIFEST } from '../manifest.js';
 import { TW, TH, gridToScreen } from './metrics.js';
 import { Terrain } from '../terrain.js';
@@ -22,6 +23,7 @@ export class UnitRenderer {
     buildUnitAnims() {
         ensureWorkerTextures(this.scene);
         ensureMedicTextures(this.scene);
+        ensureAxeTextures(this.scene);
         Object.entries(MANIFEST.anims || {}).forEach(([unit, clips]) => {
             const isCav = unit.includes('cavalry');
             Object.entries(clips).forEach(([clip, c]) => {
@@ -93,7 +95,7 @@ export class UnitRenderer {
         const scene = this.scene;
         if (!scene.battleStarted || scene.battleOver) return pose;
         const type = unit.type;
-        if (type !== 'infantry' && type !== 'pikeman' && type !== 'cavalry') return pose;
+        if (type !== 'infantry' && type !== 'axe' && type !== 'pikeman' && type !== 'cavalry') return pose;
         if (unit.animState === 'attack' || unit.moving || unit.moraleState === 'routing') return pose;
         // 目标读 AI 每步维护的粘滞目标（渲染只读不写）；守阵/架枪单位改读其哨位目标。
         let target = unit.meleeTarget;
@@ -140,7 +142,7 @@ export class UnitRenderer {
         const profile = unit.type === 'cavalry' ? cavalryProfile(unit.visualDir) : null;
         const direction = profile ? CAVALRY_PROFILE_SUFFIX[profile] : '';
         // 黑方复用蓝方帧条（assetTeam），配合基色染色区分敌我。
-        return 'assets/units/anim/' + assetTeam(unit.team) + '_' + unit.type + direction + '_' + clip;
+        return 'assets/units/anim/' + (unit.type === 'axe' ? unit.team : assetTeam(unit.team)) + '_' + unit.type + direction + '_' + clip;
     }
 
     updateDeathVisuals(delta) {

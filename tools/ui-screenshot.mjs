@@ -46,4 +46,64 @@ const state = await page.evaluate(() => ({
 console.log('picked unit:', picked);
 console.log(JSON.stringify(state, null, 1));
 console.log('pageerrors:', errors.length);
+if (process.env.SHOT_GAMEPLAY === '1') {
+    // Bounded rendering fixture: state preparation only; following clicks/mouse moves exercise actual UI.
+    const fixture = await page.evaluate(() => {
+        const ui=window.UI,scene=ui.scene;
+        const options={territory:true,coop:true,black:{},territoryAI:false,terrain:'territory'};
+        ui.cancelTargeting();scene.deployUnits({}, {}, 'custom','custom',{},options);
+        ui.battleOptions={...ui.battleOptions,...options,net:false};ui.phase='battle';ui.countdown=false;
+        scene.battleStarted=true;scene.paused=true;
+        for (const [index,type] of ['infantry','pikeman','archer','cavalry'].entries()) {
+            const unit=scene.spawnUnit('black',type,44+index*3,80);unit.slideOff=0;
+        }
+        for (const [index,team] of ['red','blue','black'].entries()) {
+            const unit=scene.spawnUnit(team,'axe',44+index*3,88);unit.slideOff=0;
+        }
+        const worker=scene.spawnUnit('red','worker',53,87);worker.slideOff=0;
+        const tower=scene.territory.camps.createBuilding('red','tower',null,true,{gx:58,gy:84});
+        scene.rebuildSpatial();ui.campControls.reset();ui.campControls.pinned=true;
+        scene.cameras.main.setZoom(1.25);
+        const center=scene.groundPoint(50,84);scene.cameras.main.centerOn(center.x,center.y);
+        ui.updateTerritoryHUD();ui.campControls.update();
+        const samples=[];
+        for(const team of ['red','blue','black']) for(const clip of ['walk','attack']) {
+            const texture=scene.textures.get(`assets/units/anim/${team}_axe_${clip}`);
+            const image=texture.getSourceImage(),ctx=image.getContext('2d');
+            const frames=[];
+            for(let frame=0;frame<4;frame++) {
+                const pixels=ctx.getImageData(frame*158,0,158,156).data;let visible=0,bright=0;
+                for(let i=0;i<pixels.length;i+=4) if(pixels[i+3]>128) {visible++;if(pixels[i]+pixels[i+1]+pixels[i+2]>600)bright++;}
+                frames.push({visible,bright});
+            }
+            samples.push({team,clip,width:image.width,height:image.height,frames});
+        }
+        return {worker:worker.id,tower:tower.id,samples};
+    });
+    await page.waitForFunction(()=>!window.UI.scene.terrainLoading);
+    await page.waitForTimeout(400);
+    await page.screenshot({path:'/tmp/ui-shot-4-black-axe-entities.png'});
+    await page.click(`#camp-control-bar [data-worker="${fixture.worker}"]`);
+    await page.click('#camp-control-bar [data-camp-action="tower"]');
+    const screenPoint=async(gx,gy)=>page.evaluate(({gx,gy})=>{
+        const s=window.UI.scene,c=s.cameras.main,p=s.groundPoint(gx,gy),a=c.getWorldPoint(0,0);
+        return {x:(p.x-a.x)*c.zoom,y:(p.y-a.y)*c.zoom};
+    },{gx,gy});
+    const valid=await screenPoint(55,81);
+    await page.mouse.move(valid.x,valid.y);await page.waitForTimeout(400);
+    await page.screenshot({path:'/tmp/ui-shot-5-tower-green-preview.png'});
+    const green=await page.locator('#command-prompt-text').textContent();
+    const blocked=await screenPoint(58,84);
+    await page.mouse.move(blocked.x,blocked.y);await page.waitForTimeout(400);
+    await page.screenshot({path:'/tmp/ui-shot-6-tower-red-preview.png'});
+    const red=await page.locator('#command-prompt-text').textContent();
+    await page.keyboard.press('Escape');
+    const canceled=await page.evaluate(()=>window.UI.campControls.targeting===null);
+    await page.mouse.click(blocked.x,blocked.y-36);
+    await page.waitForTimeout(400);
+    await page.screenshot({path:'/tmp/ui-shot-7-tower-1200-panel.png'});
+    const panel=await page.locator('#camp-control-bar').textContent();
+    console.log('gameplay-fixture:',JSON.stringify({samples:fixture.samples,green,red,canceled,panel,pageerrors:errors}));
+    if (!green.includes('可建') || !red.includes('距离太近') || !canceled || !panel.includes('1200/1200') || errors.length) process.exitCode=1;
+}
 await browser.close();

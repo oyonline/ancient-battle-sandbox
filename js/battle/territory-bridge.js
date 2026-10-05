@@ -6,7 +6,7 @@ import { TEAMS, RELATIONS_MUTUAL, groupOf, canonicalOf, sameSide, sideLabel } fr
 
 export function updateFlags(scene, dt) {
     const RADIUS = 2.8, RATE = 0.1 / 10;           // 净占领力 10（约一队剑士）10 秒拉满
-    const POWER = { infantry: 10, pikeman: 7, archer: 4, cavalry: 12, worker: 0, medic: 0 };
+    const POWER = { infantry: 10, axe: 7, pikeman: 7, archer: 4, cavalry: 12, worker: 0, medic: 0 };
     let ownershipChanged = false;
     // 两阶段：同一次 updateFlags 里可能有多面旗同时易主（如两座渡口同一步失守）。
     // 阶段一只推进度/归属并记录变化；阶段二在【本步全部归属更新完成后】按最终
