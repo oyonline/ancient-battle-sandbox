@@ -156,9 +156,9 @@ test('双端锁步：据点特色与民夫自卫下仍逐位一致，且两端�
 });
 
 test('模拟版本随本轮行为变化更新，旧页面无法混用', () => {
-    // 2026-10-03 rework-r2c（用户复验 F13）：leashReturning 复位移至回撤早退之前，
-    // 覆盖回撤/改旗令/清令/集结全部非驻守路径——旧承诺不再跨令压制新驻守接敌。
-    assert.equal(SIM_VERSION, '2026-10-03-rework-r2c');
+    // 2026-10-04 coop-black：第三阵营黑方 + 红蓝同盟，敌我判定/旗帜拉锯/投影结构全扩展。
+    assert.equal(SIM_VERSION, '2026-10-04-coop-black');
+    assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2c', '相对上一批次必须递增');
     assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2b', '相对 F8 批次必须递增');
     assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2', '相对返修轮主体必须递增');
     assert.notEqual(SIM_VERSION, '2026-10-03-cavalry-def10', '相对 S3 批次必须递增');

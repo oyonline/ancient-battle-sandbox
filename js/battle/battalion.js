@@ -12,6 +12,7 @@ import { BATTALION_POWER } from './economy.js';
 import { UNIT_TYPES } from '../units.js';
 import { board } from '../board.js';
 import { SITE_AI, traitState } from './site-traits.js';
+import { TEAMS, activeTeams, isHostile, sameSide, enemiesOf, groupOf, canonicalOf } from '../factions.js';
 
 export const BATTALION = {
     OPENING_LANES: 3,          // 开局步战营分营数（按纵向位置三等分）
@@ -81,8 +82,8 @@ export class BattalionSystem {
     constructor(scene) {
         this.scene = scene;                 // 场景钩子：flags / forEachNear / simulationTime
         this.battalions = [];               // 营创建序（确定性）
-        this.pool = { red: null, blue: null };       // 各方现役步战集结营
-        this.cavPool = { red: null, blue: null };    // 各方现役骑队集结营（骑兵独立分池，不与步战混编）
+        this.pool = { red: null, blue: null, black: null };       // 各方现役步战集结营
+        this.cavPool = { red: null, blue: null, black: null };    // 各方现役骑队集结营（骑兵独立分池，不与步战混编）
         this.nextThink = 0;
         this.seq = 1;                       // 营号从每场战斗重新计数——联机两端 id 逐一对齐（网络令按 id 寻址）
     }
@@ -92,6 +93,8 @@ export class BattalionSystem {
     }
 
     homeRally(team) {
+        // 黑方自南侧压中：老家集结点在正南中央；红西蓝东不变。
+        if (team === 'black') return { gx: this.scene.board_W() / 2, gy: this.scene.board_H() - 8 };
         return { gx: team === 'red' ? 8 : this.scene.board_W(), gy: this.scene.board_H() / 2 };
     }
 
@@ -106,7 +109,7 @@ export class BattalionSystem {
     // 其余步战兵按 gy 稳定排序后三等分（id 决胜），保留上/中/下三个成建制营。
     // 无骑兵不建空骑队；纯骑兵开局不建空步战营。
     splitOpening(units) {
-        for (const team of ['red', 'blue']) {
+        for (const team of activeTeams(this.scene)) {
             const mine = units.filter(u => u.team === team && !u.dead && !u.withdrawn && u.type !== 'worker');
             if (!mine.length) continue;
             const foot = mine.filter(u => u.type !== 'cavalry');
@@ -173,12 +176,12 @@ export class BattalionSystem {
             if (battalion.gathering) battalion.gatherPoint = this.gatherRally(battalion.team);   // 集结点改令实时生效
         }
         this.battalions = this.battalions.filter(b => b.members.length > 0);
-        for (const team of ['red', 'blue']) {
+        for (const team of TEAMS) {
             if (this.pool[team] && this.pool[team].members.length === 0) this.pool[team] = null;
             if (this.cavPool[team] && this.cavPool[team].members.length === 0) this.cavPool[team] = null;
         }
         // 集结激活：满员或超时（骑队与步战池各自阈值）
-        for (const team of ['red', 'blue']) {
+        for (const team of TEAMS) {
             if (this.pool[team] && !this.pool[team].gathering) this.pool[team] = null;       // 已激活的营不再是集结池
             if (this.cavPool[team] && !this.cavPool[team].gathering) this.cavPool[team] = null;
         }
@@ -199,7 +202,7 @@ export class BattalionSystem {
         const flags = this.scene.flags || [];
         for (const battalion of this.battalions) {
             if (battalion.orderFlag == null || !flags[battalion.orderFlag]) continue;
-            if (flags[battalion.orderFlag].owner === battalion.team) {
+            if (flags[battalion.orderFlag].owner != null && sameSide(this.scene, flags[battalion.orderFlag].owner, battalion.team)) {
                 battalion.orderFlag = null;
                 battalion.playerOrdered = false;
                 battalion.retreat = false;
@@ -225,7 +228,7 @@ export class BattalionSystem {
         let building = 0;
         if (camps) {
             for (let i = 0; i < flags.length; i++) {
-                if (!camps.ownsSite(team, i) || camps.buildings.some(b => !b.dead && b.siteId === i && b.team !== team)) continue;
+                if (!camps.ownsSite(team, i) || camps.buildings.some(b => !b.dead && b.siteId === i && !sameSide(scene, b.team, team))) continue;
                 const camp = camps.getBuilding(camps.id(team, 'camp', i));
                 if (!camp || camp.dead || !camp.complete) { building++; continue; }
                 const tower = camps.getBuilding(camps.id(team, 'tower', i));
@@ -237,7 +240,7 @@ export class BattalionSystem {
         needs.build = building > 0 ? 1 : 0.3;
         // 防线：桥头不在自己手里（或正在被拉锯）时更需要夺桥固守。
         let bridgeLost = 0;
-        for (const flag of flags) if (flag.role === 'bridge' && flag.owner !== team) bridgeLost++;
+        for (const flag of flags) if (flag.role === 'bridge' && (flag.owner == null || !sameSide(scene, flag.owner, team))) bridgeLost++;
         needs.defense = bridgeLost > 0 ? 1 : 0.4;
         // 驻守：有富余成建营才值得专门派人驻高地（数值在 aiAssign 里给）。
         needs.hold = 0.5;
@@ -258,16 +261,16 @@ export class BattalionSystem {
         const state = traitState(scene);      // 派生归属只在归属变化时重建（见 site-traits.js）
         // 实力图：每旗评估半径内双方占领力（与占旗拔河同权）
         const strength = flags.map(flag => {
-            const power = { red: 0, blue: 0 };
+            const power = {};
+            for (const t of TEAMS) power[t] = 0;
             scene.forEachNear(flag.gx, flag.gy, BATTALION.ASSESS_RADIUS, u => {
                 if (u.dead || u.withdrawn || u.moraleState === 'routing') return;
                 if (Math.hypot(u.gx - flag.gx, u.gy - flag.gy) > BATTALION.ASSESS_RADIUS) return;
-                power[u.team] += BATTALION_POWER[u.type] ?? 5;
+                power[u.team] = (power[u.team] ?? 0) + (BATTALION_POWER[u.type] ?? 5);
             });
             return power;
         });
-        for (const team of ['red', 'blue']) {
-            const foe = team === 'red' ? 'blue' : 'red';
+        for (const team of activeTeams(scene)) {
             const active = this.battalions.filter(b => b.team === team && !b.gathering && b.members.length);
             if (!active.length) continue;
             // 需求系数：每方每拍算一次；富余营多时高地驻守价值才拉满。
@@ -286,16 +289,18 @@ export class BattalionSystem {
                 let best = -1, bestScore = -Infinity;
                 for (let i = 0; i < flags.length; i++) {
                     const flag = flags[i];
-                    const mine = strength[i][team], theirs = strength[i][foe];
+                    const mine = strength[i][team] ?? 0;
+                    const theirs = enemiesOf(scene, team).reduce((n, f) => n + (strength[i][f] ?? 0), 0);
                     // 据点特色权重（克制：基础夺旗分 50，这里只做 3~28 的加减，且按需求折算）
                     const weight = SITE_AI[flag.role];
-                    const needKey = weight ? ((flag.owner === team ? weight.holdNeed : weight.contestNeed) ?? weight.need) : null;
+                    const mineOwns = flag.owner != null && sameSide(scene, flag.owner, team);
+                    const needKey = weight ? ((mineOwns ? weight.holdNeed : weight.contestNeed) ?? weight.need) : null;
                     const need = weight ? (needs[needKey] ?? 1) : 0;
                     // 同类据点"已经拥有一处"时降低争夺权重：全局效果不叠加（马场/渡口），
                     // 局部效果虽然每处都要守，但也不让所有营追着同一类奖励跑。
                     const held = !!(weight && state.owns(team, flag.role));
                     let score;
-                    if (flag.owner === team) {
+                    if (mineOwns) {
                         // 己方旗：被敌明显进犯才值得派营回援（一旗一营足够）
                         score = theirs > Math.max(12, mine * 1.2) && assignedCount[i] === 0
                             ? 120 + theirs - mine
@@ -334,7 +339,7 @@ export class BattalionSystem {
         const center = battalion.center();
         let best = null, bestDistance = Infinity;
         for (let i = 0; i < flags.length; i++) {
-            if (flags[i].owner !== battalion.team) continue;
+            if (flags[i].owner == null || !sameSide(this.scene, flags[i].owner, battalion.team)) continue;
             const d = center ? Math.hypot(flags[i].gx - center.gx, flags[i].gy - center.gy) : 0;
             if (d < bestDistance - 1e-9) { bestDistance = d; best = i; }
         }
@@ -389,7 +394,7 @@ export class BattalionSystem {
     }
 
     orderRally(team, gx, gy) {
-        if (!this.scene.territory || !['red', 'blue'].includes(team) || !Number.isFinite(gx) || !Number.isFinite(gy) ||
+        if (!this.scene.territory || !activeTeams(this.scene).includes(team) || !Number.isFinite(gx) || !Number.isFinite(gy) ||
             gx < 0.6 || gx > board.W - 0.6 || gy < 0.6 || gy > board.H - 0.6) return false;
         for (const b of this.battalions) if (b.team === team && b.gathering) this.cancelCampOrders(b);
         this.scene.territory.rally[team] = { gx, gy };

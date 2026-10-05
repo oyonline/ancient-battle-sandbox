@@ -9,6 +9,7 @@
 import { UNIT_TYPES } from '../units.js';
 import { board } from '../board.js';
 import { territoryLayout } from '../territory-map.js';
+import { TEAMS } from '../factions.js';
 
 export const TERRITORY = {
     W: 260, H: 180,                   // 领土面积为原版四倍；常规模式仍为 70×70
@@ -35,9 +36,9 @@ export function makeTerritoryFlags() {
 
 export class TerritoryEconomy {
     constructor() {
-        this.treasury = { red: TERRITORY.START_TREASURY, blue: TERRITORY.START_TREASURY };
-        this.earned = { red: 0, blue: 0 };
-        this.spent = { red: 0, blue: 0 };
+        this.treasury = { red: TERRITORY.START_TREASURY, blue: TERRITORY.START_TREASURY, black: TERRITORY.START_TREASURY };
+        this.earned = { red: 0, blue: 0, black: 0 };
+        this.spent = { red: 0, blue: 0, black: 0 };
     }
 
     incomeRate(ownedFlags) {
@@ -45,8 +46,8 @@ export class TerritoryEconomy {
     }
 
     tick(dt, owned) {
-        for (const team of ['red', 'blue']) {
-            const amount = this.incomeRate(owned[team]) * dt;
+        for (const team of TEAMS) {
+            const amount = this.incomeRate(owned?.[team] ?? 0) * dt;
             this.treasury[team] += amount;
             this.earned[team] += amount;
         }
@@ -65,7 +66,7 @@ export class TerritoryEconomy {
 // 5 面旗下 3:2 → 1.6/秒（约 9 分钟耗尽 900 票）；4:1 / 5:0 递增压制。
 export class TicketSystem {
     constructor() {
-        this.tickets = { red: TERRITORY.TICKETS, blue: TERRITORY.TICKETS };
+        this.tickets = { red: TERRITORY.TICKETS, blue: TERRITORY.TICKETS, black: TERRITORY.TICKETS };
     }
 
     tick(dt, owned) {

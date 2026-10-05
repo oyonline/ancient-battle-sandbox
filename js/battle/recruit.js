@@ -6,19 +6,20 @@
 
 import { TERRITORY } from './economy.js';
 import { UNIT_TYPES } from '../units.js';
+import { TEAMS, isHostile, ownsFlag } from '../factions.js';
 
 export class RecruitSystem {
     constructor(scene) {
         this.scene = scene;                          // 场景钩子：territory.econ / simulationTime / spawnTerritoryUnit / aliveCount
-        this.queues = { red: [], blue: [] };
-        this.spawned = { red: 0, blue: 0 };
+        this.queues = { red: [], blue: [], black: [] };
+        this.spawned = { red: 0, blue: 0, black: 0 };
     }
 
     // 马场门禁：占领 ≥1 座马场才能征骑兵（已在场/已在队列的骑兵不受影响）。
-    // 纯读旗归属（模拟态），红蓝两端锁步一致。
+    // 归属判定走同盟共享：红蓝联军下盟友占下的马场同样算己方拥有。
     ownsRanch(team) {
         for (const flag of this.scene.flags ?? []) {
-            if (flag.role === 'ranch' && flag.owner === team) return true;
+            if (flag.role === 'ranch' && ownsFlag(this.scene, team, flag)) return true;
         }
         return false;
     }
@@ -43,7 +44,7 @@ export class RecruitSystem {
 
     // 到点出兵；在场达到 ALIVE_CAP 时暂扣在队里（不弃单），腾出名额立即补上。
     update() {
-        for (const team of ['red', 'blue']) {
+        for (const team of TEAMS) {
             const queue = this.queues[team];
             while (queue.length && queue[0].readyAt <= this.scene.simulationTime + 1e-7) {
                 if (this.scene.aliveCount(team) >= TERRITORY.ALIVE_CAP) break;
@@ -83,7 +84,7 @@ export class TerritoryAI {
         // 决策读实时存活表，无随机、步进序固定，锁步两端一致。
         let foeCavalry = 0, foeCombat = 0;
         for (const unit of scene._aliveArr) {
-            if (unit.team === this.team || unit.dead || unit.withdrawn) continue;
+            if (!isHostile(scene, this.team, unit.team) || unit.dead || unit.withdrawn) continue;
             if (unit.type === 'worker' || unit.type === 'medic' || unit.type === 'wagon') continue;
             foeCombat++;
             if (unit.type === 'cavalry') foeCavalry++;

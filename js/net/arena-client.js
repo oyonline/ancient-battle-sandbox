@@ -42,7 +42,8 @@ export class ArenaClient {
     }
 
     // create/join 自带模拟版本：服务器开局前做两端版本准入（混版本必分歧）。
-    createRoom() { this.send({ t: 'create', v: SIM_VERSION }); }
+    // mode：房间玩法（'territory' 常规红蓝对战 / 'coop' 红蓝联军打黑方），服务器透传给两端。
+    createRoom(mode = 'territory') { this.send({ t: 'create', v: SIM_VERSION, mode }); }
     joinRoom(code) { this.send({ t: 'join', code, v: SIM_VERSION }); }
     sendReady() { this.send({ t: 'ready' }); }
     bye() { this.send({ t: 'bye' }); this.ws?.close(); }

@@ -2,6 +2,7 @@
 // 骑兵冲锋/穿透、已离弦箭矢继续使用各自的接触处理和共同伤害队列。
 import { Terrain } from './terrain.js';
 import { dist, resolveAttack, knockback } from './units.js';
+import { isHostile } from './factions.js';
 
 export const CombatRules = {
     canAct(unit) { return this.canBeHit(unit) && unit.moraleState !== 'routing'; },
@@ -72,7 +73,7 @@ export const CombatRules = {
     },
 
     canStrike(scene, unit, target, reach, tolerance = 0) {
-        return this.canAct(unit) && this.canBeHit(target) && unit.team !== target.team &&
+        return this.canAct(unit) && this.canBeHit(target) && isHostile(scene, unit.team, target.team) &&
             dist(unit, target) <= reach + tolerance &&
             (unit.tacticalRole !== 'guard' || this.inFacing(unit, target)) && this.clearLane(scene, unit, target);
     },

@@ -7,6 +7,7 @@ import { quantizeDecision as q } from './determinism.js';
 import { HEALING_RULES } from './healing.js';
 import { updateWorkerCombat, workerConstructionPaused } from './worker.js';
 import { buildSpeedScale, buildingDamageScale, buildSiteBonus } from './site-traits.js';
+import { RELATIONS_MUTUAL, activeTeams, isHostile, sameSide, canonicalOf, teamName, TEAMS } from '../factions.js';
 
 export const CAMP_RULES = {
     camp: { cost: 160, seconds: 18, hp: 850, def: 10, radius: 2.2 },
@@ -46,7 +47,7 @@ export class CampSystem {
         this.grid = new Map();
         this.unitsById = new Map();
         this.refreshUnits();
-        for (const team of ['red', 'blue']) {
+        for (const team of activeTeams(scene)) {
             this.createBuilding(team, 'camp', 'home', true);
             this.createBuilding(team, 'tower', 'home', true);
         }
@@ -79,15 +80,21 @@ export class CampSystem {
     unit(id) { return this.unitsById.get(id) ?? this.scene.units.find(u => u.id === id); }
     id(team, type, siteId) { return `${type}:${team}:${siteId}`; }
     site(team, siteId) {
-        if (siteId === 'home') return { gx: team === 'red' ? 7 : board.W - 7, gy: board.H / 2 };
+        if (siteId === 'home') return team === 'black'
+            ? { gx: board.W / 2, gy: board.H - 8 }             // 黑方自南侧压中
+            : { gx: team === 'red' ? 7 : board.W - 7, gy: board.H / 2 };
         return Number.isInteger(siteId) ? this.scene.flags?.[siteId] : null;
     }
-    ownsSite(team, siteId) { return siteId === 'home' || this.site(team, siteId)?.owner === team; }
+    ownsSite(team, siteId) {
+        if (siteId === 'home') return true;
+        const owner = this.site(team, siteId)?.owner;
+        return owner != null && sameSide(this.scene, team, owner);
+    }
 
     placement(team, type, siteId) {
         const s = this.site(team, siteId);
         if (!s) return null;
-        const mir = team === 'red' ? 1 : -1;
+        const mir = team === 'red' ? 1 : team === 'blue' ? -1 : 0;   // 黑方（北侧）无横向镜像
         // Put the compound behind its flag, keeping the capture circle and bridge open.
         // 医帐放据点北侧（旗圈外沿），不与南侧营寨/箭塔争地。
         const p = type === 'tower'
@@ -125,7 +132,7 @@ export class CampSystem {
 
     requestBuild(team, workerId, kind, siteId) {
         const w = this.unit(workerId), rule = CAMP_RULES[kind];
-        if (!['red', 'blue'].includes(team) || !['camp', 'tower', 'tent'].includes(kind) || !rule || !ready(w) || w.type !== 'worker' || w.team !== team ||
+        if (!activeTeams(this.scene).includes(team) || !['camp', 'tower', 'tent'].includes(kind) || !rule || !ready(w) || w.type !== 'worker' || w.team !== team ||
             siteId === 'home' || !this.ownsSite(team, siteId) || !this.placement(team, kind, siteId)) return false;
         const camp = this.getBuilding(this.id(team, 'camp', siteId));
         if ((kind === 'tower' || kind === 'tent') && (!camp?.complete || camp.dead)) return false;
@@ -178,7 +185,7 @@ export class CampSystem {
         const acceptType = b.type === 'tower' ? 'archer' : b.type === 'tent' ? 'medic' : null;
         if (!acceptType) return '这里不能驻军：只有箭塔收弓手、医帐收医师';
         if (b.dead) return '这座建筑已被摧毁';                 // 先看是否还存在，再看归属
-        if (b.team !== team) return `这是敌方${b.type === 'tower' ? '箭塔' : '医帐'}，不能驻军`;
+        if (!sameSide(this.scene, b.team, team)) return `这是敌方${b.type === 'tower' ? '箭塔' : '医帐'}，不能驻军`;
         if (!b.complete) return `${b.type === 'tower' ? '箭塔' : '医帐'}尚未完工，民夫施工完成后才能驻军`;
         const cap = b.capacity;
         if (this.reserved(b) >= cap) return `${b.type === 'tower' ? '箭塔' : '医帐'}已满（${this.reserved(b)}/${cap}，含正在前往的）`;
@@ -203,7 +210,7 @@ export class CampSystem {
         const b = this.getBuilding(towerId);
         // 箭塔收弓手；医帐收医师。其它组合一律不接受。
         const acceptType = b?.type === 'tower' ? 'archer' : b?.type === 'tent' ? 'medic' : null;
-        if (!b || !acceptType || b.team !== team || b.dead || !b.complete || !Array.isArray(unitIds)) return [];
+        if (!b || !acceptType || !sameSide(this.scene, b.team, team) || b.dead || !b.complete || !Array.isArray(unitIds)) return [];
         let count = this.reserved(b);
         const accepted = [];
         for (const id of [...new Set(unitIds)].sort((a, z) => a - z)) {
@@ -239,7 +246,7 @@ export class CampSystem {
 
     orderAttackBuilding(team, unitIds, buildingId) {
         const b = this.getBuilding(buildingId);
-        if (!b || b.dead || b.team === team || !Array.isArray(unitIds)) return false;
+        if (!b || b.dead || !isHostile(this.scene, team, b.team) || !Array.isArray(unitIds)) return false;
         let accepted = false;
         for (const id of [...new Set(unitIds)].sort((a, z) => a - z)) {
             const u = this.unit(id);
@@ -281,7 +288,7 @@ export class CampSystem {
 
     ungarrison(team, towerId) {
         const b = this.getBuilding(towerId);
-        if (!b || b.team !== team || (b.type !== 'tower' && b.type !== 'tent') || b.dead) return false;
+        if (!b || !sameSide(this.scene, b.team, team) || (b.type !== 'tower' && b.type !== 'tent') || b.dead) return false;
         for (const u of this.scene.units) if (u.garrisonOrderId === b.id) u.garrisonOrderId = null;
         for (let i = 0; i < b.garrisonIds.length; i++) {
             const u = this.unit(b.garrisonIds[i]);
@@ -293,7 +300,7 @@ export class CampSystem {
 
     damageBuilding(b, damage, source) {
         if (!b || this.getBuilding(b.id) !== b || b.dead || !Number.isFinite(damage) || damage <= 0 ||
-            (source && (source.team === b.team || source.battleId !== b.battleId))) return 0;
+            (source && (!isHostile(this.scene, source.team, b.team) || source.battleId !== b.battleId))) return 0;
         // 桥头工事：本点己方建筑受到伤害 −10%，只在统一结算入口应用一次；
         // 取整与最低伤害沿用既有口径（向下取整、至少 1 点），易主后立即失效。
         const scale = buildingDamageScale(this.scene, b);
@@ -311,16 +318,24 @@ export class CampSystem {
                 if (u) this.exitUnit(b, u, i);
             }
             b.garrisonIds = [];
-            this.scene.addBattleEvent?.(`building-${b.id}-${Math.floor(this.scene.simulationTime)}`, `${b.team === 'red' ? '红方' : '蓝方'}${b.type === 'tower' ? '箭塔' : b.type === 'tent' ? '医帐' : b.siteId === 'home' ? '大本营' : '营寨'}被摧毁`, b.team);
+            this.scene.addBattleEvent?.(`building-${b.id}-${Math.floor(this.scene.simulationTime)}`, `${teamName(b.team)}${b.type === 'tower' ? '箭塔' : b.type === 'tent' ? '医帐' : b.siteId === 'home' ? '大本营' : '营寨'}被摧毁`, b.team);
             this.scene._countsDirty = true;
         }
         return dealt;
     }
 
     winner() {
-        const red = this.getBuilding(this.id('red', 'camp', 'home'))?.dead;
-        const blue = this.getBuilding(this.id('blue', 'camp', 'home'))?.dead;
-        return red && blue ? 'draw' : red ? 'blue' : blue ? 'red' : null;
+        // 按同盟组判定：某组所有大本营尽毁即该组战败；仅剩一组存活时该组代表获胜。
+        // 二元模式 groups=[[red],[blue],[black]]，黑方未参战被过滤，结果与旧实现逐位一致。
+        const groups = this.scene.relationGroups || RELATIONS_MUTUAL;
+        const active = groups.map((group, i) => ({ i, group,
+            present: group.some(team => activeTeams(this.scene).includes(team)),
+            defeated: group.every(team => this.getBuilding(this.id(team, 'camp', 'home'))?.dead === true) }))
+            .filter(g => g.present);
+        if (!active.length) return null;
+        if (active.every(g => g.defeated)) return 'draw';
+        const alive = active.filter(g => !g.defeated);
+        return active.length > 1 && alive.length === 1 ? canonicalOf(alive[0].group) : null;
     }
 
     nearBuilding(unit, radius = 14) {
@@ -329,7 +344,7 @@ export class CampSystem {
         const y0 = Math.floor(q(unit.gy - radius) / 16), y1 = Math.floor(q(unit.gy + radius) / 16);
         for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
             for (const b of this.grid.get(`${x},${y}`) ?? []) {
-                if (b.dead || b.team === unit.team || this.getBuilding(b.id) !== b) continue;
+                if (b.dead || !isHostile(this.scene, unit.team, b.team) || this.getBuilding(b.id) !== b) continue;
                 const d = distance(unit, b);
                 if (d > radius || d >= bestD) continue;
                 best = b; bestD = d;
@@ -341,7 +356,7 @@ export class CampSystem {
     localEnemy(unit, radius) {
         let best = null, bestD = Infinity;
         this.scene.forEachNear(unit.gx, unit.gy, radius, e => {
-            if (!alive(e) || e.garrisonTowerId || e.team === unit.team || e.type === 'wagon') return;
+            if (!alive(e) || e.garrisonTowerId || !isHostile(this.scene, unit.team, e.team) || e.type === 'wagon') return;
             const d = distance(unit, e);
             if (d > radius || d > bestD || (d === bestD && best && e.id >= best.id)) return;
             best = e; bestD = d;
@@ -411,7 +426,7 @@ export class CampSystem {
         }
         if (u.garrisonOrderId) {
             const b = this.getBuilding(u.garrisonOrderId);
-            if (!b || b.dead || b.team !== u.team || !b.complete) u.garrisonOrderId = null;
+            if (!b || b.dead || !sameSide(this.scene, b.team, u.team) || !b.complete) u.garrisonOrderId = null;
             else if (distance(u, b) <= CAMP_RULES.ENTER_REACH && b.garrisonIds.length < b.capacity) {
                 // Enter in the settlement phase, so later planners see the same ground snapshot.
                 u.moveX = 0; u.moveY = 0;
@@ -483,7 +498,7 @@ export class CampSystem {
         }
         if (q(this.scene.simulationTime) < q(this.nextThink)) return;
         this.nextThink = this.scene.simulationTime + CAMP_RULES.AI_INTERVAL_MS;
-        for (const team of ['red', 'blue']) if (this.scene.territory.autoBuy?.[team]) this.ai(team);
+        for (const team of activeTeams(this.scene)) if (this.scene.territory.autoBuy?.[team]) this.ai(team);
     }
 
     ai(team) {
@@ -492,7 +507,8 @@ export class CampSystem {
         if (workers.length + recruit.queues[team].filter(i => i.type === 'worker').length < 2) recruit.enqueue(team, 'worker');
         for (const w of workers) {
             if (w.workerTask) continue;
-            const owned = (this.scene.flags ?? []).map((f, i) => ({ f, i })).filter(({ f }) => f.owner === team);
+            const owned = (this.scene.flags ?? []).map((f, i) => ({ f, i }))
+                .filter(({ f }) => f.owner != null && sameSide(this.scene, team, f.owner));
             // 建设链：营寨 → 箭塔 → 医帐（有医帐的据点收容力翻倍，AI 同样受益）。
             // 据点特色偏好：同等距离时优先能把建筑放进有奖励的据点（林口加速、路口扩收容、桥头护塔）；
             // 纯读当前归属，无随机数，红蓝镜像同序。

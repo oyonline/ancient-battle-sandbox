@@ -4,6 +4,7 @@ import { board } from './board.js';
 import { Terrain } from './terrain.js';
 import { CombatRules } from './combat.js';
 import { shallowSpeedFor, DEFAULT_SHALLOW_SPEED } from './battle/site-traits.js';
+import { TEAMS, isHostile } from './factions.js';
 
 export const UNIT_TYPES = {
     infantry: {
@@ -74,12 +75,16 @@ export function generateArmyPositions(team, config, formationKey) {
     if (total === 0) return positions;
 
     const COLS = clamp(Math.ceil(Math.sqrt(total * 1.6)), 8, 42);
-    const gySpan = 1.35;
-    const gyCenter = board.H / 2;
-    const frontGX = team === 'red' ? 16 : board.W - 16;   // 前排线，中间留开阔地
-    const dir = team === 'red' ? -1 : 1;                 // 后排延伸方向
-    const depthAvail = team === 'red' ? frontGX - 2.5 : (board.W - 2.5) - frontGX;
+    const colSpan = 1.35;
     const rowsEst = Math.ceil(total / COLS);
+    // 排布轴：红蓝沿横向（红西 / 蓝东），黑方沿纵向（自南压中）——列展开方向随之互换。
+    // 注：领土图中央是贯穿南北的大河，北侧中央为河面不可立营，故黑方入口定在南侧中央。
+    const horizontal = team !== 'black';
+    const span = horizontal ? board.W : board.H;
+    const center = horizontal ? board.H / 2 : board.W / 2;
+    const front = team === 'black' ? span - 24 : team === 'red' ? 16 : span - 16;
+    const dir = team === 'red' || team === 'black' ? -1 : 1;
+    const depthAvail = dir < 0 ? front - 2.5 : (span - 2.5) - front;
     const rowStep = Math.min(0.8, depthAvail / Math.max(rowsEst - 1, 1));
     const maxRows = rowsEst + 2;
     const order = formation.rows;
@@ -99,11 +104,9 @@ export function generateArmyPositions(team, config, formationKey) {
             }
             if (type) {
                 remaining[type]--;
-                positions.push({
-                    type,
-                    gx: frontGX + dir * row * rowStep,
-                    gy: gyCenter + (col - (COLS - 1) / 2) * gySpan
-                });
+                const along = front + dir * row * rowStep;
+                const across = center + (col - (COLS - 1) / 2) * colSpan;
+                positions.push({ type, gx: horizontal ? along : across, gy: horizontal ? across : along });
             }
         }
         if (Object.values(remaining).every(n => n <= 0)) break;
@@ -135,7 +138,7 @@ export function updatePikeBrace(unit, dt) {
         if (other.team === unit.team && other.type === 'pikeman' && distance <= 2.6) {
             support++;
             if (dx * unit.braceFacingX + dy * unit.braceFacingY < -0.25) depth++;
-        } else if (other.team !== unit.team && distance <= 6) {
+        } else if (isHostile(unit.scene, unit.team, other.team) && distance <= 6) {
             if (!Terrain.segmentClear(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, other.gx, other.gy)) return;
             if (distance < nearestDistance - 1e-9 ||
                 (Math.abs(distance - nearestDistance) <= 1e-9 && other.id < nearestEnemy.id)) {
@@ -259,17 +262,37 @@ export class CavalryAI {
         if (this.flankCache?.scene !== scene || this.flankCache.battleId !== scene.battleId ||
             now < this.flankCache.at || now - this.flankCache.at >= 750) {
             const empty = () => ({ archers: [], minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
-            const teams = { red: empty(), blue: empty() };
+            const teams = {};
+            for (const team of TEAMS) teams[team] = empty();
             for (const other of scene.units) {
                 if (!this.flankTargetAlive(other) || other.type === 'cavalry') continue;
-                const army = teams[other.team];
+                const army = teams[other.team] ||= empty();
                 if (other.type === 'archer') army.archers.push(other);
                 army.minX = Math.min(army.minX, other.gx); army.maxX = Math.max(army.maxX, other.gx);
                 army.minY = Math.min(army.minY, other.gy); army.maxY = Math.max(army.maxY, other.gy);
             }
-            this.flankCache = { scene, battleId: scene.battleId, at: now, teams };
+            this.flankCache = { scene, battleId: scene.battleId, at: now, teams, merged: {} };
         }
-        return this.flankCache.teams[unit.team === 'red' ? 'blue' : 'red'];
+        return this.flankEnemySnapshot(unit);
+    }
+
+    // 把 unit 阵营的所有敌对阵营快照合并成一份（三方下黑方=红蓝两军合并）。
+    // 按 TEAMS 固定顺序合并，保证确定性；合并结果按阵营缓存，避免逐骑每帧重算。
+    flankEnemySnapshot(unit) {
+        const cache = this.flankCache;
+        const cached = cache.merged[unit.team];
+        if (cached) return cached;
+        const merged = { archers: [], minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+        for (const other of TEAMS) {
+            if (!isHostile(cache.scene, unit.team, other)) continue;
+            const army = cache.teams[other];
+            if (!army) continue;
+            for (const archer of army.archers) merged.archers.push(archer);
+            merged.minX = Math.min(merged.minX, army.minX); merged.maxX = Math.max(merged.maxX, army.maxX);
+            merged.minY = Math.min(merged.minY, army.minY); merged.maxY = Math.max(merged.maxY, army.maxY);
+        }
+        cache.merged[unit.team] = merged;
+        return merged;
     }
 
     flank(unit, now, dt) {
@@ -719,7 +742,8 @@ export class CavalryAI {
     reform(unit, now, dt) {
         unit.stateTime += dt;
         if (unit.reformX == null) {
-            const center = unit.scene.centroid[unit.team === 'red' ? 'blue' : 'red'];
+            const center = unit.scene.enemyCentroid ? unit.scene.enemyCentroid(unit.team)
+                : unit.scene.centroid[unit.team === 'red' ? 'blue' : 'red'];
             const angle = Math.atan2(unit.gy - center.y, unit.gx - center.x);
             unit.reformX = clamp(unit.gx + Math.cos(angle) * 4.5, 1.6, board.W - 1.6);
             unit.reformY = clamp(unit.gy + Math.sin(angle) * 4.5, 1.5, board.H - 1.5);

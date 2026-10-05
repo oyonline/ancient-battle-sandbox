@@ -2,6 +2,7 @@
 import { board } from '../board.js';
 import { TERRITORY } from './economy.js';
 import { traitOf, traitState, ownsRole } from './site-traits.js';
+import { TEAMS, RELATIONS_MUTUAL, groupOf, canonicalOf, sameSide, sideLabel } from '../factions.js';
 
 export function updateFlags(scene, dt) {
     const RADIUS = 2.8, RATE = 0.1 / 10;           // 净占领力 10（约一队剑士）10 秒拉满
@@ -12,21 +13,30 @@ export function updateFlags(scene, dt) {
     // 归属生成播报——全局奖励（渡口/马场）的"仍保留/失效/骑源被断"若在循环内
     // 读中间状态，会对同一最终局面先说"仍保留"再说"失效"。
     const changes = [];
+    const power = [];                              // 各同盟组占领力（按组索引累计，逐旗复用）
+    // 同盟分组：默认「各自为战」（红蓝二元，与既有行为逐位一致）；
+    // 合作模式为 [[red,blue],[black]] —— 盟友占领力合并成一路（红蓝合力翻旗）。
+    const groups = scene.relationGroups || RELATIONS_MUTUAL;
+    const ownerA = canonicalOf(groups[0]);
+    const ownerB = groups[1] ? canonicalOf(groups[1]) : null;
     for (const flag of scene.flags) {
-        let red = 0, blue = 0;
+        for (let i = 0; i < groups.length; i++) power[i] = 0;
         scene.forEachNear(flag.gx, flag.gy, RADIUS, u => {
             if (u.dead || u.withdrawn || u.garrisonTowerId || u.type === 'worker' || u.moraleState === 'routing') return;
             if (Math.hypot(u.gx - flag.gx, u.gy - flag.gy) > RADIUS) return;
-            if (u.team === 'red') red += POWER[u.type] ?? 5; else blue += POWER[u.type] ?? 5;
+            const gi = groupOf(scene, u.team);
+            if (gi >= 0 && gi < power.length) power[gi] += POWER[u.type] ?? 5;
         });
-        flag.contested = red > 0 && blue > 0;
-        const net = red - blue;                     // 正=红方向拉，负=蓝方向拉
+        const a = power[0] ?? 0, b = power[1] ?? 0;   // 前两组构成旗面拉锯轴（正=方向 A，负=方向 B）
+        flag.contested = a > 0 && b > 0;
+        const net = a - b;
         if (net !== 0) flag.progress = Math.max(-1, Math.min(1, flag.progress + net * RATE * dt));
         const had = flag.owner;
-        if (flag.progress >= 1) flag.owner = 'red';
-        else if (flag.progress <= -1) flag.owner = 'blue';
-        else if (had === 'red' && flag.progress < 0) flag.owner = null;   // 被拉过中线：失去归属
-        else if (had === 'blue' && flag.progress > 0) flag.owner = null;
+        const hadGroup = had == null ? -1 : groupOf(scene, had);
+        if (flag.progress >= 1) flag.owner = ownerA;
+        else if (flag.progress <= -1) flag.owner = ownerB;
+        else if (hadGroup === 0 && flag.progress < 0) flag.owner = null;   // 被拉过中线：失去归属
+        else if (hadGroup === 1 && flag.progress > 0) flag.owner = null;
         if (flag.owner !== had) {
             ownershipChanged = true;
             flag.pulseAt = scene.simulationTime;                            // 归属变化：扩散脉冲
@@ -45,7 +55,7 @@ export function updateFlags(scene, dt) {
         if (flag.owner === null && had != null) {
             // 被拉过中线丢掉据点：每次真实归属变化播报一次；
             // 持续停留在同一归属状态（键不变）时不重复刷屏。
-            const who = had === 'red' ? '红方' : '蓝方';
+            const who = sideLabel(scene, had);
             scene.addBattleEvent(`flag-lost-${flag.name}-${had}-${flag.flipCount}`, `${who}失去${flag.name}旗帜`, had);
             const trait = traitOf(flag.role);
             if (trait) {
@@ -61,52 +71,59 @@ export function updateFlags(scene, dt) {
         // 占领播报：新归属非空即播（含中立→占领；changes 数组保证确有变化）。
         if (flag.owner != null) {
             scene.addBattleEvent(`flag-${flag.name}-${flag.owner}-${flag.flipCount}`,
-                `${flag.owner === 'red' ? '红方' : '蓝方'}占领了${flag.name}旗帜`, flag.owner);
+                `${sideLabel(scene, flag.owner)}占领了${flag.name}旗帜`, flag.owner);
             // 马场易主即时播报：夺场开骑源 / 断敌骑源都是大新闻。
             // 但"断骑源"必须真的断（按本步最终归属）：对手仍保有其它马场时只算被夺走一座，
             // 不能断言其骑源被完全切断。
             if (flag.role === 'ranch') {
-                const foe = flag.owner === 'red' ? 'blue' : 'red';
-                const foeName = foe === 'red' ? '红方' : '蓝方';
-                const foeStillRanch = ownsRole(scene, foe, 'ranch');
+                // 断骑源判定按"本步最终归属"：对手（敌对同盟组）仍保有马场时只算被夺走一座。
+                const myGroup = groupOf(scene, flag.owner);
+                const foeGroup = groups.findIndex((_, i) => i !== myGroup);
+                const foe = foeGroup >= 0 ? canonicalOf(groups[foeGroup]) : null;
+                const foeStillRanch = foe != null && ownsRole(scene, foe, 'ranch');
                 scene.addBattleEvent(`ranch-${flag.name}-${flag.owner}-${flag.flipCount}`,
-                    `${flag.owner === 'red' ? '红方' : '蓝方'}掌控${flag.name}，骑兵征募开启；` +
-                    (foeStillRanch ? `${foeName}仍保有马场，骑源未断` : `${foeName}骑源被断`), flag.owner);
+                    `${sideLabel(scene, flag.owner)}掌控${flag.name}，骑兵征募开启；` +
+                    (foeStillRanch ? `${sideLabel(scene, foe)}仍保有马场，骑源未断` : `${sideLabel(scene, foe)}骑源被断`), flag.owner);
             } else {
                 // 其它据点特色：占领即生效，只播报一次（归属变化驱动，不逐帧重复）。
                 const trait = traitOf(flag.role);
                 if (trait) {
                     const [brief, ...rest] = trait.reward.split('：');
                     scene.addBattleEvent(`trait-${flag.name}-${flag.owner}-${flag.flipCount}`,
-                        `${flag.owner === 'red' ? '红方' : '蓝方'}${flag.name}：${brief}生效${rest.length ? `（${rest.join('：')}）` : ''}`, flag.owner);
+                        `${sideLabel(scene, flag.owner)}${flag.name}：${brief}生效${rest.length ? `（${rest.join('：')}）` : ''}`, flag.owner);
                 }
             }
         }
     }
-    for (const team of ['red', 'blue']) {
-        scene.controlScore[team] += dt * scene.flags.filter(f => f.owner === team).length;
+    for (const team of TEAMS) {
+        scene.controlScore[team] += dt * scene.flags.filter(f => f.owner != null && sameSide(scene, team, f.owner)).length;
     }
 }
 
 export function updateTerritory(scene, dt) {
     scene.updateFlags(dt);
-    const owned = { red: 0, blue: 0 };
-    for (const flag of scene.flags) if (flag.owner) owned[flag.owner]++;
+    // 归属计数对盟友共享：红蓝联军下任一盟友的据点同时计入双方（既有二元模式结果不变）。
+    const owned = { red: 0, blue: 0, black: 0 };
+    for (const flag of scene.flags) {
+        if (!flag.owner) continue;
+        for (const team of TEAMS) if (sameSide(scene, team, flag.owner)) owned[team]++;
+    }
     const state = scene.territory;
     state.econ.tick(dt, owned);
     state.recruit.update();
     state.camps?.update(dt);
     state.healing?.update(dt);
     scene.battalions.update(scene.simulationTime);
-    for (const team of ['red', 'blue']) {
+    for (const team of TEAMS) {
         if (state.autoBuy[team]) state.ai[team].update(scene.simulationTime);
     }
-    const before = { red: state.tickets.tickets.red, blue: state.tickets.tickets.blue };
+    const before = {};
+    for (const team of TEAMS) before[team] = state.tickets.tickets[team];
     state.tickets.tick(dt, owned);
-    for (const team of ['red', 'blue']) {
+    for (const team of TEAMS) {
         if (before[team] > TERRITORY.TICKETS / 2 && state.tickets.tickets[team] <= TERRITORY.TICKETS / 2) {
             scene.addBattleEvent(`tickets-half-${team}`,
-                `${team === 'red' ? '红方' : '蓝方'}票数已流失过半，领土告急`, team);
+                `${sideLabel(scene, team)}票数已流失过半，领土告急`, team);
         }
     }
 }
@@ -128,9 +145,11 @@ export function spotFree(scene, x, y) {
 }
 
 export function spawnTerritoryUnit(scene, team, type) {
-    const cx = team === 'red' ? 5.5 : board.W - 5.5;
-    const cy = board.H / 2;
-    let gx = cx + (team === 'red' ? 1 : -1), gy = cy;
+    // 三方向出生：红自西、蓝自东、黑自南（合作模式）——各自家门口向场内一步。
+    const cx = team === 'black' ? board.W / 2 : team === 'red' ? 5.5 : board.W - 5.5;
+    const cy = team === 'black' ? board.H - 5.5 : board.H / 2;
+    let gx = cx + (team === 'red' ? 1 : team === 'blue' ? -1 : 0);
+    let gy = cy + (team === 'black' ? -1 : 0);
     outer:
     for (let ring = 0; ring < 8; ring++) {
         const radius = ring * 1.1;

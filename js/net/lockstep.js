@@ -35,7 +35,10 @@ export const LOCKSTEP = {
 // 2026-10-03 rework-r2c（用户复验 F13）：复位移至回撤早退之前，覆盖回撤/改旗
 // 令/清令/集结全部非驻守路径——"驻守出界→回撤→新驻守"序列下旧承诺不再跨令
 // 存活压制接敌（用户对照实测 3 秒敌 100 不动 vs 降到 60），行为差异实测成立。
-export const SIM_VERSION = '2026-10-03-rework-r2c';
+// 2026-10-04 coop-black：引入第三阵营「黑方」与红蓝同盟（合作模式）——敌我判定
+// 改走关系表、旗帜拉锯按同盟组合并、投影新增 K 阵营编码与经济/票数/征兵/池黑方分量。
+// 即使既有两方对局行为逐位不变，模拟语义与投影结构已扩展，混版本必须拒绝。
+export const SIM_VERSION = '2026-10-04-coop-black';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {
@@ -95,11 +98,13 @@ export class Lockstep {
 
 // ---------------- 状态投影与哈希 ----------------
 // 只投影影响模拟的字段；单位数组序 = 生成序（两端一致），死亡周期压实保持相对序。
+// 阵营字符：R 红 / B 蓝 / K 黑——既有两方对局只出现 R/B，编码与旧版逐位一致。
+const teamChar = team => team === 'red' ? 'R' : team === 'blue' ? 'B' : team === 'black' ? 'K' : String(team);
 export function battleProjection(scene) {
     const parts = ['t' + Math.round(scene.simulationTime)];
     for (const unit of scene.units) {
         if (unit.dead || unit.withdrawn) continue;
-        parts.push(unit.id, unit.team === 'red' ? 'R' : 'B', unit.type,
+        parts.push(unit.id, teamChar(unit.team), unit.type,
             Math.round(unit.gx * 1e4), Math.round(unit.gy * 1e4),
             Math.round(unit.hp * 1e3), unit.moraleState);
         // 骑兵接管/滞回标记与量化助跑距离（F3）：三项直接决定下一步是否交还冲锋
@@ -123,38 +128,42 @@ export function battleProjection(scene) {
     }
     parts.push('f');
     for (const flag of scene.flags) {
-        parts.push(flag.owner ? (flag.owner === 'red' ? 'R' : 'B') : 'n', Math.round(flag.progress * 1e4));
+        parts.push(flag.owner ? teamChar(flag.owner) : 'n', Math.round(flag.progress * 1e4));
     }
     // 营队状态入投影（F3）：营决定领土模式下所有单位的行为（集结/回撤/驻守/交还），
     // 此处分叉可能暂不改变坐标（用户探针：一侧单骑出发、一侧继续集结，哈希仍一致）
     // 却必然在后续漂移——直接纳入 2 秒哈希补上检测缺口。遍历序 = 营创建序（两端
     // 一致）；chargeDistance/时间戳取整、orderPoint 按坐标 1e4 取整，与既有投影同纪律。
+    // 按参与阵营投影：既有两方对局仍只列 R/B，合作模式才追加黑方——
+    // 投影格式随参战名单走，旧对局字符串不变。
+    const roster = scene.activeTeams || ['red', 'blue'];
     if (scene.battalions) {
         parts.push('b', scene.battalions.battalions.length);
         for (const b of scene.battalions.battalions) {
-            parts.push(b.id, b.team === 'red' ? 'R' : 'B', b.gathering ? 1 : 0, b.cavalry ? 1 : 0,
+            parts.push(b.id, teamChar(b.team), b.gathering ? 1 : 0, b.cavalry ? 1 : 0,
                 b.orderFlag ?? '', b.orderPoint ? Math.round(b.orderPoint.gx * 1e4) + ':' + Math.round(b.orderPoint.gy * 1e4) : '',
                 b.retreat ? 1 : 0, b.stance, Math.round(b.chargeUntil || 0), Math.round(b.createdAt || 0),
                 b.members.map(u => u.id).join('.'));
         }
-        parts.push('pool', scene.battalions.pool.red?.id ?? '', scene.battalions.pool.blue?.id ?? '',
-            scene.battalions.cavPool.red?.id ?? '', scene.battalions.cavPool.blue?.id ?? '');
+        parts.push('pool',
+            ...roster.map(t => scene.battalions.pool[t]?.id ?? ''),
+            ...roster.map(t => scene.battalions.cavPool[t]?.id ?? ''));
     }
     const territory = scene.territory;
     parts.push('e',
-        Math.round(territory.econ.treasury.red * 1e3), Math.round(territory.econ.treasury.blue * 1e3),
-        Math.round(territory.tickets.tickets.red * 1e3), Math.round(territory.tickets.tickets.blue * 1e3),
-        territory.recruit.spawned.red, territory.recruit.spawned.blue,
-        territory.recruit.queues.red.length, territory.recruit.queues.blue.length);
+        ...roster.map(t => Math.round(territory.econ.treasury[t] * 1e3)),
+        ...roster.map(t => Math.round(territory.tickets.tickets[t] * 1e3)),
+        ...roster.map(t => territory.recruit.spawned[t]),
+        ...roster.map(t => territory.recruit.queues[t].length));
     if (territory.camps) {
         parts.push('camps', JSON.stringify(territory.camps.projection()));
         parts.push('arrows', JSON.stringify(scene.arrows.map(a => [
             a.source?.id, a.team, a.buildingId || '', a.sx, a.sy, a.tx, a.ty,
             a.t, a.dur, a.dmg, a.firedAt, a.sourceHeight, a.targetHeight
         ])));
-        for (const team of ['red', 'blue']) {
+        for (const team of roster) {
             parts.push(team, JSON.stringify(territory.recruit.queues[team]),
-                JSON.stringify(territory.rally[team]));
+                JSON.stringify(territory.rally?.[team] ?? null));
         }
         if (territory.healing) parts.push('healing', String(Math.round(territory.healing.nextAssign || 0)));
     }

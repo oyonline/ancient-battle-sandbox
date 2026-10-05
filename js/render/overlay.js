@@ -5,6 +5,7 @@ import { clamp, dist } from '../units.js';
 import { TW, TH, OX, OY, gridToScreen, sampleGroundRing, lerpColor } from './metrics.js';
 import { TERRITORY } from '../battle/economy.js';
 import { traitOf } from '../battle/site-traits.js';
+import { ownerMark, ownerDisplayColor, sideLabel, teamColor, canonicalOf, RELATIONS_MUTUAL } from '../factions.js';
 
 // Match the compact economic strip without measuring DOM layout every frame.
 const minimapTop = width => width <= 600 ? 212 : width <= 900 ? 162 : 74;
@@ -12,15 +13,14 @@ const minimapTop = width => width <= 600 ? 212 : width <= 900 ? 162 : 74;
 // ---------------- 据点特色文案（参数与措辞的唯一来源：js/battle/site-traits.js） ----------------
 // 玩家语言把两件事分开讲：占领后能拿到什么 / 地形本来就有但双方都吃到的效果。
 // 大本营（siteId === 'home'）没有旗位，任何地方都不显示据点特色。
-const OWNER_MARK = { red: '🔴', blue: '🔵' };
-const OWNER_NAME = { red: '红方', blue: '蓝方' };
+// 归属标记/称呼按战场关系表取：多人同盟显示联军标记与「红蓝联军」，单阵营显示队标队名。
+// 需要 scene 才能判断同盟，故这些函数都接收 scene。
+function siteOwnerMark(scene, owner) { return owner == null ? '⚪' : (ownerMark(scene, owner) ?? '⚪'); }
+function siteOwnerName(scene, owner) { return owner == null ? '中立' : sideLabel(scene, owner); }
 const NEUTRAL_CUE = '（中立）';
 const NEUTRAL_CUE_FULL = '（中立，占领后归占领方）';
 // 奖励本身就长（路口）的据点只标"中立"，不再追加解释，避免旗标被撑得过宽。
 const NEUTRAL_CUE_MAX = 36;
-
-function siteOwnerMark(owner) { return OWNER_MARK[owner] ?? '⚪'; }
-function siteOwnerName(owner) { return OWNER_NAME[owner] ?? '中立'; }
 
 // 只有有旗位、有角色的据点才有特色；大本营恒为 null。
 function siteTraitOf(flag) {
@@ -41,23 +41,23 @@ export function flagSiteSignature(flag) {
 }
 
 // 旗标三行：①归属 + 军费 ②占领后归谁、拿到什么 ③地形原本就有的效果。
-export function flagLabelText(flag) {
+export function flagLabelText(scene, flag) {
     if (!flag) return '';
-    const lines = [`${siteOwnerMark(flag.owner)} ${flag.name} · 军费 +${TERRITORY.FLAG_INCOME}/秒`];
+    const lines = [`${siteOwnerMark(scene, flag.owner)} ${flag.name} · 军费 +${TERRITORY.FLAG_INCOME}/秒`];
     const trait = siteTraitOf(flag);
     if (!trait) return lines[0];
-    const owned = flag.owner === 'red' || flag.owner === 'blue' ? flag.owner : null;
-    let capture = `占领：${owned ? OWNER_NAME[owned] : ''}${traitRewardBrief(flag.role)}`;
+    const owned = flag.owner ?? null;
+    let capture = `占领：${owned ? siteOwnerName(scene, owned) : ''}${traitRewardBrief(flag.role)}`;
     if (!owned) capture += capture.length + NEUTRAL_CUE_FULL.length <= NEUTRAL_CUE_MAX ? NEUTRAL_CUE_FULL : NEUTRAL_CUE;
     lines.push(capture, `地形：${trait.terrain}`);
     return lines.join('\n');
 }
 
 // 据点列表一行（营队夺旗按钮）：归属 + 占领奖励；悬停说明给全奖励、生效条件与地形。
-export function traitSiteRow(flag) {
+export function traitSiteRow(scene, flag) {
     const sig = flagSiteSignature(flag);
     if (!flag) return { sig, text: '', title: '' };
-    const owner = `${siteOwnerMark(flag.owner)}${siteOwnerName(flag.owner)}`;
+    const owner = `${siteOwnerMark(scene, flag.owner)}${siteOwnerName(scene, flag.owner)}`;
     const trait = siteTraitOf(flag);
     const text = `⚑ ${flag.name} · ${owner}${trait ? ` · ${traitRewardBrief(flag.role)}` : ''}`;
     const title = [`${flag.name} · ${owner}`];
@@ -276,21 +276,25 @@ export class OverlayRenderer {
             g.fillRect(x + rect.x1 / board.W * w, y + rect.y1 / board.H * h,
                 (rect.x2 - rect.x1) / board.W * w, (rect.y2 - rect.y1) / board.H * h);
         }
-        // 双方出兵线提示带
+        // 双方出兵线提示带（合作模式再加一条黑方南侧出兵带）
         g.fillStyle(0xff5555, 0.10);
         g.fillRect(x, y, w * (12 / board.W), h);
         g.fillStyle(0x5599ff, 0.10);
         g.fillRect(x + w * (1 - 12 / board.W), y, w * (12 / board.W), h);
+        if ((this.scene.activeTeams || []).includes('black')) {
+            g.fillStyle(0x8a8a96, 0.12);
+            g.fillRect(x, y + h * (1 - 12 / board.H), w, h * (12 / board.H));
+        }
         // 单位点（超采样抽稀，保持小地图常 60fps）
         const step = this.scene._aliveArr.length > 700 ? 2 : 1;
         for (let i = 0; i < this.scene._aliveArr.length; i += step) {
             const u = this.scene._aliveArr[i];
-            g.fillStyle(u.team === 'red' ? RED : BLUE, 0.9);
+            g.fillStyle(teamColor(u.team), 0.9);
             g.fillRect(x + u.gx / board.W * w - 0.8, y + u.gy / board.H * h - 0.8, 1.8, 1.8);
         }
         // 旗帜（争夺时呼吸闪烁）
         for (const flag of this.scene.flags) {
-            const color = flag.owner === 'red' ? RED : flag.owner === 'blue' ? BLUE : NEUTRAL;
+            const color = flag.owner == null ? NEUTRAL : (ownerDisplayColor(this.scene, flag.owner) ?? NEUTRAL);
             const fx = x + flag.gx / board.W * w, fy = y + flag.gy / board.H * h;
             g.fillStyle(color, flag.contested ? 0.6 + 0.4 * Math.sin(this.scene.simulationTime * 0.02) : 1);
             g.fillCircle(fx, fy, 2.6);
@@ -370,11 +374,15 @@ export class OverlayRenderer {
         const g = this.scene.flagGfx;
         g.clear();
         const now = this.scene.simulationTime, t = now / 1000;
+        // 拔河进度环方向色：正方向=组 A（二元=红 / 合作=红蓝联军），负方向=组 B（二元=蓝 / 合作=黑）。
+        const grabGroups = this.scene.relationGroups || RELATIONS_MUTUAL;
+        const pullColorA = ownerDisplayColor(this.scene, canonicalOf(grabGroups[0])) ?? 0xff5b5b;
+        const pullColorB = grabGroups[1] ? (ownerDisplayColor(this.scene, canonicalOf(grabGroups[1])) ?? 0x57a0ff) : 0x57a0ff;
         for (const flag of this.scene.flags) {
             const geometry = this.getFlagGeometry(flag);
             const base = geometry.base;
             const RED = 0xff5b5b, BLUE = 0x57a0ff, NEUTRAL = 0xd8d2c0;
-            const targetColor = flag.owner === 'red' ? RED : flag.owner === 'blue' ? BLUE : NEUTRAL;
+            const targetColor = flag.owner == null ? NEUTRAL : (ownerDisplayColor(this.scene, flag.owner) ?? NEUTRAL);
             // 旗面显示色向目标色平滑过渡（归属切换不再是瞬变）
             if (flag.displayColor == null) flag.displayColor = targetColor;
             flag.displayColor = lerpColor(flag.displayColor, targetColor, 0.10);
@@ -423,12 +431,12 @@ export class OverlayRenderer {
 
             // ---- 拔河进度环（杆底，方向着色：红环向红涨、蓝环向蓝涨）----
             if (flag.progress > 0) {
-                g.lineStyle(4, RED, 0.95);
+                g.lineStyle(4, pullColorA, 0.95);
                 g.beginPath();
                 g.arc(base.x, base.y, 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * flag.progress);
                 g.strokePath();
             } else if (flag.progress < 0) {
-                g.lineStyle(4, BLUE, 0.95);
+                g.lineStyle(4, pullColorB, 0.95);
                 g.beginPath();
                 g.arc(base.x, base.y, 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * -flag.progress);
                 g.strokePath();
@@ -604,7 +612,7 @@ export class OverlayRenderer {
             this.labelFlags = flags;
             this.flagLabels = flags.map(flag => {
                 const p = this.scene.groundPoint(flag.gx, flag.gy);
-                const label = this.scene.add.text(p.x, p.y - 76, flagLabelText(flag), {
+                const label = this.scene.add.text(p.x, p.y - 76, flagLabelText(this.scene, flag), {
                     fontFamily: '"PingFang SC", sans-serif', fontSize: '22px', align: 'center',
                     color: '#fff0c7', stroke: '#29291f', strokeThickness: 4,
                     backgroundColor: '#303222b8', padding: { x: 7, y: 4 }
@@ -620,7 +628,7 @@ export class OverlayRenderer {
             const sig = flagSiteSignature(flag);
             if (label.siteSig !== sig) {
                 label.siteSig = sig;
-                label.setText(flagLabelText(flag));
+                label.setText(flagLabelText(this.scene, flag));
             }
             label.setScale(scale);
         }

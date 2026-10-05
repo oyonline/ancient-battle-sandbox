@@ -10,6 +10,7 @@ import { CombatRules } from '../combat.js';
 import { BATTALION } from './battalion.js';
 import { updateMedic } from './healing.js';
 import { dist, clamp, unitRand, moveToward } from '../units.js';
+import { isHostile, ownsFlag } from '../factions.js';
 
 // 受阻接战节奏（模拟时钟）：冷却就绪却持续打不出去达 BLOCKED_ENGAGE_MS 才解困，
 // 短于它的瞬时阻挡（友军路过）不打扰目标粘滞；解困尝试按 BLOCKED_SCAN_MS 节流，
@@ -27,7 +28,7 @@ const RETARGET_LOCK_MS = 1500;
 export function resolveBlockedEngage(scene, unit, target, now, reach) {
     let pick = null, bestD = Infinity;
     scene.forEachNear(unit.gx, unit.gy, reach + 2.5, e => {
-        if (e === target || e.team === unit.team || e.dead || e.withdrawn || e.type === 'wagon') return;
+        if (e === target || !isHostile(scene, unit.team, e.team) || e.dead || e.withdrawn || e.type === 'wagon') return;
         if (!CombatRules.canStrike(scene, unit, e, reach)) return;
         const d = dist(unit, e);
         if (d < bestD - 1e-9 || (Math.abs(d - bestD) <= 1e-9 && e.id < pick.id)) { bestD = d; pick = e; }
@@ -116,7 +117,8 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
         // 已在非己方旗圈内的单位站住守旗（见追敌分支），敌近后照常接敌不追出圈。
         // 敌军残兵(≤3)时全员清场优先——留着几个远程敌站桩，占旗得分也赢不踏实。
         // 骑兵由冲锋状态机驱动不经过这里；守位与战术组单位走各自入口，不受影响。
-        const foeCount = unit.team === 'red' ? scene.blueAlive : scene.redAlive;
+        const foeCount = scene.hostileAlive ? scene.hostileAlive(unit.team)
+            : (unit.team === 'red' ? scene.blueAlive : scene.redAlive);
         // 领土征服营队：① 集结营成员驻留集结点（攒满一波整营开进，不再单兵溜达）；
         // ② 玩家回防令：全营撤回老家集结点；③ 有令营开赴目标旗（步速按营内
         // 最慢兵种同步，弓骑不脱队）；④ 无令营沿用就近争旗。
@@ -169,13 +171,13 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
         const flagMarch = scene.battleOptions.control || scene.battleOptions.territory;
         if (flagMarch && !guardAnchor && minD > engageRange && foeCount > 3 &&
             (!unit.typeData.ranged || scene.battleOptions.territory) &&
-            !scene.flags.some(f => f.owner !== unit.team && Math.hypot(f.gx - unit.gx, f.gy - unit.gy) <= 2.8)) {
+            !scene.flags.some(f => !ownsFlag(scene, unit.team, f) && Math.hypot(f.gx - unit.gx, f.gy - unit.gy) <= 2.8)) {
             let flag = battalion && !battalion.gathering && battalion.orderFlag != null ? scene.flags[battalion.orderFlag] : null;
-            if (!flag || flag.owner === unit.team) {
+            if (!flag || ownsFlag(scene, unit.team, flag)) {
                 flag = null;
                 let best = Infinity;
                 for (const f of scene.flags) {
-                    if (f.owner === unit.team) continue;
+                    if (ownsFlag(scene, unit.team, f)) continue;
                     const d = Math.hypot(f.gx - unit.gx, f.gy - unit.gy);
                     // 等距取 y 小者：键为镜像不变量，换座两侧选同一面旗
                     if (d < best - 1e-9 || (Math.abs(d - best) <= 1e-9 && f.gy < flag.gy - 1e-9)) { best = d; flag = f; }
@@ -341,7 +343,7 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
                 } else if (nearest.tacticalRole === 'guard') {
                     moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
                 } else if (scene.battleOptions.control && !guardAnchor && !unit.typeData.ranged &&
-                    scene.flags.some(f => f.owner !== unit.team && Math.hypot(f.gx - unit.gx, f.gy - unit.gy) <= 2.8)) {
+                    scene.flags.some(f => !ownsFlag(scene, unit.team, f) && Math.hypot(f.gx - unit.gx, f.gy - unit.gy) <= 2.8)) {
                     // 已在非己方旗圈内：站住守旗不追出圈，敌贴身由攻击分支结算
                 } else {
                     const rr = Math.max(0.5, range * 0.82);

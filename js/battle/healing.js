@@ -17,6 +17,7 @@ import { board } from '../board.js';
 import { moveToward } from '../units.js';
 import { quantizeDecision as q } from './determinism.js';
 import { healingCapacityBonus } from './site-traits.js';
+import { sameSide, isHostile, teamName } from '../factions.js';
 
 // 距离比较一律先量化到 0.05 网格再与网格阈值比较（阈值 2.2/3.6/3.2/1.2/4 均为
 // 0.05 整数倍）——镜像坐标的浮点噪声（~1e-15）在量化后归到同一格点，
@@ -45,13 +46,16 @@ export class HealingSystem {
     }
 
     site(team, siteId) {
-        if (siteId === 'home') return { gx: team === 'red' ? 7 : board.W - 7, gy: board.H / 2 };
+        if (siteId === 'home') return team === 'black'
+            ? { gx: board.W / 2, gy: board.H - 8 }             // 黑方自南侧压中
+            : { gx: team === 'red' ? 7 : board.W - 7, gy: board.H / 2 };
         return Number.isInteger(siteId) ? this.scene.flags?.[siteId] ?? null : null;
     }
 
     ownsSite(team, siteId) {
         if (siteId === 'home') return true;
-        return this.site(team, siteId)?.owner === team;
+        const owner = this.site(team, siteId)?.owner;
+        return owner != null && sameSide(this.scene, team, owner);
     }
 
     tentAt(team, siteId) {
@@ -89,7 +93,7 @@ export class HealingSystem {
         const candidates = [{ siteId: 'home', order: -1, point: this.site(unit.team, 'home') }];
         const flags = this.scene.flags ?? [];
         for (let i = 0; i < flags.length; i++) {
-            if (flags[i].owner !== unit.team) continue;
+            if (flags[i].owner == null || !sameSide(this.scene, flags[i].owner, unit.team)) continue;
             candidates.push({ siteId: i, order: i, point: flags[i] });
         }
         // 平局决胜比较：先距左右边最近距离，再距上下边最近距离，最后据点序兜底。
@@ -167,7 +171,7 @@ export class HealingSystem {
             u.healCount = (u.healCount || 0) + 1;
             u.moving = false; u.moveX = 0; u.moveY = 0;
             scene.addBattleEvent?.(`heal-enter-${u.id}-${u.healCount}`,
-                `${u.team === 'red' ? '红方' : '蓝方'}${u.typeData.name}退入${u.healingAt === 'home' ? '大本营' : this.scene.flags[u.healingAt].name}疗伤`, u.team);
+                `${teamName(u.team)}${u.typeData.name}退入${u.healingAt === 'home' ? '大本营' : this.scene.flags[u.healingAt].name}疗伤`, u.team);
         }
         // ③ 疗伤推进：HP 按损血比例回满，士气同步恢复；据点失守立即中断再溃逃。
         // 毁帐降容语义：已入住者继续治完（不赶人），新入住按当前容量（评审 P2 决策）。
@@ -189,7 +193,7 @@ export class HealingSystem {
                 u.moraleReason = '据点疗伤完毕，伤愈归队';
                 scene.onMoraleStateChange?.(u, 'routing', u.moraleReason);
                 scene.addBattleEvent?.(`heal-done-${u.id}-${u.healCount}`,
-                    `${u.team === 'red' ? '红方' : '蓝方'}${u.typeData.name}伤愈归队，重返战线`, u.team);
+                    `${teamName(u.team)}${u.typeData.name}伤愈归队，重返战线`, u.team);
                 scene._countsDirty = true;
             }
         }
@@ -202,7 +206,7 @@ export class HealingSystem {
             const radius = HEALING_RULES.MEDIC_AURA_RADIUS;
             const wounded = [];
             scene.forEachNear(medic.gx, medic.gy, radius, target => {
-                if (target.team !== medic.team || target.dead || target.withdrawn ||
+                if (!sameSide(scene, target.team, medic.team) || target.dead || target.withdrawn ||
                     target.type === 'wagon' || target.type === 'medic' ||
                     target.moraleState === 'routing' || target.healingAt != null ||
                     target.garrisonTowerId || target.hp >= target.maxHp - 1e-9) return;
@@ -228,7 +232,7 @@ export function updateMedic(scene, unit, now, dt) {
     else if (battalion?.retreat) target = scene.battalions?.homeRally(unit.team);
     else if (battalion?.orderPoint) target = battalion.orderPoint;
     else if (battalion?.orderFlag != null && scene.flags?.[battalion.orderFlag] &&
-        scene.flags[battalion.orderFlag].owner !== unit.team) target = scene.flags[battalion.orderFlag];
+        (scene.flags[battalion.orderFlag].owner == null || !sameSide(scene, scene.flags[battalion.orderFlag].owner, unit.team))) target = scene.flags[battalion.orderFlag];
     else {
         const center = battalion?.center();
         if (center && qdist(unit, center) > 4) target = center;
@@ -236,7 +240,7 @@ export function updateMedic(scene, unit, now, dt) {
     // 敌人贴身：优先保命后撤（医师是对方斩医疗的优先目标）。
     let nearest = null, nearestD = Infinity;
     scene.forEachNear(unit.gx, unit.gy, 4, enemy => {
-        if (enemy.team === unit.team || enemy.dead || enemy.withdrawn ||
+        if (!isHostile(scene, unit.team, enemy.team) || enemy.dead || enemy.withdrawn ||
             enemy.moraleState === 'routing' || enemy.type === 'wagon') return;
         const d = qdist(unit, enemy);
         if (d < nearestD - 1e-9 || (Math.abs(d - nearestD) <= 1e-9 && enemy.id < nearest.id)) { nearestD = d; nearest = enemy; }

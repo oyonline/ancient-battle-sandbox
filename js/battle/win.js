@@ -4,10 +4,66 @@
 // 领土模式下经济未枯竭不算败（增援随时抵达）。表现经 scene 钩子
 // （addBattleEvent / showVictory）与全局 UI.onBattleEnd。
 import { UI } from '../ui.js';
+import { RELATIONS_COOP } from '../factions.js';
+
+// 合作模式判定：红蓝联军（两名真人）对黑方 AI，采用纯歼灭制——
+// 胜利 = 黑方 0 可战存活且不可重建 且 黑方所有建筑（大本营/营寨/箭塔/医帐）尽毁；
+// 失败 = 红蓝两家都被打光。票数不参与胜负（用户口径：杀光 + 拔寨才算赢）。
+export function isCoopBattle(scene) {
+    return scene?.relationGroups === RELATIONS_COOP
+        || (Array.isArray(scene?.activeTeams) && scene.activeTeams.includes('black'));
+}
+
+function checkCoopWin(scene) {
+    if (!scene.battleOptions.territory || !scene.territory) return false;
+    const teams = scene.activeTeams ?? ['red', 'blue', 'black'];
+    const ready = {};
+    for (const team of teams) ready[team] = 0;
+    for (const unit of scene.units) {
+        if (unit.dead || unit.withdrawn || unit.moraleState === 'routing') continue;
+        if (Object.hasOwn(ready, unit.team)) ready[unit.team]++;
+    }
+    const canRebuild = team => scene.territory.recruit.queues[team].length > 0 ||
+        scene.territory.econ.treasury[team] >= scene.territory.econ.costOf('infantry');
+    const defeated = {};
+    for (const team of teams) {
+        const alive = scene.aliveByTeam?.[team] ?? 0;
+        if (alive > 0 && !ready[team]) {
+            if (scene.collapseSince[team] == null) scene.collapseSince[team] = scene.simulationTime;
+        } else scene.collapseSince[team] = null;
+        defeated[team] = !canRebuild(team) && (!alive || (scene.collapseSince[team] != null &&
+            scene.simulationTime - scene.collapseSince[team] >= 5000 - 1e-7));
+    }
+    const blackUnitsGone = defeated.black === true;
+    const blackBuildings = scene.territory.camps ? scene.territory.camps.buildings.filter(b => b.team === 'black') : [];
+    const blackBuildingsGone = blackBuildings.every(b => b.dead);
+    const alliesWiped = defeated.red === true && defeated.blue === true;
+    if (!(blackUnitsGone && blackBuildingsGone) && !alliesWiped) return false;
+    // 已发出的箭继续落地：与主流程一致，等箭雨结算完再判终局。
+    if (scene.arrows.length > 0) {
+        scene.resolvingOutcome = true;
+        scene.battleQueue = [];
+        return true;
+    }
+    scene.battleOver = true;
+    scene.battleQueue = [];
+    const allyWin = blackUnitsGone && blackBuildingsGone;
+    const winner = allyWin ? 'red' : 'black';
+    scene.endReason = allyWin ? 'coop-win' : 'coop-loss';
+    scene.addBattleEvent(allyWin ? 'coop-win' : 'coop-loss',
+        allyWin ? '黑方全军覆没、营寨尽毁，红蓝联军得胜' : '红蓝联军全线崩溃，黑方获胜',
+        allyWin ? 'red' : 'black');
+    scene.showVictory(winner);
+    UI.onBattleEnd(winner, scene.getBattleReport());
+    return true;
+}
 
 export function checkWin(scene) {
 
         if (scene.battleOver) return;
+        // 合作模式完全由纯歼灭判定接管：未分胜负时不得回落到二元残局逻辑
+        //（否则红方单独被打光会被误判为黑方获胜）。
+        if (isCoopBattle(scene)) { checkCoopWin(scene); return; }
         const red = scene.redAlive, blue = scene.blueAlive;
         const ready = { red: 0, blue: 0 };
         for (const unit of scene.units) {
