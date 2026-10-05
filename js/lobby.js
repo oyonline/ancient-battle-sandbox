@@ -53,7 +53,7 @@ export const lobbyMethods = {
         }
         if (!client.isArena) {
             this.netStatus(this.net.serverIdentity === false
-                ? '⚠ 当前页面连的不是对战服务器（可能开着 vite 开发页 5173）。请改用房主 arena 地址后再试。'
+                ? '⚠ 当前页面连的不是对战服务器（可能开着 vite 开发页 5301）。请改用房主 arena 地址后再试。'
                 : '正在确认对战服务器，请稍后再创建或加入房间。');
             return;
         }

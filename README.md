@@ -8,7 +8,7 @@
 
 ```bash
 npm install
-npm run dev        # 本地开发/试玩 → http://localhost:5173
+npm run dev        # 本地开发/试玩 → http://localhost:5301（vite.config.js 固定端口；arena 对战服为 5300）
 ```
 
 ## 常用命令
