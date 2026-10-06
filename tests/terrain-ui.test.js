@@ -50,7 +50,8 @@ function setup({ readyScene = true, query = '' } = {}) {
         ['[data-terrain]', terrainButtons], ['[data-terrain-entry]', terrainEntries], ['[data-tactics-entry]', tacticsButtons],
         ['#tactics-ready-guide [data-tactics-entry]', tacticsButtons],
         ['#steps .step', [1, 2, 3].map(step => new Element({ step }))],
-        ['.sheet-body .sec', ['home', 'buy', 'ready', 'result'].map(name => elements.get('sec-' + name))]
+        ['.lobby-body .sec', ['home', 'net'].map(name => elements.get('sec-' + name))],
+        ['.sheet-body .sec', ['buy', 'ready', 'result'].map(name => elements.get('sec-' + name))]
     ]);
     const el = id => {
         if (!elements.has(id)) {

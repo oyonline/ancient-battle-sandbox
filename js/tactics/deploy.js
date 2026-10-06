@@ -52,7 +52,7 @@ export const DeployMethods = {
         if (defense) { this.deployPassGuards(team, members, defense); return; }
         const hill = terrain === `${team}_hill` ? Terrain.maps[terrain] : null;
         // 只占己方高地；平地和敌方高地仍守己方出发区，不跨场抢占敌人的山顶。
-        const cx = hill?.cx ?? (team === 'red' ? 20 : 50), cy = hill?.cy ?? board.H / 2;
+        const cx = hill?.cx ?? (team === 'red' ? 20 : board.W - 20), cy = hill?.cy ?? board.H / 2;
         const f = this.forward(team);
         const front = members.filter(unit => unit.type === 'pikeman').concat(members.filter(unit => unit.type === 'infantry' || unit.type === 'axe'));
         const archers = members.filter(unit => unit.type === 'archer');
@@ -162,7 +162,9 @@ export const DeployMethods = {
         const members = this.scene.units.filter(u => u.team === team && u.type === 'pikeman');
         if (!members.length) return;
         const size = Math.ceil(Math.sqrt(members.length)), spacing = 0.86;
-        let cx = team === 'red' ? 22 : 48;
+        // 守位中心按棋盘宽度镜像：小棋盘（70 格）下与原先的 22 / 48 完全一致，
+        // 领土图（260 格）下蓝方不会被甩到红方半场——旧写死的 48 只在小棋盘成立。
+        let cx = team === 'red' ? 22 : board.W - 22;
         const cy = board.H / 2, f = this.forward(team);
         const slots = [];
         // 优先填外围；人数不足一圈时，均匀分到各面，仍会留下真实空隙。
@@ -221,9 +223,10 @@ export const DeployMethods = {
         if (!members.length) return;
         const order = this.orders[team], f = this.forward(team);
         const target = this.formations[this.enemies(team)];
-        const cx = target?.cx ?? (team === 'red' ? 48 : 22), cy = target?.cy ?? board.H / 2;
+        // 同样按棋盘宽度镜像：小棋盘下 48 / 22 不变，大棋盘下红方守区不会被甩到蓝方半场
+        const cx = target?.cx ?? (team === 'red' ? board.W - 22 : 22), cy = target?.cy ?? board.H / 2;
         const half = target?.half ?? 4;
-        const home = team === 'red' ? 20 : 50;
+        const home = team === 'red' ? 20 : board.W - 20;
         const reserveCount = Math.min(Math.max(0, this.scene.battleOptions?.reserves?.[team] || 0), members.length - 1);
         const attackers = members.slice(0, members.length - reserveCount);
         const reserve = members.slice(attackers.length);

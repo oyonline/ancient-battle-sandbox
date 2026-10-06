@@ -5,6 +5,7 @@ import { Terrain } from './terrain.js';
 import { UNIT_TYPES, FORMATIONS, BUDGET } from './units.js';
 import { CHALLENGES, armyCost, fitArmyToBudget } from './challenges.js';
 import { TERRITORY, makeTerritoryFlags } from './battle/economy.js';
+import { CAMP_RULES } from './battle/camps.js';
 import { setBoardSize, resetBoardSize } from './board.js';
 import { ArenaClient } from './net/arena-client.js';
 import { NetBattle } from './net/lockstep.js';
@@ -132,10 +133,6 @@ export const UI = {
                 }
             }
         } catch (_) { /* 浏览器禁用存储时仍可正常游玩。 */ }
-        try {
-            const last = JSON.parse(localStorage.getItem('battle-last-mode-v1') || 'null');
-            if (last && typeof last.kind === 'string') this.lastMode = last;
-        } catch (_) { /* 同上：存储被禁时仅本次会话内有效 */ }
     },
 
     saveWin() {
@@ -163,6 +160,8 @@ export const UI = {
     syncControls() {
         const fighting = this.phase === 'battle';
         document.getElementById('controlbar').hidden = !fighting;
+        // 战斗中拉开抽屉只留局内可调的换图与军令（见 style.css 的 #sheet.in-battle）
+        document.getElementById('sheet').classList.toggle('in-battle', fighting);
         document.getElementById('deathmatch-hud-rule').hidden = !fighting || !this.battleOptions.deathmatch;
         document.getElementById('control-hud-rule').hidden = !fighting || !this.battleOptions.control;
         const convoyHud = document.getElementById('convoy-hud-rule');
@@ -209,17 +208,56 @@ export const UI = {
         document.getElementById('phase-hint').textContent = hint;
     },
 
+    // 分区切换：入口层（home / net）与局内抽屉（buy / ready / result）各自独立，
+    // 两层不会同时出现——离开入口的唯一方式是"进入某一局"。
     showSection(name) {
-        document.querySelectorAll('.sheet-body .sec').forEach(s => s.classList.remove('on'));
+        const inLobby = name === 'home' || name === 'net';
+        // 两层一起清：任何时刻只允许一个分区带 on，避免"入口层残留 home + 抽屉在 buy"
+        for (const root of [document.querySelector('.lobby-body'), document.querySelector('.sheet-body')]) {
+            root.querySelectorAll('.sec').forEach(s => s.classList.remove('on'));
+        }
         document.getElementById('sec-' + name).classList.add('on');
-        document.querySelector('.sheet-body').scrollTop = 0;
-        this.openSheet(true);
+        document.querySelector(inLobby ? '.lobby-body' : '.sheet-body').scrollTop = 0;
+        this.openLobby(inLobby);
+        this.openSheet(!inLobby);
+    },
+
+    openLobby(open) {
+        document.getElementById('lobby').classList.toggle('show', open);
+        // 入口层铺满整屏，顶栏与抽屉此时不可达：一并移出 Tab 顺序
+        document.body.classList.toggle('lobby-open', open);
     },
 
     openSheet(open) {
         document.getElementById('sheet').classList.toggle('open', open);
         document.getElementById('btn-fold').textContent = open ? '▾' : '▴';
         document.getElementById('btn-fold').setAttribute('aria-expanded', String(open));
+    },
+
+    // 声音开关有多个入口（顶栏、入口层头部），状态要一起刷新
+    toggleMute() {
+        Snd.muted = !Snd.muted;
+        document.querySelectorAll('[data-mute]').forEach(button => {
+            button.textContent = Snd.muted ? '🔇' : '🔊';
+            button.setAttribute('aria-label', Snd.muted ? '开启声音' : '关闭声音');
+        });
+    },
+
+    // 二次确认：只用于"离开正在进行的一局"这类不可逆动作
+    confirmLeave(onConfirm) {
+        const layer = document.getElementById('confirm-layer');
+        layer.innerHTML = `<div class="overlay-card">
+            <div class="overlay-emoji">⚑</div>
+            <div class="overlay-title">离开这一局？</div>
+            <div class="overlay-sub">战斗还没结束，离开会丢掉本局进度。</div>
+            <div class="confirm-actions">
+                <button class="big-btn" id="btn-confirm-yes">离开 · 回到玩法选择</button>
+                <button class="secondary-btn" id="btn-confirm-no">继续打</button>
+            </div></div>`;
+        layer.classList.add('show');
+        const close = () => { layer.classList.remove('show'); layer.innerHTML = ''; };
+        layer.querySelector('#btn-confirm-yes').onclick = () => { close(); Snd.play('tick'); onConfirm(); };
+        layer.querySelector('#btn-confirm-no').onclick = () => { close(); Snd.play('tick'); };
     },
 
     clearBattle() {
@@ -268,8 +306,87 @@ export const UI = {
         this.battleOptions.terrain = Terrain.normalize(terrain);
         const defender = Terrain.maps[this.battleOptions.terrain].defender;
         if (['red', 'blue'].includes(defender)) this.orders[defender] = 'hold_ground';
-        this.rememberMode('⛰ ' + Terrain.maps[this.battleOptions.terrain].name, 'terrain', this.battleOptions.terrain);
         this.deployArmies();
+    },
+
+    // 营寨攻防（快速一局）：红方一支攻城队压到蓝方大本营外，蓝方守备队全部登上寨墙。
+    // 这是用来快速试"营寨守军"强弱的一局：双方都不征兵、不重建，变量只有墙上的守军。
+    startSiege() {
+        this.clearBattle();
+        this.mode = 'territory';            // 营寨系统只存在于领土地图上
+        this.challenge = null;
+        this.editing = false;
+        // 守方 10 人：正好站满大本营的 10 个垛口，场上没有多余部队干扰观察
+        // 攻方 44 人纯近战强攻：这一局要试的是"守军吃不吃得住正面",不带弓手压墙
+        this.configs = {
+            red: { infantry: 32, axe: 12, cavalry: 4 },
+            blue: { infantry: 8, pikeman: 2 }
+        };
+        this.formations = { red: 'custom', blue: 'square' };
+        this.orders = { red: 'advance', blue: 'hold' };
+        this.resetBattleOptions();
+        this.battleOptions.territory = true;
+        this.battleOptions.territoryAI = false;
+        this.deployArmies();
+        this.stageSiege();
+    },
+
+    // 攻城演练的出发点：红方按上/中/下三路压到蓝方大本营西侧，蓝方守备队上墙。
+    // 只定义"这一局从哪儿开始"，不进模拟规则；坐标由寨子几何推出，无随机、可复现。
+    stageSiege() {
+        const scene = this.scene;
+        const camps = scene?.territory?.camps;
+        if (!camps) return;
+        const home = camps.getBuilding(camps.id('blue', 'camp', 'home'));
+        if (!home) return;
+        const radius = u => u.typeData.bodyRadius ?? 0.36;
+        const walkable = (gx, gy, r) => Terrain.walkable(scene.battleOptions?.terrain, gx, gy, r);
+        const round = v => Math.round(v * 20) / 20;
+        const place = (u, gx, gy) => {
+            u.gx = round(gx); u.gy = round(gy);
+            if (u.pgx !== undefined) { u.pgx = u.gx; u.pgy = u.gy; }
+            u.moveX = 0; u.moveY = 0;
+        };
+        // 守方：先摆到自家营寨的西侧半圈，开战立刻上墙值守。
+        // 不依赖出生点：领土图上出生点离寨子多远不可控，这里由场景直接定死。
+        const defenders = scene.units.filter(u => u.team === 'blue' && !u.dead).sort((a, b) => a.id - b.id);
+        defenders.forEach((u, i) => {
+            const angle = Math.PI / 2 + (i / Math.max(1, defenders.length - 1)) * Math.PI;
+            let gx = home.gx + Math.cos(angle) * 4.2, gy = home.gy + Math.sin(angle) * 4.2;
+            for (let k = 0; k < 14 && !walkable(gx, gy, radius(u)); k++) gx -= 1.35;
+            place(u, gx, gy);
+        });
+        camps.orderGarrison('blue', defenders.map(u => u.id), home.id);   // 受理口径与玩家手动派驻一致
+        // 攻方：按营队分上/中/下三路，在营寨西侧 26 格外的开阔地列阵，
+        // 留出守军上墙的时间，也避开守方出生带——否则开局就撞在一起，守军根本来不及登墙。
+        const lanes = 3;
+        const attackers = scene.units.filter(u => u.team === 'red' && !u.dead);
+        const redBattalions = scene.battalions?.battalions?.filter(b => b.team === 'red') ?? [];
+        const perLane = Math.ceil(attackers.length / lanes);
+        const cols = Math.max(1, Math.ceil(Math.sqrt(perLane * 1.2)));
+        const counts = [0, 0, 0];
+        attackers.forEach(u => {
+            const index = redBattalions.indexOf(u.battalion);
+            const path = index < 0 ? 1 : Math.min(index, lanes - 1);
+            const slot = counts[path]++;
+            const col = slot % cols;
+            const row = Math.floor(slot / cols);
+            let gx = home.gx - 26 - row * 2.2;
+            const gy = home.gy + (path - 1) * 8 + (col - (cols - 1) / 2) * 1.35;
+            for (let k = 0; k < 20 && !walkable(gx, gy, radius(u)); k++) gx -= 1.35;
+            place(u, gx, gy);
+        });
+        scene.rebuildSpatial();
+        // 进攻令：等同玩家右键指定目标点（点令），三路各自压向营寨。
+        // 不用"攻击建筑"令——那条令会让部队无视身边敌人硬拆寨子，看不出守军的真实强度。
+        if (redBattalions.length) {
+            redBattalions.forEach((b, i) => scene.battalions.orderHold(b, home.gx, home.gy + (i - 1) * 8));
+        } else {
+            camps.orderAttackBuilding('red', attackers.map(u => u.id), home.id);
+        }
+        scene._view = null;                      // 整批换位后全量同步一次渲染
+        const center = scene.groundPoint(home.gx, home.gy);
+        scene.cameras.main.centerOn(center.x + 3 * 64, center.y);   // 开局就把镜头放在攻防现场
     },
 
     startControl() {
@@ -283,7 +400,6 @@ export const UI = {
         this.orders = { red: 'advance', blue: 'advance' };
         this.resetBattleOptions();
         this.battleOptions.control = true;
-        this.rememberMode('⚑ 占点三旗', 'control');
         this.deployArmies();
     },
 
@@ -301,7 +417,6 @@ export const UI = {
         this.orders = { red: 'advance', blue: 'advance' };
         this.resetBattleOptions();
         this.battleOptions.convoy = true;
-        this.rememberMode('🛒 辎重护送', 'convoy');
         this.deployArmies();
     },
 
@@ -318,13 +433,11 @@ export const UI = {
         this.resetBattleOptions();
         this.battleOptions.territory = true;
         this.battleOptions.terrain = 'territory';   // 山河领土图：上翼河桥/中央高地/下翼林带
-        this.rememberMode('🚩 领土征服 · 山河会战', 'territory');
         this.deployArmies();
     },
 
     // 占点/护送的自定义配兵：预填推荐阵容进配兵界面，兵数阵容随意改
     startControlCustom() {
-        this.rememberMode('⚑ 占点 · 自定义配兵', 'controlCustom');
         this.clearBattle();
         this.mode = 'sandbox';
         this.challenge = null;
@@ -343,7 +456,6 @@ export const UI = {
     },
 
     startConvoyCustom() {
-        this.rememberMode('🛒 护送 · 自定义配兵', 'convoyCustom');
         this.clearBattle();
         this.mode = 'sandbox';
         this.challenge = null;
@@ -472,39 +584,8 @@ export const UI = {
         this.setPhase('home');
         this.setStep(0);
         this.renderChallenges();
-        this.updateContinueButton();
         this.drawTerritoryThumb();
         this.showSection('home');
-    },
-
-    // ---------------- 首页看板：继续上次 + 山河图缩略 ----------------
-    rememberMode(label, kind, arg = null) {
-        this.lastMode = { label, kind, arg };
-        try { localStorage.setItem('battle-last-mode-v1', JSON.stringify(this.lastMode)); }
-        catch (_) { /* 浏览器禁用存储时仅本次会话内有效 */ }
-    },
-
-    resumeLast() {
-        const last = this.lastMode;
-        if (!last) return;
-        const { kind, arg } = last;
-        if (kind === 'territory') this.startTerritory();
-        else if (kind === 'control') this.startControl();
-        else if (kind === 'controlCustom') this.startControlCustom();
-        else if (kind === 'convoy') this.startConvoy();
-        else if (kind === 'convoyCustom') this.startConvoyCustom();
-        else if (kind === 'tactics') this.startTactics(arg);
-        else if (kind === 'terrain') this.startTerrain(arg);
-        else if (kind === 'challenge') this.startChallenge(arg);
-        else if (kind === 'sandbox') this.resetAll();
-        else if (kind === 'net') this.openNetLobby();
-    },
-
-    updateContinueButton() {
-        const button = document.getElementById('btn-continue');
-        if (!this.lastMode) { button.hidden = true; return; }
-        button.hidden = false;
-        document.getElementById('continue-label').textContent = this.lastMode.label;
     },
 
     // 局域网房间流程已拆至 js/lobby.js，经 spread 并入
@@ -1205,8 +1286,11 @@ export const UI = {
     },
 
     bindControls() {
-        document.getElementById('btn-home').onclick = () => this.showHome();
-        document.getElementById('btn-continue').onclick = () => { this.resumeLast(); Snd.play('tick'); };
+        // 战斗中离开是一步不可逆的操作：先确认，避免手滑丢掉这一局
+        document.getElementById('btn-home').onclick = () => {
+            if (this.phase !== 'battle') { this.showHome(); return; }
+            this.confirmLeave(() => this.showHome());
+        };
         document.getElementById('btn-sandbox').onclick = () => this.resetAll();
         document.getElementById('btn-terrain').onclick = () => this.startTerrain();
         document.querySelectorAll('[data-terrain-entry]').forEach(button => {
@@ -1214,6 +1298,9 @@ export const UI = {
         });
         document.querySelectorAll('[data-control-entry]').forEach(button => {
             button.onclick = () => { this.startControl(); Snd.play('tick'); };
+        });
+        document.querySelectorAll('[data-siege-entry]').forEach(button => {
+            button.onclick = () => { this.startSiege(); Snd.play('tick'); };
         });
         document.querySelectorAll('[data-convoy-entry]').forEach(button => {
             button.onclick = () => { this.startConvoy(); Snd.play('tick'); };
@@ -1296,11 +1383,7 @@ export const UI = {
             if (!this.scene || this.phase !== 'battle') return;
             this.scene.setSpeed(Number(b.dataset.speed)); this.syncControls();
         });
-        document.getElementById('btn-mute').onclick = () => {
-            Snd.muted = !Snd.muted;
-            document.getElementById('btn-mute').textContent = Snd.muted ? '🔇' : '🔊';
-            document.getElementById('btn-mute').setAttribute('aria-label', Snd.muted ? '开启声音' : '关闭声音');
-        };
+        document.querySelectorAll('[data-mute]').forEach(button => { button.onclick = () => this.toggleMute(); });
         // 战斗信息面板折叠：隐藏 .hud-info 信息行只留操作件，战场视野让位（状态留在 DOM，不跨局记忆）
         document.getElementById('btn-hud-collapse').onclick = () => {
             const bar = document.getElementById('controlbar');
@@ -1311,7 +1394,9 @@ export const UI = {
         document.getElementById('btn-panel').onclick = toggleSheet;
         document.getElementById('btn-fold').onclick = toggleSheet;
         document.querySelector('.sheet-head').addEventListener('click', e => {
-            if (!e.target.closest('button')) toggleSheet();
+            // 步骤条只是进度展示，点它不该把面板收走（那是最容易误触的坑）
+            if (e.target.closest('button, .steps, .step')) return;
+            toggleSheet();
         });
         document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => this.applyPreset(b.dataset.preset));
         document.getElementById('btn-clear').onclick = () => this.clearArmy();

@@ -28,9 +28,9 @@ export function separate(scene, dt) {
         }
         for (let i = 0; i < units.length; i++) {
             const a = units[i];
-            if (a.dead || a.garrisonTowerId) continue;
+            if (a.dead || a.garrisonTowerId || a.wallGuardId) continue;
             scene.forEachNear(a.gx, a.gy, R, b => {
-                if (b.dead || b.id <= a.id) return;          // 每对只处理一次
+                if (b.dead || b.wallGuardId || b.id <= a.id) return;          // 每对只处理一次
                 const dx = b.gx - a.gx, dy = b.gy - a.gy;
                 const d2 = dx * dx + dy * dy;
                 const contact = CombatRules.contactDistance(a, b);
@@ -54,7 +54,7 @@ export function separate(scene, dt) {
         }
         for (let i = 0; i < units.length; i++) {
             const u = units[i];
-            if (u.garrisonTowerId) continue;
+            if (u.garrisonTowerId || u.wallGuardId) continue;
             // 推挤传导限幅后并入位移（cap 见上）；贴墙者被锚定，不吃传导位移
             const l = u.touchGuard ? 0 : Math.hypot(u.pshX, u.pshY);
             const px = l > 1e-6 ? u.pshX * (l > cap ? cap / l : 1) : 0;

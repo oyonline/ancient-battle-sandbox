@@ -538,6 +538,8 @@ export class IsoBattleScene extends Phaser.Scene {
             braceTime: 0, braceReady: false, braceHold: false, braceSupport: 0, braceDepth: 0,
             braceFacingX: team === 'black' ? 0 : team === 'red' ? 1 : -1, braceFacingY: team === 'black' ? -1 : 0,
             moving: false, dead: false, withdrawn: false, flashUntil: 0, actionEpoch: 0,
+            // 营寨守军（站上寨墙）：驻守的营寨 id、岗位序号、居高临下带来的受伤系数
+            wallGuardId: null, guardSlot: null, guardCoverScale: 1,
             pressX: 0, pressY: 0,                        // 通行意图方向（推挤传导用，每帧由 moveToward 刷新）
             strafeX: 0, strafeY: 0, strafeUntil: 0,     // 微走位：绕目标换角度的目的地与截止时间
             // 镜像不变种子（惰性播种，见 units.js unitRand）：换边对照的红蓝配对单位拿到同一随机序列，

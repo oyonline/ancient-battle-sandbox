@@ -88,14 +88,21 @@ export class CampControls {
             return;
         }
         if (kind === 'medic-in' && !units.some(u => u.type === 'medic')) return;
+        if (kind === 'guard-in' && !units.some(u => CAMP_RULES.WALL_GUARD_MELEE.includes(u.type))) {
+            this.ui.showNetToast('选中的部队里没有近战兵：先选中剑士 / 斧兵 / 长枪兵 / 骑士，再点「驻入营寨」');
+            return;
+        }
         if (kind === 'attack' && !units.length) return;
         this.ui.cancelHoldTargeting();
         this.ui.cancelRallyTargeting();
         this.targeting = { kind, worker: worker?.id,
-            units: units.filter(u => (kind === 'garrison' ? u.type === 'archer' : kind === 'medic-in' ? u.type === 'medic' : true)).map(u => u.id) };
+            units: units.filter(u => (kind === 'garrison' ? u.type === 'archer'
+                : kind === 'guard-in' ? CAMP_RULES.WALL_GUARD_MELEE.includes(u.type)
+                    : kind === 'medic-in' ? u.type === 'medic' : true)).map(u => u.id) };
         document.body.classList.add('camp-targeting');
         const prompt = { camp: '点己方据点建营寨', tower: '点陆地建箭塔 · 绿框可建，红框不可建 · Esc取消', tent: '点己方营寨据点建医帐',
             move: '点地面让民夫前往', garrison: '点己方完工箭塔，弓手将走过去入驻',
+            'guard-in': '点己方完工营寨，近战守军将走上寨墙（居高临下：伤害 ×1.25、受伤 ×0.7）',
             'medic-in': '点己方完工医帐，医师将走过去入驻', attack: '点敌方建筑，部队将前往攻寨' }[kind];
         this.targeting.prompt = prompt;
         this.ui.updateTargetingPrompt?.();
@@ -199,6 +206,11 @@ export class CampControls {
                             ? '命令已发送，等待部队执行；实际入驻以箭塔剩余容量为准'
                             : `🏹 ${willAccept.length} 名弓手正在前往箭塔`);
                     }
+                } else if (mode.kind === 'guard-in') {
+                    if (building.type !== 'camp') { this.ui.showNetToast('请点己方完工营寨'); this.update(); return true; }
+                    const willAccept = this.camps.garrisonAcceptList(this.side, mode.units, building.id);
+                    accepted = this.send({ k: 'garrison', units: mode.units, building: building.id });
+                    if (accepted) this.ui.showNetToast(`🛡 ${willAccept.length} 名近战守军正在上墙`);
                 } else accepted = this.send({ k: 'attack-building', units: mode.units, building: building.id });
             } else this.ui.showNetToast('请点箭塔或营寨建筑');
             if (accepted) this.cancel();
@@ -232,6 +244,15 @@ export class CampControls {
         return garrison.inside === 0 && garrison.reserved > 0
             ? `弓手 ${garrison.inside}/${garrison.capacity} · 弓手正在前往`
             : `弓手 ${garrison.label}`;
+    }
+
+    // 营寨守军读数：站在寨墙上的近战（口径同样只来自模拟的 garrisonStatus）。
+    wallGuardText(building, own) {
+        const garrison = own && building.complete ? this.camps.garrisonStatus?.(building) : null;
+        if (!garrison) return `${building.garrisonIds.length}/${building.capacity}`;
+        return garrison.inside === 0 && garrison.reserved > 0
+            ? `${garrison.inside}/${garrison.capacity} · 守军正在上墙`
+            : garrison.label;
     }
 
     updatePlacementPreview() {
@@ -334,7 +355,8 @@ export class CampControls {
             // 建筑状态先组装成正文，再追加据点特色——特色与状态必须同屏，
             // 不能让后写的 details = state 把刚拼好的特色行整个覆盖掉。
             details = state + (building.type === 'tower' ? ` · 驻军 ${this.towerGarrisonText(building, own)}`
-                : building.type === 'tent' ? ` · 医师 ${building.garrisonIds.length}/${this.camps.buildInfo('tent').capacity} · 据点疗伤提速扩容` : '');
+                : building.type === 'camp' ? ` · 守军 ${this.wallGuardText(building, own)} · 站上寨墙居高临下：伤害 ×1.25、受伤 ×0.7`
+                    : building.type === 'tent' ? ` · 医师 ${building.garrisonIds.length}/${this.camps.buildInfo('tent').capacity} · 据点疗伤提速扩容` : '');
             // 据点详情：写清特色、以及"按建筑与据点的真实归属"该建筑是否受益。
             // 大本营没有旗位，因此恒无特色；旧建筑留在失守据点时不能再说自己受益。
             const siteFlag = Number.isInteger(building.siteId) ? this.scene.flags?.[building.siteId] : null;
@@ -379,6 +401,7 @@ export class CampControls {
                 details += ` · 疗伤 ${healing.healingCount(this.side, building.siteId)}/${healing.capacity(this.side, building.siteId)}`;
             }
             if (own && building.type === 'tower') actions += button('exit', '弓手出塔', !building.garrisonIds.length);
+            if (own && building.type === 'camp') actions += button('exit', '守军下墙', !building.garrisonIds.length);
             if (own && building.type === 'tent') actions += button('exit', '医师出帐', !building.garrisonIds.length);
             actions += button('locate', '定位');
         }
@@ -392,6 +415,10 @@ export class CampControls {
                 '选中的部队里没有弓箭手：先选中至少 1 名弓手（或整营含弓手），再点这里选塔入驻');
         }
         if (troops.some(u => u.type === 'medic' && !u.garrisonTowerId)) actions += button('medic-in', '➕ 驻入医帐');
+        // 「驻入营寨」：选中近战兵时可见——守军会走上寨墙，居高临下接敌（可被击杀）。
+        if (troops.some(u => CAMP_RULES.WALL_GUARD_MELEE.includes(u.type) && !u.wallGuardId && !u.garrisonTowerId)) {
+            actions += button('guard-in', '🛡 驻入营寨');
+        }
         if (troops.length) actions += button('attack', '⚔ 攻击建筑');
         if (this.targeting) actions += button('cancel', '取消选点');
         const markup = `<div class="camp-control-title"><b>${heading}</b><small>${this.targeting ? '等待选择目标' : details}</small>` +

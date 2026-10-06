@@ -2,7 +2,7 @@
 import { board } from '../board.js';
 import { Terrain } from '../terrain.js';
 import { CombatRules } from '../combat.js';
-import { moveToward, calculateAttackDamage } from '../units.js';
+import { moveToward, calculateAttackDamage, resolveAttack } from '../units.js';
 import { quantizeDecision as q } from './determinism.js';
 import { HEALING_RULES } from './healing.js';
 import { updateWorkerCombat, workerConstructionPaused } from './worker.js';
@@ -15,8 +15,49 @@ export const CAMP_RULES = {
     tent: { cost: 140, seconds: 15, hp: 550, def: 4, radius: 1.5 },   // 医帐：据点疗伤提速扩容
     HOME_HP: 1800, FIELD_TOWER_CAP: 8, ENEMY_HOME_CLEARANCE: 12, TOWER_ATTACK: 1.20, CAPACITY: 4, TOWER_RANGE: 14, GARRISON_HEIGHT_PX: 82,
     TENT_GARRISON_HEIGHT_PX: 14,   // 医帐无高台：驻帐医师站在帐篷门口地面，不上 82px 平台
-    BUILD_REACH: 1.6, ENTER_REACH: 1.15, AI_INTERVAL_MS: 1800
+    BUILD_REACH: 1.6, ENTER_REACH: 1.15, AI_INTERVAL_MS: 1800,
+    // 营寨守军：近战兵站上寨墙垛口，居高临下打得更狠、也更耐打（可被击杀，攻方有解法）。
+    // 垛口数按寨墙周长推：前线营寨 6、大本营 10；墙环半径与渲染层栅栏同一口径。
+    WALL_SLOTS: 6, HOME_WALL_SLOTS: 10, WALL_RADIUS: 2.65, HOME_WALL_RADIUS: 3.5,
+    WALL_GUARD_MELEE: ['infantry', 'axe', 'pikeman', 'cavalry'],
+    WALL_GUARD_ATTACK: 1.25,       // 居高临下：守军造成的伤害倍率
+    WALL_GUARD_COVER: 0.7,         // 居高临下：守军受到的伤害倍率
+    WALL_GUARD_ENGAGE: 6,          // 寨墙外这个距离内的敌人，会把守军引到最近的一段墙
+    WALL_GUARD_LIFT_PX: 28         // 站上墙顶的抬升（墙贴图 80×98、锚点在 70/98）
 };
+
+// 寨墙环几何：与渲染层的方形栅栏同口径（边长 2r，参数从左上角起顺时针一圈）。
+export function wallRadius(building) {
+    return building?.siteId === 'home' ? CAMP_RULES.HOME_WALL_RADIUS : CAMP_RULES.WALL_RADIUS;
+}
+export function wallSlots(building) {
+    return building?.siteId === 'home' ? CAMP_RULES.HOME_WALL_SLOTS : CAMP_RULES.WALL_SLOTS;
+}
+export function wallPerimeter(building) { return 8 * wallRadius(building); }
+export function wallPointAt(building, t) {
+    const r = wallRadius(building), side = 2 * r, per = 8 * r;
+    const s = ((t % per) + per) % per;
+    const corners = [[-r, -r], [r, -r], [r, r], [-r, r]];
+    const i = Math.min(3, Math.floor(s / side));
+    const k = (s - i * side) / side;
+    const [x0, y0] = corners[i], [x1, y1] = corners[(i + 1) % 4];
+    return { gx: q(building.gx + x0 + (x1 - x0) * k), gy: q(building.gy + y0 + (y1 - y0) * k) };
+}
+// 墙环上离给定点最近的位置参数：中心朝目标方向射线与正方形边界的交点。
+export function wallParamToward(building, gx, gy) {
+    const r = wallRadius(building), side = 2 * r;
+    const dx = gx - building.gx, dy = gy - building.gy;
+    const m = Math.max(Math.abs(dx), Math.abs(dy));
+    if (m < 1e-6) return 0;
+    const ex = dx / m * r, ey = dy / m * r;
+    if (Math.abs(ex) >= Math.abs(ey)) return q(ex > 0 ? side + (ey + r) : 3 * side + (r - ey));
+    return q(ey < 0 ? ex + r : 2 * side + (r - ex));
+}
+// 第 index 个垛口的墙环参数（守军无敌人时的岗位）。
+export function wallSlotParam(building, index) {
+    const slots = Math.max(1, wallSlots(building));
+    return q((Math.max(0, index) % slots) * wallPerimeter(building) / slots);
+}
 
 // 驻军读数（模拟与渲染共用的唯一口径）：reserved 含"已预约入驻"的在途单位。
 export function garrisonStatusLabel(inside, reserved, capacity) {
@@ -66,7 +107,8 @@ export class CampSystem {
         return r ? {
             cost: r.cost, buildMs: r.seconds * 1000, maxHp: r.hp,
             capacity: kind === 'tower' ? CAMP_RULES.CAPACITY
-                : kind === 'tent' ? HEALING_RULES.TENT_MEDIC_SLOTS : 0
+                : kind === 'tent' ? HEALING_RULES.TENT_MEDIC_SLOTS
+                    : kind === 'camp' ? CAMP_RULES.WALL_SLOTS : 0
         } : null;
     }
     projection() {
@@ -117,9 +159,11 @@ export class CampSystem {
             progress: complete ? 1 : 0, complete, dead: false, workerId: null,
             paused: false, garrisonIds: [],
             capacity: type === 'tower' ? CAMP_RULES.CAPACITY
-                : type === 'tent' ? HEALING_RULES.TENT_MEDIC_SLOTS : 0,
+                : type === 'tent' ? HEALING_RULES.TENT_MEDIC_SLOTS
+                    : type === 'camp' ? wallSlots({ siteId }) : 0,
             radius: rule.radius,
-            garrisonHeight: type === 'tent' ? CAMP_RULES.TENT_GARRISON_HEIGHT_PX : CAMP_RULES.GARRISON_HEIGHT_PX,
+            garrisonHeight: type === 'tent' ? CAMP_RULES.TENT_GARRISON_HEIGHT_PX
+                : type === 'camp' ? CAMP_RULES.WALL_GUARD_LIFT_PX : CAMP_RULES.GARRISON_HEIGHT_PX,
             isBuilding: true, typeData: { def: rule.def, atk: 0, range: 0, speed: 0, bodyRadius: rule.radius },
             scene: this.scene, battleId: this.scene.battleId
         };
@@ -223,7 +267,7 @@ export class CampSystem {
 
     reserved(tower) {
         let n = tower.garrisonIds.length;
-        for (const u of this.scene.units) if (ready(u) && u.garrisonOrderId === tower.id && !u.garrisonTowerId) n++;
+        for (const u of this.scene.units) if (ready(u) && u.garrisonOrderId === tower.id && !u.garrisonTowerId && !u.wallGuardId) n++;
         return n;
     }
 
@@ -258,14 +302,16 @@ export class CampSystem {
     // 两处共用同一套过滤规则，提示人数永远等于实际受理人数。
     garrisonAcceptList(team, unitIds, towerId) {
         const b = this.getBuilding(towerId);
-        // 箭塔收弓手；医帐收医师。其它组合一律不接受。
-        const acceptType = b?.type === 'tower' ? 'archer' : b?.type === 'tent' ? 'medic' : null;
-        if (!b || !acceptType || !sameSide(this.scene, b.team, team) || b.dead || !b.complete || !Array.isArray(unitIds)) return [];
+        // 箭塔收弓手；医帐收医师；营寨收近战（上墙当守军）。其它组合一律不接受。
+        const acceptTypes = b?.type === 'tower' ? ['archer']
+            : b?.type === 'tent' ? ['medic']
+                : b?.type === 'camp' ? CAMP_RULES.WALL_GUARD_MELEE : null;
+        if (!b || !acceptTypes || !sameSide(this.scene, b.team, team) || b.dead || !b.complete || !Array.isArray(unitIds)) return [];
         let count = this.reserved(b);
         const accepted = [];
         for (const id of [...new Set(unitIds)].sort((a, z) => a - z)) {
             const u = this.unit(id);
-            if (!ready(u) || u.team !== team || u.type !== acceptType || u.garrisonTowerId ||
+            if (!ready(u) || u.team !== team || !acceptTypes.includes(u.type) || u.garrisonTowerId || u.wallGuardId ||
                 u.garrisonOrderId === towerId || count >= b.capacity) continue;
             accepted.push(u);
             count++;
@@ -327,10 +373,22 @@ export class CampSystem {
         return { gx: tower.gx, gy: tower.gy };
     }
 
+    // 上墙：守军站到自己的垛口，取得居高临下的攻防加成；仍是普通单位，可被击杀（攻方的解法）。
+    mountWallGuard(b, u) {
+        u.wallGuardId = b.id;
+        u.garrisonHeight = b.garrisonHeight;
+        u.guardCoverScale = CAMP_RULES.WALL_GUARD_COVER;
+        u.guardSlot = Math.max(0, b.garrisonIds.indexOf(u.id));
+        const p = wallPointAt(b, wallSlotParam(b, u.guardSlot));
+        u.gx = p.gx; u.gy = p.gy; u.pgx = p.gx; u.pgy = p.gy;
+        u.moving = false; u.velX = 0; u.velY = 0;
+    }
+
     exitUnit(tower, u, slot) {
         const p = this.exitPosition(tower, slot);
         u.gx = p.gx; u.gy = p.gy; u.pgx = p.gx; u.pgy = p.gy;
         u.garrisonTowerId = null; u.garrisonOrderId = null; u.garrisonHeight = 0;
+        u.wallGuardId = null; u.guardCoverScale = 1; u.guardSlot = null;
         u.target = null; u.meleeTarget = null; u.moveX = 0; u.moveY = 0;
         u.velX = 0; u.velY = 0;
         if (alive(u)) this.scene.battalions?.assignReinforcement(u);
@@ -338,7 +396,7 @@ export class CampSystem {
 
     ungarrison(team, towerId) {
         const b = this.getBuilding(towerId);
-        if (!b || !sameSide(this.scene, b.team, team) || (b.type !== 'tower' && b.type !== 'tent') || b.dead) return false;
+        if (!b || !sameSide(this.scene, b.team, team) || !['tower', 'tent', 'camp'].includes(b.type) || b.dead) return false;
         for (const u of this.scene.units) if (u.garrisonOrderId === b.id) u.garrisonOrderId = null;
         for (let i = 0; i < b.garrisonIds.length; i++) {
             const u = this.unit(b.garrisonIds[i]);
@@ -434,7 +492,46 @@ export class CampSystem {
         return false; // No legal shoulder: let the ordinary AI deal with nearby combat/movement.
     }
 
+    // 寨墙守军：沿墙环跑位——附近有敌人就赶到离他最近的一段墙、居高临下打；没有就回自己的垛口。
+    // 站在墙上：造成伤害 ×1.25、受到伤害 ×0.7。溃逃或换防离开墙环就失去加成。
+    updateWallGuard(u, now, dt) {
+        const b = this.getBuilding(u.wallGuardId);
+        if (!b || b.dead || !ready(u)) {
+            if (b) { b.garrisonIds = b.garrisonIds.filter(id => id !== u.id); this.exitUnit(b, u, u.guardSlot ?? 0); }
+            else { u.wallGuardId = null; u.guardCoverScale = 1; u.guardSlot = null; u.garrisonHeight = 0; }
+            return u.dead;
+        }
+        const foe = this.localEnemy(u, CAMP_RULES.WALL_GUARD_ENGAGE);
+        u.target = foe;
+        const per = wallPerimeter(b);
+        const have = wallParamToward(b, u.gx, u.gy);
+        const want = foe ? wallParamToward(b, foe.gx, foe.gy) : wallSlotParam(b, u.guardSlot ?? 0);
+        let diff = want - have;
+        if (diff > per / 2) diff -= per;
+        else if (diff < -per / 2) diff += per;
+        if (Math.abs(diff) > 0.02) {
+            const step = Math.min(Math.abs(diff), u.typeData.speed * dt) * Math.sign(diff);
+            const at = wallPointAt(b, have + step);
+            u.gx = at.gx; u.gy = at.gy;
+            u.moving = true;
+        } else u.moving = false;
+        if (!foe || q(now - u.lastAttack) < u.typeData.atkSpeed) return true;
+        const reach = u.typeData.range + 0.45;
+        if (q(Math.hypot(foe.gx - u.gx, foe.gy - u.gy)) > reach) return true;
+        u.lastAttack = now;
+        this.scene.playAttackAnim?.(u, foe);
+        const epoch = u.actionEpoch;
+        this.scene.scheduleBattleAction(95, () => {
+            if (this.scene.battleOver || u.actionEpoch !== epoch || !ready(u) || !foe || foe.dead || foe.withdrawn) return;
+            if (q(Math.hypot(foe.gx - u.gx, foe.gy - u.gy)) > reach + 0.15) return;
+            resolveAttack(foe, u, { multiplier: CAMP_RULES.WALL_GUARD_ATTACK });
+            this.scene.meleeImpact?.(u, foe);
+        });
+        return true;
+    }
+
     updateUnit(u, now, dt) {
+        if (u.wallGuardId) return this.updateWallGuard(u, now, dt);
         if (u.garrisonTowerId) {
             const tower = this.getBuilding(u.garrisonTowerId);
             if (!ready(u) || !tower || tower.dead) {
@@ -519,18 +616,33 @@ export class CampSystem {
         this.refreshUnits();
         for (const u of this.scene.units) {
             const b = this.getBuilding(u.garrisonOrderId);
-            if (!ready(u) || !b || b.dead || !b.complete || u.garrisonTowerId ||
+            if (!ready(u) || !b || b.dead || !b.complete || u.garrisonTowerId || u.wallGuardId ||
                 distance(u, b) > CAMP_RULES.ENTER_REACH || b.garrisonIds.length >= b.capacity) continue;
             b.garrisonIds.push(u.id); b.garrisonIds.sort((a, z) => a - z);
-            u.garrisonTowerId = b.id; u.garrisonOrderId = null; u.garrisonHeight = b.garrisonHeight;
-            u.gx = b.gx; u.gy = b.gy; u.pgx = b.gx; u.pgy = b.gy;
+            u.garrisonOrderId = null;
             u.moveX = 0; u.moveY = 0; u.pushX = 0; u.pushY = 0;
             u.actionEpoch = (u.actionEpoch ?? 0) + 1;
             u.battalion = null; u.meleeTarget = null; u.target = null;
+            if (b.type === 'camp') this.mountWallGuard(b, u);
+            else {
+                u.garrisonTowerId = b.id; u.garrisonHeight = b.garrisonHeight;
+                u.gx = b.gx; u.gy = b.gy; u.pgx = b.gx; u.pgy = b.gy;
+            }
         }
         for (const b of this.buildings) {
             if (b.dead) continue;
-            b.garrisonIds = b.garrisonIds.filter(id => alive(this.unit(id)) && this.unit(id).garrisonTowerId === b.id);
+            b.garrisonIds = b.garrisonIds.filter(id => {
+                const u = this.unit(id);
+                if (!u) return false;
+                // 阵亡守军：清掉墙上的加成与抬升，避免尸身留在墙顶继续吃掩体系数
+                if (!alive(u)) {
+                    if (u.wallGuardId === b.id) {
+                        u.wallGuardId = null; u.guardCoverScale = 1; u.guardSlot = null; u.garrisonHeight = 0;
+                    }
+                    return false;
+                }
+                return b.type === 'camp' ? u.wallGuardId === b.id : u.garrisonTowerId === b.id;
+            });
             if (b.complete) continue;
             const w = this.unit(b.workerId);
             if (!alive(w)) b.workerId = null;
@@ -579,6 +691,19 @@ export class CampSystem {
             const choices = archers.filter(u => !u.garrisonOrderId && !u.garrisonTowerId && !u.orderBuildingId && distance(u, tower) <= 28)
                 .sort((a, b) => distance(a, tower) - distance(b, tower) || a.id - b.id);
             this.orderGarrison(team, choices.slice(0, 2 - this.reserved(tower)).map(u => u.id), tower.id);
+        }
+        // 前线营寨上墙：每座就近派 2 名近战守军。大本营营寨不驻——AI 得把主力留在野战，
+        // 否则一座座营寨会把部队钉死在原地，战线推不动。
+        const melee = this.scene.units.filter(u => ready(u) && u.team === team &&
+            CAMP_RULES.WALL_GUARD_MELEE.includes(u.type) && !u.garrisonTowerId && !u.wallGuardId &&
+            !u.garrisonOrderId && !u.orderBuildingId && !u.battalion?.playerOrdered).sort((a, b) => a.id - b.id);
+        for (const camp of this.buildings) {
+            if (camp.team !== team || camp.dead || !camp.complete || camp.type !== 'camp' || camp.siteId === 'home') continue;
+            const need = Math.min(2, camp.capacity) - this.reserved(camp);
+            if (need <= 0) continue;
+            const choices = melee.filter(u => !u.garrisonOrderId && !u.wallGuardId && !u.orderBuildingId && distance(u, camp) <= 30)
+                .sort((a, b) => distance(a, camp) - distance(b, camp) || a.id - b.id);
+            if (choices.length) this.orderGarrison(team, choices.slice(0, need).map(u => u.id), camp.id);
         }
     }
 

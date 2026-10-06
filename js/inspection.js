@@ -295,6 +295,7 @@ export class UnitInspector {
             : unit.moralePhase === 'forming' ? '正在整队，准备返场'
             : unit.workerTask?.kind === 'build' ? '赶赴工地 / 建设施工'
             : unit.workerTask?.kind === 'move' ? '前往指定位置'
+            : unit.wallGuardId ? (unit.target ? '寨墙守军 · 居高临下接敌' : '寨墙守军 · 站墙待敌')
             : unit.garrisonOrderId ? `正在前往${garrisonKind(unit.garrisonOrderId) === 'tent' ? '医帐' : '箭塔'}`
             : unit.garrisonTowerId ? (garrisonKind(unit.garrisonTowerId) === 'tent' ? '驻帐中 · 治疗伤兵' : '驻塔中')
             : battalion?.retreat ? '回防集结'

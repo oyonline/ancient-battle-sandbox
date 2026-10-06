@@ -118,6 +118,8 @@ export function battleProjection(scene) {
         if (scene.territory?.camps) {
             parts.push('camp-unit', unit.garrisonTowerId || '', unit.garrisonOrderId || '',
                 unit.orderBuildingId || '', Math.round((unit.garrisonHeight || 0) * 1e3),
+                // 营寨守军：驻守的寨子与岗位决定站位/倍率，必须进哈希
+                unit.wallGuardId || '', unit.guardSlot ?? '', Math.round((unit.guardCoverScale ?? 1) * 1e3),
                 Math.round(unit.lastAttack * 1e3), JSON.stringify(unit.workerTask || null),
                 // 民夫历史交战时刻：不是派生/展示字段——它单独决定之后 300ms 的施工暂停
                 // （同模拟时刻下 800 与 600 的施工状态不同）。空串 = 从未交战；

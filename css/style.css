@@ -207,13 +207,7 @@ body[data-phase="battle"] #controlbar.collapsed { width: min(760px, calc(100% - 
 .camp-workers button { font-size: 11px; padding: 3px 7px; }
 body.camp-targeting canvas { cursor: crosshair; }
 
-/* ==================== 首页看板：继续 / 英雄卡 / 三区 ==================== */
-.continue-btn { display: block; width: 100%; padding: 12px 16px; margin-bottom: 10px;
-    border-radius: 12px; border: 2px solid #6fae62; background: rgba(38, 56, 30, 0.75);
-    color: #d8f0cf; font: 700 15px/1.4 "PingFang SC", sans-serif; cursor: pointer; text-align: left; }
-.continue-btn b { color: #b8f0a8; }
-.continue-btn:hover { background: rgba(48, 72, 38, 0.85); }
-
+/* ==================== 首页看板：英雄卡 / 三区 ==================== */
 .mode-hero { display: flex; gap: 14px; padding: 14px; margin-bottom: 14px;
     border-radius: 16px; border: 2.5px solid rgba(214, 176, 92, 0.7);
     background: linear-gradient(135deg, rgba(58, 40, 16, 0.82), rgba(38, 30, 14, 0.88)); }
@@ -278,6 +272,47 @@ body.camp-targeting canvas { cursor: crosshair; }
     .drill-row { grid-template-columns: 1fr; }
 }
 
+/* ==================== 入口层：整屏选玩法 ====================
+   与局内抽屉分开：这里没有折叠，唯一的离开方式是"进入某一局"。
+   层级压在抽屉(15)与顶栏(20)之上、轮流配兵遮罩(50)之下。 */
+.lobby-screen {
+    position: fixed; inset: 0;
+    z-index: 40;
+    display: none;
+    justify-content: center;
+    background:
+        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.09) 0 1px, transparent 1px 40px),
+        linear-gradient(180deg, rgba(60, 41, 23, 0.99) 0%, rgba(36, 23, 12, 0.99) 100%);
+}
+.lobby-screen.show { display: flex; }
+.lobby-inner {
+    width: min(960px, 100%);
+    max-height: 100%;
+    display: flex; flex-direction: column;
+    padding: 0 18px;
+}
+.lobby-head {
+    flex: none;
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 4px 12px;
+    border-bottom: 2px solid rgba(201, 164, 74, 0.35);
+}
+.lobby-heading { flex: 1; min-width: 0; }
+.lobby-heading h1 { margin: 0 0 4px; font-size: clamp(20px, 2.6vw, 27px); letter-spacing: 2px; color: #f6e3b2; }
+.lobby-heading p { margin: 0; color: #beac86; font: 13px/1.7 "PingFang SC", sans-serif; }
+#btn-lobby-mute {
+    flex: none; padding: 9px 13px; border-radius: 10px; border: 1.5px solid #7a6335;
+    background: #3d2c14; color: #f0e6cc; font-size: 16px; line-height: 1; cursor: pointer;
+}
+#btn-lobby-mute:hover { border-color: #a8934f; }
+.lobby-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 4px 22px; }
+.lobby-body::-webkit-scrollbar { width: 6px; }
+.lobby-body::-webkit-scrollbar-thumb { background: #8f753d; border-radius: 6px; }
+/* 入口层打开时，被它盖住的顶栏与抽屉整体退出交互与 Tab 顺序 */
+body.lobby-open #topbar,
+body.lobby-open #controlbar,
+body.lobby-open #sheet { visibility: hidden; }
+
 /* ==================== 底部抽屉面板 ==================== */
 #sheet {
     position: fixed;
@@ -290,6 +325,15 @@ body.camp-targeting canvas { cursor: crosshair; }
     transform: translateY(calc(100% - 52px));   /* 默认只露出头部 */
 }
 #sheet.open { transform: translateY(0); pointer-events: auto; }
+
+/* 战斗中拉开抽屉：只留局内可调的换图与军令，去掉只属于开战前的东西 */
+#sheet.in-battle #btn-start,
+#sheet.in-battle #ready-edit-actions,
+#sheet.in-battle #sec-ready > .team-banner,
+#sheet.in-battle #sec-ready > .hint-small,
+#sheet.in-battle #sec-ready > .morale-guide,
+#sheet.in-battle #sec-ready > #deathmatch-ready-rule,
+#sheet.in-battle #sec-ready > #tactics-ready-guide { display: none; }
 
 .sheet-inner {
     width: min(900px, 100%);
@@ -315,7 +359,7 @@ body.camp-targeting canvas { cursor: crosshair; }
     gap: 10px;
     cursor: pointer;
 }
-.steps { display: flex; flex: 1; gap: 6px; align-items: center; min-width: 0; }
+.steps { display: flex; flex: 1; gap: 6px; align-items: center; min-width: 0; cursor: default; }   /* 纯进度展示，不可点 */
 .step {
     display: flex; align-items: center; gap: 6px;
     font-size: 13px; color: #9d8a5e;
@@ -567,6 +611,8 @@ body.camp-targeting canvas { cursor: crosshair; }
 .overlay.show { display: flex; }
 .overlay.red  { background: radial-gradient(ellipse at center, rgba(140, 35, 25, 0.75) 0%, rgba(60, 12, 8, 0.92) 100%); }
 .overlay.blue { background: radial-gradient(ellipse at center, rgba(30, 70, 130, 0.75) 0%, rgba(10, 25, 55, 0.92) 100%); }
+.overlay.neutral { background: radial-gradient(ellipse at center, rgba(48, 39, 24, 0.82) 0%, rgba(16, 12, 7, 0.95) 100%); }
+.confirm-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .overlay-card {
     text-align: center;
     padding: 38px 48px;
@@ -734,6 +780,10 @@ summary { cursor: pointer; }
     .counts { margin-left: auto; gap: 8px; font-size: 13px; }
     #btn-panel, #btn-home, #btn-mute { font-size: 12px; padding: 4px 7px; }
     .sheet-body { padding: 10px 10px 14px; }
+    .lobby-inner { padding: 0 12px; }
+    .lobby-head { padding: 12px 2px 10px; gap: 10px; }
+    .lobby-heading p { display: none; }
+    .lobby-body { padding: 10px 2px 18px; }
     .lobby-intro { align-items: flex-start; padding-top: 4px; gap: 8px; }
     .lobby-intro h2 { font-size: 22px; letter-spacing: 0; }
     .campaign-progress { font-size: 10px; padding: 6px; white-space: nowrap; }

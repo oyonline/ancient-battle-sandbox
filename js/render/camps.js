@@ -1,5 +1,5 @@
 // Playable camps use the simulation's buildings, never decorative towers.
-import { garrisonStatusLabel, pendingGarrisonCounts } from '../battle/camps.js';
+import { garrisonStatusLabel, pendingGarrisonCounts, CAMP_RULES } from '../battle/camps.js';
 // Static timberwork is baked once; only construction, health and crew labels update.
 export const TOWER_DECK_HEIGHT = 82;
 const TEAM = { red: 0xc94d3d, blue: 0x437bae };
@@ -116,6 +116,13 @@ export function ensureCampTextures(scene) {
 
 // A crew's grid position stays at its tower. These offsets never enter simulation.
 export function towerCrewOffset(unit, camps) {
+    // 营寨守军站在寨墙垛口上：只抬到墙顶（28px），不算高台；横向不偏，纵向压在墙体之上。
+    if (unit.wallGuardId) {
+        const camp = camps?.getBuilding?.(unit.wallGuardId) ||
+            camps?.buildings?.find(b => b.id === unit.wallGuardId);
+        if (!camp || camp.dead || !camp.complete) return null;
+        return { x: 0, y: -(unit.garrisonHeight || 28), depth: 0 };
+    }
     if (!unit.garrisonTowerId) return null;
     const tower = camps?.getBuilding?.(unit.garrisonTowerId) ||
         camps?.buildings?.find(b => b.id === unit.garrisonTowerId);
@@ -139,10 +146,11 @@ export class CampRenderer {
         // A rebuilt structure reuses its command id; only its latest object owns the view.
         const latest = new Map(system.buildings.map(building => [building.id, building]));
         this._armed=undefined;   // 本端选择每帧最多读一次，未变化的帧不重复扫描
-        // 在途预约同样每帧只扫一次单位表；没有完工箭塔的帧完全不付这份成本。
+        this._armedMelee=undefined;
+        // 在途预约同样每帧只扫一次单位表；没有完工箭塔/营寨的帧完全不付这份成本。
         let reservations=null;
         for (const building of latest.values()) {
-            if (building.type==='tower' && building.complete && !building.dead) { reservations=this.pendingReservations(); break; }
+            if ((building.type==='tower'||building.type==='camp') && building.complete && !building.dead) { reservations=this.pendingReservations(); break; }
         }
         for (const building of latest.values()) {
             present.add(building.id);
@@ -221,7 +229,18 @@ export class CampRenderer {
         return !!unit&&unit.team===side&&unit.type==='archer'&&!unit.dead&&!unit.withdrawn&&!unit.garrisonTowerId;
     }
 
+    // 营寨上墙用的是近战兵：选中近战时营寨才高亮可驻。
+    selectionArmedMelee() {
+        const scene=this.scene,side=this.side,battalion=scene.selectedBattalion;
+        const melee=u=>CAMP_RULES.WALL_GUARD_MELEE.includes(u.type)&&!u.wallGuardId&&!u.garrisonTowerId;
+        const members=battalion?.team===side&&typeof battalion.aliveMembers==='function'?battalion.aliveMembers():null;
+        if(members?.some(melee))return true;
+        const unit=scene.unitInspector?.selected;
+        return !!unit&&unit.team===side&&!unit.dead&&!unit.withdrawn&&melee(unit);
+    }
+
     armed() { if(this._armed===undefined)this._armed=this.selectionArmed(); return this._armed; }
+    armedMelee() { if(this._armedMelee===undefined)this._armedMelee=this.selectionArmedMelee(); return this._armedMelee; }
 
     // 静态高亮：只在状态变化时重画，不做逐帧呼吸/动画。
     drawHighlight(view,on) {
@@ -236,10 +255,10 @@ export class CampRenderer {
         const stage=Math.round((building.progress||0)*20),health=Math.ceil(building.hp||0);
         const count=building.garrisonIds?.length||0;
         const tower=building.type==='tower',tent=building.type==='tent',home=building.siteId==='home';
-        // 只有完工且在用的己方箭塔才需要读驻军/选择：读数变化必须进 signature，
+        // 只有完工且在用的己方箭塔/营寨才需要读驻军/选择：读数变化必须进 signature，
         // 否则"弓手在路上"这类状态会被差异比较吞掉。
-        const garrison=tower&&building.complete&&!building.dead?this.garrisonStatusOf(building,reservations):null;
-        const highlight=!!garrison&&!garrison.full&&building.team===this.side&&this.armed();
+        const garrison=(tower||building.type==='camp')&&building.complete&&!building.dead?this.garrisonStatusOf(building,reservations):null;
+        const highlight=!!garrison&&!garrison.full&&building.team===this.side&&(tower?this.armed():this.armedMelee());
         const signature=`${stage}:${health}:${count}:${garrison?garrison.reserved:0}:${building.dead}:${building.complete}:${building.paused}:${highlight?1:0}`;
         if(signature===view.signature)return;
         view.signature=signature;
@@ -261,10 +280,12 @@ export class CampRenderer {
         } else {
             for(const part of view.parts) part.setAlpha(1);
             if(building.hp<building.maxHp)this.bar(view.status,h+11,building.hp/building.maxHp,TEAM[building.team]);
-            // 完工箭塔标出"塔内几人 / 共 4 人 / 还有几人在路上"，口径与模拟同一份读数。
-            view.label.setText(tower?`箭塔 弓手 ${(garrison?garrison.label:`${count}/${building.capacity||4}`).replace('（+','（')}`
+            // 完工箭塔/营寨标出"里面几人 / 共几人 / 还有几人在路上"，口径与模拟同一份读数。
+            const crewLabel=(garrison?garrison.label:`${count}/${building.capacity||0}`).replace('（+','（');
+            view.label.setText(tower?`箭塔 弓手 ${crewLabel}`
                 :tent?`医帐 医师${count}/${building.capacity||2}`
-                :home?'大本营':'前线营寨');
+                :building.type==='camp'?`${home?'大本营':'前线营寨'} 守军 ${crewLabel}`
+                :'前线营寨');
         }
     }
 

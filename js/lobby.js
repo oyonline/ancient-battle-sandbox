@@ -12,6 +12,10 @@ import { Snd } from './snd.js';
 import { UI_TACTIC_OPTIONS, UI_CAVALRY_OPTIONS, PRESETS } from './ui.js';
 import { ownerDisplayCss } from './factions.js';
 
+// 配兵面板里真正摆出数量格的兵种（隐藏的系统单位：民夫 / 医师 / 辎重车不摆）。
+// 建立卡片与刷新数量必须用同一份来源，否则会去刷新不存在的格子（历史 bug：点挑战卡无反应）。
+const buyableTypes = () => Object.keys(UNIT_TYPES).filter(key => !UNIT_TYPES[key].hidden);
+
 export const lobbyMethods = {
     // ---------------- 局域网对战：房间流程 ----------------
     openNetLobby() {
@@ -170,7 +174,6 @@ export const lobbyMethods = {
         this.battleOptions.coop = coop;
         if (coop) this.battleOptions.black = { ...TERRITORY.OPENING, infantry: 18, pikeman: 8, archer: 10, cavalry: 3, worker: 3 };
         this.net.inBattle = true;
-        this.rememberMode(coop ? '🤝 合作模式（红蓝联军打黑方）' : '🌐 局域网对战', 'net');
         if (!this.scene) { this.pendingNetStart = true; return; }
         this.scene.netClient = { send: packet => this.net.client.send(packet) };
         this.deployArmies();
@@ -289,7 +292,6 @@ export const lobbyMethods = {
     startChallenge(id) {
         const challenge = CHALLENGES.find(c => c.id === id);
         if (!challenge) return;
-        this.rememberMode('🎖 ' + challenge.title, 'challenge', id);
         this.clearBattle();
         this.mode = 'challenge';
         this.challenge = challenge;
@@ -305,7 +307,6 @@ export const lobbyMethods = {
     },
 
     resetAll() {
-        this.rememberMode('⚔️ 自由对战', 'sandbox');
         this.clearBattle();
         this.mode = 'sandbox';
         this.challenge = null;
@@ -322,7 +323,6 @@ export const lobbyMethods = {
 
     startTactics(order = 'flank') {
         if (!['assault', 'flank', 'reserve'].includes(order)) return;
-        this.rememberMode({ assault: '⚔️ 战阵 · 正面强攻', flank: '⚔️ 战阵 · 单翼迂回', reserve: '⚔️ 战阵 · 预备队死斗' }[order], 'tactics', order);
         this.clearBattle();
         this.mode = 'tactics';
         this.challenge = null;
@@ -372,8 +372,8 @@ export const lobbyMethods = {
             : '按住 ＋ 连续加兵 · 挑战中预设会按预算缩减';
         const wrap = document.getElementById('unit-cards');
         wrap.innerHTML = '';
-        for (const [key, t] of Object.entries(UNIT_TYPES)) {
-            if (t.hidden) continue;   // 辎重车等系统单位不进入配兵界面
+        for (const key of buyableTypes()) {
+            const t = UNIT_TYPES[key];
             const card = document.createElement('div');
             card.className = 'ucard';
             card.innerHTML = `<img class="uc-img" src="${key === 'axe' ? axePortraitDataUrl(team) : `assets/units/${team}_${key}.png`}" alt="${t.name}">
@@ -404,7 +404,7 @@ export const lobbyMethods = {
             row.appendChild(button);
         }
         this.renderOrders(team);
-        Object.keys(UNIT_TYPES).forEach(k => this.renderNum(team, k));
+        buyableTypes().forEach(k => this.renderNum(team, k));
         this.updateBudget(team);
     },
 
@@ -520,6 +520,7 @@ export const lobbyMethods = {
     renderNum(team, type) {
         const n = this.configs[team][type] || 0;
         const el = document.getElementById('num-' + type);
+        if (!el) return;          // 面板里没有这个兵种的数量格（系统单位）：跳过，不抛错
         el.textContent = n;
         el.closest('.ucard').classList.toggle('dim', n === 0);
     },
@@ -528,7 +529,7 @@ export const lobbyMethods = {
         if (!this.phase.startsWith('buy-')) return;
         const team = this.phase.split('-')[1];
         this.configs[team] = fitArmyToBudget(PRESETS[name].config, this.budget(team));
-        Object.keys(UNIT_TYPES).forEach(k => this.renderNum(team, k));
+        buyableTypes().forEach(k => this.renderNum(team, k));
         this.updateBudget(team);
         document.getElementById('buy-message').textContent = this.mode === 'challenge' ? '已按本关预算缩减预设；你还可以微调兵种和数量。' : '预设已就绪，继续微调或直接检阅军队。';
         Snd.play('lock');
@@ -538,7 +539,7 @@ export const lobbyMethods = {
         if (!this.phase.startsWith('buy-')) return;
         const team = this.phase.split('-')[1];
         this.configs[team] = {};
-        Object.keys(UNIT_TYPES).forEach(k => this.renderNum(team, k));
+        buyableTypes().forEach(k => this.renderNum(team, k));
         this.updateBudget(team);
     },
 
@@ -599,13 +600,14 @@ export const lobbyMethods = {
         const mySide = this.battleOptions.mySide || 'red';
         const coop = this.battleOptions.coop === true;      // 合作模式：红蓝联军对黑方 AI
         const black = this.battleOptions.black || null;
+        const territoryAI = this.battleOptions.territoryAI;   // 演练局用它让双方停手（不征兵/不重建）
         const reserves = Object.fromEntries(['red', 'blue'].map(team => [team,
             Math.min(this.battleOptions.reserves[team] || 0, Math.max(0, (this.configs[team].infantry || 0) - 1))]));
         const terrain = ['sandbox', 'terrain'].includes(this.mode) ? Terrain.normalize(this.battleOptions.terrain)
             : this.mode === 'territory' ? 'territory' : 'flat';
         const cavalryOrders = Object.fromEntries(['red', 'blue'].map(team => [team,
             ['sandbox', 'terrain'].includes(this.mode) ? this.cavalryOrder(team) : 'auto']));
-        this.battleOptions = { deathmatch, control, convoy, territory, net, mySide, coop, black, reserves, terrain, cavalryOrders };
+        this.battleOptions = { deathmatch, control, convoy, territory, net, mySide, coop, black, reserves, terrain, cavalryOrders, territoryAI };
         this.scene?.deployUnits(this.configs.red, this.configs.blue, this.formations.red, this.formations.blue,
             { ...this.orders }, { ...this.battleOptions, reserves: { ...reserves }, cavalryOrders: { ...cavalryOrders } });
         this.setPhase('ready');

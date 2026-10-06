@@ -21,7 +21,7 @@
             <span class="blue-c">🔵 <span id="blue-count">0</span></span>
         </div>
         <button id="btn-home" title="返回战役选择">⚑ 战役</button>
-        <button id="btn-mute" title="声音开关" aria-label="关闭声音">🔊</button>
+        <button id="btn-mute" data-mute title="声音开关" aria-label="关闭声音">🔊</button>
         <button id="btn-panel" title="显示/隐藏配兵面板">📜 面板</button>
         <span id="performance-hud" aria-live="off" title="帧率与存活士兵数"></span>
     </header>
@@ -107,20 +107,17 @@
         </div>
     </div>
 
-    <!-- 底部抽屉：配兵 / 就绪 / 结果 -->
-    <aside id="sheet" class="open">
-        <div class="sheet-inner">
-            <div class="sheet-head">
-                <span id="sheet-label">⚑ 统帅试炼</span>
-                <div class="steps" id="steps">
-                    <div class="step on" data-step="1"><i>1</i><span>红方配兵</span></div>
-                    <div class="step" data-step="2"><i>2</i><span>蓝方配兵</span></div>
-                    <div class="step" data-step="3"><i>3</i><span>开战</span></div>
+    <!-- 入口层：整屏选玩法。折叠开关只属于局内抽屉，这一层没有折叠这回事。 -->
+    <div id="lobby" class="lobby-screen show">
+        <div class="lobby-inner">
+            <header class="lobby-head">
+                <div class="lobby-heading">
+                    <h1>🏰 帝国亲子沙盒</h1>
+                    <p>选一个玩法进去。收起面板看战场，打完读战报再回来。</p>
                 </div>
-                <button id="btn-fold" title="收起/展开面板">▾</button>
-            </div>
-
-            <div class="sheet-body">
+                <button id="btn-lobby-mute" data-mute title="声音开关" aria-label="关闭声音">🔊</button>
+            </header>
+            <div class="lobby-body">
                 <section id="sec-home" class="sec on">
                     <div class="lobby-intro">
                         <div>
@@ -129,8 +126,6 @@
                             <p>看图选玩法。打完读战报，换个思路再来一局。</p>
                         </div>
                     </div>
-                    <button id="btn-continue" class="continue-btn" title="重新开始上次的玩法，不恢复旧战局" hidden>▶ 再玩上次模式：<b id="continue-label">领土征服</b></button>
-
                     <!-- 大会战：英雄卡 -->
                     <div class="mode-hero">
                         <canvas id="territory-thumb" width="248" height="150" aria-hidden="true"></canvas>
@@ -152,6 +147,13 @@
                     <div class="mode-zone">
                         <div class="zone-heading"><b>⚡ 快速一局</b><small>3~5 分钟 · 规则单一，一局见分晓</small></div>
                         <div class="quick-grid">
+                            <div class="quick-card">
+                                <button class="qc-main" data-siege-entry="true">
+                                    <span class="qc-icon">🛡</span><strong>营寨攻防</strong>
+                                    <span class="qc-line">一支攻城队 vs 站满寨墙的守备队</span>
+                                    <small class="qc-meta">约 2 分钟 · 试营寨守军的强弱</small>
+                                </button>
+                            </div>
                             <div class="quick-card">
                                 <button class="qc-main" data-control-entry="flat">
                                     <span class="qc-icon">⚑</span><strong>占点三旗</strong>
@@ -241,6 +243,24 @@
                         </div>
                     </div>
                 </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- 局内抽屉：只装这一局的流程（配兵 / 就绪 / 战报），入口已独立成整屏层 -->
+    <aside id="sheet">
+        <div class="sheet-inner">
+            <div class="sheet-head">
+                <span id="sheet-label">⚑ 统帅试炼</span>
+                <div class="steps" id="steps">
+                    <div class="step on" data-step="1"><i>1</i><span>红方配兵</span></div>
+                    <div class="step" data-step="2"><i>2</i><span>蓝方配兵</span></div>
+                    <div class="step" data-step="3"><i>3</i><span>开战</span></div>
+                </div>
+                <button id="btn-fold" title="收起/展开面板">▾</button>
+            </div>
+
+            <div class="sheet-body">
                 <!-- 第1/2步：配兵 -->
                 <section id="sec-buy" class="sec">
                     <div id="challenge-brief" class="challenge-brief" hidden></div>
@@ -374,6 +394,9 @@
 
     <!-- 轮流配兵遮罩（防偷看） -->
     <div class="overlay" id="overlay"></div>
+
+    <!-- 二次确认层（战斗中途离开战局等） -->
+    <div class="overlay neutral" id="confirm-layer"></div>
 
     <!-- Phaser 以经典脚本全局加载（UMD 包，先于 ES 模块执行）；其余代码经 Vite 走 ES 模块图 -->
     <script src="vendor/phaser.min.js"></script>

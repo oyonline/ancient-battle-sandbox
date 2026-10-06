@@ -895,6 +895,8 @@ export function applyDamage(target, dmg, from, attackStartedAt) {
     if (target.dead || target.withdrawn || target.hp <= 0 || !Number.isFinite(dmg) || dmg <= 0) return 0;
     const scene = target.scene;
     if (scene && (target.battleId !== scene.battleId || (from && from.battleId !== scene.battleId))) return 0;
+    // 营寨守军站在寨墙上：居高临下带来的受伤减免（无该字段的单位恒为 1）
+    if (target.guardCoverScale && target.guardCoverScale !== 1) dmg = Math.max(1, Math.floor(dmg * target.guardCoverScale));
     const effectiveDamage = Math.min(target.hp, dmg);
     target.hp = Math.max(0, target.hp - dmg);
     target.flashUntil = (scene ? scene.simulationTime : 0) + 130;
