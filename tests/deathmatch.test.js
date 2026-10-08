@@ -91,13 +91,13 @@ test('deathmatch still waits for the last airborne arrow and can end in mutual e
 
 test('deployment copies and clamps reserve options and an ordinary restart clears deathmatch', () => {
     const scene = makeScene();
-    const options = { deathmatch: true, reserves: { red: 50, blue: NaN } };
+    const options = { deathmatch: true, coop: false, reserves: { red: 50, blue: NaN } };
     scene.deployUnits({ infantry: 4 }, { pikeman: 4 }, 'custom', 'custom', {}, options);
-    assert.deepEqual(snapshot(scene.battleOptions), { deathmatch: true, control: false, convoy: false, territory: false, net: false, reserves: { red: 3, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } });
+    assert.deepEqual(snapshot(scene.battleOptions), { deathmatch: true, coop: false, control: false, convoy: false, territory: false, net: false, reserves: { red: 3, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } });
     options.reserves.red = 0;
     assert.equal(scene.battleOptions.reserves.red, 3, 'caller state must not mutate an ongoing battle');
     scene.deployUnits({ infantry: 4 }, { pikeman: 4 }, 'custom', 'custom');
-    assert.deepEqual(snapshot(scene.battleOptions), { deathmatch: false, control: false, convoy: false, territory: false, net: false, reserves: { red: 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } });
+    assert.deepEqual(snapshot(scene.battleOptions), { deathmatch: false, coop: false, control: false, convoy: false, territory: false, net: false, reserves: { red: 0, blue: 0 }, terrain: 'flat', cavalryOrders: { red: 'auto', blue: 'auto' } });
     assert.equal(scene.tactics, null);
     assert.equal(scene.getBattleReport().deathmatch, false);
 });

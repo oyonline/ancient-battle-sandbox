@@ -39,7 +39,7 @@ export const LOCKSTEP = {
 // 改走关系表、旗帜拉锯按同盟组合并、投影新增 K 阵营编码与经济/票数/征兵/池黑方分量。
 // 即使既有两方对局行为逐位不变，模拟语义与投影结构已扩展，混版本必须拒绝。
 // Free tower coordinates/IDs, axe combat and tower balance change simulation state.
-export const SIM_VERSION = '2026-10-05-free-towers-axe';
+export const SIM_VERSION = '2026-10-07-coop-supply-medics';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {
@@ -120,7 +120,7 @@ export function battleProjection(scene) {
                 unit.orderBuildingId || '', Math.round((unit.garrisonHeight || 0) * 1e3),
                 // 营寨守军：驻守的寨子与岗位决定站位/倍率，必须进哈希
                 unit.wallGuardId || '', unit.guardSlot ?? '', Math.round((unit.guardCoverScale ?? 1) * 1e3),
-                Math.round(unit.lastAttack * 1e3), JSON.stringify(unit.workerTask || null),
+                Math.round(unit.lastAttack * 1e3), JSON.stringify(unit.workerTask || null), Math.round((unit.cargo || 0) * 1e6),
                 // 民夫历史交战时刻：不是派生/展示字段——它单独决定之后 300ms 的施工暂停
                 // （同模拟时刻下 800 与 600 的施工状态不同）。空串 = 从未交战；
                 // 真实的 0ms 是有效值，不能与"未交战"混同。
@@ -160,6 +160,7 @@ export function battleProjection(scene) {
         ...roster.map(t => territory.recruit.queues[t].length));
     if (territory.camps) {
         parts.push('camps', JSON.stringify(territory.camps.projection()));
+        parts.push('resources', JSON.stringify(territory.resources?.projection() || []));
         parts.push('arrows', JSON.stringify(scene.arrows.map(a => [
             a.source?.id, a.team, a.buildingId || '', a.sx, a.sy, a.tx, a.ty,
             a.t, a.dur, a.dmg, a.firedAt, a.sourceHeight, a.targetHeight

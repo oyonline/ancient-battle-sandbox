@@ -1,6 +1,7 @@
 // Shared layout: objective positions, collision geometry and visible routes agree.
 // Keep the original five objective indices stable for orders and network commands.
-export function territoryLayout(W, H) {
+export function territoryLayout(W, H, coop = false) {
+    if (coop) return cooperativeLayout(W, H);
     const cx = W / 2, cy = H / 2;
     const bridgeY = Math.round(H * 2 / 9);
     const bridge = { x1: cx - 6, x2: cx + 6, y1: bridgeY - 3, y2: bridgeY + 3, kind: 'bridge' };
@@ -66,4 +67,39 @@ export function territoryGeometry(W, H) {
             forest(Math.round(W * 0.56), Math.round(W * 0.69))],
         defense: null
     };
+}
+
+// Cooperative campaign: separate northern settlements, a mutual-aid bridge,
+// two approaches through the ford/woodland, and a southern enemy stronghold.
+export function homePosition(team, W, H, coop = false) {
+    if (coop) return team === 'black' ? { gx: W / 2, gy: H - 18 }
+        : { gx: W * (team === 'red' ? 0.25 : 0.75), gy: 22 };
+    return team === 'black' ? { gx: W / 2, gy: H - 8 }
+        : { gx: team === 'red' ? 7 : W - 7, gy: H / 2 };
+}
+
+function cooperativeLayout(W, H) {
+    const base = territoryLayout(W, H), x = W / 2, bridgeY = Math.round(H * 2 / 9);
+    const specs = [
+        [W*.25, 40, '西营补给站', 'crossroad', 'red'],
+        [W*.25, 66, '西翼前哨', 'forest', null],
+        [x, H/2, '联军汇合高地', 'hill', null],
+        [W*.75, 40, '东营补给站', 'crossroad', 'blue'],
+        [W*.75, 66, '东翼前哨', 'forest', null],
+        [W*.30, 86, '西马场', 'ranch', null],
+        [W*.70, 86, '东马场', 'ranch', null],
+        [x-12, base.fordY, '西侧渡口', 'ford', null],
+        [x+12, base.fordY, '东侧渡口', 'ford', null],
+        [x-26, H*.76, '敌寨西路', 'crossroad', 'black'],
+        [x+26, H*.76, '敌寨东路', 'crossroad', 'black']
+    ];
+    return { ...base, sites: specs.map(([gx,gy,name,role,owner],siteId) =>
+        ({gx,gy,name,role,owner,siteId,benefit: '发展据点与合作进攻路线',progress:owner === 'black' ? -1 : owner ? 1 : 0})),
+        routes: [
+            [[W*.25,22],[W*.25,bridgeY],[x-12,bridgeY],[x+12,bridgeY],[W*.75,bridgeY],[W*.75,22]],
+            [[W*.25,22],[W*.25,66],[x-12,base.fordY],[x,base.fordY+5],[x,H/2],[x,H-18]],
+            [[W*.75,22],[W*.75,66],[x+12,base.fordY],[x,base.fordY+5]],
+            [[W*.25,66],[W*.30,86],[x-26,H*.76],[x,H-18]],
+            [[W*.75,66],[W*.70,86],[x+26,H*.76],[x,H-18]]
+        ] };
 }

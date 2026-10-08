@@ -80,7 +80,7 @@ export class CampControls {
         if (!this.active || this.ui.countdown) return;
         const worker = this.workers().find(u => u.id === this.workerId);
         const units = this.selectedTroops();
-        if (['camp', 'tower', 'tent', 'move'].includes(kind) && !worker) return;
+        if (['camp', 'tower', 'tent', 'move', 'gather'].includes(kind) && !worker) return;
         if (worker && (worker.moraleState === 'routing' || worker.moraleState === 'withdrawn')) { this.ui.showNetToast('民夫正在撤离，暂时不能施工');return; }
         if (kind === 'garrison' && !units.some(u => u.type === 'archer')) {
             // 入口今天只在有弓手时可用；仍要给"选了兵但没弓手"一个具体原因，而不是静默返回。
@@ -101,9 +101,9 @@ export class CampControls {
                     : kind === 'medic-in' ? u.type === 'medic' : true)).map(u => u.id) };
         document.body.classList.add('camp-targeting');
         const prompt = { camp: '点己方据点建营寨', tower: '点陆地建箭塔 · 绿框可建，红框不可建 · Esc取消', tent: '点己方营寨据点建医帐',
-            move: '点地面让民夫前往', garrison: '点己方完工箭塔，弓手将走过去入驻',
+            gather: '点金色物资堆：民夫会采集并自动运回自己的主基地', move: '点地面让民夫前往', garrison: '点己方完工箭塔，弓手将走过去入驻',
             'guard-in': '点己方完工营寨，近战守军将走上寨墙（居高临下：伤害 ×1.25、受伤 ×0.7）',
-            'medic-in': '点己方完工医帐，医师将走过去入驻', attack: '点敌方建筑，部队将前往攻寨' }[kind];
+            'medic-in': '点己方完工医帐，军医将走过去入驻', attack: '点敌方建筑，部队将前往攻寨' }[kind];
         this.targeting.prompt = prompt;
         this.ui.updateTargetingPrompt?.();
         this.update();
@@ -157,7 +157,11 @@ export class CampControls {
         const mode = this.targeting;
         if (mode) {
             let accepted = false;
-            if (mode.kind === 'move') {
+            if (mode.kind === 'gather') {
+                const node = this.scene.render.camps.pickResource(world.x, world.y);
+                if (node) accepted = this.send({ k: 'worker-gather', worker: mode.worker, resource: node.id });
+                else this.ui.showNetToast('请点地图上标有剩余量的金色物资堆');
+            } else if (mode.kind === 'move') {
                 this.ui.applyGroundOrder(world, (gx, gy) => {
                     accepted = this.send({ k: 'worker-move', worker: mode.worker, gx, gy });
                 });
@@ -294,6 +298,9 @@ export class CampControls {
                 const button = event.target.closest('button');
                 if (!button || button.disabled) return;
                 if (button.dataset.worker) this.selectWorker(Number(button.dataset.worker));
+                else if (button.dataset.campAction === 'deliver') {
+                    this.send({ k: 'worker-deliver', worker: this.workerId }); this.update();
+                }
                 else if (button.dataset.campAction === 'close') {
                     this.close();
                 }
@@ -330,11 +337,13 @@ export class CampControls {
         const button = (action, label, disabled = false, title = '') =>
             `<button data-camp-action="${action}"${disabled ? ' disabled' : ''}${title ? ` title="${title}"` : ''}>${label}</button>`;
         let heading = '前线建设';
-        let details = '选民夫筑寨 · 选弓手进塔 · 选医师入帐 · 选营队攻寨';
+        let details = '选民夫筑寨 · 选弓手进塔 · 选军医入帐 · 选营队攻寨';
         let actions = '';
         if (worker) {
             heading = '🧰 民夫 ' + worker.id;
-            details = worker.workerTask?.kind === 'build' ? '正在赶赴或建造；可另派民夫续建未完工建筑'
+            details = worker.workerTask?.kind === 'gather' ? `${worker.workerTask.phase === 'return' ? '运回主基地' : worker.workerTask.phase === 'harvest' ? '采集物资' : '前往物资堆'} · 携带 ${Math.floor(worker.cargo || 0)}/20 军费`
+                : worker.workerTask?.kind === 'deliver' ? `运回主基地 · 携带 ${Math.floor(worker.cargo || 0)} 军费`
+                : worker.workerTask?.kind === 'build' ? '正在赶赴或建造；可另派民夫续建未完工建筑'
                 : worker.workerTask?.kind === 'move' ? '前往指定位置' : '待命 · 无占旗能力，施工需要护卫';
             for (const kind of ['camp', 'tower', 'tent']) {
                 const info = this.camps.buildInfo(kind);
@@ -344,7 +353,7 @@ export class CampControls {
                 actions += button(kind, `${kind === 'camp' ? '筑/续营寨' : kind === 'tower' ? '建/续箭塔' : '筑/续医帐'} ${info.cost}军费 · 续建免费`,
                     this.ui.countdown || (!resumable && this.scene.territory.econ.treasury[this.side] < info.cost));
             }
-            actions += button('move', '移动民夫') + button('locate', '定位');
+            actions += button('gather', '采集并自动运输') + button('deliver', `交付物资 ${Math.floor(worker.cargo || 0)}`, !(worker.cargo > 0)) + button('move', '移动民夫') + button('locate', '定位');
         } else if (building && !building.dead) {
             const own = building.team === this.side;
             const name = building.type === 'tower' ? '箭塔' : building.type === 'tent' ? '医帐'
@@ -356,7 +365,7 @@ export class CampControls {
             // 不能让后写的 details = state 把刚拼好的特色行整个覆盖掉。
             details = state + (building.type === 'tower' ? ` · 驻军 ${this.towerGarrisonText(building, own)}`
                 : building.type === 'camp' ? ` · 守军 ${this.wallGuardText(building, own)} · 站上寨墙居高临下：伤害 ×1.25、受伤 ×0.7`
-                    : building.type === 'tent' ? ` · 医师 ${building.garrisonIds.length}/${this.camps.buildInfo('tent').capacity} · 据点疗伤提速扩容` : '');
+                    : building.type === 'tent' ? ` · 军医 ${building.garrisonIds.length}/${this.camps.buildInfo('tent').capacity} · 据点疗伤提速扩容` : '');
             // 据点详情：写清特色、以及"按建筑与据点的真实归属"该建筑是否受益。
             // 大本营没有旗位，因此恒无特色；旧建筑留在失守据点时不能再说自己受益。
             const siteFlag = Number.isInteger(building.siteId) ? this.scene.flags?.[building.siteId] : null;
@@ -402,7 +411,7 @@ export class CampControls {
             }
             if (own && building.type === 'tower') actions += button('exit', '弓手出塔', !building.garrisonIds.length);
             if (own && building.type === 'camp') actions += button('exit', '守军下墙', !building.garrisonIds.length);
-            if (own && building.type === 'tent') actions += button('exit', '医师出帐', !building.garrisonIds.length);
+            if (own && building.type === 'tent') actions += button('exit', '军医出帐', !building.garrisonIds.length);
             actions += button('locate', '定位');
         }
         // 「驻入箭塔」始终可见：有弓手时可点，选了兵但没有弓手时置灰并在 title 里说明原因。

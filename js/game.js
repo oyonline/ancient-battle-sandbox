@@ -1,4 +1,5 @@
-import { ensureAxeTextures } from './render/axe-textures.js';
+import { homePosition } from './territory-map.js';
+import { ResourceSystem } from './battle/resources.js';
 // ==================== 等距视角战斗场景 ====================
 // 帝国时代2 风格：斜45°菱形地块 + Kenney 兵种贴图 + y轴深度排序
 // UI/Snd 是 ui.js 运行时挂到全局的（模块加载序 game→ui），此处只做运行时引用。
@@ -162,7 +163,8 @@ export class IsoBattleScene extends Phaser.Scene {
         this.battleOptions.terrain = Terrain.normalize(key);
         this.navigation?.reset(this.battleOptions.terrain, this.battleId);
         // 只有已创建的真实画布需要重烘焙；无绘图的战斗测试仍用同一高度数据。
-        if ((this.groundImage || this.terrainLoading) && this._groundTerrain !== this.battleOptions.terrain) this.render.world.drawGround();
+        if ((this.groundImage || this.terrainLoading) && (this._groundTerrain !== this.battleOptions.terrain || this._groundCoop !== this.battleOptions.coop)) this.render.world.drawGround();
+        this._groundCoop = this.battleOptions.coop;
     }
 
     // 棋盘尺寸变更（进入/退出领土征服大地图）：重算世界度量并重建依赖尺寸的渲染层。
@@ -366,6 +368,7 @@ export class IsoBattleScene extends Phaser.Scene {
 
     deployUnits(redConfig, blueConfig, redFormation, blueFormation, orders = {}, options = {}) {
         // 合作模式：红蓝联军 vs 黑方 AI——参战三方、关系表为同盟分组；否则沿用红蓝二元。
+        this.battleOptions.coop = options.coop === true;
         if (options.coop === true) {
             this.activeTeams = ['red', 'blue', 'black'];
             this.relationGroups = RELATIONS_COOP;
@@ -386,7 +389,7 @@ export class IsoBattleScene extends Phaser.Scene {
             this.battleOptions.terrain = Terrain.normalize(options.terrain);
             this.applyBoardSize();
         }
-        this.clearUnits(options.terrain);
+        this.clearUnits(options.terrain, options.coop === true);
         this.render.world.drawSpawnZones();
         const armies = [
             ['red', redConfig, redFormation],
@@ -395,7 +398,14 @@ export class IsoBattleScene extends Phaser.Scene {
         // 黑方第三势力：纯 AI，由 options.black 提供开局配兵。
         if (options.coop === true && options.black) armies.push(['black', options.black, options.blackFormation || 'custom']);
         armies.forEach(([team, cfg, formation]) => {
-            generateArmyPositions(team, cfg, formation).forEach(p => this.spawnUnit(team, p.type, p.gx, p.gy));
+            generateArmyPositions(team, cfg, formation).forEach(p => {
+                if (options.coop) {
+                    const home = homePosition(team, board.W, board.H, true);
+                    if (team === 'black') p.gy -= 10;
+                    else { p.gx += home.gx - (team === 'red' ? 7 : board.W - 7); p.gy += home.gy - board.H / 2; }
+                }
+                this.spawnUnit(team, p.type, p.gx, p.gy);
+            });
         });
         this.battleOptions.deathmatch = options.deathmatch === true;
         this.battleOptions.control = options.control === true;
@@ -435,7 +445,7 @@ export class IsoBattleScene extends Phaser.Scene {
         this.userZoom = 1;
         // 占点征服：三面旗立在中线 x=35（换座镜像 x→70-x 下自对称），
         // 上翼/中路/下翼纵向分布。旗归属以单位在场数判定，积分先到 60 者胜。
-        this.flags = this.battleOptions.territory ? makeTerritoryFlags()
+        this.flags = this.battleOptions.territory ? makeTerritoryFlags(options.coop === true)
             : this.battleOptions.control ? [
                 { gx: 35, gy: board.H * 0.24, name: '上翼' },
                 { gx: 35, gy: board.H * 0.5, name: '中路' },
@@ -462,12 +472,14 @@ export class IsoBattleScene extends Phaser.Scene {
             for (const [team, cfg] of armies) {
                 const count = Math.min(12, Math.max(0, Math.floor(cfg.worker || 0)));
                 for (let i = 0; i < count; i++) {
-                    const wx = team === 'black' ? board.W / 2 : team === 'red' ? 9.5 : board.W - 9.5;
-                    const wy = (team === 'black' ? board.H - 9.5 : board.H / 2) + (i - (count - 1) / 2) * 1.2;
+                    const home = homePosition(team, board.W, board.H, options.coop === true);
+                    const wx = home.gx + (team === 'red' ? 2.5 : team === 'blue' ? -2.5 : 0);
+                    const wy = home.gy + (i - (count - 1) / 2) * 1.2;
                     this.spawnUnit(team, 'worker', wx, wy);
                 }
             }
             this.territory.camps = new CampSystem(this);
+            this.territory.resources = new ResourceSystem(this);
             this.territory.healing = new HealingSystem(this);
             this.siteTraits = new SiteTraitState(this);   // 开局归属 → 派生状态（此后按归属变化刷新）
             this.siteTraits.refresh();
@@ -497,11 +509,8 @@ export class IsoBattleScene extends Phaser.Scene {
     getTacticsSummary() { return this.tactics ? this.tactics.summary() : null; }
 
     spawnUnit(team, type, gx, gy) {
-        if (type === 'axe') ensureAxeTextures(this);
-        if (type === 'worker') this.render.units.ensureWorkerTextures?.();
-        if (type === 'medic') this.render.units.ensureMedicTextures?.();
         const typeData = UNIT_TYPES[type];
-        const key = `units/${type === 'axe' ? team : assetTeam(team)}_${type}`;   // 黑方复用蓝方贴图 + 基色染色
+        const key = `units/${['axe','worker','medic'].includes(type) ? team : assetTeam(team)}_${type}`;   // 黑方复用蓝方贴图 + 基色染色
         const { x, y } = this.groundPoint(gx, gy);
         const depth = (gx + gy) * 100;
 
@@ -552,7 +561,7 @@ export class IsoBattleScene extends Phaser.Scene {
             baseScale: sc,                              // 贴图显示缩放（待机呼吸在其上做微缩放）
             footDy,                                     // 贴图底边 → 脚底 的下压距离（对齐地面线）
             faceDir: team === 'black' ? 1 : team === 'red' ? 1 : -1,           // 当前贴图镜像符号：1=原图 / -1=水平镜像
-            baseTint: type === 'axe' ? null : teamTint(team),                   // 阵营基色染色（黑方复用蓝方贴图时为深色，其余 null）
+            baseTint: ['axe','worker','medic'].includes(type) ? null : teamTint(team),                   // 阵营基色染色（黑方复用蓝方贴图时为深色，其余 null）
             faceAcc: 0,                                  // 朝向判定的累计位移
             dirDX: 0, dirDY: 0,                         // 骑兵方向判定的平滑屏幕位移
             visualDir,                                  // 骑兵八向 heading；普通兵种固定为 side
@@ -616,7 +625,7 @@ export class IsoBattleScene extends Phaser.Scene {
         });
     }
 
-    clearUnits(terrain = 'flat') {
+    clearUnits(terrain = 'flat', coop = false) {
         this.cancelCountdown();
         // 模拟数组可能已压实，仍在倒地动画中的单位必须一起清理。
         const visualUnits = new Set([...this.units, ...(this.dyingUnits || [])]);
@@ -647,6 +656,7 @@ export class IsoBattleScene extends Phaser.Scene {
         this._countsDirty = false;
         this._lastCountUI = 0;
         this.resetBattleData();
+        this.battleOptions.coop = coop;
         this.setTerrain(terrain);
         this.syncAnimTimeScale();
     }

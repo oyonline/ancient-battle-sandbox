@@ -37,12 +37,12 @@ export const UNIT_TYPES = {
     worker: {
         name: '民夫', icon: '🔨', cost: 3, maxCount: 12, hidden: true, territoryOnly: true,
         hp: 45, atk: 12, def: 0, speed: 1.8, atkSpeed: 1400, range: 0.9,
-        scale: 1.0, tip: '建设营寨和箭塔；敌军贴近时会自卫还手，但仍需部队保护'
+        scale: 1.0, tip: '采集物资并运回主基地换军费；建造营寨和箭塔；低攻击力贴身自卫，需要保护'
     },
-    // 医师（领土征服医疗兵种）：无攻击，战场光环缓慢急救身边伤兵；
+    // 军医（领土征服医疗兵种）：无攻击，战场光环缓慢急救身边伤兵；
     // 可入驻医帐大幅加速据点疗伤。溃逃时与普通士兵一样进据点疗伤。
     medic: {
-        name: '医师', icon: '➕', cost: 8, maxCount: 8, hidden: true, territoryOnly: true,
+        name: '军医', icon: '➕', cost: 8, maxCount: 8, hidden: true, territoryOnly: true,
         hp: 60, atk: 0, def: 2, speed: 2.4, atkSpeed: 999999, range: 0,
         scale: 1.0, tip: '战地急救：缓慢治疗身边伤兵；入驻医帐可大幅加速据点疗伤'
     },

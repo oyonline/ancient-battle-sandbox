@@ -26,6 +26,7 @@ export class RecruitSystem {
 
     // 入队即扣费（训练中钱已花掉）；队列满 / 钱不够 / 在场+队列超过兵种上限均拒绝。
     enqueue(team, type) {
+        if (this.scene.territory?.camps?.getBuilding(`camp:${team}:home`)?.dead) return false;
         if (!this.queues[team] || (type === 'worker' && !this.scene.battleOptions?.territory)) return false;
         const econ = this.scene.territory.econ;
         const queue = this.queues[team];
@@ -45,6 +46,7 @@ export class RecruitSystem {
     // 到点出兵；在场达到 ALIVE_CAP 时暂扣在队里（不弃单），腾出名额立即补上。
     update() {
         for (const team of TEAMS) {
+            if (this.scene.territory?.camps?.getBuilding(`camp:${team}:home`)?.dead) { this.queues[team] = []; continue; }
             const queue = this.queues[team];
             while (queue.length && queue[0].readyAt <= this.scene.simulationTime + 1e-7) {
                 if (this.scene.aliveCount(team) >= TERRITORY.ALIVE_CAP) break;
@@ -56,7 +58,7 @@ export class RecruitSystem {
     }
 }
 
-// 朴素战略 AI：目标配比 步兵45% / 弓25% / 枪20% / 骑10% / 医师5%。
+// 朴素战略 AI：目标配比 步兵45% / 弓25% / 枪20% / 骑10% / 军医5%。
 // 每 AI_INTERVAL_MS 决策一次：按"在场+队列"计数找缺口最大的兵种，
 // 买得起就补一个；买不起就攒钱（不降级乱买）。
 export class TerritoryAI {
@@ -107,7 +109,7 @@ export class TerritoryAI {
         for (const type of TerritoryAI.ORDER) {
             if (type === 'axe' && needsMedic) continue;
             // 兵种已到上限（在场+队列）时不再产生缺口：否则每拍都挑中它、
-            // enqueue 拒绝且不试次选，其余兵种被永久饿死（医师 8 人上限即触发）。
+            // enqueue 拒绝且不试次选，其余兵种被永久饿死（军医 8 人上限即触发）。
             if ((counts[type] || 0) >= UNIT_TYPES[type].maxCount) continue;
             // 马场门禁同过滤：无马场不买骑（enqueued 必被拒，白占缺口）。
             if (type === 'cavalry' && !recruit.ownsRanch(this.team)) continue;

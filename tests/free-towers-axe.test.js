@@ -173,7 +173,7 @@ test('坐标建塔锁步命令重放一致，未来建筑seq纳入投影，版�
     assert.equal(battleProjection(a), battleProjection(b));
     b.territory.camps.nextBuildingSeq++;
     assert.notEqual(battleProjection(a), battleProjection(b));
-    assert.match(SIM_VERSION, /free-towers-axe/);
+    assert.match(SIM_VERSION, /coop-supply-medics/);
 });
 
 test('回归：斧兵动摇后走真实后退入口，而非只设置后退时钟', () => {

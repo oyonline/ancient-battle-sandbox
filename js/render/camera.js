@@ -1,3 +1,4 @@
+import { homePosition } from '../territory-map.js';
 // 相机装配：初始化/适配视口/锚点缩放（纯视图层，场景经 render.camera 调用）。
 import { board } from '../board.js';
 import { TH, OY, VIEW_W, VIEW_H } from './metrics.js';
@@ -118,7 +119,8 @@ export class CameraRig {
             if (!this.scene._territoryCamInit && this.scene.units.length) {
                 this.scene._territoryCamInit = true;
                 const side = this.scene.netMySide || 'red';
-                const home = this.scene.groundPoint(side === 'blue' ? board.W - 20 : 20, board.H / 2);
+                const spawn = this.scene.battleOptions?.coop ? homePosition(side, board.W, board.H, true) : {gx:side === 'blue' ? board.W-20 : 20,gy:board.H/2};
+                const home = this.scene.groundPoint(spawn.gx, spawn.gy);
                 cam.centerOn(home.x, home.y);
             }
             if (this.scene.ocean) this.scene.render.world.redrawOcean();

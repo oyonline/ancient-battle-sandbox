@@ -1,3 +1,4 @@
+import { homePosition } from '../territory-map.js';
 // 世界层渲染：海面/地貌底图烘焙/地形要素/装饰/飞鸟/出生区/阴影与辎重贴图（原场景渲染方法，调用面经 scene.render.world）。
 import { TEAMS, teamColor } from '../factions.js';
 import { board } from '../board.js';
@@ -629,10 +630,11 @@ export class WorldRenderer {
         if (Terrain.isNaturalSlope(this.scene.battleOptions.terrain)) return;
         if (this.scene.battleOptions.terrain === 'territory') {
             // 领土图：大本营领地光晕（三层椭圆渐隐），替代整块矩形出兵区
-            for (const [x, color] of [[8, 0xff5555], [board.W - 8, 0x5599ff]]) {
+            for (const [team, color] of [['red',0xff5555],['blue',0x5599ff],...(this.scene.battleOptions.coop ? [['black',0x888899]] : [])]) {
+                const home = homePosition(team,board.W,board.H,this.scene.battleOptions.coop);
                 for (const [rx, ry, alpha] of [[9, 16, 0.30], [6, 11, 0.35], [3.4, 6.5, 0.42]]) {
                     g.fillStyle(color, alpha);
-                    g.fillPoints(sampleGroundRing(this.scene, x, board.H / 2, rx, ry, 26), true);
+                    g.fillPoints(sampleGroundRing(this.scene, home.gx, home.gy, rx, ry, 26), true);
                 }
             }
             return;

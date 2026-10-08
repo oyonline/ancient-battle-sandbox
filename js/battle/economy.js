@@ -30,8 +30,8 @@ export const TERRITORY = {
 export const BATTALION_POWER = { infantry: 10, axe: 7, pikeman: 7, archer: 4, cavalry: 12, worker: 0, medic: 0 };
 
 // 五旗与实际桥头、高地、林口共用同一布局；起始归属与经济规则不变。
-export function makeTerritoryFlags() {
-    return territoryLayout(board.W, board.H).sites.map(f => ({ ...f, contested: false }));
+export function makeTerritoryFlags(coop = false) {
+    return territoryLayout(board.W, board.H, coop).sites.map(f => ({ ...f, contested: false }));
 }
 
 export class TerritoryEconomy {

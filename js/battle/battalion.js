@@ -1,3 +1,4 @@
+import { homePosition } from '../territory-map.js';
 // ==================== 营队系统（纯模拟，不碰渲染；仅领土征服模式启用） ====================
 // 军队按营组织：开局常备军确定性分编——骑兵整编独立骑队（营心=自身，行军不被
 // 步战营拖住），其余步战兵三等分为上/中/下营；新兵入集结营（骑兵与步战分池），
@@ -93,6 +94,7 @@ export class BattalionSystem {
     }
 
     homeRally(team) {
+        if (this.scene.battleOptions?.coop) return homePosition(team, this.scene.board_W(), this.scene.board_H(), true);
         // 黑方自南侧压中：老家集结点在正南中央；红西蓝东不变。
         if (team === 'black') return { gx: this.scene.board_W() / 2, gy: this.scene.board_H() - 8 };
         return { gx: team === 'red' ? 8 : this.scene.board_W(), gy: this.scene.board_H() / 2 };
@@ -282,7 +284,7 @@ export class BattalionSystem {
             for (const b of active) if (b.playerOrdered && b.orderFlag != null) assignedCount[b.orderFlag]++;
             for (const b of active) {
                 if (b.playerOrdered) continue;
-                // 零战力营（纯医师/纯民夫）不领旗令：占领力为 0 去夺旗永远完不成，
+                // 零战力营（纯军医/纯民夫）不领旗令：占领力为 0 去夺旗永远完不成，
                 // 医疗营就地待命随队急救即可（玩家令不受限）。
                 if (b.power() <= 0) { b.orderFlag = null; b.retreat = false; continue; }
                 const center = b.center();

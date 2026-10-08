@@ -171,6 +171,9 @@ export const UI = {
             convoyHud.textContent = `🛒 护送：送抵 ${c.delivered}/${c.need} · 被劫 ${c.hijacked || 0}/${c.need} —— 车队需要护卫随行才前进；车身被蓝方独占约 6 秒即遭劫走（人越多越快），护卫在场即冻结`;
         }
         document.getElementById('territory-hud-rule').hidden = !fighting || !this.battleOptions.territory;
+        document.getElementById('territory-hud-rule').textContent = this.battleOptions.coop
+            ? '🤝 各自发展、联军攻城：摧毁电脑主基地即胜；双方主基地均毁则败。民夫采集运回军费，军医自动救治盟友。'
+            : '🚩 据点产军费，民夫采集运输与建设，军医自动救治；耗尽敌方票数或摧毁大本营获胜。';
         this.updateTerritoryHUD();
         this.updateMorale();
         this.updateTactics();
@@ -663,6 +666,8 @@ export const UI = {
         if (!active) { this.campControls?.update(); return; }
         if (!document.getElementById('recruit-infantry')) this.buildRecruitBar();
         const territory = this.scene.territory;
+        const ticketRow = document.getElementById('territory-tickets-red')?.parentElement;
+        if (ticketRow) ticketRow.hidden = !!this.battleOptions.coop;
         const mine = this.mySide || 'red';
         const owned = { red: 0, blue: 0 };
         // 归属按同盟共享：红蓝联军下盟友占下的据点同时计入双方（既有二元模式结果不变）。
@@ -688,7 +693,7 @@ export const UI = {
         textIfChanged(document.getElementById('territory-queue'), queueText + (pending ? ` · ${pending}道征兵令待执行` : ''));
         const enemy = mine === 'red' ? 'blue' : 'red';
         const difference = owned[mine] - owned[enemy];
-        textIfChanged(document.getElementById('territory-ticket-status'), difference < 0
+        textIfChanged(document.getElementById('territory-ticket-status'), this.battleOptions.coop ? `攻城目标：电脑主基地 ${Math.ceil(territory.camps?.getBuilding('camp:black:home')?.hp || 0)} 生命` : difference < 0
             ? `少控${-difference}处据点 · 我方持续失分` : difference > 0 ? `多控${difference}处据点 · 敌方持续失分` : '控点相同 · 暂无控点失分');
         const rallyBtn = document.getElementById('btn-rally');
         rallyBtn.classList.toggle('active', !!this.rallyTargeting);
@@ -714,10 +719,10 @@ export const UI = {
         this._seenTerritoryTips ??= new Set();
         if (this._seenTerritoryTips.has(kind) || this.phase !== 'battle' || !this.battleOptions.territory) return false;
         const tips = {
-            worker: '建设：选择自己的民夫 → 建箭塔 → 点陆地选址；绿框可建，红框说明原因。营寨仍建在己方据点。',
+            worker: '民夫：选择自己的民夫 → 采集并自动运输 → 点击金色物资堆；或建箭塔 → 点陆地选址；绿框可建，红框说明原因。营寨仍建在己方据点。',
             archer: '弓手可驻塔：点「建筑行动」→ 驻入箭塔 → 选择己方完工箭塔。',
-            medic: '医师可驻帐：点「建筑行动」→ 驻入医帐，帮助溃兵疗伤归队。',
-            ranch: '骑兵需要马场。北上翼有两座马场，先派一营夺下其中一座。',
+            medic: '军医可驻帐：点「建筑行动」→ 驻入医帐，帮助溃兵疗伤归队。',
+            ranch: this.battleOptions.coop ? '骑兵需要马场。两翼前进路线各有一座马场，联军占下任意一座即可。' : '骑兵需要马场。北上翼有两座马场，先派一营夺下其中一座。',
             command: '夺旗后营队恢复自主作战。要守住桥头或据点，请用「移动并驻守」。',
             hill: siteTraitTip('hill'),
             ford: siteTraitTip('ford'),

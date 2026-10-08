@@ -1,4 +1,4 @@
-// 合作模式（红蓝联军 vs 黑方 AI）：三方参战、同盟敌我判定、纯歼灭胜负。
+// 合作模式（红蓝联军 vs 黑方 AI）：三方参战、同盟敌我判定、基地攻城胜负。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeScene } from './battle-harness.js';
@@ -39,17 +39,17 @@ test('合作模式：参战三方、红蓝结盟、黑方为敌', () => {
     assert.equal(CombatRules.canStrike(scene, red, blue, 99), false, '红方不能攻击盟友蓝方');
 });
 
-test('合作模式：黑方营寨未拔不判胜；全灭黑方且营寨尽毁即联军胜', () => {
+test('合作模式：电脑主基地未毁不判胜；摧毁主基地即联军胜', () => {
     const scene = coopScene();
     for (const u of scene.units) if (u.team === 'black') u.dead = true;
     scene.territory.recruit.queues.black = [];
     scene.territory.econ.treasury.black = 0;
     scene.rebuildSpatial();
     scene.checkWin();
-    assert.equal(scene.battleOver, false, '黑方建筑仍在：纯歼灭未达成，不判胜负');
+    assert.equal(scene.battleOver, false, '电脑主基地仍在，不判胜负');
     for (const b of scene.territory.camps.buildings) if (b.team === 'black') b.dead = true;
     scene.checkWin();
-    assert.equal(scene.battleOver, true, '黑方全灭且营寨尽毁：联军获胜');
+    assert.equal(scene.battleOver, true, '电脑主基地已毁：联军获胜');
     assert.equal(scene.winner, 'red');
 });
 

@@ -1,7 +1,8 @@
+import { homePosition } from '../territory-map.js';
 // ==================== 溃兵收容与战地医疗（纯模拟，不碰渲染） ====================
 // v0 溃兵收容循环：领土模式下崩溃士兵不再只靠接应锚重整——撤退目标改为最近的
 // 己方据点（含老家），进点疗伤（回满 HP 与士气、不战斗不占旗），痊愈后归队。
-// v1 医疗：医帐（第三种建筑，民夫施工）提速扩容；医师（新兵种）战场光环急救，
+// v1 医疗：医帐（第三种建筑，民夫施工）提速扩容；军医（新兵种）战场光环急救，
 // 可入驻医帐再加速据点疗伤。
 //
 // 状态位：unit.healSiteId（溃逃途中指定的疗伤据点）→ 到点置 unit.healingAt
@@ -32,11 +33,11 @@ export const HEALING_RULES = {
     BASE_CAPACITY: 8,          // 每据点同时疗伤容量基线
     TENT_CAPACITY: 16,         // 该点有完工医帐时的容量
     TENT_SPEED_BONUS: 1.2,     // 医帐治疗速度加成（总速 1.0 → 2.2 倍）
-    TENT_MEDIC_SLOTS: 2,       // 医帐可入驻医师数
-    TENT_MEDIC_SPEED_BONUS: 0.8, // 每名驻帐医师再加（叠加制：1.0+1.2+0.8n）
+    TENT_MEDIC_SLOTS: 2,       // 医帐可入驻军医数
+    TENT_MEDIC_SPEED_BONUS: 0.8, // 每名驻帐军医再加（叠加制：1.0+1.2+0.8n）
     MEDIC_AURA_RADIUS: 3.6,    // 战地急救光环半径（格）
     MEDIC_AURA_RATE: 3.0,      // 光环治疗 HP/秒
-    MEDIC_AURA_TARGETS: 2      // 每名医师同时急救人数
+    MEDIC_AURA_TARGETS: 2      // 每名军医同时急救人数
 };
 
 export class HealingSystem {
@@ -46,9 +47,7 @@ export class HealingSystem {
     }
 
     site(team, siteId) {
-        if (siteId === 'home') return team === 'black'
-            ? { gx: board.W / 2, gy: board.H - 8 }             // 黑方自南侧压中
-            : { gx: team === 'red' ? 7 : board.W - 7, gy: board.H / 2 };
+        if (siteId === 'home') return homePosition(team, board.W, board.H, this.scene.battleOptions?.coop);
         return Number.isInteger(siteId) ? this.scene.flags?.[siteId] ?? null : null;
     }
 
@@ -68,7 +67,7 @@ export class HealingSystem {
     }
 
     // 容量 = 基础 8 / 医帐 16 + 路口补给（+4，仅该据点归属己方时生效；大本营无旗位不加）。
-    // 不乘算疗伤速度，也不影响驻帐医师加成（那两项在 speed() 里各算一次）。
+    // 不乘算疗伤速度，也不影响驻帐军医加成（那两项在 speed() 里各算一次）。
     capacity(team, siteId) {
         const base = this.tentAt(team, siteId) ? HEALING_RULES.TENT_CAPACITY : HEALING_RULES.BASE_CAPACITY;
         return base + healingCapacityBonus(this.scene, team, siteId);
@@ -197,7 +196,7 @@ export class HealingSystem {
                 scene._countsDirty = true;
             }
         }
-        // ④ 医师战地急救光环：无攻击、按血量比例最低优先，平局 id 决胜。
+        // ④ 军医战地急救光环：无攻击、按血量比例最低优先，平局 id 决胜。
         const medics = scene.units
             .filter(u => !u.dead && !u.withdrawn && u.type === 'medic' &&
                 u.moraleState !== 'routing' && !u.garrisonTowerId && !u.garrisonOrderId)
@@ -215,6 +214,9 @@ export class HealingSystem {
             });
             wounded.sort((a, b) => a.ratio - b.ratio || a.target.id - b.target.id);
             for (const { target } of wounded.slice(0, HEALING_RULES.MEDIC_AURA_TARGETS)) {
+                // Presentation reads these timestamps; they never influence simulation decisions.
+                medic.treatingUntil = scene.simulationTime + 180;
+                target.receivingHealUntil = scene.simulationTime + 180;
                 target.hp = Math.min(target.maxHp,
                     target.hp + HEALING_RULES.MEDIC_AURA_RATE * dt);
             }
@@ -222,7 +224,7 @@ export class HealingSystem {
     }
 }
 
-// 医师战场行为（unit-ai 委托）：不攻击不占旗，随营行军；敌近且贴身时且战且退。
+// 军医战场行为（unit-ai 委托）：不攻击不占旗，随营行军；敌近且贴身时且战且退。
 // 驻塔/驻帐令由 CampSystem.updateUnit 先行接管，这里只处理野战随队。
 // 距离阈值均量化（镜像对称，见文件头 qdist 约定）。
 export function updateMedic(scene, unit, now, dt) {
@@ -237,7 +239,7 @@ export function updateMedic(scene, unit, now, dt) {
         const center = battalion?.center();
         if (center && qdist(unit, center) > 4) target = center;
     }
-    // 敌人贴身：优先保命后撤（医师是对方斩医疗的优先目标）。
+    // 敌人贴身：优先保命后撤（军医是对方斩医疗的优先目标）。
     let nearest = null, nearestD = Infinity;
     scene.forEachNear(unit.gx, unit.gy, 4, enemy => {
         if (!isHostile(scene, unit.team, enemy.team) || enemy.dead || enemy.withdrawn ||

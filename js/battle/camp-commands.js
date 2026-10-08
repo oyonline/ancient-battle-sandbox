@@ -1,6 +1,6 @@
 import { activeTeams } from '../factions.js';
 // Both local controls and lockstep packets enter the same ownership-checked API.
-export const CAMP_COMMANDS = new Set(['build', 'worker-move', 'garrison', 'ungarrison', 'attack-building']);
+export const CAMP_COMMANDS = new Set(['build', 'worker-move', 'worker-gather', 'worker-deliver', 'garrison', 'ungarrison', 'attack-building']);
 
 export function applyCampCommand(scene, command) {
     const camps = scene.territory?.camps;
@@ -12,6 +12,10 @@ export function applyCampCommand(scene, command) {
                 return camps.requestBuildAt(team, command.worker, command.kind, command.gx, command.gy, command.building);
             }
             return camps.requestBuild(team, command.worker, command.kind, command.site);
+        case 'worker-gather':
+            return scene.territory.resources?.orderGather(team, command.worker, command.resource) ?? false;
+        case 'worker-deliver':
+            return scene.territory.resources?.orderDeliver(team, command.worker) ?? false;
         case 'worker-move':
             return camps.orderWorkerMove(team, command.worker, command.gx, command.gy);
         case 'garrison':

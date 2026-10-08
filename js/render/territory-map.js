@@ -132,7 +132,7 @@ export class TerritoryMapRenderer extends TerrainMaterialsRenderer {
     }
 
     paintRoads(ctx, material, at) {
-        const { routes, sites } = territoryLayout(board.W, board.H);
+        const { routes, sites } = territoryLayout(board.W, board.H, this.scene.battleOptions?.coop);
         ctx.lineCap = ctx.lineJoin = 'round';
         for (const route of routes) {
             ctx.beginPath();
@@ -154,7 +154,7 @@ export class TerritoryMapRenderer extends TerrainMaterialsRenderer {
 
     drawProps(geometry, ground) {
         super.drawProps(geometry, ground);
-        const sites = territoryLayout(board.W, board.H).sites;
+        const sites = territoryLayout(board.W, board.H, this.scene.battleOptions?.coop).sites;
         // Clear only visual vegetation, preserving the actual woodland slow zone.
         this.scene.terrainProps = this.scene.terrainProps.filter(prop => {
             const near = sites.some(site => {

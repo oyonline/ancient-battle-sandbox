@@ -1,4 +1,5 @@
 // 领土节拍桥：旗帜争夺/经济推进/出生点占用/领土补兵，经场景单行委托调用（core.js/recruit.js/测试）。
+import { homePosition } from '../territory-map.js';
 import { board } from '../board.js';
 import { TERRITORY } from './economy.js';
 import { traitOf, traitState, ownsRole } from './site-traits.js';
@@ -146,8 +147,9 @@ export function spotFree(scene, x, y) {
 
 export function spawnTerritoryUnit(scene, team, type) {
     // 三方向出生：红自西、蓝自东、黑自南（合作模式）——各自家门口向场内一步。
-    const cx = team === 'black' ? board.W / 2 : team === 'red' ? 5.5 : board.W - 5.5;
-    const cy = team === 'black' ? board.H - 5.5 : board.H / 2;
+    const home = homePosition(team, board.W, board.H, scene.battleOptions?.coop);
+    const cx = scene.battleOptions?.coop ? home.gx : team === 'black' ? board.W / 2 : team === 'red' ? 5.5 : board.W - 5.5;
+    const cy = scene.battleOptions?.coop ? home.gy : team === 'black' ? board.H - 5.5 : board.H / 2;
     let gx = cx + (team === 'red' ? 1 : team === 'blue' ? -1 : 0);
     let gy = cy + (team === 'black' ? -1 : 0);
     outer:

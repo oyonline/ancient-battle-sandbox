@@ -1,12 +1,11 @@
 // 单位层渲染：动画注册/攻击动画/守卫朝向/逐帧同步与倒地视觉（sim 钩子经场景单行委托，调用面不变）。
-import { ensureAxeTextures } from './axe-textures.js';
 import { MANIFEST } from '../manifest.js';
 import { TW, TH, gridToScreen } from './metrics.js';
 import { Terrain } from '../terrain.js';
 import { clamp } from '../units.js';
 import { assetTeam } from '../factions.js';
 import { ANIM_ALIGN_K, CAVALRY_PROFILE_SUFFIX, CAVALRY_FLIPPED, cavalryProfile, cavalryRenderSign, cavalryHeadingFromMotion, footProfile, animAlignProfile, shadowTextureKey } from './sprites.js';
-import { ensureWorkerTextures, ensureMedicTextures, towerCrewOffset } from './camps.js';
+import { towerCrewOffset } from './camps.js';
 
 // 接敌姿态参数（毫秒，走模拟时钟，暂停即冻结）：
 // 蓄势窗口——临近冷却终点收定在起手帧，让"下一击"的节奏可读；
@@ -16,14 +15,9 @@ const STANCE_RECOVER_MS = 420;
 
 export class UnitRenderer {
     constructor(scene) { this.scene = scene; }
-    ensureWorkerTextures() { ensureWorkerTextures(this.scene); }
-    ensureMedicTextures() { ensureMedicTextures(this.scene); }
 
     // 注册各单位动画剪辑（重复开局幂等）
     buildUnitAnims() {
-        ensureWorkerTextures(this.scene);
-        ensureMedicTextures(this.scene);
-        ensureAxeTextures(this.scene);
         Object.entries(MANIFEST.anims || {}).forEach(([unit, clips]) => {
             const isCav = unit.includes('cavalry');
             Object.entries(clips).forEach(([clip, c]) => {
@@ -142,7 +136,7 @@ export class UnitRenderer {
         const profile = unit.type === 'cavalry' ? cavalryProfile(unit.visualDir) : null;
         const direction = profile ? CAVALRY_PROFILE_SUFFIX[profile] : '';
         // 黑方复用蓝方帧条（assetTeam），配合基色染色区分敌我。
-        return 'assets/units/anim/' + (unit.type === 'axe' ? unit.team : assetTeam(unit.team)) + '_' + unit.type + direction + '_' + clip;
+        return 'assets/units/anim/' + (['axe','worker','medic'].includes(unit.type) ? unit.team : assetTeam(unit.team)) + '_' + unit.type + direction + '_' + clip;
     }
 
     updateDeathVisuals(delta) {
@@ -306,10 +300,12 @@ export class UnitRenderer {
                 ? this.scene.territory?.camps?.getBuilding(unit.workerTask.buildingId) : null;
             const working = construction && !construction.dead && !construction.complete &&
                 !construction.paused && construction.workerId === unit.id;
-            const want = unit.moving ? 'walk' : working ? 'build' : 'idle';
+            const harvesting = unit.type === 'worker' && unit.workerTask?.phase === 'harvest';
+            const treating = unit.type === 'medic' && unit.treatingUntil > this.scene.simulationTime;
+            const want = unit.moving ? (unit.type === 'worker' && unit.cargo > 0 ? 'carry' : 'walk') : treating ? 'heal' : (working || harvesting) ? 'build' : 'idle';
             if (want !== unit.animState) {
                 unit.animState = want;
-                if (want === 'walk' || want === 'build') {
+                if (['walk','build','carry','heal'].includes(want)) {
                     unit.spr.play(this.unitAnimKey(unit, want), true);
                 } else {
                     unit.spr.anims.stop();
@@ -444,6 +440,13 @@ export class UnitRenderer {
                 this.scene.hpGfx.lineBetween(x - 3, my - 7, x - 6, my - 3);
                 this.scene.hpGfx.lineBetween(x + 3, my - 7, x, my - 3);
             }
+        }
+        // Field care: visible on both the healer and recipients, without changing HP logic.
+        if (unit.receivingHealUntil > this.scene.simulationTime || unit.treatingUntil > this.scene.simulationTime) {
+            const hy = y + unit.footDy - unit.spr.displayHeight - 7;
+            this.scene.hpGfx.fillStyle(0x93f0b8,.95);
+            this.scene.hpGfx.fillRect(x-1.5,hy-6,3,12);
+            this.scene.hpGfx.fillRect(x-6,hy-1.5,12,3);
         }
         // 据点疗伤中：绿色治疗条 + 白十字，与溃逃橙条明确区分（血量即治疗进度）。
         if (unit.healingAt != null) {

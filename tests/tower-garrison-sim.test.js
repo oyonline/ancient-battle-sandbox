@@ -118,11 +118,11 @@ test('无效操作的原因具体可读：满员 / 没有弓手 / 兵种不匹�
     assert.equal(camps.orderGarrison('red', [infantry.id], empty.id), false, '剑士不能驻塔');
     const tent = camps.createBuilding('red', 'tent', 1, true);
     assert.equal(camps.orderGarrison('red', [archers[0].id], tent.id), false, '弓手不能驻医帐');
-    assert.match(camps.garrisonRejectReason('red', tent.id, [archers[0].id]), /没有可入驻的医师/);
+    assert.match(camps.garrisonRejectReason('red', tent.id, [archers[0].id]), /没有可入驻的军医/);
     const camp = camps.createBuilding('red', 'camp', 3, true);
     assert.match(camps.garrisonRejectReason('red', camp.id), /只有箭塔收弓手/);
     const medics = [addUnit(s, 'red', 'medic', 21, 21), addUnit(s, 'red', 'medic', 21.5, 21)];
-    assert.equal(camps.orderGarrison('red', medics.map(u => u.id), tent.id), true, '医师可驻医帐');
+    assert.equal(camps.orderGarrison('red', medics.map(u => u.id), tent.id), true, '军医可驻医帐');
     assert.equal(camps.garrisonStatus(tent).label, '0/2（+2 前往中）');
     const third = addUnit(s, 'red', 'medic', 22, 21);
     assert.equal(camps.garrisonRejectReason('red', tent.id, [third.id]),

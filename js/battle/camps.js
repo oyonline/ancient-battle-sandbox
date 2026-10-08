@@ -1,3 +1,4 @@
+import { homePosition } from '../territory-map.js';
 // Territory construction and garrisons. All clocks and decisions use simulation state.
 import { board } from '../board.js';
 import { Terrain } from '../terrain.js';
@@ -14,7 +15,7 @@ export const CAMP_RULES = {
     tower: { cost: 120, seconds: 14, hp: 1200, def: 6, radius: 0.9 },
     tent: { cost: 140, seconds: 15, hp: 550, def: 4, radius: 1.5 },   // 医帐：据点疗伤提速扩容
     HOME_HP: 1800, FIELD_TOWER_CAP: 8, ENEMY_HOME_CLEARANCE: 12, TOWER_ATTACK: 1.20, CAPACITY: 4, TOWER_RANGE: 14, GARRISON_HEIGHT_PX: 82,
-    TENT_GARRISON_HEIGHT_PX: 14,   // 医帐无高台：驻帐医师站在帐篷门口地面，不上 82px 平台
+    TENT_GARRISON_HEIGHT_PX: 14,   // 医帐无高台：驻帐军医站在帐篷门口地面，不上 82px 平台
     BUILD_REACH: 1.6, ENTER_REACH: 1.15, AI_INTERVAL_MS: 1800,
     // 营寨守军：近战兵站上寨墙垛口，居高临下打得更狠、也更耐打（可被击杀，攻方有解法）。
     // 垛口数按寨墙周长推：前线营寨 6、大本营 10；墙环半径与渲染层栅栏同一口径。
@@ -123,9 +124,7 @@ export class CampSystem {
     unit(id) { return this.unitsById.get(id) ?? this.scene.units.find(u => u.id === id); }
     id(team, type, siteId) { return `${type}:${team}:${siteId}`; }
     site(team, siteId) {
-        if (siteId === 'home') return team === 'black'
-            ? { gx: board.W / 2, gy: board.H - 8 }             // 黑方自南侧压中
-            : { gx: team === 'red' ? 7 : board.W - 7, gy: board.H / 2 };
+        if (siteId === 'home') return homePosition(team, board.W, board.H, this.scene.battleOptions?.coop);
         return Number.isInteger(siteId) ? this.scene.flags?.[siteId] : null;
     }
     ownsSite(team, siteId) {
@@ -277,7 +276,7 @@ export class CampSystem {
         const b = this.getBuilding(towerId);
         if (!b) return '请点选一座建筑';
         const acceptType = b.type === 'tower' ? 'archer' : b.type === 'tent' ? 'medic' : null;
-        if (!acceptType) return '这里不能驻军：只有箭塔收弓手、医帐收医师';
+        if (!acceptType) return '这里不能驻军：只有箭塔收弓手、医帐收军医';
         if (b.dead) return '这座建筑已被摧毁';                 // 先看是否还存在，再看归属
         if (!sameSide(this.scene, b.team, team)) return `这是敌方${b.type === 'tower' ? '箭塔' : '医帐'}，不能驻军`;
         if (!b.complete) return `${b.type === 'tower' ? '箭塔' : '医帐'}尚未完工，民夫施工完成后才能驻军`;
@@ -286,7 +285,7 @@ export class CampSystem {
         if (Array.isArray(unitIds)) {
             const candidates = [...new Set(unitIds)].map(id => this.unit(id))
                 .filter(u => ready(u) && u.team === team && u.type === acceptType && !u.garrisonTowerId && u.garrisonOrderId !== towerId);
-            if (!candidates.length) return acceptType === 'archer' ? '选中的部队里没有可入驻的弓箭手' : '选中的部队里没有可入驻的医师';
+            if (!candidates.length) return acceptType === 'archer' ? '选中的部队里没有可入驻的弓箭手' : '选中的部队里没有可入驻的军医';
         }
         return null;
     }
@@ -302,7 +301,7 @@ export class CampSystem {
     // 两处共用同一套过滤规则，提示人数永远等于实际受理人数。
     garrisonAcceptList(team, unitIds, towerId) {
         const b = this.getBuilding(towerId);
-        // 箭塔收弓手；医帐收医师；营寨收近战（上墙当守军）。其它组合一律不接受。
+        // 箭塔收弓手；医帐收军医；营寨收近战（上墙当守军）。其它组合一律不接受。
         const acceptTypes = b?.type === 'tower' ? ['archer']
             : b?.type === 'tent' ? ['medic']
                 : b?.type === 'camp' ? CAMP_RULES.WALL_GUARD_MELEE : null;
@@ -540,7 +539,7 @@ export class CampSystem {
                 return u.dead;
             }
             u.gx = tower.gx; u.gy = tower.gy; u.moving = false;
-            // 驻塔弓手按自身冷却射击；驻帐医师只提供疗伤加成（HealingSystem 读取）。
+            // 驻塔弓手按自身冷却射击；驻帐军医只提供疗伤加成（HealingSystem 读取）。
             if (tower.type === 'tower') {
                 const enemy = this.localEnemy(u, CAMP_RULES.TOWER_RANGE);
                 u.target = enemy;
@@ -560,7 +559,9 @@ export class CampSystem {
             // 自卫优先：近身有敌就地还手、原地不动；脱离交战才回到原移动 / 施工任务。
             if (updateWorkerCombat(this.scene, u, now)) return true;
             const task = u.workerTask;
-            if (task?.kind === 'move') {
+            if (task?.kind === 'gather' || task?.kind === 'deliver') {
+                this.scene.territory.resources?.updateWorker(u, dt);
+            } else if (task?.kind === 'move') {
                 if (distance(u, task) <= 0.3) u.workerTask = null;
                 else moveToward(u, task.gx, task.gy, u.typeData.speed, dt);
             } else if (task?.kind === 'build') {
@@ -582,7 +583,7 @@ export class CampSystem {
                 return true;
             }
         }
-        // 医师不由营寨系统驱动（随营行军+急救光环见 healing.updateMedic），
+        // 军医不由营寨系统驱动（随营行军+急救光环见 healing.updateMedic），
         // 但也不能落入下面的攻寨分支（无攻击却会摸建筑）。
         if (u.type === 'medic') return false;
         let b = this.getBuilding(u.orderBuildingId);

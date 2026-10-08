@@ -7,12 +7,11 @@ import { NetBattle } from './net/lockstep.js';
 import { Terrain } from './terrain.js';
 import { UNIT_TYPES, FORMATIONS, BUDGET } from './units.js';
 
-import { axePortraitDataUrl } from './render/axe-textures.js';
 import { Snd } from './snd.js';
 import { UI_TACTIC_OPTIONS, UI_CAVALRY_OPTIONS, PRESETS } from './ui.js';
 import { ownerDisplayCss } from './factions.js';
 
-// 配兵面板里真正摆出数量格的兵种（隐藏的系统单位：民夫 / 医师 / 辎重车不摆）。
+// 配兵面板里真正摆出数量格的兵种（隐藏的系统单位：民夫 / 军医 / 辎重车不摆）。
 // 建立卡片与刷新数量必须用同一份来源，否则会去刷新不存在的格子（历史 bug：点挑战卡无反应）。
 const buyableTypes = () => Object.keys(UNIT_TYPES).filter(key => !UNIT_TYPES[key].hidden);
 
@@ -376,7 +375,7 @@ export const lobbyMethods = {
             const t = UNIT_TYPES[key];
             const card = document.createElement('div');
             card.className = 'ucard';
-            card.innerHTML = `<img class="uc-img" src="${key === 'axe' ? axePortraitDataUrl(team) : `assets/units/${team}_${key}.png`}" alt="${t.name}">
+            card.innerHTML = `<img class="uc-img" src="assets/units/${team}_${key}.png" alt="${t.name}">
                 <div class="uc-body"><div class="uc-top"><span class="uc-name">${t.name}</span><span class="uc-cost">🪙${t.cost}</span></div>
                 <div class="uc-stats">⚔️${t.atk} · 🛡️${t.def} · ❤️${t.hp}</div><div class="uc-tip">${t.tip}</div></div>
                 <div class="uc-step"><button class="step-btn minus" aria-label="减少${t.name}">－</button>
@@ -652,6 +651,8 @@ export const lobbyMethods = {
             ? '⚑ 占点征服 · 占旗攒分，先到 60 分者胜（全歼对手同样获胜）'
             : this.battleOptions.convoy
             ? '🛒 护送 · 送抵 3 辆辎重车获胜；蓝方劫走 3 辆即得手'
+            : this.battleOptions.coop
+            ? '🤝 合作攻城 · 各自发展、互援进攻；摧毁电脑主基地即获胜'
             : this.battleOptions.net
             ? '🌐 局域网对战 · 夺旗、筑寨、驻塔；耗尽敌方票数或攻破大本营获胜'
             : this.battleOptions.territory
@@ -720,8 +721,8 @@ export const lobbyMethods = {
             : this.battleOptions.coop ? (winner === 'red' ? '🤝 红蓝联军胜利！' : '⚫ 黑方获胜 · 再战一局')
             : (winner === 'red' ? '🔴 红方胜利！' : '🔵 蓝方胜利！');
         document.getElementById('phase-hint').textContent = '读一读战报，准备下一次出击';
-        const endReason = report.endReason === 'coop-win' ? '黑方全军覆没且营寨尽毁，联军达成歼灭目标。 '
-            : report.endReason === 'coop-loss' ? '红蓝联军双双溃败，未能拔除黑方营寨。 '
+        const endReason = report.endReason === 'coop-win' ? '电脑主基地已摧毁，联军达成攻城目标。 '
+            : report.endReason === 'coop-loss' ? '两座玩家主基地均被摧毁，联军失利。 '
             : report.deathmatch && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '已全灭，死斗结束。 '
             : report.endReason === 'control' ? (winner === 'red' ? '红方' : '蓝方') + '掌控旗帜积分达标，占点获胜。 '
