@@ -1,9 +1,15 @@
-// 素材清单；死亡动画由 tools/build_death_sprites.py 维护。
+// Production asset manifest; unit art packed by tools/build_unit_art.py.
 export const MANIFEST = {
   "terrain": {
-    "materials": { "file": "terrain/materials.png" },
-    "props": { "file": "terrain/props.png" },
-    "rocks": { "file": "terrain/rocks-v2.png" }
+    "materials": {
+      "file": "terrain/materials.png"
+    },
+    "props": {
+      "file": "terrain/props.png"
+    },
+    "rocks": {
+      "file": "terrain/rocks-v2.png"
+    }
   },
   "units": {
     "blue_infantry": {
@@ -45,6 +51,51 @@ export const MANIFEST = {
       "file": "units/red_cavalry.png",
       "w": 156,
       "h": 156
+    },
+    "red_axe": {
+      "file": "units/red_axe.png",
+      "w": 256,
+      "h": 256
+    },
+    "blue_axe": {
+      "file": "units/blue_axe.png",
+      "w": 256,
+      "h": 256
+    },
+    "black_axe": {
+      "file": "units/black_axe.png",
+      "w": 256,
+      "h": 256
+    },
+    "red_worker": {
+      "file": "units/red_worker.png",
+      "w": 256,
+      "h": 256
+    },
+    "blue_worker": {
+      "file": "units/blue_worker.png",
+      "w": 256,
+      "h": 256
+    },
+    "black_worker": {
+      "file": "units/black_worker.png",
+      "w": 256,
+      "h": 256
+    },
+    "red_medic": {
+      "file": "units/red_medic.png",
+      "w": 256,
+      "h": 256
+    },
+    "blue_medic": {
+      "file": "units/blue_medic.png",
+      "w": 256,
+      "h": 256
+    },
+    "black_medic": {
+      "file": "units/black_medic.png",
+      "w": 256,
+      "h": 256
     }
   },
   "props": {
@@ -298,6 +349,186 @@ export const MANIFEST = {
         "file": "anim/blue_cavalry_north_attack.png",
         "fw": 169,
         "fh": 156,
+        "frames": 4
+      }
+    },
+    "red_axe": {
+      "walk": {
+        "file": "anim/red_axe_walk.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_axe_attack.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      }
+    },
+    "blue_axe": {
+      "walk": {
+        "file": "anim/blue_axe_walk.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_axe_attack.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      }
+    },
+    "black_axe": {
+      "walk": {
+        "file": "anim/black_axe_walk.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/black_axe_attack.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      }
+    },
+    "red_worker": {
+      "walk": {
+        "file": "anim/red_worker_walk.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "build": {
+        "file": "anim/red_worker_build.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_worker_attack.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "carry": {
+        "file": "anim/red_worker_carry.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      }
+    },
+    "blue_worker": {
+      "walk": {
+        "file": "anim/blue_worker_walk.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "build": {
+        "file": "anim/blue_worker_build.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_worker_attack.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "carry": {
+        "file": "anim/blue_worker_carry.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      }
+    },
+    "black_worker": {
+      "walk": {
+        "file": "anim/black_worker_walk.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "build": {
+        "file": "anim/black_worker_build.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/black_worker_attack.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "carry": {
+        "file": "anim/black_worker_carry.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      }
+    },
+    "red_medic": {
+      "walk": {
+        "file": "anim/red_medic_walk.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "heal": {
+        "file": "anim/red_medic_heal.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/red_medic_attack.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      }
+    },
+    "blue_medic": {
+      "walk": {
+        "file": "anim/blue_medic_walk.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "heal": {
+        "file": "anim/blue_medic_heal.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/blue_medic_attack.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      }
+    },
+    "black_medic": {
+      "walk": {
+        "file": "anim/black_medic_walk.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "heal": {
+        "file": "anim/black_medic_heal.png",
+        "fw": 256,
+        "fh": 256,
+        "frames": 4
+      },
+      "attack": {
+        "file": "anim/black_medic_attack.png",
+        "fw": 256,
+        "fh": 256,
         "frames": 4
       }
     }

@@ -13,9 +13,9 @@ export const FOOT = {
     pikeman:  { pad: 34, dx:  -7, w: 63, h: 31 },
     archer:   { pad: 11, dx:  -6, w: 67, h: 33 },
     wagon:    { pad:  6, dx:   0, w: 64, h: 30 },
-    axe:      { pad: 14, dx: -1, w: 58, h: 28 },
-    worker:   { pad: 14, dx:  -1, w: 58, h: 28 },
-    medic:    { pad: 14, dx:  -1, w: 58, h: 28 },
+    axe:      { pad: 32, dx: 0, w: 72, h: 35 },
+    worker:   { pad: 32, dx: 0, w: 67, h: 33 },
+    medic:    { pad: 32, dx: 0, w: 67, h: 33 },
     cavalry: {
         east:      { pad:  4, dx: -10, w: 83, h: 41 },
         southeast: { pad: 10, dx: -16, w: 74, h: 36 },
