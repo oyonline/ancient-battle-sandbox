@@ -1,0 +1,52 @@
+{
+  "axe": {
+    "scale": 0.3708206686930091,
+    "bodyHeight": 122,
+    "walkBodyHeights": [
+      332,
+      327,
+      331,
+      327
+    ],
+    "frameSize": 256,
+    "ground": 224,
+    "clips": [
+      "walk",
+      "attack"
+    ]
+  },
+  "worker": {
+    "scale": 0.4686868686868687,
+    "bodyHeight": 116,
+    "walkBodyHeights": [
+      248,
+      247,
+      248,
+      246
+    ],
+    "frameSize": 256,
+    "ground": 224,
+    "clips": [
+      "walk",
+      "build",
+      "attack",
+      "carry"
+    ]
+  },
+  "medic": {
+    "scale": 0.3446153846153846,
+    "bodyHeight": 112,
+    "walkBodyHeights": [
+      324,
+      328,
+      325,
+      325
+    ],
+    "frameSize": 256,
+    "ground": 224,
+    "clips": [
+      "walk",
+      "heal"
+    ]
+  }
+}
