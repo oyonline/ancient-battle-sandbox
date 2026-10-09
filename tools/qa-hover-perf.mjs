@@ -6,7 +6,7 @@
 //     驻塔候选走 500ms 缓存），同窗口全军 forEachNear 总数仅作规模参照；
 //  3) 帧级对照：同输入序列下 B（当前，悬停生效）与 A（基线 a0dfc8e，无悬停管线）
 //     的 FrameStats P95/max/长帧数，结论只按实测窗口表述。
-// 用法：QA_A=http://127.0.0.1:5301/ QA_B=http://127.0.0.1:5300/ node tools/qa-hover-perf.mjs
+// 用法：QA_A=http://127.0.0.1:5301/classic.html QA_B=http://127.0.0.1:5300/classic.html node tools/qa-hover-perf.mjs
 import { chromium } from 'playwright-core';
 import { homedir } from 'node:os';
 import { existsSync } from 'node:fs';
@@ -14,8 +14,8 @@ import path from 'node:path';
 
 const EXE = [1228, 1208].map(v => path.join(homedir(),
     `Library/Caches/ms-playwright/chromium-${v}/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`)).find(existsSync);
-const URL_A = process.env.QA_A || 'http://127.0.0.1:5301/';
-const URL_B = process.env.QA_B || 'http://127.0.0.1:5300/';
+const URL_A = process.env.QA_A || 'http://127.0.0.1:5301/classic.html';
+const URL_B = process.env.QA_B || 'http://127.0.0.1:5300/classic.html';
 
 const browser = await chromium.launch({ executablePath: EXE, headless: true,
     args: ['--disable-dev-shm-usage', '--disable-gpu-sandbox'] });

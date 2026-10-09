@@ -22,7 +22,7 @@ const EXE = [
     path.join(homedir(), 'Library/Caches/ms-playwright/chromium-1208/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
 ].find(existsSync);
 if (!EXE) { console.error('未找到缓存 Chromium'); process.exit(2); }
-const PAGE_URL = process.env.QA_URL || 'http://127.0.0.1:5300/';
+const PAGE_URL = process.env.QA_URL || 'http://127.0.0.1:5300/classic.html';
 const BASELINE_DIST = '/tmp/dsh-qa-baseline/dist';
 const OLD_SIM_VERSION = '2026-10-03-cavalry-def10';   // R2：用上一轮版本做更锐利的拒绝测试
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml' };

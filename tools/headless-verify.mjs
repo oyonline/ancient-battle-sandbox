@@ -12,7 +12,7 @@ const cand = [
 ];
 const EXE = cand.find(existsSync);
 if (!EXE) { console.error('未找到缓存 Chromium，请先安装 playwright 浏览器或修改 tools/headless-verify.mjs 的路径'); process.exit(1); }
-const URL = process.env.VERIFY_URL || 'http://127.0.0.1:5300/';
+const URL = process.env.VERIFY_URL || 'http://127.0.0.1:5300/classic.html';
 const browser = await chromium.launch({ executablePath: EXE, headless: true });
 let failed = 0;
 const check = (name, ok, detail) => { console.log(`${ok ? '✅' : '❌'} ${name}${detail ? ' · ' + detail : ''}`); if (!ok) failed++; };

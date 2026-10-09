@@ -19,7 +19,7 @@ const cand = [
 ];
 const EXE = cand.find(existsSync);
 if (!EXE) { console.error('未找到缓存 Chromium'); process.exit(1); }
-const URL = process.env.VERIFY_URL || 'http://127.0.0.1:5300/';
+const URL = process.env.VERIFY_URL || 'http://127.0.0.1:5300/classic.html';
 const OUT = process.argv[2] || '.omc/evidence/engage-probe';
 const TAG = process.argv[3] || 'run';
 mkdirSync(OUT, { recursive: true });

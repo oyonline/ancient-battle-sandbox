@@ -10,7 +10,7 @@ const cand = [
     path.join(homedir(), 'Library/Caches/ms-playwright/chromium-1208/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
 ];
 const EXE = cand.find(existsSync);
-const URL = process.env.SHOT_URL || 'http://127.0.0.1:4399/';
+const URL = process.env.SHOT_URL || 'http://127.0.0.1:4399/classic.html';
 const browser = await chromium.launch({ executablePath: EXE, headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 await page.goto(URL, { waitUntil: 'load' });

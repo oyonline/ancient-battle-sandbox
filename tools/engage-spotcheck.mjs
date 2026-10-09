@@ -16,7 +16,7 @@ const cand = [
 ];
 const EXE = cand.find(existsSync);
 if (!EXE) { console.error('未找到缓存 Chromium'); process.exit(1); }
-const URL = process.env.VERIFY_URL || 'http://127.0.0.1:5300/';
+const URL = process.env.VERIFY_URL || 'http://127.0.0.1:5300/classic.html';
 const browser = await chromium.launch({ executablePath: EXE, headless: true });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const errors = [];

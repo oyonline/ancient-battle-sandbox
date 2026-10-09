@@ -11,7 +11,7 @@ import path from 'node:path';
 
 const args = process.argv.slice(2);
 const seconds = Number(args.find(a => a.startsWith('--seconds='))?.split('=')[1] ?? 25);
-const url = process.env.VERIFY_URL || 'http://127.0.0.1:5301/';
+const url = process.env.VERIFY_URL || 'http://127.0.0.1:5301/classic.html';
 const label = process.env.LABEL || 'B';
 const out = process.env.OUT || path.resolve(`.omc/evidence/review-perf/browser-${label}.json`);
 mkdirSync(path.dirname(out), { recursive: true });

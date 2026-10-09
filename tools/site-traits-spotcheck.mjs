@@ -4,7 +4,7 @@
 // 倍率由隔离移动测试证明）、大本营施工倍率观测真实施工进度、夺旗列表在可见面板中读取、
 // 渡口"丢一座仍保留"与"再次失守仍播报"的易主提示。
 // 用法：npm run build 后起 node server/arena.mjs（默认 5300，可用 PORT 覆盖），
-// 再 VERIFY_URL=http://127.0.0.1:5301/ node tools/site-traits-spotcheck.mjs
+// 再 VERIFY_URL=http://127.0.0.1:5301/classic.html node tools/site-traits-spotcheck.mjs
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import { homedir } from 'node:os';
@@ -14,7 +14,7 @@ import path from 'node:path';
 const executablePath = [1228, 1208].map(version => path.join(homedir(),
     `Library/Caches/ms-playwright/chromium-${version}/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`)).find(existsSync);
 assert.ok(executablePath, '未找到本机缓存 Chromium');
-const url = process.env.VERIFY_URL || 'http://127.0.0.1:5301/';
+const url = process.env.VERIFY_URL || 'http://127.0.0.1:5301/classic.html';
 const evidence = path.resolve('.omc/evidence/site-traits');
 mkdirSync(evidence, { recursive: true });
 const browser = await chromium.launch({ executablePath, headless: true });

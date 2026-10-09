@@ -7,7 +7,7 @@ import { CHALLENGES } from '../js/challenges.js';
 import { UI, Snd, PRESETS } from '../js/ui.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const page = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const page = fs.readFileSync(path.join(root, 'classic.html'), 'utf8');
 const snapshot = value => JSON.parse(JSON.stringify(value));
 
 class Element {

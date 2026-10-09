@@ -14,7 +14,7 @@ const browser = await chromium.launch({ executablePath: EXE, headless: true, arg
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
-await page.goto('http://127.0.0.1:5300/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await page.goto('http://127.0.0.1:5300/classic.html', { waitUntil: 'domcontentloaded', timeout: 60000 });
 await page.waitForTimeout(1500);
 await page.click('[data-territory-entry]');
 await page.waitForFunction(() => { const b = document.getElementById('btn-start'); return b && !b.disabled; }, null, { timeout: 150000 });

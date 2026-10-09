@@ -9,6 +9,7 @@ export default defineConfig({
         port: 5301
     },
     build: {
-        outDir: 'dist'
+        outDir: 'dist',
+        rollupOptions: { input: { home: 'index.html', classic: 'classic.html', battle3d: 'battle3d.html' } }
     }
 });

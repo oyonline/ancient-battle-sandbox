@@ -1,5 +1,5 @@
 // Reproducible browser acceptance: real controls, canvas picks and fixed-step simulation.
-// Start npm run arena, then VERIFY_URL=http://127.0.0.1:5300/ node tools/camps-spotcheck.mjs.
+// Start npm run arena, then VERIFY_URL=http://127.0.0.1:5300/classic.html node tools/camps-spotcheck.mjs.
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import { homedir } from 'node:os';
@@ -9,7 +9,7 @@ import path from 'node:path';
 const executablePath = [1228, 1208].map(version => path.join(homedir(),
     `Library/Caches/ms-playwright/chromium-${version}/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing`)).find(existsSync);
 assert.ok(executablePath, '未找到本机缓存 Chromium');
-const url = process.env.VERIFY_URL || 'http://127.0.0.1:5300/';
+const url = process.env.VERIFY_URL || 'http://127.0.0.1:5300/classic.html';
 const evidence = path.resolve('.omc/evidence/camps-development');
 mkdirSync(evidence, { recursive: true });
 const browser = await chromium.launch({ executablePath, headless: true });

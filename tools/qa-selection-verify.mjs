@@ -20,7 +20,7 @@ const EXE = [
     path.join(homedir(), 'Library/Caches/ms-playwright/chromium-1208/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing')
 ].find(existsSync);
 if (!EXE) { console.error('未找到缓存 Chromium'); process.exit(2); }
-const PAGE_URL = process.env.QA_URL || 'http://127.0.0.1:5300/';
+const PAGE_URL = process.env.QA_URL || 'http://127.0.0.1:5300/classic.html';
 mkdirSync('docs/qa-u1', { recursive: true });
 
 const browser = await chromium.launch({ executablePath: EXE, headless: true,
