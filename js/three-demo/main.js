@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { createFighter, stepSkirmish, separateBodies, BODY_RADIUS } from './combat-model.js';
+import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
+import { AnimationController, updateSkinMatrices } from './animation-controller.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const $ = id => document.getElementById(id);
@@ -55,12 +57,12 @@ const units=[]; let templates, team='red', selected=[], fighting=false, paused=f
 const healthStatus = () => ['red','blue'].map(t => `${t==='red'?'红':'蓝'}方 ${units.filter(u=>u.team===t&&u.hp>0).length}`).join(' · ');
 function teamColor(t){return t==='red'?'#b84c38':'#487c9c';}
 function select(list){ selected=list.filter(u=>u.hp>0); $('selection').textContent = `已选${team==='red'?'红':'蓝'}方 ${selected.length} 名 · 点击地面移动`; for(const u of units)u.ring.visible=selected.includes(u)&&u.hp>0; }
-function cloneModel(template,t){const model=template.clone(true);model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;const tint=m=>{if(m.name!=='team_cloth')return m;const owned=m.clone();owned.color.set(teamColor(t));return owned;};o.material=Array.isArray(o.material)?o.material.map(tint):tint(o.material);}});return model;}
+function cloneModel(template,t){const model=cloneSkeleton(template.scene);model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;const tint=m=>{if(m.name!=='team_cloth')return m;const owned=m.clone();owned.color.set(teamColor(t));return owned;};o.material=Array.isArray(o.material)?o.material.map(tint):tint(o.material);}});return model;}
 function createUnit(t,kind,x,z,index){const model=cloneModel(templates[kind],t); const root=new THREE.Group();root.add(model);scene.add(root);root.position.set(x,heightAt(x,z),z);root.rotation.y=t==='red'?Math.PI/2:-Math.PI/2;
  const ring=new THREE.Mesh(bodyRingGeometry[kind],new THREE.MeshBasicMaterial({color:'#f5df9d',side:THREE.DoubleSide}));scene.add(ring);const joints=[];model.traverse(o=>{if(!o.isMesh&&/^(arm_|leg_|horse_leg_|rider$)/.test(o.name))joints.push({object:o,base:o.quaternion.clone(),name:o.name});});
- const u={...createFighter(units.length,t,kind,x,z),root,model,ring,joints,index};u.root.rotation.y=u.heading;root.userData.unit=u;units.push(u);}
-function reset(){for(const u of units){scene.remove(u.root,u.ring);u.model.traverse(o=>{if(o.isMesh)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(m.name==='team_cloth')m.dispose();});});u.ring.material.dispose();}clearBattleMarks();units.length=0;fighting=false;winner=null;paused=false;elapsed=0;distance=43;focus.set(0,0,0);updateCamera(); marker.visible=false;$('pause').textContent='暂停';$('fight').textContent='开始交战';
- for(const t of ['red','blue']){const side=t==='red'?-1:1;for(let i=0;i<12;i++)createUnit(t,'infantry',side*(8+Math.floor(i/4)*1.2),(i%4-1.5)*1.35,i);for(let i=0;i<4;i++)createUnit(t,'cavalry',side*(10.8+i%2*3.1),5.5+Math.floor(i/2)*3.1,i+12);}
+ const u={...createFighter(units.length,t,kind,x,z),root,model,ring,joints,index};u.root.rotation.y=u.heading;u.animation=new AnimationController(model,templates[kind].animations);if(kind==='cavalry'&&!u.animation.actions.has('charge'))throw new Error('Missing cavalry Charge animation');root.userData.unit=u;units.push(u);}
+function reset(){for(const u of units){u.animation?.dispose();scene.remove(u.root,u.ring);u.model.traverse(o=>{if(o.isMesh)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(m.name==='team_cloth')m.dispose();});});u.ring.material.dispose();}clearBattleMarks();clearArrows();units.length=0;fighting=false;winner=null;paused=false;elapsed=0;distance=43;focus.set(0,0,0);updateCamera(); marker.visible=false;$('pause').textContent='暂停';$('fight').textContent='开始交战';
+ for(const t of ['red','blue']){const side=t==='red'?-1:1;for(let i=0;i<6;i++)createUnit(t,'infantry',side*(8+Math.floor(i/4)*2.1),(i%4-1.5)*2.1,i);for(let i=0;i<4;i++)createUnit(t,'pikeman',side*12.2,(i-1.5)*2.1,i+6);for(let i=0;i<2;i++)createUnit(t,'archer',side*15,(i-.5)*3,i+10);for(let i=0;i<4;i++)createUnit(t,'cavalry',side*(10.8+i%2*4.2),6+Math.floor(i/2)*4.2,i+12);}
  separateBodies(units);select(units.filter(u=>u.team===team));$('battle-status').textContent=`自由布阵 · ${healthStatus()}`;}
 const localX = new THREE.Vector3(1,0,0);
 const strideRotation = new THREE.Quaternion();
@@ -78,27 +80,37 @@ function addBlood(x,z,size=.35){
  if(bloodMarks.length>96){const old=bloodMarks.shift();scene.remove(old);old.geometry.dispose();}
 }
 function impactRing(x,z,charge){const geometry=new THREE.RingGeometry(.25,.35,20);geometry.rotateX(-Math.PI/2);const material=new THREE.MeshBasicMaterial({color:charge?'#ffd77b':'#d7ae91',transparent:true,opacity:.85,side:THREE.DoubleSide,depthWrite:false});const ring=new THREE.Mesh(geometry,material);ring.position.set(x,heightAt(x,z)+.09,z);ring.userData.life=.6;scene.add(ring);impactMarks.push(ring);if(impactMarks.length>32){const old=impactMarks.shift();scene.remove(old);old.geometry.dispose();old.material.dispose();}}
+const arrowGeometry=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,-.6),new THREE.Vector3(0,0,.15),new THREE.Vector3(0,0,.15),new THREE.Vector3(-.10,0,-.02),new THREE.Vector3(0,0,.15),new THREE.Vector3(.10,0,-.02)]);
+const arrowMaterial=new THREE.LineBasicMaterial({color:'#e8d7a1'}),arrowMarks=new Map();
+function clearArrows(){for(const mark of arrowMarks.values())scene.remove(mark);arrowMarks.clear();}
+function addArrow(shot){if(arrowMarks.size>=64)return;const mark=new THREE.LineSegments(arrowGeometry,arrowMaterial);mark.userData.shot=shot;scene.add(mark);arrowMarks.set(shot.id,mark);}
+function updateArrows(){const active=new Set(units.flatMap(u=>u.projectiles.map(shot=>shot.id)));for(const [id,mark] of arrowMarks){if(!active.has(id)){scene.remove(mark);arrowMarks.delete(id);continue;}const shot=mark.userData.shot,progress=Math.min(1,shot.age/shot.duration);mark.position.set(shot.x,THREE.MathUtils.lerp(heightAt(shot.startX,shot.startZ),heightAt(shot.endX,shot.endZ),progress)+1.5+Math.sin(progress*Math.PI)*.45,shot.z);mark.rotation.y=Math.atan2(shot.vx,shot.vz);}}
 const corpseVertex=new THREE.Vector3();
 function settleCorpse(u){
- u.model.position.y=0;u.root.updateMatrixWorld(true);let lift=-Infinity;
- u.model.traverse(o=>{if(!o.isMesh)return;const p=o.geometry.attributes.position;for(let i=0;i<p.count;i++){corpseVertex.fromBufferAttribute(p,i).applyMatrix4(o.matrixWorld);lift=Math.max(lift,heightAt(corpseVertex.x,corpseVertex.z)+.025-corpseVertex.y);}});
+ u.model.position.y=0;u.root.updateMatrixWorld(true);updateSkinMatrices(u.model);let lift=-Infinity;
+ u.model.traverse(o=>{if(!o.isMesh)return;const p=o.geometry.attributes.position;for(let i=0;i<p.count;i++){o.getVertexPosition(i,corpseVertex).applyMatrix4(o.matrixWorld);lift=Math.max(lift,heightAt(corpseVertex.x,corpseVertex.z)+.025-corpseVertex.y);}});
  u.model.position.y=Number.isFinite(lift)?lift:0;
 }
 function update(dt){
  elapsed+=dt;
  const events=stepSkirmish(units,dt,fighting);
  for(const event of events){
-  if(event.type==='death'){event.unit.ring.visible=false;addBlood(event.x,event.z,event.unit.kind==='cavalry'?.65:.4);}
-  else if(event.type==='charge'){impactRing(event.x,event.z,true);addBlood(event.x,event.z,.24);}
-  else {impactRing(event.x,event.z,false);if(event.target.hp%24<12)addBlood(event.x,event.z,.12);}
+  if(event.type==='death'){event.unit.animation?.trigger('death');event.unit.ring.visible=false;addBlood(event.x,event.z,event.unit.kind==='cavalry'?.65:.4);}
+  else if(event.type==='charge'){event.target.animation?.trigger('hit');impactRing(event.x,event.z,true);addBlood(event.x,event.z,.24);}
+  else if(event.type==='attack'){event.from.animation?.trigger('attack');}
+  else if(event.type==='cancel-shot'||event.type==='cancel-attack'){event.from.animation?.cancelAttack(event.from.moving);}
+  else if(event.type==='draw'){event.from.animation?.trigger('attack');}
+  else if(event.type==='shoot'){addArrow(event.shot);}
+  else {event.target.animation?.trigger('hit');impactRing(event.x,event.z,false);if(event.target.hp%24<12)addBlood(event.x,event.z,.12);}
  }
  for(const u of units){
   u.root.position.set(u.x,heightAt(u.x,u.z),u.z);u.root.rotation.y=u.heading;
-  if(u.hp<=0){u.deathTime=(u.deathTime??0)+dt;const t=Math.min(1,u.deathTime/.65);u.model.rotation.z=(u.id%2?1:-1)*Math.PI/2*(1-Math.pow(1-t,3));if(!u.corpseSettled){settleCorpse(u);u.corpseSettled=t===1;}u.ring.visible=false;continue;}
-  animateUnit(u,elapsed,u.moving,u.attacking);u.ring.position.set(u.x,heightAt(u.x,u.z)+.04,u.z);
-  u.model.rotation.z=Math.sin(elapsed*45+u.id)*.06*Math.min(1,u.hitFlash*5);
+  if(u.hp<=0){u.deathTime=(u.deathTime??0)+dt;const t=Math.min(1,u.deathTime/.65);if(u.animation){u.animation.update(dt,false);u.model.rotation.z=0;}else u.model.rotation.z=(u.id%2?1:-1)*Math.PI/2*(1-Math.pow(1-t,3));if(!u.corpseSettled){settleCorpse(u);u.corpseSettled=u.animation?u.animation.deathComplete:t===1;}u.ring.visible=false;continue;}
+  if(u.animation){u.model.position.y=0;u.model.rotation.z=0;u.animation.update(dt,u.moving,u.kind==='cavalry'&&u.speed>=1.5&&(u.runup>=3.2||u.pierceTime>0||u.chargeFlash>0));updateSkinMatrices(u.model);}else animateUnit(u,elapsed,u.moving,u.attacking);u.ring.position.set(u.x,heightAt(u.x,u.z)+.04,u.z);
+  if(!u.animation)u.model.rotation.z=Math.sin(elapsed*45+u.id)*.06*Math.min(1,u.hitFlash*5);
   if(u.kind==='cavalry'&&u.moving&&u.speed>=3.4&&Math.floor(elapsed*10)!==u.dustTick){u.dustTick=Math.floor(elapsed*10);impactRing(u.x-Math.sin(u.heading)*.55,u.z-Math.cos(u.heading)*.55,false);}
  }
+ updateArrows();
  for(let i=impactMarks.length-1;i>=0;i--){const ring=impactMarks[i];ring.userData.life-=dt;ring.scale.setScalar(1+(1-ring.userData.life/.6)*2);ring.material.opacity=Math.max(0,ring.userData.life/.6)*.5;if(ring.userData.life<=0){scene.remove(ring);ring.geometry.dispose();ring.material.dispose();impactMarks.splice(i,1);}}
  const aliveRed=units.some(u=>u.team==='red'&&u.hp>0),aliveBlue=units.some(u=>u.team==='blue'&&u.hp>0);
  if(fighting&&(!aliveRed||!aliveBlue)){fighting=false;winner=aliveRed?'红':'蓝';select(selected);}
@@ -109,15 +121,17 @@ function setTeam(t){team=t;$('team-red').setAttribute('aria-pressed',String(t===
 const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
 renderer.domElement.addEventListener('pointerdown',event=>{if(!ready)return;const r=renderer.domElement.getBoundingClientRect();pointer.set((event.clientX-r.left)/r.width*2-1,-(event.clientY-r.top)/r.height*2+1);raycaster.setFromCamera(pointer,camera);
  const hits=raycaster.intersectObjects(units.filter(u=>u.hp>0).map(u=>u.root),true);if(hits.length){let node=hits[0].object;while(node&&!node.userData.unit)node=node.parent;const u=node?.userData.unit;if(u?.team===team){select([u]);return;}}
- const hit=raycaster.intersectObject(ground)[0];if(hit&&selected.length){const count=selected.length;selected=selected.filter(u=>u.hp>0);selected.forEach((u,i)=>{const columns=Math.ceil(Math.sqrt(count));const x=THREE.MathUtils.clamp(hit.point.x+(i%columns-(columns-1)/2)*3.1,-17,17);const z=THREE.MathUtils.clamp(hit.point.z+(Math.floor(i/columns)-Math.floor((count-1)/columns)/2)*3.1,-13,13);u.target={x,z};u.runup=0;u.pierceTime=0;});marker.position.copy(hit.point);marker.position.y+=.05;marker.visible=true;$('selection').textContent=`已下令 ${selected.length} 名士兵前往标记位置${paused?' · 恢复后执行':''}`;}});
+ const hit=raycaster.intersectObject(ground)[0];if(hit&&selected.length){const count=selected.length,gap=Math.max(3.1,...selected.map(u=>u.radius*2+.15));selected=selected.filter(u=>u.hp>0);selected.forEach((u,i)=>{const columns=Math.ceil(Math.sqrt(count));const x=THREE.MathUtils.clamp(hit.point.x+(i%columns-(columns-1)/2)*gap,-17,17);const z=THREE.MathUtils.clamp(hit.point.z+(Math.floor(i/columns)-Math.floor((count-1)/columns)/2)*gap,-13,13);u.target={x,z};u.pendingShot=null;u.pendingStrike=null;u.animation?.cancelAttack(true);u.runup=0;u.pierceTime=0;});marker.position.copy(hit.point);marker.position.y+=.05;marker.visible=true;$('selection').textContent=`已下令 ${selected.length} 名士兵前往标记位置${paused?' · 恢复后执行':''}`;}});
 function zoom(amount){distance=THREE.MathUtils.clamp(distance+amount,10,65);updateCamera();}
 renderer.domElement.addEventListener('wheel',event=>{event.preventDefault();zoom(Math.sign(event.deltaY)*2.3);},{passive:false});
 $('zoom-in').onclick=()=>zoom(-4);$('zoom-out').onclick=()=>zoom(4);$('overview').onclick=()=>{distance=43;focus.set(0,0,0);updateCamera();};$('focus').onclick=()=>{const living=selected.filter(u=>u.hp>0);if(!living.length)return;focus.set(0,0,0);for(const u of living)focus.add(u.root.position);focus.divideScalar(living.length);distance=18;updateCamera();};
+const roleControls=document.createElement('div');roleControls.className='control-group';roleControls.setAttribute('aria-label','选择兵种');$('select-all').parentElement.insertAdjacentElement('afterend',roleControls);
+for(const [kind,label] of [['infantry','剑盾'],['pikeman','长矛'],['archer','弓兵'],['cavalry','骑兵']]){const button=document.createElement('button');button.textContent=label;button.onclick=()=>{select(units.filter(u=>u.team===team&&u.kind===kind));$('focus').click();};roleControls.append(button);}
 $('team-red').onclick=()=>setTeam('red');$('team-blue').onclick=()=>setTeam('blue');$('select-all').onclick=()=>select(units.filter(u=>u.team===team));$('fight').onclick=()=>{if(!ready)return;if(fighting || winner) reset();for(const u of units)u.target=null;winner=null;fighting=true;paused=false;$('pause').textContent='暂停';marker.visible=false;$('fight').textContent='重新交战';};$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'继续':'暂停';$('battle-status').textContent=`${paused?'已暂停':fighting?'交战中':'自由布阵'} · ${healthStatus()}`;};$('reset').onclick=reset;
 let last=performance.now();
 renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.05);last=now;if(ready&&!paused)update(dt);renderer.render(scene,camera);});
-async function start(){try{const assets=await Promise.all(['infantry','cavalry','tower'].map(name=>loader.loadAsync(`${import.meta.env.BASE_URL}assets/3d-sample/${name}.glb`)));templates={infantry:assets[0].scene,cavalry:assets[1].scene,tower:assets[2].scene};for(const [t,x,z] of [['red',-12,-7],['blue',12,-7]]){const tower=cloneModel(templates.tower,t);tower.position.set(x,heightAt(x,z),z);scene.add(tower);}ready=true;reset();$('loading').hidden=true;for(const id of ['fight','pause','reset'])$(id).disabled=false;}catch(error){showFailure('战场模型未能加载，请重新加载，或进入 2D 经典版。');console.error(error);}}
-window.addEventListener('pagehide',()=>{renderer.setAnimationLoop(null);observer.disconnect();const geometries=new Set(),materials=new Set();scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>materials.add(m));});geometries.forEach(g=>g.dispose());materials.add(bloodMaterial);materials.forEach(m=>m.dispose());renderer.dispose();},{once:true});
+async function start(){try{const paths={infantry:'infantry-rigged',pikeman:'spear-rigged',archer:'archer-rigged',cavalry:'cavalry-rigged',tower:'tower'};templates=Object.fromEntries(await Promise.all(Object.entries(paths).map(async([kind,name])=>[kind,await loader.loadAsync(`${import.meta.env.BASE_URL}assets/3d-sample/${name}.glb`)])));for(const [t,x,z] of [['red',-12,-7],['blue',12,-7]]){const tower=cloneModel(templates.tower,t);tower.position.set(x,heightAt(x,z),z);scene.add(tower);}reset();ready=true;$('loading').hidden=true;for(const id of ['fight','pause','reset'])$(id).disabled=false;}catch(error){showFailure('战场模型未能加载，请重新加载，或进入 2D 经典版。');console.error(error);}}
+window.addEventListener('pagehide',()=>{renderer.setAnimationLoop(null);observer.disconnect();for(const u of units)u.animation?.dispose();const geometries=new Set(),materials=new Set();scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>materials.add(m));});geometries.add(arrowGeometry);geometries.forEach(g=>g.dispose());materials.add(arrowMaterial);materials.add(bloodMaterial);materials.forEach(m=>m.dispose());renderer.dispose();},{once:true});
 window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 start();
 
