@@ -1,0 +1,13 @@
+{
+  "errors": [],
+  "assets": [
+    "http://localhost:5301/assets/3d-sample/tower.glb",
+    "http://localhost:5301/assets/3d-sample/locomotion1/infantry-rigged.glb",
+    "http://localhost:5301/assets/3d-sample/spear-rigged.glb",
+    "http://localhost:5301/assets/3d-sample/archer-rigged.glb",
+    "http://localhost:5301/assets/3d-sample/cavalry-rigged.glb"
+  ],
+  "initial": "自由布阵 · 红方 16 · 蓝方 16",
+  "fighting": "交战中 · 红方 16 · 蓝方 12 · 骑兵冲锋 6",
+  "reset": "自由布阵 · 红方 16 · 蓝方 16"
+}

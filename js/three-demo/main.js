@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createMotionQA, createDuelQA, createCrowdQA } from './motion-qa.js';
 import { createFighter, stepSkirmish, separateBodies, BODY_RADIUS } from './combat-model.js';
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js';
 import { AnimationController, updateSkinMatrices } from './animation-controller.js';
@@ -15,6 +16,16 @@ function showFailure(message) {
  document.querySelectorAll('.demo-controls button').forEach(button => button.disabled = true);
 }
 try {
+const preview=new URLSearchParams(location.search);
+const qaMode=['single','small','duel','four','sixteen'].includes(preview.get('qa'))?preview.get('qa'):null;
+const motionCandidate=preview.get('motion')==='candidate';
+const duelCandidate=preview.get('duel')==='candidate';
+let motionQA,duelQA,crowdQA;
+const crowdCandidate=preview.get('crowd')==='candidate';
+const comparing=preview.has('soldier');
+const r11=comparing&&preview.get('soldier')==='r11';
+const candidate=comparing&&(preview.get('soldier')==='candidate'||r11);
+const candidateLabel=r11?'候选 R1.1':'候选 R1';
 const viewport = $('viewport');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#b9c5ab');
@@ -39,7 +50,7 @@ sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -26; sun.shadow.cam
 sun.shadow.camera.top = 26; sun.shadow.camera.bottom = -26; sun.shadow.normalBias = .04;
 scene.add(sun);
 
-function heightAt(x, z) { return .15 + 2.5 * Math.exp(-((x + 5) ** 2 / 42 + (z + 5) ** 2 / 50)) + .65 * Math.exp(-((x - 8) ** 2 / 55 + (z - 6) ** 2 / 30)); }
+function heightAt(x, z) { if(qaMode)return .15;return .15 + 2.5 * Math.exp(-((x + 5) ** 2 / 42 + (z + 5) ** 2 / 50)) + .65 * Math.exp(-((x - 8) ** 2 / 55 + (z - 6) ** 2 / 30)); }
 const geometry = new THREE.PlaneGeometry(38, 30, 76, 60); geometry.rotateX(-Math.PI / 2);
 const positions = geometry.attributes.position;
 const colors = [];
@@ -60,9 +71,9 @@ function select(list){ selected=list.filter(u=>u.hp>0); $('selection').textConte
 function cloneModel(template,t){const model=cloneSkeleton(template.scene);model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;const tint=m=>{if(m.name!=='team_cloth')return m;const owned=m.clone();owned.color.set(teamColor(t));return owned;};o.material=Array.isArray(o.material)?o.material.map(tint):tint(o.material);}});return model;}
 function createUnit(t,kind,x,z,index){const model=cloneModel(templates[kind],t); const root=new THREE.Group();root.add(model);scene.add(root);root.position.set(x,heightAt(x,z),z);root.rotation.y=t==='red'?Math.PI/2:-Math.PI/2;
  const ring=new THREE.Mesh(bodyRingGeometry[kind],new THREE.MeshBasicMaterial({color:'#f5df9d',side:THREE.DoubleSide}));scene.add(ring);const joints=[];model.traverse(o=>{if(!o.isMesh&&/^(arm_|leg_|horse_leg_|rider$)/.test(o.name))joints.push({object:o,base:o.quaternion.clone(),name:o.name});});
- const u={...createFighter(units.length,t,kind,x,z),root,model,ring,joints,index};u.root.rotation.y=u.heading;u.animation=new AnimationController(model,templates[kind].animations);if(kind==='cavalry'&&!u.animation.actions.has('charge'))throw new Error('Missing cavalry Charge animation');root.userData.unit=u;units.push(u);}
-function reset(){for(const u of units){u.animation?.dispose();scene.remove(u.root,u.ring);u.model.traverse(o=>{if(o.isMesh)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(m.name==='team_cloth')m.dispose();});});u.ring.material.dispose();}clearBattleMarks();clearArrows();units.length=0;fighting=false;winner=null;paused=false;elapsed=0;distance=43;focus.set(0,0,0);updateCamera(); marker.visible=false;$('pause').textContent='暂停';$('fight').textContent='开始交战';
- for(const t of ['red','blue']){const side=t==='red'?-1:1;for(let i=0;i<6;i++)createUnit(t,'infantry',side*(8+Math.floor(i/4)*2.1),(i%4-1.5)*2.1,i);for(let i=0;i<4;i++)createUnit(t,'pikeman',side*12.2,(i-1.5)*2.1,i+6);for(let i=0;i<2;i++)createUnit(t,'archer',side*15,(i-.5)*3,i+10);for(let i=0;i<4;i++)createUnit(t,'cavalry',side*(10.8+i%2*4.2),6+Math.floor(i/2)*4.2,i+12);}
+ const u={...createFighter(units.length,t,kind,x,z),root,model,ring,joints,index};u.locomotion=motionCandidate&&kind==='infantry';u.crowd=crowdCandidate&&u.locomotion;u.root.rotation.y=u.heading;u.animation=new AnimationController(model,templates[kind].animations,{locomotion:u.locomotion});if(kind==='cavalry'&&!u.animation.actions.has('charge'))throw new Error('Missing cavalry Charge animation');root.userData.unit=u;units.push(u);}
+function reset(){for(const u of units){u.animation?.dispose();scene.remove(u.root,u.ring);u.model.traverse(o=>{if(o.isMesh)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(m.name==='team_cloth')m.dispose();});});u.ring.material.dispose();}clearBattleMarks();clearArrows();units.length=0;fighting=false;winner=null;paused=false;elapsed=0;distance=qaMode==='duel'?10:qaMode==='sixteen'?31:qaMode==='four'?21:qaMode?18:43;focus.set(0,qaMode?1.1:0,0);updateCamera(); marker.visible=false;$('pause').textContent='暂停';$('fight').textContent='开始交战';
+ if(qaMode==='duel'){createUnit('red','infantry',-3,0,0);createUnit('blue','infantry',3,0,1);}else if(qaMode==='four'||qaMode==='sixteen'){const count=qaMode==='four'?4:16,rows=qaMode==='four'?2:4;for(const t of ['red','blue'])for(let i=0;i<count;i++){const side=t==='red'?-1:1;createUnit(t,'infantry',side*(4.5+Math.floor(i/rows)*2.2),(i%rows-(rows-1)/2)*2.2+(t==='blue'?.7:0),i);}}else if(qaMode){for(let i=0;i<(qaMode==='small'?4:1);i++)createUnit('red','infantry',-3,(i-((qaMode==='small'?4:1)-1)/2)*2.2-1,i);}else for(const t of ['red','blue']){const side=t==='red'?-1:1;for(let i=0;i<6;i++)createUnit(t,'infantry',side*(8+Math.floor(i/4)*2.1),(i%4-1.5)*2.1,i);for(let i=0;i<4;i++)createUnit(t,'pikeman',side*12.2,(i-1.5)*2.1,i+6);for(let i=0;i<2;i++)createUnit(t,'archer',side*15,(i-.5)*3,i+10);for(let i=0;i<4;i++)createUnit(t,'cavalry',side*(10.8+i%2*4.2),6+Math.floor(i/2)*4.2,i+12);}
  separateBodies(units);select(units.filter(u=>u.team===team));$('battle-status').textContent=`自由布阵 · ${healthStatus()}`;}
 const localX = new THREE.Vector3(1,0,0);
 const strideRotation = new THREE.Quaternion();
@@ -92,8 +103,8 @@ function settleCorpse(u){
  u.model.position.y=Number.isFinite(lift)?lift:0;
 }
 function update(dt){
- elapsed+=dt;
- const events=stepSkirmish(units,dt,fighting);
+ elapsed+=dt;motionQA?.beforeStep(elapsed);
+ const events=stepSkirmish(units,dt,fighting);duelQA?.recordEvents(elapsed,events);crowdQA?.recordEvents(elapsed,events);
  for(const event of events){
   if(event.type==='death'){event.unit.animation?.trigger('death');event.unit.ring.visible=false;addBlood(event.x,event.z,event.unit.kind==='cavalry'?.65:.4);}
   else if(event.type==='charge'){event.target.animation?.trigger('hit');impactRing(event.x,event.z,true);addBlood(event.x,event.z,.24);}
@@ -106,16 +117,17 @@ function update(dt){
  for(const u of units){
   u.root.position.set(u.x,heightAt(u.x,u.z),u.z);u.root.rotation.y=u.heading;
   if(u.hp<=0){u.deathTime=(u.deathTime??0)+dt;const t=Math.min(1,u.deathTime/.65);if(u.animation){u.animation.update(dt,false);u.model.rotation.z=0;}else u.model.rotation.z=(u.id%2?1:-1)*Math.PI/2*(1-Math.pow(1-t,3));if(!u.corpseSettled){settleCorpse(u);u.corpseSettled=u.animation?u.animation.deathComplete:t===1;}u.ring.visible=false;continue;}
-  if(u.animation){u.model.position.y=0;u.model.rotation.z=0;u.animation.update(dt,u.moving,u.kind==='cavalry'&&u.speed>=1.5&&(u.runup>=3.2||u.pierceTime>0||u.chargeFlash>0));updateSkinMatrices(u.model);}else animateUnit(u,elapsed,u.moving,u.attacking);u.ring.position.set(u.x,heightAt(u.x,u.z)+.04,u.z);
+  if(u.animation){u.model.position.y=0;u.model.rotation.z=0;const actualSpeed=Math.hypot(u.x-(u.animationX??u.x),u.z-(u.animationZ??u.z))/Math.max(dt,.001);const turnRate=Math.atan2(Math.sin(u.heading-(u.animationHeading??u.heading)),Math.cos(u.heading-(u.animationHeading??u.heading)))/Math.max(dt,.001);u.animationX=u.x;u.animationZ=u.z;u.animationHeading=u.heading;u.animation.update(dt,u.locomotion?actualSpeed>.04:u.moving,u.kind==='cavalry'&&u.speed>=1.5&&(u.runup>=3.2||u.pierceTime>0||u.chargeFlash>0),{speed:actualSpeed,turnRate});updateSkinMatrices(u.model);}else animateUnit(u,elapsed,u.moving,u.attacking);u.ring.position.set(u.x,heightAt(u.x,u.z)+.04,u.z);
   if(!u.animation)u.model.rotation.z=Math.sin(elapsed*45+u.id)*.06*Math.min(1,u.hitFlash*5);
   if(u.kind==='cavalry'&&u.moving&&u.speed>=3.4&&Math.floor(elapsed*10)!==u.dustTick){u.dustTick=Math.floor(elapsed*10);impactRing(u.x-Math.sin(u.heading)*.55,u.z-Math.cos(u.heading)*.55,false);}
  }
+ motionQA?.afterStep(elapsed,dt);duelQA?.afterStep(elapsed);crowdQA?.afterStep(elapsed,dt);
  updateArrows();
  for(let i=impactMarks.length-1;i>=0;i--){const ring=impactMarks[i];ring.userData.life-=dt;ring.scale.setScalar(1+(1-ring.userData.life/.6)*2);ring.material.opacity=Math.max(0,ring.userData.life/.6)*.5;if(ring.userData.life<=0){scene.remove(ring);ring.geometry.dispose();ring.material.dispose();impactMarks.splice(i,1);}}
  const aliveRed=units.some(u=>u.team==='red'&&u.hp>0),aliveBlue=units.some(u=>u.team==='blue'&&u.hp>0);
  if(fighting&&(!aliveRed||!aliveBlue)){fighting=false;winner=aliveRed?'红':'蓝';select(selected);}
  const charges=units.filter(u=>u.hp>0&&u.kind==='cavalry'&&u.runup>=3.2&&u.speed>=3.4).length;
- $('battle-status').textContent=winner?`${winner}方胜出 · 战场遗骸保留 · 重置可再演练`:`${paused?'已暂停':fighting?'交战中':'自由布阵'} · ${healthStatus()}${charges?' · 骑兵冲锋 '+charges:''}`;
+ $('battle-status').textContent=winner?`${winner}方胜出 · 战场遗骸保留 · 重置可再演练`:`${paused?'已暂停':fighting?'交战中':'自由布阵'} · ${healthStatus()}${charges?' · 骑兵冲锋 '+charges:''}${motionQA?' · '+motionQA.version+' '+motionQA.label+' t='+elapsed.toFixed(3):duelQA?' · 双兵 t='+elapsed.toFixed(3):''}`;
 }
 function setTeam(t){team=t;$('team-red').setAttribute('aria-pressed',String(t==='red'));$('team-blue').setAttribute('aria-pressed',String(t==='blue'));select(units.filter(u=>u.team===t));}
 const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2();
@@ -128,9 +140,23 @@ $('zoom-in').onclick=()=>zoom(-4);$('zoom-out').onclick=()=>zoom(4);$('overview'
 const roleControls=document.createElement('div');roleControls.className='control-group';roleControls.setAttribute('aria-label','选择兵种');$('select-all').parentElement.insertAdjacentElement('afterend',roleControls);
 for(const [kind,label] of [['infantry','剑盾'],['pikeman','长矛'],['archer','弓兵'],['cavalry','骑兵']]){const button=document.createElement('button');button.textContent=label;button.onclick=()=>{select(units.filter(u=>u.team===team&&u.kind===kind));$('focus').click();};roleControls.append(button);}
 $('team-red').onclick=()=>setTeam('red');$('team-blue').onclick=()=>setTeam('blue');$('select-all').onclick=()=>select(units.filter(u=>u.team===team));$('fight').onclick=()=>{if(!ready)return;if(fighting || winner) reset();for(const u of units)u.target=null;winner=null;fighting=true;paused=false;$('pause').textContent='暂停';marker.visible=false;$('fight').textContent='重新交战';};$('pause').onclick=()=>{paused=!paused;$('pause').textContent=paused?'继续':'暂停';$('battle-status').textContent=`${paused?'已暂停':fighting?'交战中':'自由布阵'} · ${healthStatus()}`;};$('reset').onclick=reset;
+function setupComparison(){
+ paused=true;const previewTime=Number(preview.get('time')||0);const sample=Number.isFinite(previewTime)?Math.max(0,Math.min(2,previewTime)):0;const clip=(preview.get('clip')||'idle').toLowerCase();
+ for(const u of units){u.animation.mixer.stopAllAction();const action=u.animation.actions.get(clip)||u.animation.actions.get('idle');action.reset().play();action.setLoop(THREE.LoopOnce,1);action.clampWhenFinished=true;u.animation.mixer.setTime(Math.min(sample,action.getClip().duration));updateSkinMatrices(u.model);if(clip==='death')settleCorpse(u);}
+ const target=units.find(u=>u.team==='red'&&u.kind==='infantry'&&u.index===3);
+ if(preview.get('view')==='near'){focus.copy(target.root.position);focus.y+=1.1;distance=10;updateCamera();}
+ if(preview.has('angle')){const angle=Number(preview.get('angle'));if(Number.isFinite(angle))target.root.rotation.y=angle;}
+ if(preview.get('solo')==='1')for(const u of units){u.root.visible=u===target;u.ring.visible=false;}
+ const group=document.createElement('div');group.className='control-group';
+ for(const [value,label]of [['old','旧版'],['candidate','候选 R1'],['r11','候选 R1.1']]){const b=document.createElement('button');b.textContent=label;b.setAttribute('aria-pressed',String(preview.get('soldier')===value));b.onclick=()=>{const params=new URLSearchParams(location.search);params.set('soldier',value);location.search=params.toString();};group.append(b);}
+ for(const [value,label]of [['default','默认机位'],['near','最近机位']]){const b=document.createElement('button');b.textContent=label;b.onclick=()=>{const params=new URLSearchParams(location.search);params.set('view',value);location.search=params.toString();};group.append(b);}
+ document.querySelector('.demo-controls').prepend(group);$('battle-status').textContent=`剑盾对照 · ${candidate?candidateLabel:'旧版'} · ${clip} ${sample.toFixed(3)}s · 冻结采样`;window.soldierPreview={asset:r11?'round1-1/infantry-rigged.glb':candidate?'round1/infantry-rigged.glb':'infantry-rigged.glb',clip,sampleTime:sample,units:units.length};
+ window.soldierPreview.sample=(clip,time,angle)=>{for(const u of units){u.model.position.y=0;u.animation.mixer.stopAllAction();const a=u.animation.actions.get(clip);a.reset().setLoop(THREE.LoopOnce,1);a.clampWhenFinished=true;a.play();u.animation.mixer.setTime(Math.min(time,a.getClip().duration));updateSkinMatrices(u.model);if(clip==='death')settleCorpse(u);}if(angle!==undefined)target.root.rotation.y=angle;window.soldierPreview.clip=clip;window.soldierPreview.sampleTime=time;$('battle-status').textContent=`剑盾对照 · ${candidate?candidateLabel:'旧版'} · ${clip} ${time.toFixed(3)}s · 冻结采样`;renderer.render(scene,camera);};
+ window.soldierPreview.inspect=()=>{const positions=[];target.model.traverse(o=>{if(o.isSkinnedMesh){const p=o.geometry.attributes.position;const v=new THREE.Vector3();for(let i=0;i<p.count;i++){o.getVertexPosition(i,v).applyMatrix4(o.matrixWorld);positions.push([v.x,v.y,v.z]);}}});return {finite:positions.every(p=>p.every(Number.isFinite)),bounds: [0,1,2].map(k=>[Math.min(...positions.map(p=>p[k])),Math.max(...positions.map(p=>p[k]))]),feet:[...['L','R'].map(side=>{let bone;target.model.traverse(o=>{if(o.isSkinnedMesh)bone=o.skeleton.bones.find(b=>b.name.replaceAll('.','')==='Foot'+side);});return {side,position:bone?.getWorldPosition(new THREE.Vector3()).toArray(),quaternion:bone?.getWorldQuaternion(new THREE.Quaternion()).toArray()};})],ground:target.root.position.y,terrainGap:Math.min(...positions.map(p=>p[1]-heightAt(p[0],p[2])))};};
+}
 let last=performance.now();
-renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.05);last=now;if(ready&&!paused)update(dt);renderer.render(scene,camera);});
-async function start(){try{const paths={infantry:'infantry-rigged',pikeman:'spear-rigged',archer:'archer-rigged',cavalry:'cavalry-rigged',tower:'tower'};templates=Object.fromEntries(await Promise.all(Object.entries(paths).map(async([kind,name])=>[kind,await loader.loadAsync(`${import.meta.env.BASE_URL}assets/3d-sample/${name}.glb`)])));for(const [t,x,z] of [['red',-12,-7],['blue',12,-7]]){const tower=cloneModel(templates.tower,t);tower.position.set(x,heightAt(x,z),z);scene.add(tower);}reset();ready=true;$('loading').hidden=true;for(const id of ['fight','pause','reset'])$(id).disabled=false;}catch(error){showFailure('战场模型未能加载，请重新加载，或进入 2D 经典版。');console.error(error);}}
+renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.05);last=now;if(ready&&!paused)update(dt);renderer.render(scene,camera);if(crowdQA?.running&&preview.get('capture')==='1'&&Math.floor(elapsed*10)!==crowdQA.captureTick){crowdQA.captureTick=Math.floor(elapsed*10);crowdQA.frames.push({time:elapsed,trace:crowdQA.trace.at(-1),image:renderer.domElement.toDataURL('image/png')});}if(duelQA?.running&&preview.get('capture')==='1'&&elapsed<13&&Math.floor(elapsed*10)!==duelQA.captureTick){duelQA.captureTick=Math.floor(elapsed*10);duelQA.frames.push({time:elapsed,trace:duelQA.trace.at(-1),image:renderer.domElement.toDataURL('image/png')});}if(motionQA&&preview.get('capture')==='1'&&[[3.55,3.95],[4.16,4.5],[6.1,6.4],[10.4,10.85],[21.3,21.7]].some(([a,b])=>elapsed>=a&&elapsed<=b)){motionQA.frames??=[];const u=units[0],v=new THREE.Vector3(u.x,heightAt(u.x,u.z)+1.3,u.z).project(camera);motionQA.frames.push({time:elapsed,trace:motionQA.trace.at(-1),width:renderer.domElement.width,height:renderer.domElement.height,center:[(v.x+1)*renderer.domElement.width/2,(1-v.y)*renderer.domElement.height/2],image:renderer.domElement.toDataURL('image/png')});}});
+async function start(){try{const paths={infantry:duelCandidate?'duel1/infantry-rigged':motionCandidate?'locomotion1/infantry-rigged':qaMode?'round1-1/infantry-rigged':r11?'round1-1/infantry-rigged':candidate?'round1/infantry-rigged':'infantry-rigged',pikeman:'spear-rigged',archer:'archer-rigged',cavalry:'cavalry-rigged',tower:'tower'};templates=Object.fromEntries(await Promise.all(Object.entries(paths).map(async([kind,name])=>[kind,await loader.loadAsync(`${import.meta.env.BASE_URL}assets/3d-sample/${name}.glb`)])));for(const [t,x,z] of [['red',-12,-7],['blue',12,-7]]){const tower=cloneModel(templates.tower,t);tower.position.set(x,heightAt(x,z),z);scene.add(tower);}reset();if(qaMode==='four'||qaMode==='sixteen')crowdQA=createCrowdQA({reset,startFight:()=>{fighting=true;},getUnits:()=>units,mode:qaMode,version:crowdCandidate?'candidate':'baseline'});else if(qaMode==='duel')duelQA=createDuelQA({reset,startFight:()=>{fighting=true;},getUnits:()=>units});else if(qaMode)motionQA=createMotionQA({reset,getUnits:()=>units,getElapsed:()=>elapsed,controllerVersion:motionCandidate?'candidate':'baseline',onTarget:target=>{marker.visible=!!target;if(target)marker.position.set(target[0],.2,target[1]);}});if(comparing)setupComparison();ready=true;$('loading').hidden=true;for(const id of ['fight','pause','reset'])$(id).disabled=false;}catch(error){showFailure('战场模型未能加载，请重新加载，或进入 2D 经典版。');console.error(error);}}
 window.addEventListener('pagehide',()=>{renderer.setAnimationLoop(null);observer.disconnect();for(const u of units)u.animation?.dispose();const geometries=new Set(),materials=new Set();scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>materials.add(m));});geometries.add(arrowGeometry);geometries.forEach(g=>g.dispose());materials.add(arrowMaterial);materials.add(bloodMaterial);materials.forEach(m=>m.dispose());renderer.dispose();},{once:true});
 window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 start();

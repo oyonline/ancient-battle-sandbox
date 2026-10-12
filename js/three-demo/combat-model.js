@@ -41,18 +41,31 @@ export function stepSkirmish(units,dt,fighting){
   if(u.pendingShot){if(u.target){u.pendingShot=null;events.push({type:'cancel-shot',from:u});}else{u.pendingShot.time-=dt;if(u.pendingShot.time<=1e-8){const aimed=units.find(other=>other.id===u.pendingShot.targetId&&other.hp>0);if(aimed)launchArrow(u,aimed,events);else events.push({type:'cancel-shot',from:u});u.pendingShot=null;}}}
   let enemy=null,target=u.target;
   if(u.pierceTime>0)target={x:u.x+Math.sin(u.heading)*4,z:u.z+Math.cos(u.heading)*4};
-  else if(fighting&&!target){let best=Infinity;for(const other of alive){if(other.team===u.team)continue;const d=Math.hypot(other.x-u.x,other.z-u.z)-other.radius;if(d<best){best=d;enemy=other;}}target=enemy;}
+  else if(fighting&&!target){let best=Infinity;for(const other of alive){if(other.team===u.team)continue;const d=Math.hypot(other.x-u.x,other.z-u.z)-other.radius;if(d<best){best=d;enemy=other;}}if(u.crowd)u.combatTargetId=enemy?.id;target=enemy;}
+  if(u.crowd)u.blockedBy=undefined;
   const plan={u,enemy,mx:0,mz:0,oldX:u.x,oldZ:u.z};
   if(target){const dx=target.x-u.x,dz=target.z-u.z,d=Math.hypot(dx,dz),stop=enemy?(u.kind==='archer'?7.2:meleeReach(u,enemy)-.08):.1;
-   const desired=Math.atan2(dx,dz),turn=Math.atan2(Math.sin(desired-u.heading),Math.cos(desired-u.heading));
+   let desired=Math.atan2(dx,dz);
+   // A rear swordsman commits to the outer shoulder of a close ally instead
+   // of repeatedly walking into its back. Front-rank contact stays still.
+   if(u.crowd&&enemy&&d>stop+.25&&!u.pendingStrike&&u.hitFlash<=0){
+    let blocker=null,best=Infinity;const nx=dx/Math.max(d,1e-6),nz=dz/Math.max(d,1e-6);
+    for(const b of alive){if(b===u||b.team!==u.team)continue;const bx=b.x-u.x,bz=b.z-u.z,forward=bx*nx+bz*nz,lateral=bx*nz-bz*nx,r=u.radius+b.radius+.06;if(forward>.2&&forward<Math.min(d,r+1.15)&&Math.abs(lateral)<r*.8&&forward<best){blocker=b;best=forward;}}
+    if(blocker){
+     if(u.routeBlockerId!==blocker.id){u.routeBlockerId=blocker.id;const center=alive.filter(a=>a.team===u.team).reduce((v,a)=>v+a.z,0)/alive.filter(a=>a.team===u.team).length;u.routeSide=(u.z<center?-1:1)*(nx>=0?-1:1);}
+     const clearance=u.radius+blocker.radius+.25,wayX=blocker.x+nz*u.routeSide*clearance,wayZ=blocker.z-nx*u.routeSide*clearance;desired=Math.atan2(wayX-u.x,wayZ-u.z);
+    }else u.routeBlockerId=null;
+   }
+   const turn=Math.atan2(Math.sin(desired-u.heading),Math.cos(desired-u.heading));
    if(Math.abs(turn)>.55)u.runup=0;
-   u.heading+=clamp(turn,-dt*5,dt*5);
+   u.heading+=clamp(turn,-dt*(u.locomotion?2.6:5),dt*(u.locomotion?2.6:5));
    const aligned=d>1e-8&&(Math.sin(u.heading)*dx+Math.cos(u.heading)*dz)/d>=.985;
    if(u.kind==='archer'&&enemy&&d<=ARCHER.range&&aligned&&u.hitFlash<=0&&u.attackCooldown<=1e-8&&!u.pendingShot){u.pendingShot={time:ARCHER.windup,targetId:enemy.id};u.attackCooldown=ARCHER.cooldown;events.push({type:'draw',from:u,target:enemy});}
    if(u.kind==='archer'&&enemy&&d<3&&!u.pendingShot){const advance=Math.min(3-d,dt*1.7);plan.mx=-dx/Math.max(d,1e-6)*advance;plan.mz=-dz/Math.max(d,1e-6)*advance;}
-   else if(d>stop&&!u.pendingShot){const top=u.kind==='cavalry'?(u.pierceTime>0?3.8*(.5+u.momentum*.5):u.chargeCooldown>0?2.8:4.8):(u.kind==='pikeman'?1.65:1.8);u.speed=Math.min(top,u.speed+dt*(u.kind==='cavalry'?3.8:6));const advance=Math.min(d-stop,u.speed*dt);plan.mx=dx/d*advance;plan.mz=dz/d*advance;}
+   else if(d>stop&&!u.pendingShot){const top=u.kind==='cavalry'?(u.pierceTime>0?3.8*(.5+u.momentum*.5):u.chargeCooldown>0?2.8:4.8):(u.kind==='pikeman'?1.65:1.8);if(u.locomotion){const remainingTurn=Math.abs(Math.atan2(Math.sin(desired-u.heading),Math.cos(desired-u.heading)));const desiredSpeed=Math.min(top,Math.sqrt(12*Math.max(0,d-stop)))*clamp((1.05-remainingTurn)/.65,0,1);u.speed+=clamp(desiredSpeed-u.speed,-dt*8,dt*5);const advance=Math.min(d-stop,u.speed*dt);plan.mx=Math.sin(u.heading)*advance;plan.mz=Math.cos(u.heading)*advance;}else{u.speed=Math.min(top,u.speed+dt*(u.kind==='cavalry'?3.8:6));const advance=Math.min(d-stop,u.speed*dt);plan.mx=dx/d*advance;plan.mz=dz/d*advance;}}
    else if(enemy)u.attacking=true;else u.target=null;
   }
+  if(u.locomotion&&u.stopRequested&&!target){u.speed=Math.max(0,u.speed-dt*8);plan.mx=Math.sin(u.heading)*u.speed*dt;plan.mz=Math.cos(u.heading)*u.speed*dt;}
   if(u.pendingStrike&&u.target){u.pendingStrike=null;events.push({type:'cancel-attack',from:u});}
   plans.push(plan);
  }
@@ -61,7 +74,7 @@ export function stepSkirmish(units,dt,fighting){
   for(const b of alive){if(b===u)continue;const dx=u.x-b.x,dz=u.z-b.z,r=u.radius+b.radius+.055,c=dx*dx+dz*dz-r*r,dot=dx*p.mx+dz*p.mz;
    if(dot>=0)continue;if(c<=0){fraction=0;p.blocker=b;continue;}const disc=dot*dot-len*len*c;if(disc<0)continue;const t=(-dot-Math.sqrt(disc))/(len*len);if(t>=0&&t<fraction){fraction=Math.max(0,t-.001);p.blocker=b;}
   }
-  p.mx*=fraction;p.mz*=fraction;
+  p.mx*=fraction;p.mz*=fraction;if(u.crowd)u.blockedBy=p.blocker?.id;
  }
  for(const p of plans){const u=p.u;const nextX=u.x+p.mx,nextZ=u.z+p.mz;u.x=clamp(nextX,-17,17);u.z=clamp(nextZ,-13,13);p.mx=u.x-p.oldX;p.mz=u.z-p.oldZ;if(u.x!==nextX||u.z!==nextZ){u.pierceTime=0;u.momentum=0;u.runup=0;u.speed=0;}const actual=Math.hypot(p.mx,p.mz);u.moving=actual>.001;const forward=p.mx*Math.sin(u.heading)+p.mz*Math.cos(u.heading);if(u.moving&&forward>actual*.94&&u.speed>=CHARGE.speed)u.runup+=forward;}
  // Resolve contact while speed/run-up still describe the approach, then brake for ordinary melee.

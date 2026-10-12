@@ -1,3 +1,4 @@
+import { PlantedFeet } from './planted-feet.js';
 import { AnimationMixer, LoopOnce, LoopRepeat, Box3, Vector3, Sphere } from 'three';
 
 function refreshSkinWorld(model) {
@@ -38,7 +39,8 @@ export function prepareClipBounds(model, clips) {
 
 // One controller and mixer per cloned skeleton. Shared clips remain immutable.
 export class AnimationController {
- constructor(model, clips) {
+ constructor(model, clips, {locomotion=false}={}) {
+  this.locomotion=locomotion;this.stateAge=0;this.feet=locomotion?new PlantedFeet(model):null;
   this.model = model;
   let skinned = false;
   model.traverse(object => { if (object.isSkinnedMesh) skinned = true; });
@@ -64,13 +66,13 @@ export class AnimationController {
  play(name, restart = false) {
   if (this.state === name && !restart) return;
   const previous = this.actions.get(this.state), next = this.actions.get(name);
-  next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1);
-  const loop=['idle','walk','charge'].includes(name);
+  const remembered=next.time;next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1);if(this.locomotion&&name==='walk'&&!restart)next.time=remembered;
+  const loop=['idle','walk','charge','turn'].includes(name);
   next.setLoop(loop?LoopRepeat:LoopOnce,loop?Infinity:1);
   next.clampWhenFinished=!loop;
   next.play();
   if (previous && previous !== next) next.crossFadeFrom(previous, name === 'death' ? .08 : .12, false);
-  this.state = name;
+  this.state = name;this.stateAge=0;
  }
  trigger(name) {
   name = name.toLowerCase();
@@ -85,10 +87,12 @@ export class AnimationController {
   if(this.dead||this.disposed||this.oneShot!=='attack')return;
   this.actions.get('attack').stop();this.oneShot=null;this.play(moving?'walk':'idle');
  }
- update(dt, moving, charging=false) {
+ update(dt, moving, charging=false, motion=null) {
   if (this.disposed) return;
-  if (!this.dead && !this.oneShot) this.play(moving?(charging&&this.actions.has('charge')?'charge':'walk'):'idle');
-  this.mixer.update(dt);
+  if (!this.dead && !this.oneShot){const turning=this.locomotion&&motion&&Math.abs(motion.turnRate)>.25&&motion.speed<.12&&this.actions.has('turn');this.play(turning?'turn':moving?(charging&&this.actions.has('charge')?'charge':'walk'):'idle');}
+  if(this.locomotion&&motion){if(this.state==='walk')this.actions.get('walk').setEffectiveTimeScale(Math.max(0,Math.min(2.5,motion.speed/1.8)));if(this.state==='turn')this.actions.get('turn').setEffectiveTimeScale(Math.max(.25,Math.min(1.5,Math.abs(motion.turnRate)/2.6)));}
+  this.mixer.update(dt);this.stateAge+=dt;
+  if(this.feet){refreshSkinWorld(this.model);const action=this.actions.get(this.state);this.feet.update(this.state,action.time/action.getClip().duration,this.stateAge,dt);}
  }
  dispose() {
   if (this.disposed) return;

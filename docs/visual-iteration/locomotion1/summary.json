@@ -1,0 +1,14 @@
+{
+  "technical": "passed",
+  "internal_visual": "passed_with_P2_transition_followups",
+  "user_recognition": "unknown",
+  "assetSHA256": "edd8cc96e804f3d63ca1408c5c63111f382d17196538fb153bcba868a57ad504",
+  "tests": "765 pass / 0 fail",
+  "build": "pass",
+  "bodyHeadingDisplacementMaxDegrees": {
+    "baseline": 173.2566,
+    "candidate": 0
+  },
+  "P2": "Walk/Idle transitions still have quick foot reposition and local slide; exact synchronized frames reviewed, former Turn contact-release P1 fixed",
+  "evidence": ".omc/evidence/locomotion1/candidate2-exact"
+}

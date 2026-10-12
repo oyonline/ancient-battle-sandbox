@@ -1,0 +1,200 @@
+{
+  "baseline-four": {
+    "url": "http://127.0.0.1:5301/battle3d.html?qa=four&motion=candidate&duel=candidate&crowd=baseline&capture=1",
+    "traceFrames": 1919,
+    "renderFrames": 320,
+    "events": 168,
+    "errors": [],
+    "firstAttackByUnit": {
+      "0": 2.0833999999999997,
+      "1": 2.0833999999999997,
+      "4": 2.0833999999999997,
+      "5": 2.0833999999999997,
+      "6": 10.983900000000018,
+      "7": 12.800699999999994,
+      "3": 13.799899999999985,
+      "2": 19.567099999999883
+    },
+    "minLivingCenterGap": 2.059995017166827,
+    "maxAbsZ": 2.647888212389896,
+    "deaths": 6,
+    "lastAliveByTeam": {
+      "red": 2,
+      "blue": 0
+    },
+    "video": ".omc/evidence/crowd1/baseline-four/page@56ccef8a8ad7a862a9d059781ddcc354.webm",
+    "recordSHA256": "8366d4885986d3b1e320e8d4efbd5c78d7bc9f08d54f1cb3441d0ec7b039b4f3"
+  },
+  "candidate2-four": {
+    "url": "http://127.0.0.1:5301/battle3d.html?qa=four&motion=candidate&duel=candidate&crowd=candidate&capture=1",
+    "traceFrames": 1920,
+    "renderFrames": 320,
+    "events": 112,
+    "errors": [],
+    "firstAttackByUnit": {
+      "0": 2.0834999999999986,
+      "1": 2.0834999999999986,
+      "4": 2.0834999999999986,
+      "5": 2.0834999999999986,
+      "2": 4.116899999999998,
+      "3": 4.116899999999998,
+      "6": 4.116899999999998,
+      "7": 4.116899999999998
+    },
+    "minLivingCenterGap": 2.0599913901115823,
+    "maxAbsZ": 3.617361610333032,
+    "deaths": 4,
+    "lastAliveByTeam": {
+      "red": 4,
+      "blue": 0
+    },
+    "video": ".omc/evidence/crowd1/candidate2-four/page@799705a7933226bfdd1512a2d0ea577e.webm",
+    "recordSHA256": "a272e1d9427b6abf09f40e7b0eb35f5f6708bbeca543d3ac9db104f59f475efc"
+  },
+  "baseline-sixteen": {
+    "url": "http://127.0.0.1:5301/battle3d.html?qa=sixteen&motion=candidate&duel=candidate&crowd=baseline&capture=1",
+    "traceFrames": 1920,
+    "renderFrames": 320,
+    "events": 491,
+    "errors": [],
+    "firstAttackByUnit": {
+      "0": 2.0834999999999995,
+      "1": 2.0834999999999995,
+      "2": 2.0834999999999995,
+      "3": 2.0834999999999995,
+      "16": 2.0834999999999995,
+      "17": 2.0834999999999995,
+      "18": 2.0834999999999995,
+      "19": 2.0834999999999995,
+      "20": 9.717300000000003,
+      "7": 10.0173,
+      "23": 10.217299999999998,
+      "21": 11.117399999999984,
+      "22": 11.167399999999983,
+      "4": 14.600999999999946,
+      "27": 18.017299999999885,
+      "5": 18.117799999999885,
+      "25": 18.234499999999876,
+      "26": 20.45129999999983,
+      "31": 22.16809999999979,
+      "9": 23.35149999999978,
+      "8": 23.434699999999783,
+      "24": 26.685099999999714,
+      "12": 26.70169999999971,
+      "29": 27.768499999999662,
+      "28": 29.235299999999643,
+      "6": 29.40179999999964,
+      "30": 31.352099999999574
+    },
+    "minLivingCenterGap": 2.0589423836900913,
+    "maxAbsZ": 6.934368912977472,
+    "deaths": 16,
+    "lastAliveByTeam": {
+      "red": 11,
+      "blue": 5
+    },
+    "video": ".omc/evidence/crowd1/baseline-sixteen/page@18eb33f564260f80ca4a97f1bb98288a.webm",
+    "recordSHA256": "a0b7f0c9c432a9b9b7a14b7c2df7e545109730991e4ecf33313d6316b64f42d6"
+  },
+  "candidate-sixteen": {
+    "url": "http://127.0.0.1:5301/battle3d.html?qa=sixteen&motion=candidate&duel=candidate&crowd=candidate&capture=1",
+    "traceFrames": 1911,
+    "renderFrames": 320,
+    "events": 494,
+    "errors": [],
+    "firstAttackByUnit": {
+      "0": 2.0839999999999987,
+      "1": 2.0839999999999987,
+      "2": 2.0839999999999987,
+      "3": 2.0839999999999987,
+      "16": 2.0839999999999987,
+      "17": 2.0839999999999987,
+      "18": 2.0839999999999987,
+      "19": 2.0839999999999987,
+      "4": 4.0841999999999965,
+      "20": 4.0841999999999965,
+      "7": 4.100799999999996,
+      "23": 4.100799999999996,
+      "8": 6.217600000000013,
+      "11": 6.217600000000013,
+      "24": 6.217600000000013,
+      "27": 6.217600000000013,
+      "12": 10.083800000000007,
+      "15": 10.083800000000007,
+      "28": 10.083800000000007,
+      "31": 10.083800000000007,
+      "21": 12.184699999999976,
+      "22": 13.518099999999956,
+      "26": 15.368199999999936,
+      "29": 15.451599999999933,
+      "14": 16.13489999999992,
+      "25": 16.284899999999915,
+      "30": 18.01839999999987,
+      "13": 18.768399999999836
+    },
+    "minLivingCenterGap": 2.0596200345596825,
+    "maxAbsZ": 12.97835822505393,
+    "deaths": 17,
+    "lastAliveByTeam": {
+      "red": 15,
+      "blue": 0
+    },
+    "video": ".omc/evidence/crowd1/candidate-sixteen/page@2bcf76199926c1fed7dc8da0c06bbf4a.webm",
+    "recordSHA256": "def6a48ceec3d07867887b3413ba62b2d7ca9f069d0cbe4d2017aab851d6d8ac"
+  },
+  "fourSafetyReplay": {
+    "frames": 1920,
+    "maxPhysicalDifference": 0,
+    "eventDiff": 0
+  },
+  "assets": {
+    "public/assets/3d-sample/round1-1/infantry-rigged.glb": "50b7dbda0589910fd6ba7053d6239e2b58abb5c6f15b8f4cb9c145f61919b2ca",
+    "public/assets/3d-sample/locomotion1/infantry-rigged.glb": "edd8cc96e804f3d63ca1408c5c63111f382d17196538fb153bcba868a57ad504",
+    "public/assets/3d-sample/duel1/infantry-rigged.glb": "61180645e4a8ee8533da2e8c41f9eecbbc48511bba5529ce53168c12be83ffcb"
+  },
+  "sourceDigest": {
+    "js/three-demo/main.js": "e55079ae3d8c83d9c4f89e8516ee5ba659eae2871e0e2ba52beb1ab74f88a1f4",
+    "js/three-demo/combat-model.js": "67c03c681bcbc20ebb2c2b73a9071fbca00adbdc8865d04d8393353b64d457d9",
+    "js/three-demo/motion-qa.js": "c247058ec8c1b61968f6eee91943259b840647c2cef252a668bc0e6447239ea5"
+  },
+  "verification": {
+    "build": "passed; existing chunk-size warning",
+    "targeted": "37/37",
+    "fullSandboxed": "765/767; two arena-server socket listen EPERM",
+    "technical": "passed",
+    "internalVisual4": "passed by independent review and controller",
+    "internalVisual16": "passed with P2 wide outer wings near boundary",
+    "userAccepted": "unknown",
+    "fullNormalPermissions": "767/767; fail0; duration86805ms",
+    "judgeTriage": "attempted exit2 project_config_missing; no report or feedback created"
+  },
+  "mixed32Smoke": {
+    "url": "http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate",
+    "initial": "\u81ea\u7531\u5e03\u9635 \u00b7 \u7ea2\u65b9 16 \u00b7 \u84dd\u65b9 16",
+    "battle": "\u5df2\u6682\u505c \u00b7 \u7ea2\u65b9 15 \u00b7 \u84dd\u65b9 12",
+    "reset": "\u81ea\u7531\u5e03\u9635 \u00b7 \u7ea2\u65b9 16 \u00b7 \u84dd\u65b9 16",
+    "assets": [
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/spear-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+        "status": 200
+      }
+    ],
+    "errors": []
+  }
+}

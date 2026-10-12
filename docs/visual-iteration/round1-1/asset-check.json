@@ -1,0 +1,16 @@
+{
+  "R1_sha256": "122b85368ad4b21ed25d5c10a467cb9653d029dae43a3299d6190e4390543963",
+  "R11_sha256": "50b7dbda0589910fd6ba7053d6239e2b58abb5c6f15b8f4cb9c145f61919b2ca",
+  "bones": [
+    18,
+    18
+  ],
+  "inverseBindMatricesIdentical": true,
+  "clips": [
+    "Idle",
+    "Walk",
+    "Attack",
+    "Hit",
+    "Death"
+  ]
+}

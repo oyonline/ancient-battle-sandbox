@@ -1,0 +1,29 @@
+{
+  "url": "http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate",
+  "initial": "自由布阵 · 红方 16 · 蓝方 16",
+  "battle": "已暂停 · 红方 15 · 蓝方 12",
+  "reset": "自由布阵 · 红方 16 · 蓝方 16",
+  "assets": [
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+      "status": 200
+    }
+  ],
+  "errors": []
+}

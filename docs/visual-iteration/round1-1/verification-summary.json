@@ -1,0 +1,33 @@
+{
+  "errors": [],
+  "samples": 122,
+  "finite": true,
+  "candidate": {
+    "L": {
+      "maxPositionDrift": 7.957020905871732e-05,
+      "endPositionDifference": 0.0
+    },
+    "R": {
+      "maxPositionDrift": 6.953008914482517e-05,
+      "endPositionDifference": 0.0
+    },
+    "heightRange": [
+      2.5258965822322796,
+      2.5419206994246712
+    ]
+  },
+  "r11": {
+    "L": {
+      "maxPositionDrift": 0.00016700188833076573,
+      "endPositionDifference": 0.0
+    },
+    "R": {
+      "maxPositionDrift": 7.99166778777802e-05,
+      "endPositionDifference": 0.0
+    },
+    "heightRange": [
+      2.5590720305541304,
+      2.574702429781447
+    ]
+  }
+}
