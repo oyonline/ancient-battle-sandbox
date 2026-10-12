@@ -1,0 +1,2617 @@
+{
+  "stage": "C2",
+  "baseCommit": "109279300e82a9503a906651c7b930370e6ebb85",
+  "status": {
+    "technical": "passed: both versions 23 checks, tests 780/780 exit0, build exit0",
+    "independent_internal": "APPROVE limited 1280x900 initial formation / 14s sampled gameplay and interactions",
+    "user_visual": "unknown"
+  },
+  "normal_viewport": [
+    1280,
+    900
+  ],
+  "normal_canvas": [
+    1280,
+    695
+  ],
+  "candidate": {
+    "distance": 44,
+    "focus": [
+      0,
+      0,
+      4
+    ],
+    "fov": 38
+  },
+  "limitations": [
+    "near board corner remains cropped; not full-board or arbitrary-position fit",
+    "manual zoom/focus can still crop actors",
+    "real-time dt differs between recordings; damage result is not claimed identical"
+  ],
+  "versions": {
+    "baseline": {
+      "checks": [
+        {
+          "label": "normal32",
+          "pass": true
+        },
+        {
+          "label": "fov38",
+          "pass": true
+        },
+        {
+          "label": "canvas1280x695",
+          "pass": true
+        },
+        {
+          "label": "initial distance",
+          "pass": true
+        },
+        {
+          "label": "initial focus",
+          "pass": true
+        },
+        {
+          "label": "mouse unit selects intended actor",
+          "pass": true
+        },
+        {
+          "label": "mouse ground projects actual origin",
+          "pass": true
+        },
+        {
+          "label": "plus retains step4",
+          "pass": true
+        },
+        {
+          "label": "minus restores distance",
+          "pass": true
+        },
+        {
+          "label": "wheel retains step2.3",
+          "pass": true
+        },
+        {
+          "label": "selected focus distance18",
+          "pass": true
+        },
+        {
+          "label": "overview restores preset",
+          "pass": true
+        },
+        {
+          "label": "control reset32health",
+          "pass": true
+        },
+        {
+          "label": "reset restores preset",
+          "pass": true
+        },
+        {
+          "label": "postbattle reset32health",
+          "pass": true
+        },
+        {
+          "label": "C2 inactive four",
+          "pass": true
+        },
+        {
+          "label": "original distance four",
+          "pass": true
+        },
+        {
+          "label": "C2 inactive sixteen",
+          "pass": true
+        },
+        {
+          "label": "original distance sixteen",
+          "pass": true
+        },
+        {
+          "label": "C2 inactive b1-default",
+          "pass": true
+        },
+        {
+          "label": "original distance b1-default",
+          "pass": true
+        },
+        {
+          "label": "C2 inactive b1-near",
+          "pass": true
+        },
+        {
+          "label": "original distance b1-near",
+          "pass": true
+        }
+      ],
+      "browser_errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        }
+      ],
+      "initial": {
+        "label": "initial",
+        "elapsed": 0.11670000000000003,
+        "camera": {
+          "position": [
+            20.540984608376046,
+            26.01858050394299,
+            27.38797947783473
+          ],
+          "focus": [
+            0,
+            0,
+            0
+          ],
+          "distance": 43,
+          "fov": 38,
+          "direction": [
+            0.47769731647386154,
+            0.6050832675335579,
+            0.6369297552984821
+          ]
+        },
+        "canvas": [
+          1280,
+          695
+        ],
+        "unit_bounds": {
+          "min_y": 168.6578256378342,
+          "max_y": 721.4319042156907,
+          "bottom_margin": -26.43190421569068
+        },
+        "towers": {
+          "min": [
+            468.78071226413454,
+            35.00731030058315
+          ],
+          "max": [
+            1086.7486105850785,
+            411.6345383643246
+          ],
+          "finite": true
+        }
+      },
+      "records": [
+        {
+          "label": "initial",
+          "elapsed": 0.11670000000000003,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "unit-click",
+          "elapsed": 0.11670000000000003,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "ground-click",
+          "elapsed": 0.11670000000000003,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "zoom-in",
+          "elapsed": 0.11670000000000003,
+          "camera": {
+            "position": [
+              18.6301953424806,
+              23.59824743380876,
+              24.8402604566408
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 39,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "zoom-out",
+          "elapsed": 0.11670000000000003,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "wheel",
+          "elapsed": 0.11670000000000003,
+          "camera": {
+            "position": [
+              21.639688436265928,
+              27.41027201927017,
+              28.852917915021237
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 45.3,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "selected-focus",
+          "elapsed": 0.11670000000000003,
+          "camera": {
+            "position": [
+              0.5985516965295083,
+              12.926175931595257,
+              8.314735595372676
+            ],
+            "focus": [
+              -8,
+              2.0346771159912156,
+              -3.1500000000000004
+            ],
+            "distance": 18,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "overview",
+          "elapsed": 0.11670000000000003,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "control-reset",
+          "elapsed": 0.05,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-1",
+          "elapsed": 2.0835000000000017,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-2",
+          "elapsed": 4.199499999999998,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-3",
+          "elapsed": 6.317100000000017,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-4",
+          "elapsed": 8.450500000000025,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-5",
+          "elapsed": 10.5839,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-6",
+          "elapsed": 12.700699999999983,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 11
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-7",
+          "elapsed": 14.834199999999962,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 11
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-paused",
+          "elapsed": 14.98419999999996,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 11
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "reset",
+          "elapsed": 0.05,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "compatible-four",
+          "elapsed": 0.06670000000000001,
+          "camera": {
+            "position": [
+              10.031643645951092,
+              13.806748618204715,
+              13.375524861268124
+            ],
+            "focus": [
+              0,
+              1.1,
+              0
+            ],
+            "distance": 21,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 4,
+            "blue": 4
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "label": "running-four",
+          "elapsed": 1.3835,
+          "camera": {
+            "position": [
+              10.031643645951092,
+              13.806748618204715,
+              13.375524861268124
+            ],
+            "focus": [
+              0,
+              1.1,
+              0
+            ],
+            "distance": 21,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 4,
+            "blue": 4
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "label": "compatible-sixteen",
+          "elapsed": 0.0834,
+          "camera": {
+            "position": [
+              14.808616810689708,
+              19.857581293540296,
+              19.744822414252944
+            ],
+            "focus": [
+              0,
+              1.1,
+              0
+            ],
+            "distance": 31,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "running-sixteen",
+          "elapsed": 1.4499999999999993,
+          "camera": {
+            "position": [
+              14.808616810689708,
+              19.857581293540296,
+              19.744822414252944
+            ],
+            "focus": [
+              0,
+              1.1,
+              0
+            ],
+            "distance": 31,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "compatible-b1-default",
+          "elapsed": 0,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "compatible-b1-near",
+          "elapsed": 0,
+          "camera": {
+            "position": [
+              -3.4014483034704917,
+              15.060153945308366,
+              4.464735595372677
+            ],
+            "focus": [
+              -12,
+              4.168655129704325,
+              -7
+            ],
+            "distance": 18,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        }
+      ],
+      "raw": "../../../../.omc/evidence/camera2/baseline/record.json"
+    },
+    "candidate": {
+      "checks": [
+        {
+          "label": "normal32",
+          "pass": true
+        },
+        {
+          "label": "fov38",
+          "pass": true
+        },
+        {
+          "label": "canvas1280x695",
+          "pass": true
+        },
+        {
+          "label": "initial distance",
+          "pass": true
+        },
+        {
+          "label": "initial focus",
+          "pass": true
+        },
+        {
+          "label": "mouse unit selects intended actor",
+          "pass": true
+        },
+        {
+          "label": "mouse ground projects actual origin",
+          "pass": true
+        },
+        {
+          "label": "plus retains step4",
+          "pass": true
+        },
+        {
+          "label": "minus restores distance",
+          "pass": true
+        },
+        {
+          "label": "wheel retains step2.3",
+          "pass": true
+        },
+        {
+          "label": "selected focus distance18",
+          "pass": true
+        },
+        {
+          "label": "overview restores preset",
+          "pass": true
+        },
+        {
+          "label": "control reset32health",
+          "pass": true
+        },
+        {
+          "label": "reset restores preset",
+          "pass": true
+        },
+        {
+          "label": "postbattle reset32health",
+          "pass": true
+        },
+        {
+          "label": "C2 inactive four",
+          "pass": true
+        },
+        {
+          "label": "original distance four",
+          "pass": true
+        },
+        {
+          "label": "C2 inactive sixteen",
+          "pass": true
+        },
+        {
+          "label": "original distance sixteen",
+          "pass": true
+        },
+        {
+          "label": "C2 inactive b1-default",
+          "pass": true
+        },
+        {
+          "label": "original distance b1-default",
+          "pass": true
+        },
+        {
+          "label": "C2 inactive b1-near",
+          "pass": true
+        },
+        {
+          "label": "original distance b1-near",
+          "pass": true
+        }
+      ],
+      "browser_errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        }
+      ],
+      "initial": {
+        "label": "initial",
+        "elapsed": 0.1498999999999999,
+        "camera": {
+          "position": [
+            21.018681924849908,
+            26.623663771476547,
+            32.024909233133215
+          ],
+          "focus": [
+            0,
+            0,
+            4
+          ],
+          "distance": 44,
+          "fov": 38,
+          "direction": [
+            0.47769731647386154,
+            0.6050832675335579,
+            0.6369297552984821
+          ]
+        },
+        "canvas": [
+          1280,
+          695
+        ],
+        "unit_bounds": {
+          "min_y": 143.4574883952469,
+          "max_y": 619.2581841922857,
+          "bottom_margin": 75.74181580771426
+        },
+        "towers": {
+          "min": [
+            527.2017371065447,
+            18.719356552782372
+          ],
+          "max": [
+            1107.7948269004132,
+            361.74192906922036
+          ],
+          "finite": true
+        }
+      },
+      "records": [
+        {
+          "label": "initial",
+          "elapsed": 0.1498999999999999,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "unit-click",
+          "elapsed": 0.1498999999999999,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "ground-click",
+          "elapsed": 0.1498999999999999,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "zoom-in",
+          "elapsed": 0.1498999999999999,
+          "camera": {
+            "position": [
+              19.107892658954462,
+              24.203330701342317,
+              29.47719021193928
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 40,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "zoom-out",
+          "elapsed": 0.1498999999999999,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "wheel",
+          "elapsed": 0.1498999999999999,
+          "camera": {
+            "position": [
+              22.11738575273979,
+              28.01535528680373,
+              33.48984767031972
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 46.3,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "selected-focus",
+          "elapsed": 0.1498999999999999,
+          "camera": {
+            "position": [
+              0.5985516965295083,
+              12.926175931595257,
+              8.314735595372676
+            ],
+            "focus": [
+              -8,
+              2.0346771159912156,
+              -3.1500000000000004
+            ],
+            "distance": 18,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "overview",
+          "elapsed": 0.1498999999999999,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0
+          ]
+        },
+        {
+          "label": "control-reset",
+          "elapsed": 0.134,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-1",
+          "elapsed": 2.1999000000000004,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-2",
+          "elapsed": 4.415900000000004,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-3",
+          "elapsed": 6.56580000000002,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-4",
+          "elapsed": 8.683600000000023,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-5",
+          "elapsed": 10.799900000000004,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-6",
+          "elapsed": 12.933899999999985,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 11
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-7",
+          "elapsed": 15.084099999999967,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 10
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "fighting-paused",
+          "elapsed": 15.250799999999968,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 10
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "reset",
+          "elapsed": 0.05,
+          "camera": {
+            "position": [
+              21.018681924849908,
+              26.623663771476547,
+              32.024909233133215
+            ],
+            "focus": [
+              0,
+              0,
+              4
+            ],
+            "distance": 44,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "compatible-four",
+          "elapsed": 0.06690000000000002,
+          "camera": {
+            "position": [
+              10.031643645951092,
+              13.806748618204715,
+              13.375524861268124
+            ],
+            "focus": [
+              0,
+              1.1,
+              0
+            ],
+            "distance": 21,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 4,
+            "blue": 4
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "label": "running-four",
+          "elapsed": 1.3844999999999994,
+          "camera": {
+            "position": [
+              10.031643645951092,
+              13.806748618204715,
+              13.375524861268124
+            ],
+            "focus": [
+              0,
+              1.1,
+              0
+            ],
+            "distance": 21,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 4,
+            "blue": 4
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "label": "compatible-sixteen",
+          "elapsed": 0.06639999999999999,
+          "camera": {
+            "position": [
+              14.808616810689708,
+              19.857581293540296,
+              19.744822414252944
+            ],
+            "focus": [
+              0,
+              1.1,
+              0
+            ],
+            "distance": 31,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "running-sixteen",
+          "elapsed": 1.4497999999999993,
+          "camera": {
+            "position": [
+              14.808616810689708,
+              19.857581293540296,
+              19.744822414252944
+            ],
+            "focus": [
+              0,
+              1.1,
+              0
+            ],
+            "distance": 31,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "compatible-b1-default",
+          "elapsed": 0,
+          "camera": {
+            "position": [
+              20.540984608376046,
+              26.01858050394299,
+              27.38797947783473
+            ],
+            "focus": [
+              0,
+              0,
+              0
+            ],
+            "distance": 43,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "label": "compatible-b1-near",
+          "elapsed": 0,
+          "camera": {
+            "position": [
+              -3.4014483034704917,
+              15.060153945308366,
+              4.464735595372677
+            ],
+            "focus": [
+              -12,
+              4.168655129704325,
+              -7
+            ],
+            "distance": 18,
+            "fov": 38,
+            "direction": [
+              0.47769731647386154,
+              0.6050832675335579,
+              0.6369297552984821
+            ]
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "alive": {
+            "red": 16,
+            "blue": 16
+          },
+          "selected": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        }
+      ],
+      "raw": "../../../../.omc/evidence/camera2/candidate/record.json"
+    }
+  }
+}
