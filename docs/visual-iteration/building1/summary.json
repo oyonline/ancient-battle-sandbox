@@ -1,0 +1,860 @@
+{
+  "assetCheck": {
+    "preservedGLB": 15,
+    "candidateSHA256": "8932d1896158503d6dd5903ed887ec5381ccc6fbefc6d743b599b806a9f82666",
+    "bytes": 179840,
+    "meshes": 1,
+    "nodes": 2,
+    "noSkeletonAnimationsCamerasLights": true
+  },
+  "baseline": {
+    "version": "baseline",
+    "records": [
+      {
+        "label": "default",
+        "tower": {
+          "min": [
+            -13.444999933242798,
+            0.868655129704325,
+            -8.355000019073486
+          ],
+          "max": [
+            -9.97000002861023,
+            5.718655391964762,
+            -5.644999980926514
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -12,
+            0.868655129704325,
+            -7
+          ]
+        },
+        "actor": {
+          "min": [
+            -14.949664198550622,
+            0.44855467453150805,
+            -5.165195403564313
+          ],
+          "max": [
+            -12.957322041388593,
+            3.050208565058133,
+            -4.191661465586865
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -14.2,
+            0.4832065328484104,
+            -4.95
+          ]
+        },
+        "camera": {
+          "position": [
+            20.540984608376046,
+            26.01858050394299,
+            27.38797947783473
+          ],
+          "focus": [
+            0,
+            0,
+            0
+          ],
+          "fov": 38
+        },
+        "canvas": [
+          1280,
+          695
+        ],
+        "units": 32,
+        "sampleTime": 0
+      },
+      {
+        "label": "near",
+        "tower": {
+          "min": [
+            -13.444999933242798,
+            0.868655129704325,
+            -8.355000019073486
+          ],
+          "max": [
+            -9.97000002861023,
+            5.718655391964762,
+            -5.644999980926514
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -12,
+            0.868655129704325,
+            -7
+          ]
+        },
+        "actor": {
+          "min": [
+            -14.949664198550622,
+            0.44855467453150805,
+            -5.165195403564313
+          ],
+          "max": [
+            -12.957322041388593,
+            3.050208565058133,
+            -4.191661465586865
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -14.2,
+            0.4832065328484104,
+            -4.95
+          ]
+        },
+        "camera": {
+          "position": [
+            -3.4014483034704917,
+            15.060153945308366,
+            4.464735595372677
+          ],
+          "focus": [
+            -12,
+            4.168655129704325,
+            -7
+          ],
+          "fov": 38
+        },
+        "canvas": [
+          1280,
+          695
+        ],
+        "units": 32,
+        "sampleTime": 0
+      },
+      {
+        "label": "side",
+        "tower": {
+          "min": [
+            -13.355000019080562,
+            0.868655129704325,
+            -9.02999997139075
+          ],
+          "max": [
+            -10.644999980919438,
+            5.718655391964762,
+            -5.5550000667505675
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -12,
+            0.868655129704325,
+            -7
+          ]
+        },
+        "actor": {
+          "min": [
+            -14.415195403566996,
+            0.44855467453150805,
+            -6.192677958611504
+          ],
+          "max": [
+            -13.441661465580783,
+            3.050208565058133,
+            -4.200335801446317
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -14.2,
+            0.4832065328484104,
+            -4.95
+          ]
+        },
+        "camera": {
+          "position": [
+            -3.4014483034704917,
+            15.060153945308366,
+            4.464735595372677
+          ],
+          "focus": [
+            -12,
+            4.168655129704325,
+            -7
+          ],
+          "fov": 38
+        },
+        "canvas": [
+          1280,
+          695
+        ],
+        "units": 32,
+        "sampleTime": 0
+      },
+      {
+        "label": "back",
+        "tower": {
+          "min": [
+            -14.029999971389739,
+            0.868655129704325,
+            -8.355000019073785
+          ],
+          "max": [
+            -10.555000066756921,
+            5.718655391964762,
+            -5.644999980926215
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -12,
+            0.868655129704325,
+            -7
+          ]
+        },
+        "actor": {
+          "min": [
+            -15.44267795861156,
+            0.44855467453150805,
+            -5.708338534413175
+          ],
+          "max": [
+            -13.450335801449443,
+            3.050208565058133,
+            -4.734804596435544
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -14.2,
+            0.4832065328484104,
+            -4.95
+          ]
+        },
+        "camera": {
+          "position": [
+            -3.4014483034704917,
+            15.060153945308366,
+            4.464735595372677
+          ],
+          "focus": [
+            -12,
+            4.168655129704325,
+            -7
+          ],
+          "fov": 38
+        },
+        "canvas": [
+          1280,
+          695
+        ],
+        "units": 32,
+        "sampleTime": 0
+      }
+    ],
+    "initial": "自由布阵 · 红方 16 · 蓝方 16",
+    "fighting": "已暂停 · 红方 16 · 蓝方 11",
+    "reset": "自由布阵 · 红方 16 · 蓝方 16",
+    "errors": [],
+    "assets": [
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+        "status": 200
+      }
+    ]
+  },
+  "candidate": {
+    "version": "candidate",
+    "records": [
+      {
+        "label": "default",
+        "tower": {
+          "min": [
+            -14.055000066757202,
+            0.3886551255319999,
+            -8.975000023841858
+          ],
+          "max": [
+            -9.329999923706055,
+            8.678654997978061,
+            -5.024999976158142
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -12,
+            0.868655129704325,
+            -7
+          ]
+        },
+        "actor": {
+          "min": [
+            -14.949664198550622,
+            0.44855467453150805,
+            -5.165195403564313
+          ],
+          "max": [
+            -12.957322041388593,
+            3.050208565058133,
+            -4.191661465586865
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -14.2,
+            0.4832065328484104,
+            -4.95
+          ]
+        },
+        "camera": {
+          "position": [
+            20.540984608376046,
+            26.01858050394299,
+            27.38797947783473
+          ],
+          "focus": [
+            0,
+            0,
+            0
+          ],
+          "fov": 38
+        },
+        "canvas": [
+          1280,
+          695
+        ],
+        "units": 32,
+        "sampleTime": 0
+      },
+      {
+        "label": "near",
+        "tower": {
+          "min": [
+            -14.055000066757202,
+            0.3886551255319999,
+            -8.975000023841858
+          ],
+          "max": [
+            -9.329999923706055,
+            8.678654997978061,
+            -5.024999976158142
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -12,
+            0.868655129704325,
+            -7
+          ]
+        },
+        "actor": {
+          "min": [
+            -14.949664198550622,
+            0.44855467453150805,
+            -5.165195403564313
+          ],
+          "max": [
+            -12.957322041388593,
+            3.050208565058133,
+            -4.191661465586865
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -14.2,
+            0.4832065328484104,
+            -4.95
+          ]
+        },
+        "camera": {
+          "position": [
+            -3.4014483034704917,
+            15.060153945308366,
+            4.464735595372677
+          ],
+          "focus": [
+            -12,
+            4.168655129704325,
+            -7
+          ],
+          "fov": 38
+        },
+        "canvas": [
+          1280,
+          695
+        ],
+        "units": 32,
+        "sampleTime": 0
+      },
+      {
+        "label": "side",
+        "tower": {
+          "min": [
+            -13.975000023851921,
+            0.3886551255319999,
+            -9.670000076294924
+          ],
+          "max": [
+            -10.024999976148079,
+            8.678654997978061,
+            -4.944999933233127
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -12,
+            0.868655129704325,
+            -7
+          ]
+        },
+        "actor": {
+          "min": [
+            -14.415195403566996,
+            0.44855467453150805,
+            -6.192677958611504
+          ],
+          "max": [
+            -13.441661465580783,
+            3.050208565058133,
+            -4.200335801446317
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -14.2,
+            0.4832065328484104,
+            -4.95
+          ]
+        },
+        "camera": {
+          "position": [
+            -3.4014483034704917,
+            15.060153945308366,
+            4.464735595372677
+          ],
+          "focus": [
+            -12,
+            4.168655129704325,
+            -7
+          ],
+          "fov": 38
+        },
+        "canvas": [
+          1280,
+          695
+        ],
+        "units": 32,
+        "sampleTime": 0
+      },
+      {
+        "label": "back",
+        "tower": {
+          "min": [
+            -14.670000076293913,
+            0.3886551255319999,
+            -8.975000023842282
+          ],
+          "max": [
+            -9.94499993324239,
+            8.678654997978061,
+            -5.0249999761577175
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -12,
+            0.868655129704325,
+            -7
+          ]
+        },
+        "actor": {
+          "min": [
+            -15.44267795861156,
+            0.44855467453150805,
+            -5.708338534413175
+          ],
+          "max": [
+            -13.450335801449443,
+            3.050208565058133,
+            -4.734804596435544
+          ],
+          "scale": [
+            1,
+            1,
+            1
+          ],
+          "position": [
+            -14.2,
+            0.4832065328484104,
+            -4.95
+          ]
+        },
+        "camera": {
+          "position": [
+            -3.4014483034704917,
+            15.060153945308366,
+            4.464735595372677
+          ],
+          "focus": [
+            -12,
+            4.168655129704325,
+            -7
+          ],
+          "fov": 38
+        },
+        "canvas": [
+          1280,
+          695
+        ],
+        "units": 32,
+        "sampleTime": 0
+      }
+    ],
+    "initial": "自由布阵 · 红方 16 · 蓝方 16",
+    "fighting": "已暂停 · 红方 16 · 蓝方 11",
+    "reset": "自由布阵 · 红方 16 · 蓝方 16",
+    "errors": [],
+    "assets": [
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+        "status": 200
+      },
+      {
+        "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+        "status": 200
+      }
+    ]
+  },
+  "comparisonContract": "same actual Three scene, original camera direction/FOV/light/terrain, same viewport1280x900, same actor GLB/scale/position and Idle0; near camera same distance18/focus offset3.3; side/back only turn asset pair, not camera",
+  "internalReview": "APPROVE: independent readonly source and real Three in-game tower-proportion review; root accepted limited internal result, no new P0/P1",
+  "userVisualApproval": "unknown",
+  "postCaptureQAGuardCheck": {
+    "errors": [],
+    "records": [
+      {
+        "q": "qa=single&unit=cavalry&still=1",
+        "status": "地形接地 T1 · cavalry · 候选 · idle 0.000s"
+      },
+      {
+        "q": "qa=single&unit=archer&still=1",
+        "status": "地形接地 T1 · archer · 候选 · idle 0.000s"
+      },
+      {
+        "q": "qa=single&unit=pikeman&still=1",
+        "status": "地形接地 T1 · pikeman · 候选 · idle 0.000s"
+      },
+      {
+        "q": "still=1&view=near",
+        "status": "建筑比例 候选 B1 · 当前剑盾兵同尺度 · Idle 0s"
+      },
+      {
+        "resetInspect": {
+          "tower": {
+            "min": [
+              -14.055000066757202,
+              0.3886551255319999,
+              -8.975000023841858
+            ],
+            "max": [
+              -9.329999923706055,
+              8.678654997978061,
+              -5.024999976158142
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "position": [
+              -12,
+              0.868655129704325,
+              -7
+            ]
+          },
+          "actor": {
+            "min": [
+              -14.949664198550622,
+              0.44855467453150805,
+              -5.165195403564313
+            ],
+            "max": [
+              -12.957322041388593,
+              3.050208565058133,
+              -4.191661465586865
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ],
+            "position": [
+              -14.2,
+              0.4832065328484104,
+              -4.95
+            ]
+          },
+          "camera": {
+            "position": [
+              -3.4014483034704917,
+              15.060153945308366,
+              4.464735595372677
+            ],
+            "focus": [
+              -12,
+              4.168655129704325,
+              -7
+            ],
+            "fov": 38
+          },
+          "canvas": [
+            1280,
+            695
+          ],
+          "units": 32,
+          "sampleTime": 0
+        }
+      }
+    ]
+  },
+  "tests": {
+    "full": {
+      "passed": 780,
+      "failed": 0,
+      "exit": 0
+    },
+    "buildExit": 0,
+    "reportedBy": "root actual final verification after QA guard"
+  }
+}

@@ -243,6 +243,47 @@ def tower():
     mesh('banner',[(1.34,.20,4.3),(2.03,.17,4.23),(1.94,.15,3.42),(1.34,.20,3.5)],[(0,1,2,3)],M['cloth'],root)
     return root
 
+def tower_candidate():
+    """B1: component clearances calibrated to current 2.61-unit rigged soldier.
+    Same material/root/front conventions; not a uniformly scaled old model.
+    The dark door is an exterior surface cue, not a new traversable building.
+    """
+    root=empty('tower')
+    box('stone_foundation',(0,0,-.08),(1.61,1.61,.40),M['stone'],root,.045)
+    verts=[]
+    for z,w in [(.30,1.46),(3.60,1.30)]:verts.extend([(-w,-w,z),(w,-w,z),(w,w,z),(-w,w,z)])
+    mesh('tapered_stone_wall',verts,[(0,1,2,3),(4,7,6,5),(0,4,5,1),(1,5,6,2),(2,6,7,3),(3,7,4,0)],M['stone'],root)
+    for h in [.75,1.30,1.85,2.40,2.95,3.50]:
+        w=1.46-(h-.30)/3.30*.16
+        for side in [-1,1]:
+            line('stone_course',(-w,side*w,h),(w,side*w,h),.009,M['stone2'],root,6)
+            line('stone_course',(side*w,-w,h),(side*w,w,h),.009,M['stone2'],root,6)
+    # A sloping panel follows the actual tapered wall, rather than disappearing
+    # into its top. All frames follow that same plane.
+    def front(z):return -1.46+(z-.30)/3.30*.16-.035
+    bottom=.32;top=3.18
+    mesh('door',[(-.57,front(bottom),bottom),(.57,front(bottom),bottom),(.57,front(top),top),(-.57,front(top),top)],[(0,1,2,3)],M['wood'],root)
+    for x in [-.63,.63]:line('door_frame',(x,front(bottom)-.015,bottom),(x,front(top)-.015,top),.065,M['stone2'],root)
+    line('door_lintel',(-.68,front(top)-.015,top),(.68,front(top)-.015,top),.075,M['stone2'],root)
+    for x in [-.28,.28]:line('door_iron',(x,front(.55)-.008,.55),(x,front(2.81)-.008,2.81),.009,M['iron'],root)
+    for x in [-.87,.87]:box('arrow_slit',(x,front(2.76)-.006,2.76),(.05,.025,.24),M['dark'],root,.009)
+    box('timber_floor',(0,0,3.70),(1.75,1.75,.10),M['wood'],root,.02)
+    for x in [-1.38,1.38]:
+        for y in [-1.38,1.38]:line('post',(x,y,3.80),(x,y,6.80),.085,M['wood'],root)
+    for side in [-1,1]:
+        for h in [3.94,5.03,6.70]:
+            line('crossbeam',(-1.51,side*1.46,h),(1.51,side*1.46,h),.045,M['wood'],root)
+            line('crossbeam',(side*1.46,-1.51,h),(side*1.46,1.51,h),.045,M['wood'],root)
+        for i in range(7):
+            t=-1.28+i*2.56/6
+            line('railing',(t,side*1.46,3.94),(t,side*1.46,5.03),.023,M['wood'],root,6)
+            line('railing',(side*1.46,t,3.94),(side*1.46,t,5.03),.023,M['wood'],root,6)
+    hip_roof(root,6.80,2.00,1.92,.94)
+    line('flagpole',(1.90,.20,.15),(1.90,.20,7.21),.033,M['wood'],root)
+    mesh('banner',[(1.90,.20,7.08),(2.67,.17,7.00),(2.56,.15,6.02),(1.90,.20,6.10)],[(0,1,2,3)],M['cloth'],root)
+    return root
+
+
 def merge_static_meshes():
     groups={}
     for o in list(bpy.context.scene.objects):
@@ -260,7 +301,8 @@ def bounds_of(objects):
     points=[o.matrix_world@Vector(c) for o in objects if o.type=='MESH' for c in o.bound_box]
     lo=[min(v[i] for v in points) for i in range(3)];hi=[max(v[i] for v in points) for i in range(3)]
     return {'blender_min':lo,'blender_max':hi,'three_min':[lo[0],lo[2],-hi[1]],'three_max':[hi[0],hi[2],-lo[1]],'planar_size':[hi[0]-lo[0],hi[1]-lo[1]]}
-for name,builder in [('infantry',infantry),('cavalry',cavalry),('tower',tower)]:
+builders=[('tower',tower_candidate)] if '--tower-candidate' in sys.argv else [('infantry',infantry),('cavalry',cavalry),('tower',tower)]
+for name,builder in builders:
     root=builder()
     raw=list(root.children_recursive)
     METADATA[name]={'whole_asset':bounds_of(raw)}

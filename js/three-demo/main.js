@@ -18,17 +18,20 @@ function showFailure(message) {
 }
 try {
 const preview=new URLSearchParams(location.search);
+const buildingCandidate=preview.get('building')==='candidate';
+const buildingComparing=preview.has('building')&&preview.get('still')==='1'&&!preview.has('qa');
+const towers=[];
 const terrainCandidate=preview.get('terrain')==='candidate';
-const terrainComparing=preview.has('terrain')&&(preview.get('still')==='1'||preview.has('view'));
+const terrainComparing=!buildingComparing&&preview.has('terrain')&&(preview.get('still')==='1'||preview.has('view'));
 const coordinationCandidate=preview.get('coordination')==='candidate';
 const qaMode=['single','small','duel','four','sixteen'].includes(preview.get('qa'))?preview.get('qa'):null;
 const qaKind=['pikeman','archer','cavalry'].includes(preview.get('unit'))?preview.get('unit'):'infantry';
 const rideCandidate=preview.get('ride')==='candidate';
-const rideComparing=preview.has('ride')&&(preview.get('still')==='1'||(!qaMode&&preview.has('view')));
+const rideComparing=!buildingComparing&&preview.has('ride')&&(preview.get('still')==='1'||(!qaMode&&preview.has('view')));
 const bowCandidate=preview.get('bow')==='candidate';
-const bowComparing=preview.has('bow')&&(preview.get('still')==='1'||(!qaMode&&preview.has('view')));
+const bowComparing=!buildingComparing&&preview.has('bow')&&(preview.get('still')==='1'||(!qaMode&&preview.has('view')));
 const pikeCandidate=preview.get('pike')==='candidate';
-const pikeComparing=preview.has('pike')&&(preview.get('still')==='1'||(!qaMode&&preview.has('view')));
+const pikeComparing=!buildingComparing&&preview.has('pike')&&(preview.get('still')==='1'||(!qaMode&&preview.has('view')));
 const motionCandidate=preview.get('motion')==='candidate';
 const duelCandidate=preview.get('duel')==='candidate';
 let motionQA,duelQA,crowdQA;
@@ -183,8 +186,33 @@ function setupComparison(){
  if(terrainComparing){window.soldierPreview.kind=target.kind;window.soldierPreview.asset={infantry:duelCandidate?'duel1/infantry-rigged.glb':motionCandidate?'locomotion1/infantry-rigged.glb':'round1-1/infantry-rigged.glb',pikeman:pikeCandidate?'pikeman1/spear-rigged.glb':'spear-rigged.glb',archer:bowCandidate?'archer1/archer-rigged.glb':'archer-rigged.glb'}[target.kind];$('battle-status').textContent=`地形接地 T1 · ${target.kind} · ${terrainCandidate?'候选':'基准'} · ${clip} ${sample.toFixed(3)}s`;}
 }
 let last=performance.now();
+function setupBuildingComparison(){
+ paused=true;
+ const tower=towers[0];
+ // Existing actor GLB, unchanged world scale. The two comparison versions use
+ // the exact same position and Idle sample beside the tower front.
+ const soldier=units.find(u=>u.team==='red'&&u.kind==='infantry');
+ for(const u of units){u.root.visible=u===soldier;u.ring.visible=false;}
+ soldier.x=tower.position.x-2.20;soldier.z=tower.position.z+2.05;
+ soldier.root.position.set(soldier.x,heightAt(soldier.x,soldier.z),soldier.z);soldier.root.rotation.y=0;
+ soldier.animation.terrain?.restore();soldier.animation.mixer.stopAllAction();soldier.animation.actions.get('idle').reset().play();soldier.animation.mixer.setTime(0);updateSkinMatrices(soldier.model);soldier.animation.terrain?.rememberLift();soldier.animation.terrain?.apply('idle',0);updateSkinMatrices(soldier.model);
+ if(preview.get('view')==='near'){focus.copy(tower.position);focus.y+=3.3;distance=18;updateCamera();}
+ // Inspection turns only the tower/actor pair; the camera, lights and terrain
+ // remain fixed between baseline and candidate.
+ const angle=Number(preview.get('buildingAngle')||0);
+ if(Number.isFinite(angle)){tower.rotation.y=angle;soldier.root.rotation.y=angle;}
+ window.buildingPreview={asset:buildingCandidate?'building1/tower.glb':'tower.glb',inspect:()=>{
+  scene.updateMatrixWorld(true);const b=new THREE.Box3().setFromObject(tower),actor=new THREE.Box3().setFromObject(soldier.model);
+  return {tower:{min:b.min.toArray(),max:b.max.toArray(),scale:tower.scale.toArray(),position:tower.position.toArray()},actor:{min:actor.min.toArray(),max:actor.max.toArray(),scale:soldier.model.scale.toArray(),position:soldier.root.position.toArray()},camera:{position:camera.position.toArray(),focus:focus.toArray(),fov:camera.fov},canvas:[renderer.domElement.width,renderer.domElement.height],units:units.length,sampleTime:0};
+ }};
+ $('reset').onclick=()=>{reset();setupBuildingComparison();};
+ $('fight').disabled=true;$('pause').disabled=true;
+ $('battle-status').textContent=`建筑比例 ${buildingCandidate?'候选 B1':'基准'} · 当前剑盾兵同尺度 · Idle 0s`;
+}
+if(preview.has('building')){const g=document.createElement('div');g.className='control-group';for(const v of ['baseline','candidate']){const b=document.createElement('button');b.textContent=v==='baseline'?'建筑比例基准':'建筑比例候选 B1';b.onclick=()=>{const p=new URLSearchParams(location.search);p.set('building',v);location.search=p.toString();};g.append(b);}document.querySelector('.demo-controls').prepend(g);}
+
 renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.05);last=now;if(ready&&!paused)update(dt);renderer.render(scene,camera);if(crowdQA?.running&&preview.get('capture')==='1'&&Math.floor(elapsed*10)!==crowdQA.captureTick){crowdQA.captureTick=Math.floor(elapsed*10);crowdQA.frames.push({time:elapsed,trace:crowdQA.trace.at(-1),image:renderer.domElement.toDataURL('image/png')});}if(duelQA?.running&&preview.get('capture')==='1'&&elapsed<18&&Math.floor(elapsed*10)!==duelQA.captureTick){duelQA.captureTick=Math.floor(elapsed*10);duelQA.frames.push({time:elapsed,trace:duelQA.trace.at(-1),image:renderer.domElement.toDataURL('image/png')});}if(motionQA?.running&&preview.get('capture')==='1'&&Math.floor(elapsed*10)!==motionQA.captureTick){motionQA.captureTick=Math.floor(elapsed*10);motionQA.frames??=[];const u=units[0],v=new THREE.Vector3(u.x,heightAt(u.x,u.z)+1.3,u.z).project(camera);motionQA.frames.push({time:elapsed,trace:motionQA.trace.at(-1),width:renderer.domElement.width,height:renderer.domElement.height,center:[(v.x+1)*renderer.domElement.width/2,(1-v.y)*renderer.domElement.height/2],image:renderer.domElement.toDataURL('image/png')});}});
-async function start(){try{const paths={infantry:duelCandidate?'duel1/infantry-rigged':motionCandidate?'locomotion1/infantry-rigged':qaMode?'round1-1/infantry-rigged':r11?'round1-1/infantry-rigged':candidate?'round1/infantry-rigged':'infantry-rigged',pikeman:pikeCandidate?'pikeman1/spear-rigged':'spear-rigged',archer:bowCandidate?'archer1/archer-rigged':'archer-rigged',cavalry:rideCandidate?'cavalry1/cavalry-rigged':'cavalry-rigged',tower:'tower'};templates=Object.fromEntries(await Promise.all(Object.entries(paths).map(async([kind,name])=>[kind,await loader.loadAsync(`${import.meta.env.BASE_URL}assets/3d-sample/${name}.glb`)])));for(const [t,x,z] of [['red',-12,-7],['blue',12,-7]]){const tower=cloneModel(templates.tower,t);tower.position.set(x,heightAt(x,z),z);scene.add(tower);}reset();if(qaMode==='four'||qaMode==='sixteen')crowdQA=createCrowdQA({reset,startFight:()=>{fighting=true;},getUnits:()=>units,mode:qaMode,version:crowdCandidate?'candidate':'baseline'});else if(qaMode==='duel')duelQA=createDuelQA({reset,startFight:()=>{fighting=true;},getUnits:()=>units});else if(qaMode)motionQA=createMotionQA({reset,getUnits:()=>units,getElapsed:()=>elapsed,controllerVersion:(qaKind==='cavalry'?rideCandidate:qaKind==='archer'?bowCandidate:qaKind==='pikeman'?pikeCandidate:motionCandidate)?'candidate':'baseline',onTarget:target=>{marker.visible=!!target;if(target)marker.position.set(target[0],.2,target[1]);}});if(comparing)setupComparison();if(qaMode&&['pikeman','archer','cavalry'].includes(qaKind)){const group=document.createElement('div');group.className='control-group';for(const [value,label] of (qaKind==='cavalry'?[['baseline','骑兵基准'],['candidate','骑兵候选 V1']]:qaKind==='archer'?[['baseline','弓兵基准'],['candidate','弓兵候选 A1']]:[['baseline','长矛基准'],['candidate','长矛候选 P1']])){const b=document.createElement('button');b.textContent=label;b.onclick=()=>{const p=new URLSearchParams(location.search);p.set(qaKind==='cavalry'?'ride':qaKind==='archer'?'bow':'pike',value);location.search=p.toString();};group.append(b);}document.querySelector('.demo-controls').prepend(group);}ready=true;$('loading').hidden=true;for(const id of ['fight','pause','reset'])$(id).disabled=false;}catch(error){showFailure('战场模型未能加载，请重新加载，或进入 2D 经典版。');console.error(error);}}
+async function start(){try{const paths={infantry:duelCandidate?'duel1/infantry-rigged':motionCandidate?'locomotion1/infantry-rigged':qaMode?'round1-1/infantry-rigged':r11?'round1-1/infantry-rigged':candidate?'round1/infantry-rigged':'infantry-rigged',pikeman:pikeCandidate?'pikeman1/spear-rigged':'spear-rigged',archer:bowCandidate?'archer1/archer-rigged':'archer-rigged',cavalry:rideCandidate?'cavalry1/cavalry-rigged':'cavalry-rigged',tower:buildingCandidate?'building1/tower':'tower'};templates=Object.fromEntries(await Promise.all(Object.entries(paths).map(async([kind,name])=>[kind,await loader.loadAsync(`${import.meta.env.BASE_URL}assets/3d-sample/${name}.glb`)])));for(const [t,x,z] of [['red',-12,-7],['blue',12,-7]]){const tower=cloneModel(templates.tower,t);tower.position.set(x,heightAt(x,z),z);scene.add(tower);towers.push(tower);}reset();if(qaMode==='four'||qaMode==='sixteen')crowdQA=createCrowdQA({reset,startFight:()=>{fighting=true;},getUnits:()=>units,mode:qaMode,version:crowdCandidate?'candidate':'baseline'});else if(qaMode==='duel')duelQA=createDuelQA({reset,startFight:()=>{fighting=true;},getUnits:()=>units});else if(qaMode)motionQA=createMotionQA({reset,getUnits:()=>units,getElapsed:()=>elapsed,controllerVersion:(qaKind==='cavalry'?rideCandidate:qaKind==='archer'?bowCandidate:qaKind==='pikeman'?pikeCandidate:motionCandidate)?'candidate':'baseline',onTarget:target=>{marker.visible=!!target;if(target)marker.position.set(target[0],.2,target[1]);}});if(buildingComparing)setupBuildingComparison();else if(comparing)setupComparison();if(qaMode&&['pikeman','archer','cavalry'].includes(qaKind)){const group=document.createElement('div');group.className='control-group';for(const [value,label] of (qaKind==='cavalry'?[['baseline','骑兵基准'],['candidate','骑兵候选 V1']]:qaKind==='archer'?[['baseline','弓兵基准'],['candidate','弓兵候选 A1']]:[['baseline','长矛基准'],['candidate','长矛候选 P1']])){const b=document.createElement('button');b.textContent=label;b.onclick=()=>{const p=new URLSearchParams(location.search);p.set(qaKind==='cavalry'?'ride':qaKind==='archer'?'bow':'pike',value);location.search=p.toString();};group.append(b);}document.querySelector('.demo-controls').prepend(group);}ready=true;$('loading').hidden=true;for(const id of ['fight','pause','reset'])$(id).disabled=buildingComparing&&id!=='reset';}catch(error){showFailure('战场模型未能加载，请重新加载，或进入 2D 经典版。');console.error(error);}}
 window.addEventListener('pagehide',()=>{renderer.setAnimationLoop(null);observer.disconnect();for(const u of units)u.animation?.dispose();const geometries=new Set(),materials=new Set();scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>materials.add(m));});geometries.add(arrowGeometry);geometries.forEach(g=>g.dispose());materials.add(arrowMaterial);materials.add(bloodMaterial);materials.forEach(m=>m.dispose());renderer.dispose();},{once:true});
 window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 start();
