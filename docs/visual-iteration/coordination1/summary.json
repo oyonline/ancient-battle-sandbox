@@ -1,0 +1,1533 @@
+{
+  "scope": "presentation coordination Q1; runtime native assets unchanged",
+  "runs": {
+    "candidate-mixed": {
+      "url": "http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=candidate",
+      "frames": 16,
+      "trace": 0,
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "events": {}
+    },
+    "candidate-cavalry-four": {
+      "url": "http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=candidate&unit=cavalry&qa=four&capture=1",
+      "frames": 320,
+      "trace": 1920,
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        }
+      ],
+      "events": {
+        "attack": 72,
+        "hit": 38,
+        "death": 6,
+        "charge": 4
+      },
+      "last": {
+        "time": 32.001899999999594,
+        "dt": 0.01669999999999709,
+        "units": [
+          {
+            "id": 0,
+            "team": "red",
+            "x": -1.1631350639887275,
+            "z": -4.188578012666651,
+            "heading": 1.073844945145357,
+            "hp": -6,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.02500000000000005,
+                "finite": true
+              },
+              "chestX": -0.011233436093198271,
+              "modelY": 0.15701892213435562,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 1,
+            "team": "red",
+            "x": -1.0723085158476093,
+            "z": 1.988529338033603,
+            "heading": 1.4858581238441082,
+            "hp": -6,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.02500000000000005,
+                "finite": true
+              },
+              "chestX": -0.011233436093198271,
+              "modelY": 0.15701892213435562,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 2,
+            "team": "red",
+            "x": -0.847226159556806,
+            "z": -1.6151236023435682,
+            "heading": 0.7883863028849366,
+            "hp": 86,
+            "moving": false,
+            "speed": 0,
+            "state": "idle",
+            "actionTime": 1.3339000000000043,
+            "deathComplete": false,
+            "corpseSettled": false,
+            "effects": {
+              "contact": null,
+              "chestX": -0.0010012917737650426,
+              "modelY": 0,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 3,
+            "team": "red",
+            "x": -1.0944528185951927,
+            "z": 2.4680589815030185,
+            "heading": 1.6458371155451235,
+            "hp": 86,
+            "moving": false,
+            "speed": 0,
+            "state": "idle",
+            "actionTime": 1.1005000000000078,
+            "deathComplete": false,
+            "corpseSettled": false,
+            "effects": {
+              "contact": null,
+              "chestX": -0.007670404007722287,
+              "modelY": 0,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 4,
+            "team": "blue",
+            "x": 1.839575447490182,
+            "z": -1.5577507065893104,
+            "heading": -1.9468108144377383,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.02500000000000005,
+                "finite": true
+              },
+              "chestX": -0.011233436093198271,
+              "modelY": 0.1570189221343556,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 5,
+            "team": "blue",
+            "x": 1.9361680725324086,
+            "z": 3.7488800341082977,
+            "heading": -1.9468318821670643,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.024999999999999994,
+                "bodyGap": 0.024999999999999994,
+                "finite": true
+              },
+              "chestX": -0.011233436093198271,
+              "modelY": 0.15701892213435556,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 6,
+            "team": "blue",
+            "x": 3.08551338567272,
+            "z": -2.36945668115891,
+            "heading": -1.4010933736176683,
+            "hp": -6,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.02500000000000005,
+                "finite": true
+              },
+              "chestX": -0.011233436093198271,
+              "modelY": 0.15701892213435562,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 7,
+            "team": "blue",
+            "x": 2.954220137741165,
+            "z": 2.163671807966731,
+            "heading": -1.4957555380446699,
+            "hp": -6,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.02500000000000005,
+                "finite": true
+              },
+              "chestX": -0.011233436093198271,
+              "modelY": 0.15701892213435562,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          }
+        ]
+      }
+    },
+    "baseline-mixed": {
+      "url": "http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=baseline",
+      "frames": 16,
+      "trace": 0,
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "events": {}
+    },
+    "candidate-cavalry-duel": {
+      "url": "http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=candidate&unit=cavalry&qa=duel&capture=1",
+      "frames": 180,
+      "trace": 1080,
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "events": {
+        "charge": 2,
+        "attack": 10,
+        "hit": 5,
+        "death": 1
+      },
+      "last": {
+        "time": 18.001099999999912,
+        "distance": 4.060098990719999,
+        "units": [
+          {
+            "id": 0,
+            "x": -2.233338667576293,
+            "z": 1.111223497464012e-16,
+            "heading": 1.5707963267948968,
+            "hp": 64,
+            "speed": 0,
+            "runup": 0,
+            "pierceTime": 0,
+            "chargeFlash": 0,
+            "state": "idle",
+            "actionTime": 1.6516000000000035,
+            "pendingStrike": null,
+            "deathComplete": false,
+            "corpseSettled": false,
+            "effects": {
+              "contact": null,
+              "chestX": -0.0018977469352969506,
+              "modelY": 0,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 1,
+            "x": 1.8267603231437062,
+            "z": 6.34916037083297e-17,
+            "heading": -1.5707963267948966,
+            "hp": -6,
+            "speed": 0,
+            "runup": 0,
+            "pierceTime": 0,
+            "chargeFlash": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "pendingStrike": null,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.02500000000000005,
+                "finite": true
+              },
+              "chestX": -0.011233436093198271,
+              "modelY": 0.1570189221343556,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          }
+        ]
+      }
+    },
+    "baseline-archer-duel": {
+      "url": "http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=baseline&unit=archer&qa=duel&capture=1",
+      "frames": 180,
+      "trace": 1079,
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "events": {
+        "draw": 16,
+        "shoot": 16,
+        "arrow-hit": 16,
+        "death": 2
+      },
+      "last": {
+        "time": 18.001099999999916,
+        "distance": 6,
+        "units": [
+          {
+            "id": 0,
+            "x": -3,
+            "z": 0,
+            "heading": 1.5707963267948966,
+            "hp": -12,
+            "speed": 0,
+            "runup": 0,
+            "pierceTime": 0,
+            "chargeFlash": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "pendingStrike": null,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000016,
+                "bodyGap": 0.7087877335121568,
+                "finite": true
+              },
+              "heldArrowScale": 0.0010000000474974513,
+              "modelY": 0.8323985934468141,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 1,
+            "x": 3,
+            "z": 0,
+            "heading": -1.5707963267948966,
+            "hp": -12,
+            "speed": 0,
+            "runup": 0,
+            "pierceTime": 0,
+            "chargeFlash": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "pendingStrike": null,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000016,
+                "bodyGap": 0.7087877335121568,
+                "finite": true
+              },
+              "heldArrowScale": 0.0010000000474974513,
+              "modelY": 0.8323985934468141,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          }
+        ]
+      }
+    },
+    "baseline-cavalry-duel": {
+      "url": "http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=baseline&unit=cavalry&qa=duel&capture=1",
+      "frames": 180,
+      "trace": 1080,
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        }
+      ],
+      "events": {
+        "charge": 2,
+        "attack": 10,
+        "hit": 5,
+        "death": 1
+      },
+      "last": {
+        "time": 18.001199999999944,
+        "distance": 4.06009898464,
+        "units": [
+          {
+            "id": 0,
+            "x": -2.2363027757747416,
+            "z": 1.1076781110795813e-16,
+            "heading": 1.5707963267948968,
+            "hp": 64,
+            "speed": 0,
+            "runup": 0,
+            "pierceTime": 0,
+            "chargeFlash": 0,
+            "state": "idle",
+            "actionTime": 1.618300000000005,
+            "pendingStrike": null,
+            "deathComplete": false,
+            "corpseSettled": false,
+            "effects": {
+              "contact": null,
+              "modelY": 0,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 1,
+            "x": 1.8237962088652584,
+            "z": 6.337080511339955e-17,
+            "heading": -1.5707963267948966,
+            "hp": -6,
+            "speed": 0,
+            "runup": 0,
+            "pierceTime": 0,
+            "chargeFlash": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "pendingStrike": null,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.02500000000000005,
+                "finite": true
+              },
+              "modelY": 0.1570189221343556,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          }
+        ]
+      }
+    },
+    "baseline-cavalry-four": {
+      "url": "http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=baseline&unit=cavalry&qa=four&capture=1",
+      "frames": 320,
+      "trace": 1919,
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "events": {
+        "attack": 72,
+        "hit": 38,
+        "death": 6,
+        "charge": 4
+      },
+      "last": {
+        "time": 32.00219999999956,
+        "dt": 0.01669999999999709,
+        "units": [
+          {
+            "id": 0,
+            "team": "red",
+            "x": -1.160597153662116,
+            "z": -4.191410689308462,
+            "heading": 1.0721997525618963,
+            "hp": -6,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.02500000000000005,
+                "finite": true
+              },
+              "modelY": 0.15701892213435562,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 1,
+            "team": "red",
+            "x": -1.0694619890219155,
+            "z": 1.993943302087775,
+            "heading": 1.4869114029627026,
+            "hp": -6,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.02500000000000005,
+                "finite": true
+              },
+              "modelY": 0.1570189221343556,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 2,
+            "team": "red",
+            "x": -0.862404361767831,
+            "z": -1.6265005878322238,
+            "heading": 0.7837065636258115,
+            "hp": 86,
+            "moving": false,
+            "speed": 0,
+            "state": "idle",
+            "actionTime": 1.3006000000000069,
+            "deathComplete": false,
+            "corpseSettled": false,
+            "effects": {
+              "contact": null,
+              "modelY": 0,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 3,
+            "team": "red",
+            "x": -1.1414932433383573,
+            "z": 2.467862754744229,
+            "heading": 1.6478744722424374,
+            "hp": 86,
+            "moving": false,
+            "speed": 0,
+            "state": "idle",
+            "actionTime": 1.1006000000000054,
+            "deathComplete": false,
+            "corpseSettled": false,
+            "effects": {
+              "contact": null,
+              "modelY": 0,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 4,
+            "team": "blue",
+            "x": 1.840868209398328,
+            "z": -1.5595020008201799,
+            "heading": -1.9454908988862534,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.02500000000000005,
+                "finite": true
+              },
+              "modelY": 0.15701892213435556,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 5,
+            "team": "blue",
+            "x": 1.9368407716546254,
+            "z": 3.745644499008711,
+            "heading": -1.945511909479052,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.02500000000000005,
+                "finite": true
+              },
+              "modelY": 0.1570189221343556,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 6,
+            "team": "blue",
+            "x": 3.08254909436848,
+            "z": -2.365172546063856,
+            "heading": -1.4023148363047668,
+            "hp": -6,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.02500000000000005,
+                "finite": true
+              },
+              "modelY": 0.15701892213435562,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 7,
+            "team": "blue",
+            "x": 2.9065511109647915,
+            "z": 2.155227631893379,
+            "heading": -1.493718181347356,
+            "hp": -6,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02499999999999994,
+                "bodyGap": 0.02499999999999994,
+                "finite": true
+              },
+              "modelY": 0.15701892213435562,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          }
+        ]
+      }
+    },
+    "baseline-archer-four": {
+      "url": "http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=baseline&unit=archer&qa=four&capture=1",
+      "frames": 320,
+      "trace": 1920,
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        }
+      ],
+      "events": {
+        "draw": 78,
+        "shoot": 56,
+        "arrow-hit": 56,
+        "death": 6
+      },
+      "last": {
+        "time": 32.00199999999968,
+        "dt": 0.016700000000000728,
+        "units": [
+          {
+            "id": 0,
+            "team": "red",
+            "x": -3.085159640249312,
+            "z": -0.9969030185425358,
+            "heading": 1.1591626924076106,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "targetId": 5,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.7087877335121567,
+                "finite": true
+              },
+              "heldArrowScale": 0.0010000000474974513,
+              "modelY": 0.8323985934468141,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 1,
+            "team": "red",
+            "x": -3.1664399197966158,
+            "z": 1.2339133439782515,
+            "heading": 1.4924892016352884,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "targetId": 5,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000016,
+                "bodyGap": 0.7087877335121568,
+                "finite": true
+              },
+              "heldArrowScale": 0.0010000000474974513,
+              "modelY": 0.8323985934468141,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 2,
+            "team": "red",
+            "x": -2.380172245067209,
+            "z": -2.342877112596987,
+            "heading": 0.723835639365389,
+            "hp": 44,
+            "moving": false,
+            "speed": 0,
+            "state": "attack",
+            "actionTime": 0.08340000000000146,
+            "targetId": 7,
+            "deathComplete": false,
+            "corpseSettled": false,
+            "effects": {
+              "contact": null,
+              "heldArrowScale": 0.9999999536422551,
+              "modelY": 0,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 3,
+            "team": "red",
+            "x": -3.9220115498238943,
+            "z": 3.3638690974853334,
+            "heading": 1.4892174102943752,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "targetId": 7,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000016,
+                "bodyGap": 0.7087877335121568,
+                "finite": true
+              },
+              "heldArrowScale": 0.0010000000474974513,
+              "modelY": 0.8323985934468141,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 4,
+            "team": "blue",
+            "x": 3.166439919796604,
+            "z": -0.5339133439782483,
+            "heading": -1.649103451954505,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "targetId": 0,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.7087877335121567,
+                "finite": true
+              },
+              "heldArrowScale": 0.0010000000474974513,
+              "modelY": 0.8323985934468141,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 5,
+            "team": "blue",
+            "x": 3.0851596402493136,
+            "z": 1.696903018542542,
+            "heading": -1.9824299611821827,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "targetId": 0,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.7087877335121567,
+                "finite": true
+              },
+              "heldArrowScale": 0.0010000000474974513,
+              "modelY": 0.8323985934468141,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 6,
+            "team": "blue",
+            "x": 3.9220115498238957,
+            "z": -2.6638690974853256,
+            "heading": -1.6523752432954184,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "targetId": 2,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.7087877335121567,
+                "finite": true
+              },
+              "heldArrowScale": 0.0010000000474974513,
+              "modelY": 0.8323985934468141,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 7,
+            "team": "blue",
+            "x": 2.3801722450672105,
+            "z": 3.042877112596993,
+            "heading": -2.4177570142244043,
+            "hp": 44,
+            "moving": false,
+            "speed": 0,
+            "state": "attack",
+            "actionTime": 0.08340000000000146,
+            "targetId": 2,
+            "deathComplete": false,
+            "corpseSettled": false,
+            "effects": {
+              "contact": null,
+              "heldArrowScale": 0.9999999536422551,
+              "modelY": 0,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          }
+        ]
+      }
+    },
+    "candidate-archer-four": {
+      "url": "http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=candidate&unit=archer&qa=four&capture=1",
+      "frames": 320,
+      "trace": 1920,
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "events": {
+        "draw": 84,
+        "shoot": 58,
+        "arrow-hit": 56,
+        "death": 6
+      },
+      "last": {
+        "time": 32.00199999999975,
+        "dt": 0.016700000000000728,
+        "units": [
+          {
+            "id": 0,
+            "team": "red",
+            "x": -3.085835681078775,
+            "z": -0.9981314668876341,
+            "heading": 1.158908689862113,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "targetId": 5,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.024999999999999994,
+                "bodyGap": 0.11599878775685998,
+                "finite": true
+              },
+              "heldArrowScale": 0.001,
+              "modelY": 0.2396096476915172,
+              "rootY": 0.15,
+              "arrowReleased": true,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 1,
+            "team": "red",
+            "x": -3.166854309551857,
+            "z": 1.2328781665829343,
+            "heading": 1.4921721835008583,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "targetId": 5,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.024999999999999994,
+                "bodyGap": 0.11599878775685998,
+                "finite": true
+              },
+              "heldArrowScale": 0.001,
+              "modelY": 0.2396096476915172,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 2,
+            "team": "red",
+            "x": -3.254070021139069,
+            "z": -3.251862471664064,
+            "heading": 1.488925546476587,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "targetId": 6,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.024999999999999994,
+                "bodyGap": 0.11599878775685998,
+                "finite": true
+              },
+              "heldArrowScale": 0.001,
+              "modelY": 0.2396096476915172,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 3,
+            "team": "red",
+            "x": -2.832190640970828,
+            "z": 2.571715046369041,
+            "heading": 2.2359840576188525,
+            "hp": 44,
+            "moving": false,
+            "speed": 0,
+            "state": "attack",
+            "actionTime": 0.5844000000000014,
+            "targetId": 6,
+            "deathComplete": false,
+            "corpseSettled": false,
+            "effects": {
+              "contact": null,
+              "heldArrowScale": 0.001,
+              "modelY": 0,
+              "rootY": 0.15,
+              "arrowReleased": true,
+              "projectiles": [
+                {
+                  "id": "3:12",
+                  "x": -0.9110855214878506,
+                  "z": 1.0647020339438333,
+                  "age": 0.1
+                }
+              ],
+              "flight": [
+                {
+                  "id": "3:12",
+                  "origin": [
+                    -1.9342623178417946,
+                    2.2381947694758644,
+                    1.7276583701276342
+                  ],
+                  "position": [
+                    -0.9769609830571317,
+                    2.3649281965568547,
+                    0.9999302224072558
+                  ],
+                  "quaternion": [
+                    -0.09845199463094476,
+                    0.8897915295236485,
+                    0,
+                    0.44562118300318104
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": 4,
+            "team": "blue",
+            "x": 3.166854309551857,
+            "z": -0.5328781665829326,
+            "heading": -1.6494204700889348,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "targetId": 0,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.024999999999999994,
+                "bodyGap": 0.11599878775685998,
+                "finite": true
+              },
+              "heldArrowScale": 0.001,
+              "modelY": 0.2396096476915172,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 5,
+            "team": "blue",
+            "x": 3.0858356810787715,
+            "z": 1.6981314668876355,
+            "heading": -1.9826839637276803,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "targetId": 0,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.024999999999999994,
+                "bodyGap": 0.11599878775685998,
+                "finite": true
+              },
+              "heldArrowScale": 0.001,
+              "modelY": 0.2396096476915172,
+              "rootY": 0.15,
+              "arrowReleased": true,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 6,
+            "team": "blue",
+            "x": 2.832190640970825,
+            "z": -1.87171504636904,
+            "heading": -0.9056085959709406,
+            "hp": 44,
+            "moving": false,
+            "speed": 0,
+            "state": "attack",
+            "actionTime": 0.5844000000000014,
+            "targetId": 3,
+            "deathComplete": false,
+            "corpseSettled": false,
+            "effects": {
+              "contact": null,
+              "heldArrowScale": 0.001,
+              "modelY": 0,
+              "rootY": 0.15,
+              "arrowReleased": true,
+              "projectiles": [
+                {
+                  "id": "6:12",
+                  "x": 0.9110855214878475,
+                  "z": -0.3647020339438327,
+                  "age": 0.1
+                }
+              ],
+              "flight": [
+                {
+                  "id": "6:12",
+                  "origin": [
+                    1.934262317841791,
+                    2.2381947694758644,
+                    -1.0276583701276338
+                  ],
+                  "position": [
+                    0.9769609830571283,
+                    2.3649281965568547,
+                    -0.2999302224072556
+                  ],
+                  "quaternion": [
+                    -0.049007187715826156,
+                    -0.44291820271167487,
+                    0,
+                    0.8952216268940588
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "id": 7,
+            "team": "blue",
+            "x": 3.2540700211390656,
+            "z": 3.9518624716640653,
+            "heading": -1.6526671071132066,
+            "hp": -12,
+            "moving": false,
+            "speed": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "targetId": 3,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.024999999999999994,
+                "bodyGap": 0.11599878775685998,
+                "finite": true
+              },
+              "heldArrowScale": 0.001,
+              "modelY": 0.2396096476915172,
+              "rootY": 0.15,
+              "arrowReleased": false,
+              "projectiles": [],
+              "flight": []
+            }
+          }
+        ]
+      }
+    },
+    "candidate-archer-duel": {
+      "url": "http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=candidate&unit=archer&qa=duel&capture=1",
+      "frames": 180,
+      "trace": 1079,
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        }
+      ],
+      "events": {
+        "draw": 16,
+        "shoot": 16,
+        "arrow-hit": 16,
+        "death": 2
+      },
+      "last": {
+        "time": 18.001099999999937,
+        "distance": 6,
+        "units": [
+          {
+            "id": 0,
+            "x": -3,
+            "z": 0,
+            "heading": 1.5707963267948966,
+            "hp": -12,
+            "speed": 0,
+            "runup": 0,
+            "pierceTime": 0,
+            "chargeFlash": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "pendingStrike": null,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.11599878775686004,
+                "finite": true
+              },
+              "heldArrowScale": 0.001,
+              "modelY": 0.2396096476915172,
+              "rootY": 0.15,
+              "arrowReleased": true,
+              "projectiles": [],
+              "flight": []
+            }
+          },
+          {
+            "id": 1,
+            "x": 3,
+            "z": 0,
+            "heading": -1.5707963267948966,
+            "hp": -12,
+            "speed": 0,
+            "runup": 0,
+            "pierceTime": 0,
+            "chargeFlash": 0,
+            "state": "death",
+            "actionTime": 1.25,
+            "pendingStrike": null,
+            "deathComplete": true,
+            "corpseSettled": true,
+            "effects": {
+              "contact": {
+                "gap": 0.02500000000000005,
+                "bodyGap": 0.11599878775686004,
+                "finite": true
+              },
+              "heldArrowScale": 0.001,
+              "modelY": 0.2396096476915172,
+              "rootY": 0.15,
+              "arrowReleased": true,
+              "projectiles": [],
+              "flight": []
+            }
+          }
+        ]
+      }
+    }
+  },
+  "invariants": {
+    "public/assets/3d-sample/archer-rigged.glb": "14b9cf5348eb4bd30cae4befb0bd15ed628899dae32500f26f8aeb9effe80abf",
+    "public/assets/3d-sample/archer1/archer-rigged.glb": "a86fce43b1bf022e7a0d1acf7e0e039e0ce53da94354868cd37f55b4f43deb11",
+    "public/assets/3d-sample/cavalry-rigged.glb": "1e6ba2d0f9142e6608cc45e315ac31c79c0830579d3c363b128c42bf7d6b958f",
+    "public/assets/3d-sample/cavalry.glb": "dcfaf6b41e64c464c6cc6840d234e6a97ff0b89a5169929f8957539848d659d7",
+    "public/assets/3d-sample/cavalry1/cavalry-rigged.glb": "f8360500293593247185536fe0547ace7634928f06e1b54ac8d07ff6eeb73e46",
+    "public/assets/3d-sample/duel1/infantry-rigged.glb": "61180645e4a8ee8533da2e8c41f9eecbbc48511bba5529ce53168c12be83ffcb",
+    "public/assets/3d-sample/infantry-rigged.glb": "3fb6c804576bf2683da48f658ca2343bccb1e5c0d302026d2c30b3270245ba9d",
+    "public/assets/3d-sample/infantry.glb": "37b813c77388381bdf5b2d8f902e6be048312d89965aa2340769c09b60ca2c43",
+    "public/assets/3d-sample/locomotion1/infantry-rigged.glb": "edd8cc96e804f3d63ca1408c5c63111f382d17196538fb153bcba868a57ad504",
+    "public/assets/3d-sample/pikeman1/spear-rigged.glb": "b3c60a64134fb091988bd4c692274df9136673c30a2a3d270cfc311b06389d15",
+    "public/assets/3d-sample/round1-1/infantry-rigged.glb": "50b7dbda0589910fd6ba7053d6239e2b58abb5c6f15b8f4cb9c145f61919b2ca",
+    "public/assets/3d-sample/round1/infantry-before.glb": "3fb6c804576bf2683da48f658ca2343bccb1e5c0d302026d2c30b3270245ba9d",
+    "public/assets/3d-sample/round1/infantry-rigged.glb": "122b85368ad4b21ed25d5c10a467cb9653d029dae43a3299d6190e4390543963",
+    "public/assets/3d-sample/spear-rigged.glb": "eb02d13c6bfdbde76e72ee4d64c77b2666ef7553fe74114c2cfe79492a2f11e0",
+    "public/assets/3d-sample/tower.glb": "6067afed4436e25af9b01ee0451385da3a095d9f35739902f799cf52dbb75c97"
+  },
+  "combat_model_sha256": "67c03c681bcbc20ebb2c2b73a9071fbca00adbdc8865d04d8393353b64d457d9",
+  "verification": {
+    "related": "39/39",
+    "full": "773/773",
+    "build": "passed",
+    "independentReview": "approved by independent readonly Codex lane; root accepted scoped Q1",
+    "userVisualApproval": "unknown",
+    "modelEffort": {
+      "requested": "inherited",
+      "actual": "unknown"
+    }
+  },
+  "source_sha256": {
+    "js/three-demo/main.js": "75f71e56dee07c5dc59383bed451a15fecb48b7ca35d7456088ff38dc72201c6",
+    "js/three-demo/action-coordination.js": "06e18feaf0aa21e6d9950051e9aefd0d742d446b7c42f6cfc1c051c0d773ec6b",
+    "js/three-demo/motion-qa.js": "c971babd12fed15dd7027e11cf1663787d0aeec9e3ba3df9585700013a8e7569"
+  }
+}
