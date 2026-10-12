@@ -1,0 +1,348 @@
+{
+  "stage": "P1",
+  "technical": "passed",
+  "internal_visual": "passed",
+  "user_acceptance": "unknown",
+  "asset_sha256": "b3c60a64134fb091988bd4c692274df9136673c30a2a3d270cfc311b06389d15",
+  "baseline_asset_sha256": "eb02d13c6bfdbde76e72ee4d64c77b2666ef7553fe74114c2cfe79492a2f11e0",
+  "checks": {
+    "baseline-static": {
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "samples": 17,
+      "trace_samples": 0,
+      "frames": 0,
+      "events": 0,
+      "provenance": "formal URL no route"
+    },
+    "candidate-static": {
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "samples": 17,
+      "trace_samples": 0,
+      "frames": 0,
+      "events": 0,
+      "provenance": "formal URL no route"
+    },
+    "candidate-flat": {
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "samples": 17,
+      "trace_samples": 0,
+      "frames": 0,
+      "events": 0,
+      "provenance": "formal URL no route"
+    },
+    "baseline-move": {
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "samples": 0,
+      "trace_samples": 1440,
+      "frames": 111,
+      "events": 0,
+      "provenance": "private first baseline route exact species adapter, archived; formal candidate and all other capture no route"
+    },
+    "candidate-move": {
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "samples": 0,
+      "trace_samples": 1440,
+      "frames": 113,
+      "events": 0,
+      "provenance": "formal URL no route"
+    },
+    "baseline-duel": {
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/spear-rigged.glb",
+          "status": 200
+        }
+      ],
+      "samples": 0,
+      "trace_samples": 1079,
+      "frames": 130,
+      "events": 22,
+      "provenance": "formal URL no route"
+    },
+    "candidate-duel": {
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "samples": 0,
+      "trace_samples": 1080,
+      "frames": 130,
+      "events": 22,
+      "provenance": "formal URL no route"
+    },
+    "candidate-four": {
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "samples": 0,
+      "trace_samples": 1917,
+      "frames": 320,
+      "events": 89,
+      "provenance": "formal URL no route"
+    },
+    "mixed-smoke": {
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+          "status": 200
+        }
+      ],
+      "samples": 0,
+      "trace_samples": 0,
+      "frames": 0,
+      "events": 0,
+      "provenance": "formal URL no route",
+      "initial": "\u81ea\u7531\u5e03\u9635 \u00b7 \u7ea2\u65b9 16 \u00b7 \u84dd\u65b9 16",
+      "battle": "\u5df2\u6682\u505c \u00b7 \u7ea2\u65b9 16 \u00b7 \u84dd\u65b9 11",
+      "reset": "\u81ea\u7531\u5e03\u9635 \u00b7 \u7ea2\u65b9 16 \u00b7 \u84dd\u65b9 16"
+    }
+  },
+  "limitations": [
+    "Existing slope lacks per-foot terrain conformance: baseline -0.102, candidate -0.126 world units at selected scene position",
+    "M1 local release foot slip remains; C1 outer flank near bounds remains",
+    "Original duel first-strike priority unchanged"
+  ]
+}

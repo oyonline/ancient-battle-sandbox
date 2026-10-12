@@ -1,0 +1,87 @@
+{
+  "kind": "pikeman",
+  "releaseSeconds": null,
+  "clips": {
+    "Idle": {
+      "duration": 2,
+      "frames": 48
+    },
+    "Walk": {
+      "duration": 0.75,
+      "frames": 18
+    },
+    "Turn": {
+      "duration": 0.5,
+      "frames": 12
+    },
+    "Attack": {
+      "duration": 0.875,
+      "frames": 21
+    },
+    "Hit": {
+      "duration": 0.417,
+      "frames": 10
+    },
+    "Death": {
+      "duration": 1.25,
+      "frames": 30
+    }
+  },
+  "front": "Three +Z (Blender -Y)",
+  "height": 2.6122968196868896,
+  "vertices": 5195,
+  "triangles": 9862,
+  "bones": 18,
+  "materials": [
+    "brown leather",
+    "charcoal steel mail",
+    "team_cloth",
+    "dark forged armour",
+    "ivory linen tabard",
+    "aged golden shield rim",
+    "skin in helmet shadow",
+    "pale steel blade",
+    "dark eye slit"
+  ],
+  "swordBladeScale": null,
+  "componentBoundsBlender": {
+    "body": {
+      "min": [
+        -0.5381830930709839,
+        -0.7509468793869019,
+        -0.0064999982714653015
+      ],
+      "max": [
+        0.5557674169540405,
+        0.2653663754463196,
+        2.6122968196868896
+      ]
+    },
+    "weapon": {
+      "min": [
+        0.1550000011920929,
+        -2.3899998664855957,
+        1.6715039014816284
+      ],
+      "max": [
+        0.3050000071525574,
+        0.6399999260902405,
+        1.7284961938858032
+      ]
+    },
+    "torso": {
+      "min": [
+        -0.35860002040863037,
+        -0.2739744186401367,
+        1.0793375968933105
+      ],
+      "max": [
+        0.35860002040863037,
+        0.2653663754463196,
+        2.2149999141693115
+      ]
+    }
+  },
+  "bodyRadiusConservative": 0.934236927876806,
+  "authoring": "parameterized standalone Blender source; actual armature and vertex weights"
+}

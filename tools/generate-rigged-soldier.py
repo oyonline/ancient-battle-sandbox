@@ -5,10 +5,15 @@ from pathlib import Path
 D=str(Path(sys.argv[sys.argv.index('--')+1]) if '--' in sys.argv else Path(__file__).resolve().parents[1]/'public/assets/3d-sample')
 KIND=sys.argv[sys.argv.index('--kind')+1] if '--kind' in sys.argv else 'infantry'
 assert KIND in ('infantry','pikeman','archer','cavalry')
+PIKE='--pikeman-candidate' in sys.argv
+assert not PIKE or KIND=='pikeman', 'P1 is pikeman only'
 DUEL='--duel' in sys.argv
-MOTION='--locomotion' in sys.argv or DUEL
-R11='--candidate-r11' in sys.argv or MOTION
+assert not (PIKE and DUEL), 'Sword duel candidate cannot be applied to pikeman'
+MOTION='--locomotion' in sys.argv or DUEL or PIKE
+R11='--candidate-r11' in sys.argv or (MOTION and not PIKE)
 CANDIDATE='--candidate' in sys.argv or R11
+SHAPE=CANDIDATE or PIKE
+LOWER=R11 or PIKE
 assert not CANDIDATE or KIND=='infantry', 'Round 1 is infantry only'
 ASSET_NAME='spear' if KIND=='pikeman' else KIND
 Path(D).mkdir(parents=True,exist_ok=True)
@@ -43,7 +48,7 @@ def loft(n,rings,m,N=16):
  return finish(o,n,m)
 def rod(n,a,b,r1,r2,m):
  d=Vector(b)-Vector(a)
- if CANDIDATE and ('sleeve' in n or 'vambrace' in n):
+ if SHAPE and ('sleeve' in n or 'vambrace' in n):
   # Anatomical volume through the length, rather than a straight cone.
   direction=d.normalized();u=direction.cross(Vector((0,1,0))).normalized();v=direction.cross(u).normalized()
   vs=[];fs=[];profiles=[(0,.86),(.14,1.03),(.38,1.10),(.68,.97),(1,.82)]
@@ -97,37 +102,37 @@ for side in [-1,1]:
  leg_shell(('right' if side==1 else 'left')+' fitted shin plate',[(.30,.083,.119),(.45,.096,.132),(.69,.109,.146),(.81,.105,.143)])
 loft('dark mail hip layer',[(1.17,0,0,.285,.185),(1.52,0,0,.26,.175)],dark)
 loft('red fitted tunic',[(1.42,0,0,.245,.19),(1.74,0,0,.245,.18),(2.07,0,.015,.295,.19),(2.31,0,.015,.275,.18),(2.40,0,.018,.18,.13)],red)
-loft('steel torso under surcoat',[(1.59,0,-.005,.238,.190),(1.74,0,-.008,.246,.202),(1.96,0,.008,.302,.218),(2.16,0,.012,.326,.216),(2.29,0,0,.280,.175)] if CANDIDATE else [(1.59,0,-.005,.254,.204),(1.87,0,0,.283,.206),(2.16,0,.006,.301,.208),(2.29,0,0,.264,.175)],steel)
+loft('steel torso under surcoat',[(1.59,0,-.005,.238,.190),(1.74,0,-.008,.246,.202),(1.96,0,.008,.302,.218),(2.16,0,.012,.326,.216),(2.29,0,0,.280,.175)] if SHAPE else [(1.59,0,-.005,.254,.204),(1.87,0,0,.283,.206),(2.16,0,.006,.301,.208),(2.29,0,0,.264,.175)],steel)
 # Ivory surcoat front with a two-sided split lower hem and real cloth thickness.
 def panel(n,verts,m):
  fs=[tuple(range(len(verts)))];me=bpy.data.meshes.new(n);me.from_pydata(verts,[],fs);me.update();o=bpy.data.objects.new(n,me);bpy.context.collection.objects.link(o);finish(o,n,m);sol=o.modifiers.new('cloth thickness','SOLIDIFY');sol.thickness=.018;be=o.modifiers.new('soft cloth edge','BEVEL');be.width=.010;be.segments=2;return o
 def draped_tabard(n,front=True):
  rows=[(2.33,.15,-.176,.002),(2.16,.218,-.221,.004),(1.90,.212,-.229,.009),(1.71,.207,-.247,.002),(1.52,.219,-.236,.013),(1.30,.244,-.222,.023),(1.17,.258,-.218,.029)]
- if CANDIDATE:
+ if SHAPE:
   rows=[(2.33,.164,-.182,.002),(2.16,.272,-.235,.005),(1.96,.266,-.241,.008),(1.74,.223,-.225,.004),(1.52,.247,-.234,.012),(1.30,.273,-.219,.020),(1.17,.279,-.210,.024)]
  verts=[];fs=[]
  # Separate lower halves naturally open a centre slit, upper edges meet.
  for side in [-1,1]:
   base=len(verts)
   for k,(z,w,y,amp) in enumerate(rows):
-   if R11 and k==len(rows)-1:z+=.095
+   if LOWER and k==len(rows)-1:z+=.095
    inner=.014 if z<1.6 else 0
    for j in range(9):
     t=j/8;x=side*(inner+(w-inner)*t)
-    yy=y+(.100 if CANDIDATE else .063)*t*t+amp*math.sin(t*math.pi*2.0+.4)
+    yy=y+(.100 if SHAPE else .063)*t*t+amp*math.sin(t*math.pi*2.0+.4)
     zz=z+(.025*math.sin(t*math.pi)+(.075*(1-t) if k==len(rows)-1 else 0))
-    if not front:yy=-yy+(.038 if CANDIDATE else -.012)
+    if not front:yy=-yy+(.038 if SHAPE else -.012)
     verts.append((x,yy,zz))
   for k in range(len(rows)-1):
    for j in range(8):
     q=base+k*9+j;fs.append((q,q+1,q+10,q+9))
- if CANDIDATE and not front:fs=[tuple(reversed(face)) for face in fs]
+ if SHAPE and not front:fs=[tuple(reversed(face)) for face in fs]
  me=bpy.data.meshes.new(n);me.from_pydata(verts,[],fs);me.update();o=bpy.data.objects.new(n,me);bpy.context.collection.objects.link(o);finish(o,n,cream)
  so=o.modifiers.new('linen thickness','SOLIDIFY');so.thickness=.009
  for p in me.polygons:p.use_smooth=True
  return o
 draped_tabard('ivory tabard - draped front');draped_tabard('ivory tabard - draped back',False)
-loft('brown waist belt',[(1.63,0,-.007,.252,.230),(1.713,0,-.007,.248,.230)] if CANDIDATE else [(1.63,0,-.007,.264,.236),(1.713,0,-.007,.262,.235)],leather)
+loft('brown waist belt',[(1.63,0,-.007,.252,.230),(1.713,0,-.007,.248,.230)] if SHAPE else [(1.63,0,-.007,.264,.236),(1.713,0,-.007,.262,.235)],leather)
 panel('brown belt over ivory cloth',[(-.195,-.252,1.635),(.195,-.252,1.635),(.195,-.252,1.713),(-.195,-.252,1.713)],leather)
 box('brass belt buckle',(.025,-.275,1.67),(.075,.025,.067),gold,.008)
 # Dark mail coif and steel helmet conceal the baby-face problem entirely.
@@ -148,9 +153,9 @@ for side in [-1,1]:
  rod(('right' if side==1 else 'left')+' red upper sleeve',a,c,.12,.118,red)
  # Overlapping curved shallow rings, angled along upper arm; two clear layers.
  direction=(c-a).normalized()
- for i in range(1 if CANDIDATE else 2):
+ for i in range(1 if SHAPE else 2):
   center=a+direction*(.075+i*.075)
-  if CANDIDATE:
+  if SHAPE:
    # A continuous curved shoulder shell, open under the armpit.
    u=Vector((side,0,0));v=Vector((0,1,0));vs=[];fs=[]
    for t,r in [(0,.115),(.055,.149),(.13,.156),(.20,.122)]:
@@ -229,7 +234,7 @@ for o in parts:
   w.x*=1.10
   if z<=1.2:
    w.z=z*.90
-   if CANDIDATE and ('shin plate' in o.name or 'boot shaft' in o.name):
+   if SHAPE and ('shin plate' in o.name or 'boot shaft' in o.name):
     sgn=1 if o.name.startswith('right') else -1;base_y=-.07 if sgn==1 else .065
     raw_center=base_y+(.028*max(0,min(1,(z-.12)/.56)) if 'boot shaft' in o.name else 0)
     ankle_y=-.07 if sgn==1 else .065;knee_y=-.145 if sgn==1 else -.01
@@ -247,7 +252,7 @@ for o in parts:o.location.z-=.065
 
 # R1.1 lower-body volumes are authored directly around the unchanged bind axes.
 # The shorter cloth hem reveals the thigh transition rather than a knee peg.
-if R11:
+if LOWER:
  for o in list(parts):
   if any(term in o.name for term in ('brown trouser','boot shaft','knee cup','shin plate')):
    parts.remove(o);bpy.data.objects.remove(o,do_unlink=True)
@@ -427,9 +432,9 @@ def weights_for(n,v):
  if 'sleeve' in n or 'shoulder lamella' in n:return {'UpperArm.'+side:1}
  if 'boot foot' in n:return {'Foot.'+side:1}
  if 'boot shaft' in n or 'shin plate' in n:return {'Shin.'+side:1}
- if 'knee cup' in n:return {'Thigh.'+side:1} if R11 else {'Shin.'+side:.5,'Thigh.'+side:.5}
+ if 'knee cup' in n:return {'Thigh.'+side:1} if LOWER else {'Shin.'+side:.5,'Thigh.'+side:.5}
  if 'trouser' in n:
-  t=max(0,min(1,(z-(.69 if R11 else .67))/(.13 if R11 else .22)));return {'Shin.'+side:1-t,'Thigh.'+side:t}
+  t=max(0,min(1,(z-(.69 if LOWER else .67))/(.13 if LOWER else .22)));return {'Shin.'+side:1-t,'Thigh.'+side:t}
  if KIND=='cavalry':z-=1
  if 'tabard' in n:
   # Cloth follows torso while lower skirt softly follows hip/thigh motion.
@@ -513,8 +518,8 @@ def ready_legs():
  # Solve a grounded, asymmetric guard from the original rest skeleton.
  # Rest matrices and hierarchy stay unchanged; only exported clip poses move.
  bpy.context.view_layer.update()
- hips=rig.pose.bones['Hips'];m=hips.matrix.copy();m.translation+=Vector((.012,-.060,-.040) if R11 else (.025,.025,-.075));hips.matrix=m;bpy.context.view_layer.update()
- targets=[('L',Vector((-.215,.100,.16))),('R',Vector((.210,-.160,.16)))] if R11 else [('L',Vector((-.245,.185,.16))),('R',Vector((.225,-.225,.16)))]
+ hips=rig.pose.bones['Hips'];m=hips.matrix.copy();m.translation+=Vector((.012,-.060,-.040) if LOWER else (.025,.025,-.075));hips.matrix=m;bpy.context.view_layer.update()
+ targets=[('L',Vector((-.215,.100,.16))),('R',Vector((.210,-.160,.16)))] if LOWER else [('L',Vector((-.245,.185,.16))),('R',Vector((.225,-.225,.16)))]
  for side_,ankle in targets:
   upper=rig.pose.bones['Thigh.'+side_];lower=rig.pose.bones['Shin.'+side_];head=upper.matrix.translation.copy();l1=upper.bone.length;l2=lower.bone.length;d=ankle-head;dist=min(d.length,l1+l2-.002);u=d.normalized();along=(l1*l1-l2*l2+dist*dist)/(2*dist);height=math.sqrt(max(.00001,l1*l1-along*along));pole=Vector((0,-1,0));pole=(pole-u*pole.dot(u)).normalized();knee=head+u*along+pole*height
   align_bone(upper,head,knee);align_bone(lower,knee,ankle)
@@ -551,8 +556,10 @@ def make_action(name,duration,poses):
  action=bpy.data.actions.new(name);action.use_fake_user=True;rig.animation_data.action=action
  for frame,pose in poses:
   for pb in rig.pose.bones:pb.location=(0,0,0);pb.rotation_euler=(0,0,0);pb.scale=(1,1,1)
-  if CANDIDATE and (name in ('Idle','Attack','Hit') or (MOTION and name in ('Walk','Turn')) or (name=='Death' and frame==0)):
+  if (CANDIDATE or PIKE) and (name in ('Idle','Attack','Hit') or (MOTION and name in ('Walk','Turn')) or (name=='Death' and frame==0)):
    prepared={'Spine':{'r':(.085 if R11 else .060,0,.018 if R11 else .035)},'Chest':{'r':(-.025,.045,-.055)},'Head':{'r':(-.025,0,.030)},'UpperArm.L':{'r':(-.12,-.035,-.08)},'Forearm.L':{'r':(-.12,0,0)},'UpperArm.R':{'r':(-.10,.025,.05)},'Forearm.R':{'r':(-.14,0,0)}}
+   if PIKE:
+    prepared={key:value for key,value in prepared.items() if not key.startswith(('UpperArm','Forearm'))}
    for key,values in pose.items():
     if key in prepared and 'r' in values:prepared[key]['r']=tuple(a+b for a,b in zip(prepared[key]['r'],values['r']))
     else:prepared[key]=values
@@ -563,7 +570,7 @@ def make_action(name,duration,poses):
    pb=rig.pose.bones[name_]
    if 'r' in values:pb.rotation_euler=values['r']
    if 'l' in values:pb.location=values['l']
-  if CANDIDATE and (name in ('Idle','Attack','Hit') or (MOTION and name in ('Walk','Turn')) or (name=='Death' and frame==0)):ready_legs()
+  if (CANDIDATE or PIKE) and (name in ('Idle','Attack','Hit') or (MOTION and name in ('Walk','Turn')) or (name=='Death' and frame==0)):ready_legs()
   if MOTION and name in ('Walk','Turn'):solve_motion_legs(name,frame)
   if DUEL and name=='Attack':solve_duel_attack(frame)
   if KIND!='infantry' and name!='Death':
