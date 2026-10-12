@@ -1,0 +1,86 @@
+{
+  "kind": "archer",
+  "releaseSeconds": 0.4583333333333333,
+  "clips": {
+    "Idle": {
+      "duration": 2,
+      "frames": 48
+    },
+    "Walk": {
+      "duration": 0.75,
+      "frames": 18
+    },
+    "Turn": {
+      "duration": 0.5,
+      "frames": 12
+    },
+    "Attack": {
+      "duration": 0.875,
+      "frames": 21
+    },
+    "Hit": {
+      "duration": 0.417,
+      "frames": 10
+    },
+    "Death": {
+      "duration": 1.25,
+      "frames": 30
+    }
+  },
+  "front": "Three +Z (Blender -Y)",
+  "height": 2.824495553970337,
+  "vertices": 6809,
+  "triangles": 12998,
+  "bones": 19,
+  "materials": [
+    "brown leather",
+    "charcoal steel mail",
+    "team_cloth",
+    "dark forged armour",
+    "ivory linen tabard",
+    "aged golden shield rim",
+    "skin in helmet shadow",
+    "pale steel blade"
+  ],
+  "swordBladeScale": null,
+  "componentBoundsBlender": {
+    "body": {
+      "min": [
+        -0.5381830930709839,
+        -0.836153507232666,
+        -0.0064999982714653015
+      ],
+      "max": [
+        0.6443819999694824,
+        0.43279406428337097,
+        2.612299919128418
+      ]
+    },
+    "weapon": {
+      "min": [
+        0.06200000271201134,
+        -1.1800000667572021,
+        1.4955044984817505
+      ],
+      "max": [
+        0.1379999965429306,
+        -0.15999996662139893,
+        2.824495553970337
+      ]
+    },
+    "torso": {
+      "min": [
+        -0.35860002040863037,
+        -0.2739744186401367,
+        1.0793375968933105
+      ],
+      "max": [
+        0.35860002040863037,
+        0.2653663754463196,
+        2.2149999141693115
+      ]
+    }
+  },
+  "bodyRadiusConservative": 1.0556423871473513,
+  "authoring": "parameterized standalone Blender source; actual armature and vertex weights"
+}

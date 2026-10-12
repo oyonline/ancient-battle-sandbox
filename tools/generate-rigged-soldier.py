@@ -5,15 +5,17 @@ from pathlib import Path
 D=str(Path(sys.argv[sys.argv.index('--')+1]) if '--' in sys.argv else Path(__file__).resolve().parents[1]/'public/assets/3d-sample')
 KIND=sys.argv[sys.argv.index('--kind')+1] if '--kind' in sys.argv else 'infantry'
 assert KIND in ('infantry','pikeman','archer','cavalry')
+BOW='--archer-candidate' in sys.argv
+assert not BOW or KIND=='archer', 'A1 is archer only'
 PIKE='--pikeman-candidate' in sys.argv
 assert not PIKE or KIND=='pikeman', 'P1 is pikeman only'
 DUEL='--duel' in sys.argv
-assert not (PIKE and DUEL), 'Sword duel candidate cannot be applied to pikeman'
-MOTION='--locomotion' in sys.argv or DUEL or PIKE
-R11='--candidate-r11' in sys.argv or (MOTION and not PIKE)
+assert not ((PIKE or BOW) and DUEL), 'Sword duel candidate is infantry only'
+MOTION='--locomotion' in sys.argv or DUEL or PIKE or BOW
+R11='--candidate-r11' in sys.argv or (MOTION and not (PIKE or BOW))
 CANDIDATE='--candidate' in sys.argv or R11
-SHAPE=CANDIDATE or PIKE
-LOWER=R11 or PIKE
+SHAPE=CANDIDATE or PIKE or BOW
+LOWER=R11 or PIKE or BOW
 assert not CANDIDATE or KIND=='infantry', 'Round 1 is infantry only'
 ASSET_NAME='spear' if KIND=='pikeman' else KIND
 Path(D).mkdir(parents=True,exist_ok=True)
@@ -275,6 +277,27 @@ if LOWER:
    for poly in me.polygons:poly.use_smooth=True
   fitted_plate(prefix+' fitted shin plate',[(.235,.076,.101),(.37,.087,.112),(.52,.090,.117),(.655,.086,.110)])
   fitted_plate(prefix+' fitted knee cup',[(.688,.067,.100),(.727,.084,.110),(.773,.086,.114),(.818,.068,.101)])
+
+# A1 restores the native hood/quiver silhouette without changing the skeleton.
+if BOW:
+ for o in list(parts):
+  if o.name.startswith(('helmet','left steel cheek','right steel cheek')):
+   parts.remove(o);bpy.data.objects.remove(o,do_unlink=True)
+ verts=[];faces=[]
+ # Open face: side cheeks join across crown and back, never cover the face.
+ for z,rx,ry in [(2.205,.185,.145),(2.37,.192,.163),(2.51,.169,.161),(2.595,.106,.109),(2.6123,.018,.025)]:
+  for j in range(17):
+   a=-.70+j/16*(math.pi+1.40);verts.append((rx*math.cos(a),.0+ry*math.sin(a),z))
+ for k in range(4):
+  for j in range(16):q_=k*17+j;faces.append((q_,q_+1,q_+18,q_+17))
+ me=bpy.data.meshes.new('linen hood');me.from_pydata(verts,[],faces);me.update();o=bpy.data.objects.new('helmet - ivory open hood',me);bpy.context.collection.objects.link(o);finish(o,o.name,cream);o.modifiers.new('linen thickness','SOLIDIFY').thickness=.012
+ for poly in me.polygons:poly.use_smooth=True
+ rod('quiver brown leather case',(-.235,.25,1.56),(-.255,.33,2.25),.090,.112,leather)
+ for i in range(5):
+  x=-.29+i*.022;rod('quiver arrow '+str(i),(x,.325,2.17),(x,.35,2.43+(i%2)*.03),.006,.006,leather)
+  panel('quiver fletching '+str(i),[(x-.020,.35,2.36),(x+.020,.35,2.36),(x+.015,.35,2.47),(x-.012,.35,2.47)],cream)
+ strap=[(-.22,.24,2.23),(-.29,.10,2.30),(-.27,-.24,2.22),(-.19,-.285,2.09),(.015,-.293,1.91),(.22,-.27,1.73)]
+ for i in range(len(strap)-1):rod('quiver chest strap '+str(i),strap[i],strap[i+1],.018,.018,leather)
 
 # Weapon variants keep the identical adult armour identity and humanoid hierarchy.
 arm_targets={}
@@ -556,9 +579,9 @@ def make_action(name,duration,poses):
  action=bpy.data.actions.new(name);action.use_fake_user=True;rig.animation_data.action=action
  for frame,pose in poses:
   for pb in rig.pose.bones:pb.location=(0,0,0);pb.rotation_euler=(0,0,0);pb.scale=(1,1,1)
-  if (CANDIDATE or PIKE) and (name in ('Idle','Attack','Hit') or (MOTION and name in ('Walk','Turn')) or (name=='Death' and frame==0)):
+  if (CANDIDATE or PIKE or BOW) and (name in ('Idle','Attack','Hit') or (MOTION and name in ('Walk','Turn')) or (name=='Death' and frame==0)):
    prepared={'Spine':{'r':(.085 if R11 else .060,0,.018 if R11 else .035)},'Chest':{'r':(-.025,.045,-.055)},'Head':{'r':(-.025,0,.030)},'UpperArm.L':{'r':(-.12,-.035,-.08)},'Forearm.L':{'r':(-.12,0,0)},'UpperArm.R':{'r':(-.10,.025,.05)},'Forearm.R':{'r':(-.14,0,0)}}
-   if PIKE:
+   if PIKE or BOW:
     prepared={key:value for key,value in prepared.items() if not key.startswith(('UpperArm','Forearm'))}
    for key,values in pose.items():
     if key in prepared and 'r' in values:prepared[key]['r']=tuple(a+b for a,b in zip(prepared[key]['r'],values['r']))
@@ -570,7 +593,7 @@ def make_action(name,duration,poses):
    pb=rig.pose.bones[name_]
    if 'r' in values:pb.rotation_euler=values['r']
    if 'l' in values:pb.location=values['l']
-  if (CANDIDATE or PIKE) and (name in ('Idle','Attack','Hit') or (MOTION and name in ('Walk','Turn')) or (name=='Death' and frame==0)):ready_legs()
+  if (CANDIDATE or PIKE or BOW) and (name in ('Idle','Attack','Hit') or (MOTION and name in ('Walk','Turn')) or (name=='Death' and frame==0)):ready_legs()
   if MOTION and name in ('Walk','Turn'):solve_motion_legs(name,frame)
   if DUEL and name=='Attack':solve_duel_attack(frame)
   if KIND!='infantry' and name!='Death':
