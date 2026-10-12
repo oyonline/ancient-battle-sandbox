@@ -1,0 +1,5146 @@
+{
+  "base": "3ebf10424e232ba372c161aad1519c98c61489fc",
+  "staticSample": "Idle 0; renderer actual Three.js; same camera/positions/materials",
+  "pairedStaticEquality": {
+    "initial": {
+      "materials": true,
+      "background": true,
+      "toneMapping": true,
+      "outputColorSpace": true,
+      "camera": true,
+      "canvas": true,
+      "units": true,
+      "shadow": true
+    },
+    "infantry-near": {
+      "materials": true,
+      "background": true,
+      "toneMapping": true,
+      "outputColorSpace": true,
+      "camera": true,
+      "canvas": true,
+      "units": true,
+      "shadow": true
+    },
+    "compatible-b1-default": {
+      "materials": true,
+      "background": true,
+      "toneMapping": true,
+      "outputColorSpace": true,
+      "camera": true,
+      "canvas": true,
+      "units": true,
+      "shadow": true
+    },
+    "compatible-b1-near": {
+      "materials": true,
+      "background": true,
+      "toneMapping": true,
+      "outputColorSpace": true,
+      "camera": true,
+      "canvas": true,
+      "units": true,
+      "shadow": true
+    }
+  },
+  "versions": {
+    "baseline": {
+      "checks": 98,
+      "failed": [],
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        }
+      ],
+      "initial": {
+        "candidate": false,
+        "materials": [
+          {
+            "id": 0,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 1,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 5,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 6,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 7,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 8,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 9,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 10,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 11,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 12,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 13,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 14,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 15,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 16,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 17,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 18,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 19,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 20,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 21,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 22,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 23,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 24,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 25,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 26,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 27,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 28,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 29,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 30,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 31,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          }
+        ],
+        "background": "b9c5ab",
+        "toneMapping": 0,
+        "outputColorSpace": "srgb",
+        "hemisphere": {
+          "sky": "fff5da",
+          "ground": "556547",
+          "intensity": 1.7
+        },
+        "sun": {
+          "color": "fff0cb",
+          "intensity": 2,
+          "position": [
+            -16,
+            28,
+            16
+          ],
+          "normalBias": 0.04,
+          "mapSize": [
+            2048,
+            2048
+          ],
+          "bounds": [
+            -26,
+            26,
+            26,
+            -26
+          ]
+        },
+        "camera": {
+          "position": [
+            21.018681924849908,
+            26.623663771476547,
+            32.024909233133215
+          ],
+          "focus": [
+            0,
+            0,
+            4
+          ],
+          "distance": 44,
+          "fov": 38
+        },
+        "canvas": [
+          1280,
+          695
+        ],
+        "paused": true,
+        "units": [
+          {
+            "id": 0,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              -8,
+              2.0346771159912156,
+              -3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 1,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              -8,
+              1.6280945489489764,
+              -1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 2,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              -8,
+              1.123135638699598,
+              1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 3,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              -8,
+              0.6892079212204909,
+              3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 4,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              -10.1,
+              1.406885947187613,
+              -3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 5,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              -10.1,
+              1.1353886250206147,
+              -1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 6,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              -12.2,
+              0.8294920355031058,
+              -3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 7,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              -12.2,
+              0.6826422154658319,
+              -1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 8,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              -12.2,
+              0.5000942793752831,
+              1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 9,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              -12.2,
+              0.34303126162066705,
+              3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 10,
+            "kind": "archer",
+            "hp": 100,
+            "position": [
+              -15,
+              0.3309336286877897,
+              -1.5
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 11,
+            "kind": "archer",
+            "hp": 100,
+            "position": [
+              -15,
+              0.249316853454964,
+              1.5
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 12,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              -10.8,
+              0.2508446623484459,
+              6
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 13,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              -15,
+              0.17059801279547346,
+              6
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 14,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              -10.8,
+              0.16163286519333592,
+              10.2
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 15,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              -15,
+              0.1522997253114232,
+              10.2
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 16,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              8,
+              0.23164749132942136,
+              -3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 17,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              8,
+              0.30671920292709737,
+              -1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 18,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              8,
+              0.4587153724154561,
+              1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 19,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              8,
+              0.6576682497128266,
+              3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 20,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              10.1,
+              0.19706494300944014,
+              -3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 21,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              10.1,
+              0.2724688572069873,
+              -1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 22,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              12.2,
+              0.1809854537409142,
+              -3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 23,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              12.2,
+              0.24156878745014376,
+              -1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 24,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              12.2,
+              0.3594568230747264,
+              1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 25,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              12.2,
+              0.5103588293135441,
+              3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 26,
+            "kind": "archer",
+            "hp": 100,
+            "position": [
+              15,
+              0.19104028937850143,
+              -1.5
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 27,
+            "kind": "archer",
+            "hp": 100,
+            "position": [
+              15,
+              0.28586220430987447,
+              1.5
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 28,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              10.8,
+              0.7142291755028788,
+              6
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 29,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              15,
+              0.4166999376946847,
+              6
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 30,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              10.8,
+              0.4631345654769472,
+              10.2
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 31,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              15,
+              0.2981278002713935,
+              10.2
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        ]
+      },
+      "nearCamera": {
+        "position": [
+          -3.2230268352613844,
+          7.84004059655607,
+          9.51929755298482
+        ],
+        "focus": [
+          -8,
+          1.789207921220491,
+          3.1500000000000004
+        ],
+        "distance": 10,
+        "fov": 38
+      },
+      "fightLast": {
+        "elapsed": 15.783999999999965,
+        "alive": 26
+      },
+      "resetAlive": 32
+    },
+    "candidate": {
+      "checks": 98,
+      "failed": [],
+      "errors": [],
+      "assets": [
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+          "status": 200
+        },
+        {
+          "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+          "status": 200
+        }
+      ],
+      "initial": {
+        "candidate": true,
+        "materials": [
+          {
+            "id": 0,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 1,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 5,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 6,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 7,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 8,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 9,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 10,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 11,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 12,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 13,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 14,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 15,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "b84c38",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 16,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 17,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 18,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 19,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 20,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 21,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 22,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 23,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 24,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 25,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 26,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 27,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 28,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 29,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 30,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          },
+          {
+            "id": 31,
+            "materials": [
+              {
+                "name": "brown leather",
+                "color": "5b4a33",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "dark forged armour",
+                "color": "767d7c",
+                "roughness": 0.4699999988079071,
+                "metalness": 0.3499999940395355
+              },
+              {
+                "name": "charcoal steel mail",
+                "color": "4b504d",
+                "roughness": 0.8299999833106995,
+                "metalness": 0
+              },
+              {
+                "name": "team_cloth",
+                "color": "487c9c",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "ivory linen tabard",
+                "color": "d4cbb5",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "aged golden shield rim",
+                "color": "aa9061",
+                "roughness": 0.550000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "skin in helmet shadow",
+                "color": "aa8965",
+                "roughness": 0.800000011920929,
+                "metalness": 0
+              },
+              {
+                "name": "pale steel blade",
+                "color": "a8afac",
+                "roughness": 0.4000000059604645,
+                "metalness": 0
+              },
+              {
+                "name": "dark eye slit",
+                "color": "242924",
+                "roughness": 0.8999999761581421,
+                "metalness": 0
+              }
+            ]
+          }
+        ],
+        "background": "b9c5ab",
+        "toneMapping": 0,
+        "outputColorSpace": "srgb",
+        "hemisphere": {
+          "sky": "f4f6ff",
+          "ground": "62695b",
+          "intensity": 1.45
+        },
+        "sun": {
+          "color": "fff5e8",
+          "intensity": 1.8,
+          "position": [
+            -16,
+            28,
+            16
+          ],
+          "normalBias": 0.04,
+          "mapSize": [
+            2048,
+            2048
+          ],
+          "bounds": [
+            -26,
+            26,
+            26,
+            -26
+          ]
+        },
+        "camera": {
+          "position": [
+            21.018681924849908,
+            26.623663771476547,
+            32.024909233133215
+          ],
+          "focus": [
+            0,
+            0,
+            4
+          ],
+          "distance": 44,
+          "fov": 38
+        },
+        "canvas": [
+          1280,
+          695
+        ],
+        "paused": true,
+        "units": [
+          {
+            "id": 0,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              -8,
+              2.0346771159912156,
+              -3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 1,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              -8,
+              1.6280945489489764,
+              -1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 2,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              -8,
+              1.123135638699598,
+              1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 3,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              -8,
+              0.6892079212204909,
+              3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 4,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              -10.1,
+              1.406885947187613,
+              -3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 5,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              -10.1,
+              1.1353886250206147,
+              -1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 6,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              -12.2,
+              0.8294920355031058,
+              -3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 7,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              -12.2,
+              0.6826422154658319,
+              -1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 8,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              -12.2,
+              0.5000942793752831,
+              1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 9,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              -12.2,
+              0.34303126162066705,
+              3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 10,
+            "kind": "archer",
+            "hp": 100,
+            "position": [
+              -15,
+              0.3309336286877897,
+              -1.5
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 11,
+            "kind": "archer",
+            "hp": 100,
+            "position": [
+              -15,
+              0.249316853454964,
+              1.5
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 12,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              -10.8,
+              0.2508446623484459,
+              6
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 13,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              -15,
+              0.17059801279547346,
+              6
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 14,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              -10.8,
+              0.16163286519333592,
+              10.2
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 15,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              -15,
+              0.1522997253114232,
+              10.2
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 16,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              8,
+              0.23164749132942136,
+              -3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 17,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              8,
+              0.30671920292709737,
+              -1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 18,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              8,
+              0.4587153724154561,
+              1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 19,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              8,
+              0.6576682497128266,
+              3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 20,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              10.1,
+              0.19706494300944014,
+              -3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 21,
+            "kind": "infantry",
+            "hp": 100,
+            "position": [
+              10.1,
+              0.2724688572069873,
+              -1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 22,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              12.2,
+              0.1809854537409142,
+              -3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 23,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              12.2,
+              0.24156878745014376,
+              -1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 24,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              12.2,
+              0.3594568230747264,
+              1.05
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 25,
+            "kind": "pikeman",
+            "hp": 100,
+            "position": [
+              12.2,
+              0.5103588293135441,
+              3.1500000000000004
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 26,
+            "kind": "archer",
+            "hp": 100,
+            "position": [
+              15,
+              0.19104028937850143,
+              -1.5
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 27,
+            "kind": "archer",
+            "hp": 100,
+            "position": [
+              15,
+              0.28586220430987447,
+              1.5
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 28,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              10.8,
+              0.7142291755028788,
+              6
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 29,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              15,
+              0.4166999376946847,
+              6
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 30,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              10.8,
+              0.4631345654769472,
+              10.2
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          },
+          {
+            "id": 31,
+            "kind": "cavalry",
+            "hp": 100,
+            "position": [
+              15,
+              0.2981278002713935,
+              10.2
+            ],
+            "scale": [
+              1,
+              1,
+              1
+            ]
+          }
+        ]
+      },
+      "nearCamera": {
+        "position": [
+          -3.2230268352613844,
+          7.84004059655607,
+          9.51929755298482
+        ],
+        "focus": [
+          -8,
+          1.789207921220491,
+          3.1500000000000004
+        ],
+        "distance": 10,
+        "fov": 38
+      },
+      "fightLast": {
+        "elapsed": 15.117899999999967,
+        "alive": 26
+      },
+      "resetAlive": 32
+    }
+  },
+  "review": "independent limited APPROVE; 1280x900 current static / sampled dynamics / recorded interactions; user visual approval unknown",
+  "fullVideoLocation": ".omc/evidence/lighting1/{baseline,candidate}/",
+  "validation": {
+    "fullTests": {
+      "passed": 780,
+      "failed": 0,
+      "exit": 0
+    },
+    "buildExit": 0
+  }
+}

@@ -18,6 +18,7 @@ function showFailure(message) {
 }
 try {
 const preview=new URLSearchParams(location.search);
+const lightCandidate=preview.get('light')==='candidate';
 const buildingCandidate=preview.get('building')==='candidate';
 const buildingComparing=preview.has('building')&&preview.get('still')==='1'&&!preview.has('qa');
 const towers=[];
@@ -60,8 +61,10 @@ const direction = new THREE.Vector3(.75, .95, 1).normalize();
 function updateCamera() { camera.position.copy(focus).addScaledVector(direction, distance * Math.max(1, 1.35 / camera.aspect)); camera.lookAt(focus); }
 function resize() { const { width, height } = viewport.getBoundingClientRect(); renderer.setSize(width, height); camera.aspect = width / height; camera.updateProjectionMatrix(); updateCamera(); }
 const observer = new ResizeObserver(resize); observer.observe(viewport);
-scene.add(new THREE.HemisphereLight('#fff5da', '#556547', 1.7));
-const sun = new THREE.DirectionalLight('#fff0cb', 2.0);
+// L1 changes only the existing two light sources. Assets, camera and shadow geometry stay fixed.
+const hemisphere = new THREE.HemisphereLight(lightCandidate?'#f4f6ff':'#fff5da', lightCandidate?'#62695b':'#556547', lightCandidate?1.45:1.7);
+scene.add(hemisphere);
+const sun = new THREE.DirectionalLight(lightCandidate?'#fff5e8':'#fff0cb', lightCandidate?1.8:2.0);
 sun.position.set(-16, 28, 16); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048); sun.shadow.camera.left = -26; sun.shadow.camera.right = 26;
 sun.shadow.camera.top = 26; sun.shadow.camera.bottom = -26; sun.shadow.normalBias = .04;
@@ -227,6 +230,12 @@ if(preview.has('camera')){
   function bounds(objects){const min=[Infinity,Infinity],max=[-Infinity,-Infinity];let finite=true;for(const root of objects){root.updateMatrixWorld(true);updateSkinMatrices(root);root.traverse(o=>{if(!o.isMesh||!o.visible)return;const positions=o.geometry.attributes.position;for(let i=0;i<positions.count;i++){o.getVertexPosition(i,point).applyMatrix4(o.matrixWorld).project(camera);finite=finite&&Number.isFinite(point.x)&&Number.isFinite(point.y)&&Number.isFinite(point.z);const x=(point.x+1)*renderer.domElement.width/2,y=(1-point.y)*renderer.domElement.height/2;min[0]=Math.min(min[0],x);min[1]=Math.min(min[1],y);max[0]=Math.max(max[0],x);max[1]=Math.max(max[1],y);}});}return {min,max,finite};}
   return {active:cameraCandidate,applicable:cameraApplicable,camera:{position:camera.position.toArray(),focus:focus.toArray(),distance,fov:camera.fov,direction:direction.toArray()},canvas:[renderer.domElement.width,renderer.domElement.height],elapsed,paused,fighting,selected:selected.map(u=>u.id),groundPick:(()=>{const p=new THREE.Vector3(0,heightAt(0,0),0).project(camera);return [(p.x+1)*renderer.domElement.width/2,(1-p.y)*renderer.domElement.height/2];})(),units:units.map(u=>{const p=u.root.position.clone();p.y+=1.4;p.project(camera);return {id:u.id,kind:u.kind,team:u.team,hp:u.hp,position:u.root.position.toArray(),pick:[(p.x+1)*renderer.domElement.width/2,(1-p.y)*renderer.domElement.height/2],target:u.target,bounds:bounds([u.root])};}),towers:bounds(towers),rings:bounds(units.filter(u=>u.ring.visible).map(u=>u.ring))};
  }};
+}
+
+if(preview.has('light')){
+ for(const [value,label] of [['baseline','光照基准'],['candidate','光照候选 L1']]){const b=document.createElement('button');b.textContent=label;b.setAttribute('aria-pressed',String(preview.get('light')===value));b.onclick=()=>{const p=new URLSearchParams(location.search);p.set('light',value);location.search=p.toString();};document.querySelector('.zoom').append(b);}
+ // Explicit capture sampling; normal gameplay never calls this helper.
+ window.lightingPreview={near:()=>{const actor=units.find(u=>u.team==='red'&&u.kind==='infantry'&&u.index===3);for(const u of units){u.root.visible=u===actor;u.ring.visible=false;}for(const t of towers)t.visible=false;focus.copy(actor.root.position);focus.y+=1.1;distance=10;updateCamera();renderer.render(scene,camera);},freeze:()=>{paused=true;$('pause').textContent='继续';for(const u of units){u.model.position.y=0;u.animation.terrain?.restore();u.animation.mixer.stopAllAction();const a=u.animation.actions.get('idle');a.reset().play();u.animation.mixer.setTime(0);updateSkinMatrices(u.model);u.animation.terrain?.rememberLift();u.animation.terrain?.apply('idle',0);updateSkinMatrices(u.model);}renderer.render(scene,camera);},inspect:()=>({candidate:lightCandidate,materials:units.map(u=>{const m=[];u.model.traverse(o=>{if(o.isMesh)for(const a of(Array.isArray(o.material)?o.material:[o.material]))m.push({name:a.name,color:a.color?.getHexString(),roughness:a.roughness,metalness:a.metalness});});return {id:u.id,materials:m};}),background:scene.background.getHexString(),toneMapping:renderer.toneMapping,outputColorSpace:renderer.outputColorSpace,hemisphere:{sky:hemisphere.color.getHexString(),ground:hemisphere.groundColor.getHexString(),intensity:hemisphere.intensity},sun:{color:sun.color.getHexString(),intensity:sun.intensity,position:sun.position.toArray(),normalBias:sun.shadow.normalBias,mapSize:sun.shadow.mapSize.toArray(),bounds:[sun.shadow.camera.left,sun.shadow.camera.right,sun.shadow.camera.top,sun.shadow.camera.bottom]},camera:{position:camera.position.toArray(),focus:focus.toArray(),distance,fov:camera.fov},canvas:[renderer.domElement.width,renderer.domElement.height],paused,units:units.map(u=>({id:u.id,kind:u.kind,hp:u.hp,position:u.root.position.toArray(),scale:u.model.scale.toArray()}))})};
 }
 
 start();
