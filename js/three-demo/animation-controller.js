@@ -1,3 +1,4 @@
+import { TerrainContact } from './terrain-contact.js';
 import { PlantedFeet } from './planted-feet.js';
 import { AnimationMixer, LoopOnce, LoopRepeat, Box3, Vector3, Sphere } from 'three';
 
@@ -39,7 +40,7 @@ export function prepareClipBounds(model, clips) {
 
 // One controller and mixer per cloned skeleton. Shared clips remain immutable.
 export class AnimationController {
- constructor(model, clips, {locomotion=false}={}) {
+ constructor(model, clips, {locomotion=false,terrainHeight=null}={}) {
   this.locomotion=locomotion;this.stateAge=0;this.feet=locomotion?new PlantedFeet(model):null;
   this.model = model;
   let skinned = false;
@@ -61,6 +62,7 @@ export class AnimationController {
    else this.oneShot = null;
   };
   this.mixer.addEventListener('finished', this.onFinished);
+  this.terrain=terrainHeight&&this.feet?new TerrainContact(model,this.feet,terrainHeight):null;
   this.play('idle');
  }
  play(name, restart = false) {
@@ -89,13 +91,15 @@ export class AnimationController {
  }
  update(dt, moving, charging=false, motion=null) {
   if (this.disposed) return;
+  this.terrain?.restore();
   if (!this.dead && !this.oneShot){const turning=this.locomotion&&motion&&Math.abs(motion.turnRate)>.25&&motion.speed<.12&&this.actions.has('turn');this.play(turning?'turn':moving?(charging&&this.actions.has('charge')?'charge':'walk'):'idle');}
   if(this.locomotion&&motion){if(this.state==='walk')this.actions.get('walk').setEffectiveTimeScale(Math.max(0,Math.min(2.5,motion.speed/1.8)));if(this.state==='turn')this.actions.get('turn').setEffectiveTimeScale(Math.max(.25,Math.min(1.5,Math.abs(motion.turnRate)/2.6)));}
   this.mixer.update(dt);this.stateAge+=dt;
-  if(this.feet){refreshSkinWorld(this.model);const action=this.actions.get(this.state);this.feet.update(this.state,action.time/action.getClip().duration,this.stateAge,dt);}
+  if(this.feet){refreshSkinWorld(this.model);const action=this.actions.get(this.state);this.terrain?.rememberLift();this.feet.update(this.state,action.time/action.getClip().duration,this.stateAge,dt);this.terrain?.apply(this.state,action.time/action.getClip().duration);}
  }
  dispose() {
   if (this.disposed) return;
+  this.terrain?.restore();
   this.disposed = true;
   this.mixer.removeEventListener('finished', this.onFinished);
   this.mixer.stopAllAction();
