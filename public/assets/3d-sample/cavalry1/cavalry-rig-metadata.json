@@ -1,0 +1,88 @@
+{
+  "kind": "cavalry",
+  "releaseSeconds": null,
+  "clips": {
+    "Idle": {
+      "duration": 2,
+      "frames": 48
+    },
+    "Walk": {
+      "duration": 1,
+      "frames": 24
+    },
+    "Attack": {
+      "duration": 0.875,
+      "frames": 21
+    },
+    "Hit": {
+      "duration": 0.417,
+      "frames": 10
+    },
+    "Death": {
+      "duration": 1.25,
+      "frames": 30
+    },
+    "Charge": {
+      "duration": 0.75,
+      "frames": 18
+    }
+  },
+  "front": "Three +Z (Blender -Y)",
+  "height": 3.6122970581054688,
+  "vertices": 8229,
+  "triangles": 15786,
+  "bones": 34,
+  "materials": [
+    "brown leather",
+    "dark forged armour",
+    "charcoal steel mail",
+    "team_cloth",
+    "ivory linen tabard",
+    "aged golden shield rim",
+    "skin in helmet shadow",
+    "pale steel blade",
+    "dark eye slit"
+  ],
+  "swordBladeScale": null,
+  "componentBoundsBlender": {
+    "body": {
+      "min": [
+        -0.7424300909042358,
+        -1.8299999237060547,
+        0.013000000268220901
+      ],
+      "max": [
+        0.7424300909042358,
+        1.443786859512329,
+        3.6122970581054688
+      ]
+    },
+    "weapon": {
+      "min": [
+        0.520004153251648,
+        -2.919999837875366,
+        2.690004348754883
+      ],
+      "max": [
+        0.639995813369751,
+        0.36000001430511475,
+        2.8099958896636963
+      ]
+    },
+    "torso": {
+      "min": [
+        -0.35860002040863037,
+        -0.2739744186401367,
+        1.9878854751586914
+      ],
+      "max": [
+        0.35860002040863037,
+        0.2653663754463196,
+        3.2149999141693115
+      ]
+    }
+  },
+  "bodyRadiusConservative": 1.9748676311703115,
+  "cavalryCandidate": true,
+  "authoring": "parameterized standalone Blender source; actual armature and vertex weights"
+}

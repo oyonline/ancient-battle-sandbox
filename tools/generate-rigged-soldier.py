@@ -5,16 +5,18 @@ from pathlib import Path
 D=str(Path(sys.argv[sys.argv.index('--')+1]) if '--' in sys.argv else Path(__file__).resolve().parents[1]/'public/assets/3d-sample')
 KIND=sys.argv[sys.argv.index('--kind')+1] if '--kind' in sys.argv else 'infantry'
 assert KIND in ('infantry','pikeman','archer','cavalry')
+RIDE='--cavalry-candidate' in sys.argv
+assert not RIDE or KIND=='cavalry', 'V1 is cavalry only'
 BOW='--archer-candidate' in sys.argv
 assert not BOW or KIND=='archer', 'A1 is archer only'
 PIKE='--pikeman-candidate' in sys.argv
 assert not PIKE or KIND=='pikeman', 'P1 is pikeman only'
 DUEL='--duel' in sys.argv
-assert not ((PIKE or BOW) and DUEL), 'Sword duel candidate is infantry only'
+assert not ((PIKE or BOW or RIDE) and DUEL), 'Sword duel candidate is infantry only'
 MOTION='--locomotion' in sys.argv or DUEL or PIKE or BOW
 R11='--candidate-r11' in sys.argv or (MOTION and not (PIKE or BOW))
 CANDIDATE='--candidate' in sys.argv or R11
-SHAPE=CANDIDATE or PIKE or BOW
+SHAPE=CANDIDATE or PIKE or BOW or RIDE
 LOWER=R11 or PIKE or BOW
 assert not CANDIDATE or KIND=='infantry', 'Round 1 is infantry only'
 ASSET_NAME='spear' if KIND=='pikeman' else KIND
@@ -640,7 +642,7 @@ bpy.ops.export_scene.gltf(filepath=D+'/'+ASSET_NAME+'-rigged.glb',use_selection=
 for track in rig.animation_data.nla_tracks:track.mute=True
 # Measured neutral body bounds (exclude sword/shield group) and real mesh stats.
 bounds=[v.co for v in body.data.vertices if not (v.groups and any(body.vertex_groups[g.group].name=='Hand.R' and g.weight>.99 for g in v.groups))]
-metadata={'kind':KIND,'releaseSeconds':11/24 if KIND=='archer' else None,'clips':clips,'front':'Three +Z (Blender -Y)','height':max(v.co.z for v in body.data.vertices),'vertices':len(body.data.vertices),'triangles':sum(len(p.vertices)-2 for p in body.data.polygons),'bones':len(rig.pose.bones),'materials':[m.name for m in body.data.materials],'swordBladeScale':1.25 if KIND=='infantry' else None,'componentBoundsBlender':component_bounds,'bodyRadiusConservative': max(math.hypot(x,y) for x in component_bounds['body']['min'][0:1]+component_bounds['body']['max'][0:1] for y in [component_bounds['body']['min'][1],component_bounds['body']['max'][1]]),'authoring':'parameterized standalone Blender source; actual armature and vertex weights'}
+metadata={'kind':KIND,'releaseSeconds':11/24 if KIND=='archer' else None,'clips':clips,'front':'Three +Z (Blender -Y)','height':max(v.co.z for v in body.data.vertices),'vertices':len(body.data.vertices),'triangles':sum(len(p.vertices)-2 for p in body.data.polygons),'bones':len(rig.pose.bones),'materials':[m.name for m in body.data.materials],'swordBladeScale':1.25 if KIND=='infantry' else None,'componentBoundsBlender':component_bounds,'bodyRadiusConservative': max(math.hypot(x,y) for x in component_bounds['body']['min'][0:1]+component_bounds['body']['max'][0:1] for y in [component_bounds['body']['min'][1],component_bounds['body']['max'][1]]),'cavalryCandidate':RIDE,'authoring':'parameterized standalone Blender source; actual armature and vertex weights'}
 Path(D+'/'+KIND+'-rig-metadata.json').write_text(json.dumps(metadata,indent=2))
 bpy.ops.wm.save_as_mainfile(filepath=D+'/'+ASSET_NAME+'-rigged.blend')
 print('RIGGED_SOLDIER_COMPLETE',json.dumps(metadata))

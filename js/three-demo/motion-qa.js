@@ -19,7 +19,7 @@ export function createDuelQA({reset,startFight,getUnits}){
  let running=false;const trace=[],events=[];
  function start(){reset();trace.length=0;events.length=0;api.frames.length=0;api.captureTick=-1;startFight();running=true;}
  function recordEvents(time,list){if(!running)return;for(const e of list)events.push({time,type:e.type,from:e.from?.id,target:e.target?.id,unit:e.unit?.id});}
- function afterStep(time){if(!running)return;const units=getUnits();trace.push({time,distance:Math.hypot(units[0].x-units[1].x,units[0].z-units[1].z),units:units.map(u=>({id:u.id,x:u.x,z:u.z,heading:u.heading,hp:u.hp,state:u.animation.state,actionTime:u.animation.actions.get(u.animation.state).time,pendingStrike:u.pendingStrike?{...u.pendingStrike}:null,deathComplete:u.animation.deathComplete,corpseSettled:!!u.corpseSettled}))});if(time>=18)running=false;}
+ function afterStep(time){if(!running)return;const units=getUnits();trace.push({time,distance:Math.hypot(units[0].x-units[1].x,units[0].z-units[1].z),units:units.map(u=>({id:u.id,x:u.x,z:u.z,heading:u.heading,hp:u.hp,speed:u.speed,runup:u.runup,pierceTime:u.pierceTime,chargeFlash:u.chargeFlash,state:u.animation.state,actionTime:u.animation.actions.get(u.animation.state).time,pendingStrike:u.pendingStrike?{...u.pendingStrike}:null,deathComplete:u.animation.deathComplete,corpseSettled:!!u.corpseSettled}))});if(time>=18)running=false;}
  const api={ready:true,start,recordEvents,afterStep,trace,events,frames:[],get running(){return running;}};window.duelQA=api;const button=document.createElement('button');button.textContent='重放双兵交战';button.onclick=start;document.querySelector('.demo-controls').prepend(button);return api;
 }
 
