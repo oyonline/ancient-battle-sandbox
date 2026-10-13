@@ -1,0 +1,63 @@
+{
+  "bones": 34,
+  "boneTransformsEqual": true,
+  "inverseBindValuesEqual": true,
+  "clips": [
+    {
+      "name": "Idle",
+      "channelTargetsEqual": true,
+      "duration": 2.0,
+      "durationEqual": true,
+      "maximumInterpolatedFloatDifference": 0.0,
+      "changedTracks": []
+    },
+    {
+      "name": "Walk",
+      "channelTargetsEqual": true,
+      "duration": 1.0,
+      "durationEqual": true,
+      "maximumInterpolatedFloatDifference": 0.0,
+      "changedTracks": []
+    },
+    {
+      "name": "Attack",
+      "channelTargetsEqual": true,
+      "duration": 0.875,
+      "durationEqual": true,
+      "maximumInterpolatedFloatDifference": 0.0,
+      "changedTracks": []
+    },
+    {
+      "name": "Hit",
+      "channelTargetsEqual": true,
+      "duration": 0.4166666567325592,
+      "durationEqual": true,
+      "maximumInterpolatedFloatDifference": 0.0,
+      "changedTracks": []
+    },
+    {
+      "name": "Death",
+      "channelTargetsEqual": true,
+      "duration": 1.25,
+      "durationEqual": true,
+      "maximumInterpolatedFloatDifference": 1.0063799023628235,
+      "changedTracks": [
+        "Thigh.R.rotation",
+        "Shin.R.rotation",
+        "Foot.R.rotation"
+      ]
+    },
+    {
+      "name": "Charge",
+      "channelTargetsEqual": true,
+      "duration": 0.75,
+      "durationEqual": true,
+      "maximumInterpolatedFloatDifference": 0.0,
+      "changedTracks": []
+    }
+  ],
+  "footVerticesCount": 96,
+  "footVerticesEqual": true,
+  "oldCount": 19,
+  "oldAssetsUnchanged": true
+}

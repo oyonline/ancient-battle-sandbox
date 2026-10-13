@@ -93,3 +93,25 @@ P2三态：技术验证限定通过；高级独立视觉APPROVE_WITH_NOTES、独
 总控2026-10-13范围裁决：A2资产/生者/主场/平地晚Death限定接受；坡面完整目标未通过。单列本批最后S1共享尸体坡面视觉支撑（纯renderer opt-in，保留T1/Q1及旧资产对照，不改规则/时钟/命令），在V2马＋骑手形体复审后实施，避免四类GLB盲调腕高。技术/内部视觉按上述限定范围记录，用户明确认可A2/整体美术仍未知；高级requested gpt-6-astra/high、actual未知。独立技术最终限定APPROVE_WITH_NOTES（Q1 on平地/资产；S1坡面开放）：25GLB200/errors=[]，自然持箭scale=.001，平地late/hold稳定，19bind/旧18/非Death/网格属性保持；实际最低点归原胸带装备，衣料/皮甲分区如上。Q1off原本仍有拉弦，A2 nock到弓平面距.7158 vsA1 .7431m略减，但弦长比1.6417 vs旧1.5258、总长约增加15cm，记为注意项；未见新增端点脱离/骨伸长证据，不宣称off是松弦。独立原始qa-standard-20261013/a2-death-fix/{summary,structural-summary}.json；总控结合高级既有造型/生者/main APPROVE_WITH_NOTES与实际平地补图判断，正式接受Q1on平地限定范围；高级坡面整体目标保持开放，不能写全坡通过。当前NO PUSH/MERGE/DEPLOY；KB源未同步的既有dirty owner-handoff限制保持。
 
 下一项V2独立马＋骑手模型：连续马身肩胯、弧线颈头、肌肉/细腱/平底蹄，骑乘坐标胸腰/袖/腿适配；保34骨/鞍缰/6动作与现规则。V2后S1仍待实施，整批尚未完成。
+
+## V2 马＋骑手：技术与内部视觉限定通过，坡面S1开放
+
+独立 `cavalry-standard/cavalry-rigged.glb` 新冻结SHA256 `6c6db675430b3b6b5b8881be0b374e86e64cec1b357c0195eacf852ff07cb649`。`ride=standard`继承V1/Q1 native行为，`ride=candidate`仍V1；紧凑角色selector加入cavalry，混合A/B固定R2/P2/A2，只换骑兵。原19GLB保持。
+
+骑手新胸腰颈布层单独+1m，新袖/肩/护臂按真实骑乘骨轴造型，不重复平移；裤腿按原mounted_leg_point变换，显式作者环语义分配Thigh/Shin/Hips，侧别用L/R后缀，原脚/鞍/缰/握手保持。马只替换指定body/shoulder/hip球、颈杆/头吻球、腿杆/膝球/蹄：连续椭圆马身肩胯、弧线渐变颈头、肌肉到细腱、平底前低后高楔蹄；耳眼鬃尾与马具保留。HorseBody/Neck/Head与腿根/膝连接使用明确环权重。
+
+新网格7,483顶点/14,350三角/9种原材质；34骨bind/inverseBind、Hips父HorseBody、四腿链、96骑手Foot点保持。骑兵不启用biped M1/T1骑手Foot锚为逐马蹄IK，旧马蹄坡接地限制保留。首稿cb06六clip插值与V1差0，实机44静态/动作/main配对20GLB200/errors=[]；生者高级独立APPROVE_WITH_NOTES，实看12关键图，成人骑姿与马体连续收益可见、无明显持枪/缰绳脱手或蹄腿断开，肩甲杯口和近镜蹄较方留notes。原生首稿与真实Death明确REVISE，不纳生者批准；快照 `v2/frozen-v2-living-first/` 保留cb06/main0a12/gen8c31及真实故障图。
+
+真实flat首稿最低FootR/leather v72 gap=.025、HorseBody=.329037；同场V1 HorseBody=.329037，旧骑手下侧靴支点也抬整马，不能因历史存在豁免新标准。仅新V2晚Death将右腿向马肩外侧收拢，固定Thigh/Shin骨长，不塞进马腹；0/5入口、左腿/手/缰/鞍/整马侧倒路线与时长保持，13→23渐入、23→30随原马体末段。三key最大reach1.095901/1.479374m、scale偏差≤4.8e-7。Death仅Right Thigh/Shin/Foot三旋转通道实差，时长1.25；Idle/Walk/Attack/Hit/Charge插值差0。相对cb06位置/蒙皮/材质相同，金色UV float最大2.98e-8、头skin法线9.37e-5导出差，两组索引排序变但oriented triangles同，不宣称全属性bytes同。
+
+新6c6真实duel死亡完成后full=.025、最低HorseHoofFR，HorseBody=.097699；骑手Foot=.145953、legs=.146327、hips=.330826、torso=.322896、head=.530492m。原骑手脚撑马已消除，马腿/蹄提供合理支持；整体马骑侧倒保留，马头/骑手头胸离地并非各部贴地，不新增下马或死亡物理系统。真实图/分区 `v2/runtime-death-leg1/`；8次真实平地入口/过渡/末态/hold采样 `death-leg1-mid/`。最终冻结 `frozen-v2-death-final/` 绑定6c6/main0a12/gen c3b6068a…、5晚段侧图/实际Q1图、结构/兼容报告。
+
+高级独立晚Death补审APPROVE_WITH_NOTES，实看6图及新SHA：未见下侧靴继续顶马、换膝撑马、腿脚反折或可确认穿出马腹；2D遮挡不能证明内部零相交。生者批准按实际5clip与网格兼容继承。独立技术最终APPROVE_WITH_NOTES，总控接受：80GLB200/errors=[]，旧19/34bind/父子/六duration/五生者键值保持；Death仅右三骨旋转实改，translation/scale浮差最大5.364418e-7。12生者姿态四蹄最低gap5.0289mm、两版最大差1.8802mm；真实5.652秒走转与自然Charge（HP100→64）、Hit/Attack/Death完成1.25及分区支持通过。原不匹配入口 `ride=standard&modelRole=cavalry&qa=single&unit=pikeman&still=1&view=near` 在main0a12实际空target失败，现只main1e0dc使QA角色/控件/metadata按真实qaKind，旧独立比较匹配kind且有明确missing-actor guard，Terrain metadata含cavalry；原错配及infantry/archer边界、正常cavalry基准/候选已独立复验。新源快照 `v2/frozen-v2-preview-fix/`，GLB6c6/gen c3b保持，生者/Death几何批准不重开。
+
+独立192点/380面闭合马腹查询另确认新增右shin骨段中心浅入4.65–24.43mm（末态7.88mm），旧cb06同点在外145.084mm；晚态膝心始终在外、末态外距78.35mm，踝在外165.21mm，实际图无塞膝/穿出/反折/新支点。该中心线/马腹范围是P3模型限制，不能写全网格零相交或无碰撞；未因此再盲调已通过姿态。独立原始回执 `qa-standard-20261013/v2-final/verdict.json`。
+
+正常两版各24s移动，18s双骑均Charge2/attack10/hit5/death1；32s4v4均Charge4/death6（8→2→reset8），mixed32→27→reset32。40GLB200/errors=[]、finite bounds、8连续WebM与trace见 `v2/dynamic-final/`；candidate mixed暂停实际14.2675s，两版为独立wallclock，不声明锁步。该8run源为0a12，正常明确role/unit均cavalry，后有界1e0dc标签/入口修正不改变此路由；新源真实Charge/移动由独立QA另验。相关21/21动画/协调测试与新源最终build通过，全量留S1共享renderer更改后最终一次。精选13实图与机器摘要见 `docs/visual-iteration/model-standard/v2/`；authoring Blend/原录像只本地保存。
+
+三态：V2技术限定APPROVE_WITH_NOTES；高级生者与flat晚DeathAPPROVE_WITH_NOTES、独立技术同结论，总控接受；用户认可V2/整体美术未知。高级requested gpt-6-astra/high actual未知。保留近景肩甲杯口/方蹄、右shin浅交叠、整马携骑手侧倒与头胸高度简化、四蹄活人坡面不足和未测容量；**S1共享坡尸完整门仍OPEN，本批未整体完成**。NO PUSH/MERGE/DEPLOY。
+
+A2高级最终可引用原句："APPROVE_WITH_NOTES，仅限 A2 资产造型、生者动作、44m 主场识别及 Q1 on 平地晚 Death；画面整段悬空已明显收敛，未见新增手弓脱离或袖子断裂。胸腹并非全贴地：排除装备后布料约 .0732m、皮甲约 .0931m。正常可达坡面完整门仍 REVISE，留 S1；Q1 off 弦长余量列 notes，不宣称已通过完整兼容。"

@@ -1,0 +1,97 @@
+{
+  "priorFrozenSHA": "cb06f120e1e5a89aa9a0a9f6c35cb3d3bf3bf1df047fb61539722cbba2aa3c96",
+  "newSHA": "6c6db675430b3b6b5b8881be0b374e86e64cec1b357c0195eacf852ff07cb649",
+  "primitives": [
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": true
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": false,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": true
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": false,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": false
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": true
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": true
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": false
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": true
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": true
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": true
+    }
+  ],
+  "materialsEqual": true
+}

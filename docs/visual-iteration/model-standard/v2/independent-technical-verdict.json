@@ -1,0 +1,147 @@
+{
+  "verdict": "APPROVE_WITH_NOTES limited V2 technology/assets and flat actual combat; S1 slope corpse gate OPEN",
+  "sampledSource": {
+    "asset": "6c6db675430b3b6b5b8881be0b374e86e64cec1b357c0195eacf852ff07cb649",
+    "main": "1e0dc5c4f41212b6b144dd74fe20c2257bd1f3522550fa84efd64a19ecd08e7e",
+    "generator": "c3b6068a9da019186f3e79df433215acc35acf5e662226f6bce5a4f1067f3be3"
+  },
+  "old19": "19/19 exact",
+  "bonesBind": "34 bind/inverse/hierarchy exact vs V1/CB06, Hips under HorseBody, four horse hoof parents retained",
+  "fiveAliveClips": "Idle/Walk/Attack/Hit/Charge exact keys and values; all 6 durations unchanged; Death1.25 remains",
+  "exportDifferences": "Right3 Death rotation key/value changes; translation/scale max5.364418e-7; positions/joints/weights/material exact vs CB06; tiny UV/normal differences and reordered oriented equivalent triangles documented",
+  "runtime": {
+    "errors": [],
+    "GLBResponses": 80,
+    "allHTTP200": true,
+    "badOriginalURL": "reproduced root undefined on main0a12 then repaired on main1e0dc; actualkind pikeman/metadata/role controls correct",
+    "moreMismatchKinds": [
+      "infantry",
+      "archer"
+    ],
+    "pairedCanvas": {
+      "main": [
+        1280,
+        666
+      ],
+      "near": [
+        1280,
+        695
+      ]
+    },
+    "alivePoseCount": 12,
+    "fourHoofMaxV2V1GapDifference": 0.0018801520491492085,
+    "lowestAliveHoofGap": 0.005028855283240846,
+    "motionEndSeconds": 5.652000000000007,
+    "naturalEvents": [
+      "attack",
+      "charge",
+      "death",
+      "hit"
+    ],
+    "chargeDamage": "two actual charge events 100->64 HP; Hit action/event then ordinary attacks and Death",
+    "naturalDeathComplete": 1.25,
+    "naturalSupport": {
+      "all": {
+        "gap": 0.02499999999999994,
+        "bone": "HorseHoofFR",
+        "material": "charcoal steel mail",
+        "index": 631,
+        "point": [
+          1.4803539158901484,
+          0.17499999999999993,
+          -1.253212020747617
+        ]
+      },
+      "riderLegs": {
+        "gap": 0.1459529718170868,
+        "bone": "FootR",
+        "material": "brown leather",
+        "index": 72,
+        "point": [
+          0.7701235414666536,
+          0.2959529718170868,
+          0.5103522337244387
+        ]
+      },
+      "riderArmsWeapon": {
+        "gap": 0.04049035480245447,
+        "bone": "HandR",
+        "material": "brown leather",
+        "index": 825,
+        "point": [
+          1.4550706091443963,
+          0.19049035480245446,
+          1.5309582339095782
+        ]
+      },
+      "horseNeckHead": {
+        "gap": 0.28802208485012504,
+        "bone": "HorseNeck",
+        "material": "brown leather",
+        "index": 4221,
+        "point": [
+          1.1052821301992384,
+          0.43802208485012506,
+          0.4999187385434658
+        ]
+      },
+      "HorseBodyIncludingSaddle": {
+        "gap": 0.09769928285007032,
+        "bone": "HorseBody",
+        "material": "brown leather",
+        "index": 4081,
+        "point": [
+          1.6700708413260763,
+          0.2476992828500703,
+          0.2844291172396894
+        ]
+      },
+      "riderTrunkHead": {
+        "gap": 0.32289573364962665,
+        "bone": "Chest",
+        "material": "team_cloth",
+        "index": 575,
+        "point": [
+          1.7897903993822206,
+          0.47289573364962667,
+          1.9223415527043428
+        ]
+      },
+      "horseLegsHoofs": {
+        "gap": 0.02499999999999994,
+        "bone": "HorseHoofFR",
+        "material": "charcoal steel mail",
+        "index": 631,
+        "point": [
+          1.4803539158901484,
+          0.17499999999999993,
+          -1.253212020747617
+        ]
+      }
+    },
+    "controlledDeadSamples": 10,
+    "controlledTimes": [
+      0.8,
+      0.9583333333333334,
+      1.1041666666666667,
+      1.25,
+      1.65
+    ]
+  },
+  "notes": {
+    "newShinOverlap": "Exact closed horse continuous-barrel surface, 192 vertices and 380 oriented triangles; right shin center point lies inside at 4.65\u201324.43mm for sampled late stages, 7.877mm at completed native/natural Death. This is NEW vs replaced CB06 same controlled fixture (shin center outside 145.084mm).",
+    "kneeNotBuried": "sampled knee center stays outside barrel, completed clearance78.352mm; ankle outside165.211mm. Actual outside views do not show a knee driven into belly, reverse bend or detached boot. Skin contact/occluded shin overlap remains a model limitation, not zero-intersection approval.",
+    "support": "natural lowest HorseHoofFR .025; HorseBody including saddle .097699; rider stays on mount rather than each rider zone lying directly on ground. Right Foot is no longer lowest supporting prop.",
+    "geometricScope": "centerline knee/ankle/shin-mid and exact continuous barrel only; not collision physics or exhaustive all-garment mesh overlap proof.",
+    "slope": "not tested by this flat technical closeout; S1 full slope conformity gate stays OPEN.",
+    "approval": "technical and previous independent internal visual acceptances do not constitute explicit overall user art approval."
+  },
+  "artifacts": [
+    "v2-final/structure.json",
+    "v2-final/runtime.json",
+    "v2-final/natural-charge-hit-death.png",
+    "v2-final/controlled-flat-death-0.644.png",
+    "v2-final/controlled-flat-death-3.785.png",
+    "v2-final-addendum/runtime.json"
+  ]
+}

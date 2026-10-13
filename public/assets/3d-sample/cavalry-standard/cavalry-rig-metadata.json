@@ -1,0 +1,181 @@
+{
+  "kind": "cavalry",
+  "releaseSeconds": null,
+  "clips": {
+    "Idle": {
+      "duration": 2,
+      "frames": 48
+    },
+    "Walk": {
+      "duration": 1,
+      "frames": 24
+    },
+    "Attack": {
+      "duration": 0.875,
+      "frames": 21
+    },
+    "Hit": {
+      "duration": 0.417,
+      "frames": 10
+    },
+    "Death": {
+      "duration": 1.25,
+      "frames": 30
+    },
+    "Charge": {
+      "duration": 0.75,
+      "frames": 18
+    }
+  },
+  "front": "Three +Z (Blender -Y)",
+  "height": 3.6122970581054688,
+  "vertices": 7483,
+  "triangles": 14350,
+  "bones": 34,
+  "materials": [
+    "brown leather",
+    "aged golden shield rim",
+    "skin in helmet shadow",
+    "dark forged armour",
+    "pale steel blade",
+    "dark eye slit",
+    "charcoal steel mail",
+    "team_cloth",
+    "ivory linen tabard"
+  ],
+  "swordBladeScale": null,
+  "componentBoundsBlender": {
+    "body": {
+      "min": [
+        -0.7424300909042358,
+        -1.8324037790298462,
+        0.013000000268220901
+      ],
+      "max": [
+        0.7424300909042358,
+        1.443786859512329,
+        3.6122970581054688
+      ]
+    },
+    "weapon": {
+      "min": [
+        0.520004153251648,
+        -2.919999837875366,
+        2.690004348754883
+      ],
+      "max": [
+        0.639995813369751,
+        0.36000001430511475,
+        2.8099958896636963
+      ]
+    },
+    "torso": {
+      "min": [
+        -0.3529999852180481,
+        -0.2639999985694885,
+        2.119999885559082
+      ],
+      "max": [
+        0.3529999852180481,
+        0.23999999463558197,
+        3.2300000190734863
+      ]
+    }
+  },
+  "bodyRadiusConservative": 1.977095356648974,
+  "cavalryCandidate": true,
+  "authoring": "parameterized standalone Blender source; actual armature and vertex weights",
+  "standardVersion": "V2",
+  "baseAuthoringSha256": "a21d8c56d8111629a0061cd19131c86db99577c3be94c621010863a20fdd9903",
+  "meshScope": "mounted adult rider anatomy; continuous horse barrel/shoulder/hip, curved neck/head, muscle/tendon legs and flat wedge hooves; original tack and bind anchors retained",
+  "animationScope": "V1 five living clips unchanged; late rider right-leg release only, original 34-bone bind and Death 1.25 timing/horse side-fall preserved",
+  "lateDeathRiderLegChecks": [
+    {
+      "frame": 13,
+      "reach": 1.0552397588975337,
+      "maxReach": 1.4793741703033447,
+      "scales": [
+        0.9999998807907104,
+        0.9999999403953552,
+        0.9999999403953552,
+        1.0000003576278687,
+        0.9999998211860657,
+        1.0000001192092896
+      ],
+      "hip": [
+        0.790422797203064,
+        0.10000000894069672,
+        1.1350916624069214
+      ],
+      "knee": [
+        0.2613529562950134,
+        -0.34091997146606445,
+        1.2226972579956055
+      ],
+      "ankle": [
+        0.34095799922943115,
+        -0.5999999046325684,
+        0.4858517646789551
+      ],
+      "releaseBlend": 0.4444444444444444
+    },
+    {
+      "frame": 23,
+      "reach": 1.0959014050190787,
+      "maxReach": 1.4793741703033447,
+      "scales": [
+        0.9999998211860657,
+        0.9999996423721313,
+        1.0000004768371582,
+        1.0000001192092896,
+        0.9999999403953552,
+        1.0000001192092896
+      ],
+      "hip": [
+        0.8767951726913452,
+        0.10000000894069672,
+        0.551374077796936
+      ],
+      "knee": [
+        0.7449561953544617,
+        -0.4370208978652954,
+        0.9711681604385376
+      ],
+      "ankle": [
+        0.6056155562400818,
+        -0.949999988079071,
+        0.3933814764022827
+      ],
+      "releaseBlend": 1
+    },
+    {
+      "frame": 30,
+      "reach": 1.095901403319432,
+      "maxReach": 1.4793741703033447,
+      "scales": [
+        0.9999998211860657,
+        0.9999997615814209,
+        1.0000003576278687,
+        1.0000001192092896,
+        0.9999997019767761,
+        1.0
+      ],
+      "hip": [
+        0.8773940205574036,
+        0.10000000894069672,
+        0.49712270498275757
+      ],
+      "knee": [
+        0.7643176317214966,
+        -0.4370209574699402,
+        0.9223548173904419
+      ],
+      "ankle": [
+        0.5994691252708435,
+        -0.949999988079071,
+        0.3513221740722656
+      ],
+      "releaseBlend": 1
+    }
+  ]
+}

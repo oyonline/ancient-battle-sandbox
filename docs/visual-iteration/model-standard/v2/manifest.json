@@ -1,0 +1,110 @@
+{
+  "stage": "V2 actual-QA-kind entry guard addendum",
+  "mainSHA256": "1e0dc5c4f41212b6b144dd74fe20c2257bd1f3522550fa84efd64a19ecd08e7e",
+  "assetSHA256": "6c6db675430b3b6b5b8881be0b374e86e64cec1b357c0195eacf852ff07cb649",
+  "generatorSHA256": "c3b6068a9da019186f3e79df433215acc35acf5e662226f6bce5a4f1067f3be3",
+  "sourceBeforeSHA256": "0a12ef993a0402176f89f006510ccad662852fcc79e6124fa0d40f49904a1a48",
+  "scope": "QA role/control/metadata follow actual qaKind; kind-specific old comparisons gated; missing actor explicit guard; cavalry terrain metadata truthful",
+  "visualEvidence": ".omc/evidence/model-standard/v2/frozen-v2-death-final",
+  "visualStatus": "advanced independent living+flat LateDeath APPROVE_WITH_NOTES",
+  "runtimeBeforeFix": ".omc/evidence/model-standard/v2/dynamic-final",
+  "runtimeNote": "actual normal8 runs use the prior0a12; their explicit role=cavalry/unit=cavalry routes unchanged by this guard. Independent current-source natural runtime pending.",
+  "selected": [
+    {
+      "filename": "baseline-near-side.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-living-first/baseline-near-side.png",
+      "candidateSHA": "cb06f120e1e5a89aa9a0a9f6c35cb3d3bf3bf1df047fb61539722cbba2aa3c96",
+      "scope": "approved living shape; final5live exact, positions/skin/material same with quantified export microdifferences"
+    },
+    {
+      "filename": "candidate-near-front.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-living-first/candidate-near-front.png",
+      "candidateSHA": "cb06f120e1e5a89aa9a0a9f6c35cb3d3bf3bf1df047fb61539722cbba2aa3c96",
+      "scope": "approved living shape; final5live exact, positions/skin/material same with quantified export microdifferences"
+    },
+    {
+      "filename": "candidate-near-side.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-living-first/candidate-near-side.png",
+      "candidateSHA": "cb06f120e1e5a89aa9a0a9f6c35cb3d3bf3bf1df047fb61539722cbba2aa3c96",
+      "scope": "approved living shape; final5live exact, positions/skin/material same with quantified export microdifferences"
+    },
+    {
+      "filename": "candidate-near-back.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-living-first/candidate-near-back.png",
+      "candidateSHA": "cb06f120e1e5a89aa9a0a9f6c35cb3d3bf3bf1df047fb61539722cbba2aa3c96",
+      "scope": "approved living shape; final5live exact, positions/skin/material same with quantified export microdifferences"
+    },
+    {
+      "filename": "candidate-charge-0.42.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-living-first/candidate-charge-0.42.png",
+      "candidateSHA": "cb06f120e1e5a89aa9a0a9f6c35cb3d3bf3bf1df047fb61539722cbba2aa3c96",
+      "scope": "approved living shape; final5live exact, positions/skin/material same with quantified export microdifferences"
+    },
+    {
+      "filename": "baseline-main.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-living-first/baseline-main.png",
+      "candidateSHA": "cb06f120e1e5a89aa9a0a9f6c35cb3d3bf3bf1df047fb61539722cbba2aa3c96",
+      "scope": "approved living shape; final5live exact, positions/skin/material same with quantified export microdifferences"
+    },
+    {
+      "filename": "candidate-main.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-living-first/candidate-main.png",
+      "candidateSHA": "cb06f120e1e5a89aa9a0a9f6c35cb3d3bf3bf1df047fb61539722cbba2aa3c96",
+      "scope": "approved living shape; final5live exact, positions/skin/material same with quantified export microdifferences"
+    },
+    {
+      "filename": "actual-q1-death.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-death-final/actual-q1-death.png",
+      "candidateSHA": "6c6db675430b3b6b5b8881be0b374e86e64cec1b357c0195eacf852ff07cb649",
+      "scope": "bounded late right-rider-leg correction, flat only; S1 slope gate open"
+    },
+    {
+      "filename": "death-side-0.54.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-death-final/death-side-0.54.png",
+      "candidateSHA": "6c6db675430b3b6b5b8881be0b374e86e64cec1b357c0195eacf852ff07cb649",
+      "scope": "bounded late right-rider-leg correction, flat only; S1 slope gate open"
+    },
+    {
+      "filename": "death-side-0.8.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-death-final/death-side-0.8.png",
+      "candidateSHA": "6c6db675430b3b6b5b8881be0b374e86e64cec1b357c0195eacf852ff07cb649",
+      "scope": "bounded late right-rider-leg correction, flat only; S1 slope gate open"
+    },
+    {
+      "filename": "death-side-0.9583333333333334.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-death-final/death-side-0.9583333333333334.png",
+      "candidateSHA": "6c6db675430b3b6b5b8881be0b374e86e64cec1b357c0195eacf852ff07cb649",
+      "scope": "bounded late right-rider-leg correction, flat only; S1 slope gate open"
+    },
+    {
+      "filename": "death-side-1.1041666666666667.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-death-final/death-side-1.1041666666666667.png",
+      "candidateSHA": "6c6db675430b3b6b5b8881be0b374e86e64cec1b357c0195eacf852ff07cb649",
+      "scope": "bounded late right-rider-leg correction, flat only; S1 slope gate open"
+    },
+    {
+      "filename": "death-side-1.25.png",
+      "source": ".omc/evidence/model-standard/v2/frozen-v2-death-final/death-side-1.25.png",
+      "candidateSHA": "6c6db675430b3b6b5b8881be0b374e86e64cec1b357c0195eacf852ff07cb649",
+      "scope": "bounded late right-rider-leg correction, flat only; S1 slope gate open"
+    }
+  ],
+  "imageSHA256": {
+    "baseline-near-side.png": "db0440bf17ab7207ce15a5171a13c09ead64dfac4ee7a10f6a3c085a8ca5b222",
+    "candidate-near-front.png": "53eacf300e99e8c1c3c95f88b71f9412a52d6c2cc7c9343d0518faf05a2a2d4f",
+    "candidate-near-side.png": "c3b82bc867fe4b09910dd44fa0554a1e580fcd282bc04940f1c754eeaff5fa03",
+    "candidate-near-back.png": "8820a2aa91e07bb26e3f80f882ca711e29f309c998c017cc6a8f0fc96dbee1cd",
+    "candidate-charge-0.42.png": "cc1e18b8e11dd312cc36d3ee8c37695eeec0a9479ff54487e12f1e52718c464a",
+    "baseline-main.png": "34524cb8d4a31c8fbcaa30fb2c3f1fb839251f78ea512218f3e04b4a62c54383",
+    "candidate-main.png": "cbd47c57ebf30670fa102e5bbd63eb78bcd45cf9859ee492b397fa0fa297f505",
+    "actual-q1-death.png": "ac97d68797d3128f293853cce035905c4fd0a4903f6698b74ccc8410f2fb520a",
+    "death-side-0.54.png": "881de6f956b420fe442998bf3b9b93c45d16a24e2fe90b826744aef34e189a63",
+    "death-side-0.8.png": "695f24a92d5d9eee6068685042b6488604f88727816e8f39fb25bbd8f6659727",
+    "death-side-0.9583333333333334.png": "b2fdaf6c2b3d4ea75073a4d5bf831df42a9c0164da8f9f68233e84c035665395",
+    "death-side-1.1041666666666667.png": "b048ebce32c3693a956b30ff27958afd5b83f50fa4b23becfb7da202abedf083",
+    "death-side-1.25.png": "c5e75764d13b816fccea309740d7852c6ec97e56a758b0f53ce5b147b91c3370"
+  },
+  "technicalStatus": "APPROVE_WITH_NOTES limited asset/flat actual combat, source1e0dc",
+  "userApproval": "unknown",
+  "openGate": "S1 full slope support"
+}

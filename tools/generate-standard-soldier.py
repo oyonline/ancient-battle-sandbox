@@ -33,6 +33,7 @@ def standard_geometry(ctx):
         if any(term in part.name for term in remove_terms):
             parts.remove(part)
             bpy.data.objects.remove(part, do_unlink=True)
+    retained_parts=set(parts)
     # A rounded barrel ribcage narrows at the waist and opens over the pelvis.
     smooth_mesh(loft('standard tunic torso', [
         (1.19, 0, .010, .288, .197), (1.34, 0, .003, .305, .201),
@@ -129,7 +130,7 @@ def standard_geometry(ctx):
                (elbow-upper*.10,.105), (elbow,.102), (elbow+lower*.15,.109),
                (elbow+lower*.42,.099), (elbow+lower*.75,.081), (wrist+lower*.04,.067)]
         sleeve=tube('standard soft arm '+side,rings,red)
-        if ctx['KIND'] in ('pikeman','archer'):
+        if ctx['KIND'] in ('pikeman','archer','cavalry'):
             # A pike forearm folds back across the upper-arm axis. Projection
             # cannot distinguish its segments; tube ring order provides an
             # unambiguous continuous skin transition.
@@ -200,13 +201,119 @@ def standard_geometry(ctx):
                 continue
             offset=(vertex.co-center).dot(cross)
             vertex.co += cross*offset*.40
+    if ctx['KIND']=='cavalry':
+        standard_mounted_geometry(ctx,retained_parts)
+
+
+def standard_mounted_geometry(ctx, retained):
+    """Fit only newly made anatomy; original feet, grips and tack are mounted."""
+    parts=ctx['parts'];ctx['standard_mounted_leg_weights']={}
+    mounted_arms=('standard soft arm ','standard forearm plate ',
+                  'standard shoulder plate ','standard glove cuff ')
+    for part in parts:
+        if part in retained or part.name.startswith(mounted_arms):continue
+        leg=part.name.startswith(('standard trouser ','standard boot shaft ','standard shin plate '))
+        for vertex in part.data.vertices:
+            point=part.matrix_world @ vertex.co
+            if leg:
+                side=part.name[-1];z=point.z
+                weight={'Shin.'+side:1}
+                if part.name.startswith('standard trouser '):
+                    thigh=max(0,min(1,(z-.66)/.21));hip=max(0,min(.35,(z-1.16)*2.5))
+                    weight={'Shin.'+side:(1-thigh)*(1-hip),'Thigh.'+side:thigh*(1-hip),'Hips':hip}
+                point=ctx['mounted_leg_point'](point,side)
+                ctx['standard_mounted_leg_weights'][(part.name,*[round(v,6) for v in point])]=weight
+            else:point.z+=1
+            vertex.co=part.matrix_world.inverted() @ point
+        part.data.update()
+
+    # Remove precise construction pieces, keeping saddle, reins, mane and face
+    # landmarks. Horse bones / their bind anchors are the existing V1 hierarchy.
+    remove=('horse body barrel','horse powerful shoulder','horse rounded hindquarters',
+            'horse neck','horse head','horse muzzle','horse upper leg ',
+            'horse lower leg ','horse knee ','horse fetlock ','horse hoof ')
+    for part in list(parts):
+        if part.name.startswith(remove):
+            parts.remove(part);bpy.data.objects.remove(part,do_unlink=True)
+    ctx['standard_horse_weights']={}
+
+    def loft_axis(name, rings, material, weights, count=18):
+        vertices=[];faces=[]
+        for i,(center,rx,rz) in enumerate(rings):
+            center=Vector(center)
+            axis=(Vector(rings[min(i+1,len(rings)-1)][0])-Vector(rings[max(i-1,0)][0])).normalized()
+            u=Vector((1,0,0));v=axis.cross(u).normalized()
+            for j in range(count):
+                angle=j/count*math.tau
+                point=center+u*math.cos(angle)*rx+v*math.sin(angle)*rz
+                vertices.append(point)
+                ctx['standard_horse_weights'][(name,*[round(q,6) for q in point])]=weights[i]
+        faces.append(tuple(reversed(range(count))))
+        for i in range(len(rings)-1):
+            for j in range(count):
+                q=i*count+j;faces.append((q,i*count+(j+1)%count,(i+1)*count+(j+1)%count,q+count))
+        faces.append(tuple((len(rings)-1)*count+j for j in range(count)))
+        data=bpy.data.meshes.new(name);data.from_pydata(vertices,[],faces);data.update()
+        obj=bpy.data.objects.new(name,data);bpy.context.collection.objects.link(obj)
+        ctx['finish'](obj,name,material);smooth_mesh(obj)
+
+    body=[((0,-1.00,1.49),.17,.24),((0,-.79,1.51),.36,.41),
+          ((0,-.53,1.53),.445,.515),((0,-.14,1.52),.49,.515),
+          ((0,.28,1.53),.485,.48),((0,.67,1.55),.465,.465),
+          ((0,.96,1.56),.35,.39),((0,1.13,1.57),.10,.18)]
+    loft_axis('horse standard continuous barrel',body,ctx['leather'],[{'HorseBody':1}]*len(body),24)
+    neck=[((0,-.53,1.59),.32,.34),((0,-.67,1.76),.32,.30),
+          ((0,-.78,1.99),.275,.255),((0,-.95,2.20),.215,.215),
+          ((0,-1.12,2.29),.175,.175)]
+    loft_axis('horse standard curved neck',neck,ctx['leather'],
+              [{'HorseBody':.70,'HorseNeck':.30},{'HorseBody':.25,'HorseNeck':.75},
+               {'HorseNeck':1},{'HorseNeck':.9,'HorseHead':.1},{'HorseNeck':.3,'HorseHead':.7}],20)
+    head=[((0,-1.10,2.30),.13,.15),((0,-1.23,2.28),.20,.245),
+          ((0,-1.41,2.23),.193,.225),((0,-1.59,2.12),.17,.16),
+          ((0,-1.78,2.065),.14,.13),((0,-1.82,2.06),.12,.10)]
+    loft_axis('horse standard continuous head muzzle',head,ctx['leather'],
+              [{'HorseNeck':.35,'HorseHead':.65}]+[{'HorseHead':1}]*(len(head)-1),20)
+
+    for key,(hip,knee,ankle,toe) in ctx['horse_joints'].items():
+        upper=knee-hip;lower=ankle-knee
+        upper_rings=[(hip-upper*.04,.155,.16),(hip+upper*.15,.157,.155),
+                     (hip+upper*.40,.137,.135),(hip+upper*.72,.10,.10),
+                     (knee,.076,.079)]
+        loft_axis('horse standard upper leg '+key,upper_rings,ctx['leather'],
+                  [{'HorseBody':.30,'HorseUpper.'+key:.70},{'HorseUpper.'+key:1},
+                   {'HorseUpper.'+key:1},{'HorseUpper.'+key:1},
+                   {'HorseUpper.'+key:.6,'HorseLower.'+key:.4}],14)
+        lower_rings=[(knee,.077,.080),(knee+lower*.16,.071,.072),
+                     (knee+lower*.50,.053,.055),(knee+lower*.82,.043,.045),
+                     (ankle,.058,.064),(ankle+lower*.035,.052,.053)]
+        loft_axis('horse standard lower leg '+key,lower_rings,ctx['leather'],
+                  [{'HorseUpper.'+key:.4,'HorseLower.'+key:.6}]+[{'HorseLower.'+key:1}]*4+
+                  [{'HorseLower.'+key:.7,'HorseHoof.'+key:.3}],14)
+        # Flat old sole height with a lower front and higher heel, no ball joint.
+        name='horse standard hoof '+key;verts=[]
+        for level in (0,1):
+            for x,y in [(-.084,-.11),(.084,-.11),(.084,.105),(-.084,.105)]:
+                z=.013 if level==0 else .087 if y<0 else .133
+                point=Vector((toe.x+x*(.92 if level else 1),toe.y+.065+y*(.88 if level else 1),z))
+                verts.append(point);ctx['standard_horse_weights'][(name,*[round(v,6) for v in point])]={'HorseHoof.'+key:1}
+        faces=[(3,2,1,0),(4,5,6,7),(0,1,5,4),(1,2,6,5),(2,3,7,6),(3,0,4,7)]
+        data=bpy.data.meshes.new(name);data.from_pydata(verts,[],faces);data.update()
+        obj=bpy.data.objects.new(name,data);bpy.context.collection.objects.link(obj);ctx['finish'](obj,name,ctx['dark'])
 
 
 def standard_weights(ctx, fallback, name, point):
+    if name.startswith('horse standard '):
+        weight=ctx['standard_horse_weights'].get((name,*[round(v,6) for v in point]))
+        assert weight is not None, f'Horse ring weight missing: {name} {point[:]}'
+        return weight
+    if ctx['KIND']=='cavalry' and name.startswith('standard trouser '):
+        weight=ctx['standard_mounted_leg_weights'].get((name,*[round(v,6) for v in point]))
+        assert weight is not None, f'Mounted leg ring weight missing: {name} {point[:]}'
+        return weight
     if name.startswith('standard soft arm '):
         side=name[-1];shoulder,elbow,wrist=ctx['standard_arm_axes'][side]
         ring_weight=ctx.get('standard_arm_ring_weights',{}).get((side,*[round(value,6) for value in point]))
-        if ctx['KIND'] in ('pikeman','archer'):
+        if ctx['KIND'] in ('pikeman','archer','cavalry'):
             assert ring_weight is not None, f'Folded sleeve ring weight missing: {side} {point[:]}'
         if ring_weight is not None:return ring_weight
         upper=elbow-shoulder;lower=wrist-elbow
@@ -228,6 +335,9 @@ def standard_weights(ctx, fallback, name, point):
         hip=max(0,min(.35,(point.z-1.16)*2.5))
         return {'Shin.'+side:(1-t)*(1-hip),'Thigh.'+side:t*(1-hip),'Hips':hip}
     if name.startswith(('standard boot shaft ','standard shin plate ')):return {'Shin.'+name[-1]:1}
+    # New torso pieces were authored in standing space, then mounted once.
+    if ctx['KIND']=='cavalry':
+        point=point.copy();point.z-=1
     if name.startswith('standard tabard '):
         if point.z >= 1.52:
             t=max(0,min(1,(point.z-1.52)/.45))
@@ -410,6 +520,35 @@ def standard_archer_death(ctx, frame):
         'scales':scales,'nockTarget':nock[:],'actualNock':actual[:],'releaseBlend':progress,'lateBowRoll':-.38*progress})
 
 
+def standard_cavalry_death(ctx,frame):
+    """Release the down-side rider leg from being a support under the horse."""
+    if frame<13:return
+    pose=ctx['rig'].pose.bones;bones=ctx['rig'].data.bones
+    bpy.context.view_layer.update()
+    horse_delta=pose['HorseBody'].matrix @ bones['HorseBody'].matrix_local.inverted()
+    progress=min(1,(frame-5)/18)
+    # Fold towards the shoulder outside the neck rather than into the barrel.
+    desired=horse_delta @ Vector((.34,-.95,1.85))
+    upper=pose['Thigh.R'];lower=pose['Shin.R'];foot=pose['Foot.R']
+    shoulder=upper.matrix.translation.copy()
+    ankle=foot.matrix.translation.lerp(desired,progress)
+    l1=upper.bone.length;l2=lower.bone.length;direction=ankle-shoulder;distance=direction.length
+    assert abs(l1-l2)+1e-5<distance<=l1+l2-.002, f'V2 Death {frame} rider leg unreachable {distance}/{l1+l2}'
+    axis=direction.normalized();along=(l1*l1-l2*l2+distance*distance)/(2*distance)
+    height=math.sqrt(max(1e-8,l1*l1-along*along))
+    # The free knee swings over the saddle; a knee below the barrel would
+    # replace the old boot as a prop. Both limb lengths remain native V1.
+    pole=horse_delta.to_3x3() @ Vector((-1,0,.15));pole-=axis*pole.dot(axis)
+    knee=shoulder+axis*along+pole.normalized()*height
+    ctx['align_bone'](upper,shoulder,knee);ctx['align_bone'](lower,knee,ankle)
+    matrix=horse_delta @ bones['Foot.R'].matrix_local;matrix.translation=ankle
+    foot.matrix=matrix;bpy.context.view_layer.update()
+    scales=[*upper.scale,*lower.scale]
+    assert max(abs(value-1) for value in scales)<2e-5, f'V2 Death {frame} rider leg stretched'
+    ctx.setdefault('cavalry_death_checks',[]).append({'frame':frame,'reach':distance,'maxReach':l1+l2,
+        'scales':scales,'hip':shoulder[:],'knee':knee[:],'ankle':ankle[:],'releaseBlend':progress})
+
+
 def standard_pike_euler_continuity(ctx, action, frame):
     """Equivalent Euler values follow the short path between P2 arm keys."""
     if frame==0:ctx['pike_previous_eulers']={}
@@ -446,24 +585,29 @@ source=source.replace('for frame,pose in poses:',
     "for frame,pose in poses:\n  if KIND in ('pikeman','archer') and name=='Death' and frame in (23,30):pose=next(p for f,p in poses if f==30)")
 key_marker="for pb in rig.pose.bones:pb.keyframe_insert('location',frame=frame);"
 assert source.count(key_marker)==1, 'Base animation-key insertion point changed'
-source=source.replace(key_marker,"if KIND=='archer' and name=='Death':standard_archer_death(globals(),frame)\n  if KIND in ('pikeman','archer'):standard_pike_euler_continuity(globals(),name,frame)\n  "+key_marker)
+source=source.replace(key_marker,"if KIND=='archer' and name=='Death':standard_archer_death(globals(),frame)\n  if KIND=='cavalry' and name=='Death':standard_cavalry_death(globals(),frame)\n  if KIND in ('pikeman','archer') or (KIND=='cavalry' and name=='Death'):standard_pike_euler_continuity(globals(),name,frame)\n  "+key_marker)
 source=source.replace(weights_marker,"baseline_weights_for=weights_for\ndef weights_for(n,v):\n return standard_weights(globals(),baseline_weights_for,n,v)\n"+weights_marker)
 out=Path(sys.argv[sys.argv.index('--')+1])
 kind=sys.argv[sys.argv.index('--kind')+1] if '--kind' in sys.argv else 'infantry'
-assert kind in ('infantry','pikeman','archer'), 'Only authorized model stages may generate'
-variant_flag={'infantry':'--duel','pikeman':'--pikeman-candidate','archer':'--archer-candidate'}[kind]
+assert kind in ('infantry','pikeman','archer','cavalry'), 'Only authorized model stages may generate'
+variant_flag={'infantry':'--duel','pikeman':'--pikeman-candidate','archer':'--archer-candidate','cavalry':'--cavalry-candidate'}[kind]
 sys.argv=[str(base),'--',str(out),'--kind',kind,variant_flag]
 ctx={'__file__':str(base),'standard_geometry':standard_geometry,'standard_weights':standard_weights,
     'standard_pike_pose':standard_pike_pose,'standard_pike_euler_continuity':standard_pike_euler_continuity,
-    'standard_archer_death':standard_archer_death}
+    'standard_archer_death':standard_archer_death,'standard_cavalry_death':standard_cavalry_death}
 exec(compile(source,str(base),'exec'),ctx)
 metadata_path=out/(kind+'-rig-metadata.json')
 metadata=json.loads(metadata_path.read_text())
-metadata.update(standardVersion={'infantry':'R2','pikeman':'P2','archer':'A2'}[kind],baseAuthoringSha256=hashlib.sha256(base.read_bytes()).hexdigest(),
+metadata.update(standardVersion={'infantry':'R2','pikeman':'P2','archer':'A2','cavalry':'V2'}[kind],baseAuthoringSha256=hashlib.sha256(base.read_bytes()).hexdigest(),
     meshScope='continuous anatomy, layered cloth/plate, soft shoulder/elbow weights, fitted calf/ankle, readable sword edge',
     animationScope={'infantry':'existing D1 six clips and original 18-bone bind hierarchy',
         'pikeman':'existing P1 six clips and original 18-bone bind hierarchy',
-        'archer':'existing A1 six clips and original 19-bone hierarchy including Arrow; bow/string mesh retained'}[kind])
+        'archer':'existing A1 six clips and original 19-bone hierarchy including Arrow; bow/string mesh retained',
+        'cavalry':'existing V1 six clips and original 34-bone horse/rider hierarchy, saddle/reins/grips retained'}[kind])
+if kind=='cavalry':
+    metadata['meshScope']='mounted adult rider anatomy; continuous horse barrel/shoulder/hip, curved neck/head, muscle/tendon legs and flat wedge hooves; original tack and bind anchors retained'
+    metadata['animationScope']='V1 five living clips unchanged; late rider right-leg release only, original 34-bone bind and Death 1.25 timing/horse side-fall preserved'
+    metadata['lateDeathRiderLegChecks']=ctx.get('cavalry_death_checks',[])
 if kind=='archer':
     metadata['meshScope']='adult continuous anatomy and shaped cloth with light leather jerkin/shoulder/forearm guards; original hood/quiver/bow/string/arrow retained'
     metadata['animationScope']='A1 live/shot timings retained; late right Death arm follows the Q1-positioned bow chord, fixed limbs; final body pose at23 and hold30'
