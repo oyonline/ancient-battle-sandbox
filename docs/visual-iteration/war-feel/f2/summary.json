@@ -1,0 +1,465 @@
+{
+  "stage": "F2",
+  "status": "APPROVE_WITH_NOTES / bounded scope accepted",
+  "requestedModel": "native inherited",
+  "actualModel": "unknown",
+  "sources": {
+    "js/three-demo/main.js": "05fa0cbcd5c9ba498cbc464b79da2e503cb86ef5b76ef1da69be666cf61deea1",
+    "js/three-demo/combat-feedback.js": "d77182350338187c9174af99d0611fe3d8ff44db6e3bace4154a3590a7ef064f",
+    "tests/three-combat-feedback.test.js": "abfaf3cc1b3cf0b8b1ec5f78bc62c6ceaa32bc37ac892aafde481c55e774d529",
+    "tools/qa-war-feel.mjs": "14b015bc52ab7f00364d6ab4c4d2a8b9b08974db013319ebc83854657fcc9626"
+  },
+  "protectedCombatAndLine": {
+    "js/three-demo/combat-model.js": "804daff3875291bcb4dd9f5ef21ca5cd2b515192e14cca7809a9bbd3b6485bcb",
+    "js/three-demo/battle-line.js": "df86e132dc69aacc9864a012a742e3a1379bec4043e0fe2a884fa9c55da8542a"
+  },
+  "sameInitial": {
+    "mixed": {
+      "canvasPixelMaxDiff": 0,
+      "differingPixelCount": 0,
+      "unitStateEqual": true,
+      "cameraEqual": true,
+      "canvasEqual": true,
+      "stage": "atomic real reset plus existing freeze at Idle0",
+      "viewport": [
+        1280,
+        900
+      ],
+      "canvas": [
+        1280,
+        646
+      ],
+      "canvasBounds": {
+        "x": 0,
+        "y": 60,
+        "width": 1280,
+        "height": 646
+      }
+    },
+    "cavalry": {
+      "canvasPixelMaxDiff": 0,
+      "differingPixelCount": 0,
+      "unitStateEqual": true,
+      "cameraEqual": true,
+      "canvasEqual": true,
+      "stage": "atomic real reset plus existing freeze at Idle0",
+      "viewport": [
+        1280,
+        900
+      ],
+      "canvas": [
+        1280,
+        646
+      ],
+      "canvasBounds": {
+        "x": 0,
+        "y": 60,
+        "width": 1280,
+        "height": 646
+      }
+    }
+  },
+  "runs": [
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "event": {
+        "time": 16.635099999999934,
+        "type": "charge",
+        "from": 30,
+        "target": 12,
+        "first": true
+      },
+      "beforeTime": 16.601799999999937,
+      "contactTime": 16.635099999999934,
+      "phaseOffsets": [
+        0,
+        0.10000000000000142,
+        0.2003999999999948,
+        0.4170999999999907
+      ],
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "peak": 31
+    },
+    {
+      "mode": "mixed",
+      "version": "baseline",
+      "event": {
+        "time": 16.668399999999952,
+        "type": "charge",
+        "from": 30,
+        "target": 12,
+        "first": true
+      },
+      "beforeTime": 16.634999999999952,
+      "contactTime": 16.668399999999952,
+      "phaseOffsets": [
+        0,
+        0.11669999999999447,
+        0.2003999999999948,
+        0.41699999999999093
+      ],
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "peak": 27
+    },
+    {
+      "mode": "cavalry",
+      "version": "candidate",
+      "event": {
+        "time": 1.8666999999999982,
+        "type": "charge",
+        "from": 0,
+        "target": 1,
+        "first": true
+      },
+      "beforeTime": 1.8500999999999983,
+      "contactTime": 1.8666999999999982,
+      "phaseOffsets": [
+        0,
+        0.11669999999999958,
+        0.20009999999999883,
+        0.4001999999999979
+      ],
+      "camera": {
+        "position": [
+          4.7769731647386156,
+          7.150832675335579,
+          6.36929755298482
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 10,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "peak": 26
+    },
+    {
+      "mode": "cavalry",
+      "version": "baseline",
+      "event": {
+        "time": 1.8667999999999993,
+        "type": "charge",
+        "from": 0,
+        "target": 1,
+        "first": true
+      },
+      "beforeTime": 1.8334999999999992,
+      "contactTime": 1.8667999999999993,
+      "phaseOffsets": [
+        0,
+        0.11660000000000048,
+        0.2000000000000004,
+        0.41659999999999964
+      ],
+      "camera": {
+        "position": [
+          4.7769731647386156,
+          7.150832675335579,
+          6.36929755298482
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 10,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "peak": 22
+    }
+  ],
+  "requests": [
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-standard/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pike-standard/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer-standard/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "baseline",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "baseline",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-standard/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "baseline",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pike-standard/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "baseline",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer-standard/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "baseline",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "mode": "cavalry",
+      "version": "baseline",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer-standard/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "cavalry",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "cavalry",
+      "version": "baseline",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "cavalry",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pike-standard/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "cavalry",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer-standard/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "cavalry",
+      "version": "baseline",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-standard/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "cavalry",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-standard/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "cavalry",
+      "version": "baseline",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pike-standard/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "cavalry",
+      "version": "baseline",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "mode": "cavalry",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    }
+  ],
+  "errors": [],
+  "tests": {
+    "focused": 9,
+    "pass": 9,
+    "fail": 0,
+    "log": ".omc/evidence/war-feel/f2/tests-final.log",
+    "full": {
+      "tests": 800,
+      "pass": 800,
+      "fail": 0,
+      "exitCode": 0,
+      "log": ".omc/evidence/war-feel/f2/full-tests-final.log"
+    }
+  },
+  "build": {
+    "exitCode": 0,
+    "log": ".omc/evidence/war-feel/f2/build-outer-cue.log"
+  },
+  "images": [
+    {
+      "path": "docs/visual-iteration/war-feel/f2/mixed-baseline-charge-0.00.png",
+      "raw": ".omc/evidence/war-feel/f2/pilot-outer-cue/mixed-baseline/charge-0.00.png",
+      "sha256": "9ed0445df60ae56a00eb3732e7d816785ecf2fde426717d50f09f8b6c2665ed2",
+      "requestedOffset": 0,
+      "actualOffset": 0,
+      "actualGameTime": 16.668399999999952
+    },
+    {
+      "path": "docs/visual-iteration/war-feel/f2/mixed-baseline-charge-0.10.png",
+      "raw": ".omc/evidence/war-feel/f2/pilot-outer-cue/mixed-baseline/charge-0.10.png",
+      "sha256": "9ff3a86c825632c97ae22476c55b8dea24ec28d861dcc77fa7852145914e25e5",
+      "requestedOffset": 0.1,
+      "actualOffset": 0.11669999999999447,
+      "actualGameTime": 16.785099999999947
+    },
+    {
+      "path": "docs/visual-iteration/war-feel/f2/mixed-baseline-charge-0.40.png",
+      "raw": ".omc/evidence/war-feel/f2/pilot-outer-cue/mixed-baseline/charge-0.40.png",
+      "sha256": "4d1c3c42275dd0770f50216f1050a7e0f6601a9ac59d77bc340a6da20efce9bc",
+      "requestedOffset": 0.4,
+      "actualOffset": 0.41699999999999093,
+      "actualGameTime": 17.085399999999943
+    },
+    {
+      "path": "docs/visual-iteration/war-feel/f2/mixed-candidate-charge-0.00.png",
+      "raw": ".omc/evidence/war-feel/f2/pilot-outer-cue/mixed-candidate/charge-0.00.png",
+      "sha256": "8c1b4a293b8d12f2db9a902bf0233e177f37001f5253903b1295f06300d54e8f",
+      "requestedOffset": 0,
+      "actualOffset": 0,
+      "actualGameTime": 16.635099999999934
+    },
+    {
+      "path": "docs/visual-iteration/war-feel/f2/mixed-candidate-charge-0.10.png",
+      "raw": ".omc/evidence/war-feel/f2/pilot-outer-cue/mixed-candidate/charge-0.10.png",
+      "sha256": "cc4debed36509482dcf46657215b174000fe966f4ce11bcc3cbef4035f3ef508",
+      "requestedOffset": 0.1,
+      "actualOffset": 0.10000000000000142,
+      "actualGameTime": 16.735099999999935
+    },
+    {
+      "path": "docs/visual-iteration/war-feel/f2/mixed-candidate-charge-0.40.png",
+      "raw": ".omc/evidence/war-feel/f2/pilot-outer-cue/mixed-candidate/charge-0.40.png",
+      "sha256": "406497124904c50517547453c5c10ed6a719cbb30dd4e4a0a40ab8aef562dbdb",
+      "requestedOffset": 0.4,
+      "actualOffset": 0.4170999999999907,
+      "actualGameTime": 17.052199999999925
+    },
+    {
+      "path": "docs/visual-iteration/war-feel/f2/cavalry-baseline-charge-0.10.png",
+      "raw": ".omc/evidence/war-feel/f2/pilot-outer-cue/cavalry-baseline/charge-0.10.png",
+      "sha256": "6cfab686a73f85ee31a083fb8e765167bcd5467e829bdb3f8e1c247ae85c2971",
+      "requestedOffset": 0.1,
+      "actualOffset": 0.11660000000000048,
+      "actualGameTime": 1.9833999999999998
+    },
+    {
+      "path": "docs/visual-iteration/war-feel/f2/cavalry-candidate-charge-0.10.png",
+      "raw": ".omc/evidence/war-feel/f2/pilot-outer-cue/cavalry-candidate/charge-0.10.png",
+      "sha256": "7fdc7b744ec50290c1559f17940ccca284aa3aba4b683d43df4e22c14244871f",
+      "requestedOffset": 0.1,
+      "actualOffset": 0.11669999999999958,
+      "actualGameTime": 1.9833999999999978
+    }
+  ],
+  "scope": "Only F2 when feedback=candidate and chargefx=candidate; baseline is current F1. Independent normal-speed runs have different wall-clock dt/outcomes; camera and initial canvas match. Main is 44m, cavalry duel is10m. Timed names are requests, actual times above. Four native WebM retained; not claimed fully visually watched.",
+  "selfVisual": "Main short cue emerges outside target horse at .1s and decays; improvement modest. Near cue narrower and placed on one physical shoulder. Existing dust count/area unchanged by last adjustment. User recognition unknown.",
+  "history": "First new UI was mistakenly inserted in event loop and fixed before valid capture. First valid and low-cue evidence are superseded calibration, not formal verdict. Added viewer assertion initially missed Vector3 import; fixed, 9/9 final. Judge returned exit2 for missing project config, no valid report/feedback target. Old free-Idle captures are not matched Idle0.",
+  "review": {
+    "technical": {
+      "status": "APPROVE_WITH_NOTES",
+      "requiredRemaining": [],
+      "path": ".omc/evidence/qa-standard-20261013/f2-final/verdict.json",
+      "sha256": "cbe4d43198fc33748932ab06afc2d128444a52832bdafd30e2c65785d899fdca"
+    },
+    "internalVisual": {
+      "status": "APPROVE_WITH_NOTES",
+      "requiredRemaining": [],
+      "path": ".omc/evidence/war-feel/f2/advanced-final/verdict.json",
+      "sha256": "94646860b0b68719f32f491be4b4e18d8aafe6cbc17cbf8f9a4f34db5db2080d"
+    },
+    "user": "unknown",
+    "controller": "accepted bounded F2 scope"
+  },
+  "notes": [
+    "Main cue remains short and locally occluded; no claim of major overall war feeling improvement.",
+    "Cavalry .4 image also includes a second reciprocal native charge at2.0835s, not persistence beyond the first cue TTL."
+  ]
+}

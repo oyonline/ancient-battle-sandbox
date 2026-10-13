@@ -7,8 +7,9 @@ const finite = v => Number.isFinite(v.x + v.y + v.z);
 // Visuals consume resolved events and final world poses. No fighter or material
 // belonging to a soldier is changed here; all rendered resources are owned.
 export class CombatFeedback {
- constructor(scene, heightAt, { maxParticles = 128, maxEvents = 64 } = {}) {
+ constructor(scene, heightAt, { maxParticles = 128, maxEvents = 64, chargeCandidate = false, chargeView = null } = {}) {
   this.scene = scene; this.heightAt = heightAt;
+  this.chargeCandidate = chargeCandidate; this.chargeView = chargeView;
   this.maxParticles = maxParticles; this.maxEvents = maxEvents;
   this.events = []; this.particles = []; this.deaths = new Map();
   this.horses = new Map(); this.hoofVertices = new WeakMap();
@@ -40,19 +41,20 @@ export class CombatFeedback {
    result.set(Math.sin(event.from?.heading ?? 0), 0, Math.cos(event.from?.heading ?? 0));
   return result.normalize();
  }
- spawn(type, point, velocity, size, life, color, opacity, shard = false) {
+ spawn(type, point, velocity, size, life, color, opacity, shard = false, envelope = null) {
   if (!finite(point) || !finite(velocity) || !Number.isFinite(size + life)) return;
   if (this.particles.length >= this.maxParticles) { this.dropped++; return; }
   const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity,
-   depthWrite: false, fog: true });
+   depthWrite: false, depthTest: true, fog: true });
   const mesh = new THREE.Mesh(shard ? this.shardGeometry : this.dustGeometry, material);
   mesh.position.copy(point);
-  mesh.scale.set(size * (shard ? .22 : 1), size, size * (shard ? .22 : .8));
+  const width = envelope?.width ?? .22;
+  mesh.scale.set(size * (shard ? width : 1), size, size * (shard ? width : .8));
   if (shard) mesh.quaternion.setFromUnitVectors(UP, velocity.clone().normalize());
   mesh.renderOrder = 2;
   this.scene.add(mesh);
   this.particles.push({ mesh, velocity, life, remaining: life, opacity, shard,
-   initialScale: mesh.scale.clone(), type });
+   initialScale: mesh.scale.clone(), type, envelope });
   this.created[type] = (this.created[type] ?? 0) + 1;
  }
  impact(event) {
@@ -84,6 +86,49 @@ export class CombatFeedback {
     .48 + (i % 2) * .1, '#9b947c', .32);
   }
   this.record(type, point, { count, strength });
+ }
+ chargeContact(event) {
+  // Knockback and body separation happen after event.x/z was recorded. Read
+  // the final victim footprint now, after main has updated all world poses.
+  const point = event.target.root?.getWorldPosition(new THREE.Vector3())
+   ?? new THREE.Vector3(event.target.x, 0, event.target.z);
+  if (!finite(point)) return;
+  point.y = this.heightAt(point.x, point.z);
+  const direction = this.direction(event), lateral = new THREE.Vector3(direction.z, 0, -direction.x);
+  const horse = event.target.kind === 'cavalry', first = !!event.first;
+  const count = first ? 6 : 3, strength = first ? 1 : .6;
+  const near = point.clone().addScaledVector(direction, horse ? -.55 : -.3);
+  for (let i = 0; i < count; i++) {
+   const side = i % 2 ? 1 : -1, row = Math.floor(i / 2);
+   // Two ground-side shoulders reveal the contact around an opaque horse.
+   // A bounded 0.7–1.2m fan stays below rider and team-cloth silhouettes.
+   const origin = near.clone().addScaledVector(lateral, side * (horse ? .74 : .48) * strength)
+    .addScaledVector(direction, (row - 1) * .13);
+   origin.y = this.heightAt(origin.x, origin.z) + .12;
+   const velocity = direction.clone().multiplyScalar(.9 * strength)
+    .addScaledVector(lateral, side * (.85 + row * .12) * strength)
+    .addScaledVector(UP, (.58 + row * .1) * strength);
+   this.spawn(first ? 'charge-first' : 'charge-follow', origin, velocity,
+    (.31 + row * .045) * strength, first ? .46 : .34,
+    '#b7ac94', first ? .52 : .32, false, { fade: 1.7, expansion: 1.1, drag: 3.4 });
+  }
+  const view = this.chargeView ? new THREE.Vector3().subVectors(this.chargeView, point) : new THREE.Vector3(1, 0, 1);
+  const side = lateral.dot(view) >= 0 ? 1 : -1;
+  // Reuse the same cues in one physical near shoulder. Thin unequal shards
+  // show a brief direction without a symmetric pair of decorative arrows.
+  for (let i = 0; i < (first ? 4 : 2); i++) {
+   const origin = near.clone().addScaledVector(lateral, side * (horse ? .82 : .55) + (i - 1.5) * .035)
+    .addScaledVector(direction, (i - 1.5) * .085);
+   origin.y = this.heightAt(origin.x, origin.z) + .34;
+   const velocity = direction.clone().multiplyScalar(-1.9 * strength)
+    .addScaledVector(lateral, side * .8).addScaledVector(UP, .5 + i * .07);
+   this.spawn('charge-cue', origin, velocity, (first ? .46 : .3) + i % 2 * .07,
+    first ? .28 : .2, i % 2 ? '#c3ac78' : '#ded7c4', first ? .88 : .55,
+    true, { fade: 1.45, drag: 4, width: .12 });
+  }
+  this.record(first ? 'charge-first' : 'charge-follow', point, {
+   target: event.target.id, first, source: 'final-target-footprint',
+   eventXZ: [event.x, event.z], count, strength });
  }
  record(type, point, detail) {
   this.recent.push({ sequence: ++this.sequence, type, position: point.toArray(), ...detail });
@@ -139,10 +184,13 @@ export class CombatFeedback {
    if (!present.has(actor)) continue;
    if (event.type === 'death') this.deaths.set(actor, { emitted: false });
    else if (event.type === 'charge') {
-    const point = new THREE.Vector3(event.x, 0, event.z), direction = this.direction(event);
-    this.dust(event.first ? 'charge-first' : 'charge-follow', point, direction,
-     event.first ? 6 : 3, event.first ? 1.3 : .8);
-    this.impact({ ...event, type: 'hit' });
+    if (this.chargeCandidate) this.chargeContact(event);
+    else {
+     const point = new THREE.Vector3(event.x, 0, event.z), direction = this.direction(event);
+     this.dust(event.first ? 'charge-first' : 'charge-follow', point, direction,
+      event.first ? 6 : 3, event.first ? 1.3 : .8);
+     this.impact({ ...event, type: 'hit' });
+    }
    } else this.impact(event);
   }
   this.events.length = 0;
@@ -163,8 +211,14 @@ export class CombatFeedback {
    if (particle.remaining <= 0) { this.remove(i); continue; }
    particle.mesh.position.addScaledVector(particle.velocity, dt);
    const progress = 1 - particle.remaining / particle.life;
-   particle.mesh.material.opacity = particle.opacity * (1 - progress);
-   if (!particle.shard) particle.mesh.scale.copy(particle.initialScale).multiplyScalar(1 + progress * .9);
+   if (particle.envelope) {
+    particle.mesh.material.opacity = particle.opacity * Math.pow(1 - progress, particle.envelope.fade);
+    particle.velocity.multiplyScalar(Math.exp(-particle.envelope.drag * dt));
+    if (!particle.shard) particle.mesh.scale.copy(particle.initialScale).multiplyScalar(1 + progress * particle.envelope.expansion);
+   } else {
+    particle.mesh.material.opacity = particle.opacity * (1 - progress);
+    if (!particle.shard) particle.mesh.scale.copy(particle.initialScale).multiplyScalar(1 + progress * .9);
+   }
   }
  }
  remove(index) {

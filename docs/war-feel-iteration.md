@@ -1,6 +1,28 @@
-# 战争感 W1 → F1
+# 战争感 W1 / F1 / F2 / W2
 
-2026-10-13 当前 W1 `[x]`、F1 `[x]`：两项实际实现、真实游戏检查、必要验证及两路独立复审均在受检范围通过，总控接受。W1本地提交3392abb，F1源码冻结mainab57e057…/feedback2b7b077…；最终全量797/797/build退出0。独立技术和高级源码/视觉均为 `APPROVE_WITH_NOTES`；用户对旧整体战争感已明确不足，新候选认可未知。owner_task=`codex-native-asset-worker / warfeel-w1-f1-20261013`。用户本批授权适当本地commit及最终push仅到既有工作分支，覆盖模型5笔、W1与F1，不merge main、不部署。保留原20GLB及R2/P2/A2/V2/S1和全部早期基准。Git最终tip/远端/writer/service只认下文外部live receipt，不在本文预写执行结果。
+## 当前批 F2 → W2（2026-10-13，进行中）
+
+用户本批明确继续主场冲锋反馈F2，再交战后期拥挤W2；每项实际游戏检查和独立技术/高级复审后自主继续，当前批适当commit/push仅既有工作分支，不merge main/部署。owner_task=`codex-native-asset-worker / warfeel-f2-w2-20261013`。requested native继承，actual未知，无fallback。
+
+- [x] F2 独立 `chargefx=baseline|candidate`，仅`feedback=candidate`时新候选生效；baseline是已通过F1。仅改post-pose target footprint土尘与短方向cue，首强续弱/快速衰减，depthTest真、cap/TTL/暂停/reset保持；不把knockback后但separation前的event.x/z当最终接触位置。最终main05fa0cb…/feedbackd771823…冻结；9/9focused、800/800全量及build退出0，主镜44m/骑duel真实首撞短窗完成，20GLB200/errors=[]、Idle0画布像素差0。两路独立APPROVE_WITH_NOTES/requiredRemaining=[]，总控接受受检范围。技术/内部视觉限定通过，用户新候选认可未知；主镜帮助定位但短小/局部遮挡仍P3，不宣称整体战争感显著增强。
+- [ ] W2 尚未施工：独立晚段movement intent，在敌alive≤2/foot≤1、己方显著占优、远离合法接敌且被ally挡住的有限残局处理绕行/稳定side与退出滞回；不改旧W1/core碰撞/伤害/时钟/命令，不宣称早期23s拥挤全解决。具体卡由总控在F2通过后接续。
+
+开工正式snapshot09:45:45UTC，trueRemote=fetched=local4c6f2086f553ab8ccd2d98fbe649313b5e5ae133、equal0/0、clean/dirtyOwnernone，official GitHub ID1200045147与绑定一致；两writerproviders free、5301 PID69740 HTTP200。随后同owner新task正常claim09:48:35UTC（new0600token、common-dir controlled_shared、机械hotzone仅mutex），精确10项ownership；20GLB/生成器/2D与battle-line/combat-model/旧测试保护。进程/Git/lease不从本文推断live。
+
+本轮KB提醒由总控真实查询并展示，台账170合法1卡/去重1/0600：旧2D“回撤/驻守边界 + 滞回承诺（3s 144 次折返→0）”仅归纳为W2设计经验，3D需要本批实测，不计3D已过。KB未知dirty源仍不接管，新候选明确用户认可仍未知；测试与内部视觉分别记录。
+
+
+### F2 最终冻结与受检证据（限定通过）
+
+`frozen-f2-final/manifest.json`绑定四源码完整SHA、真实采样与8精选，精选摘要在`docs/visual-iteration/war-feel/f2/summary.json`。主场两版初始32、44m、画布1280×646；骑duel10m/同画布。真实首charge均from30→12（主场）/from0→1（双骑），候选main16.6351s、基准16.6684s，独立wallclock/dt不声称战果同步；候选实际后窗0/.1000/.2004/.4171s，图名仅请求时段。四正常WebM保存但不宣称完整逐帧实看。
+
+只在实际feedback候选时启F2；新selector在feedback基准时disabled，正常首撞后仍仅一个控件。最终direction cue复用同4/2粒子且收细/集中在真实近侧肩外，readonly camera.position通过new Vector3.subVectors读取、不修改相机；未再加土尘数/面积。主场0/.1/.4与近镜.1两版图用于独立判定，观察为适度改善，用户新候选认可未知。第一稿新控件误插进event loop导致QA等待，已在首有效采样前修正；first-valid/low-cue仅校准历史。补camera不可变assert首次漏Vector3导入，已修且最终9/9；judge按规运行exit2缺项目配置，无有效报告/feedback目标，不将其当通过诊断。
+
+技术正式`.omc/evidence/qa-standard-20261013/f2-final/verdict.json`（cbe4d431…）独立9合同、900帧F1禁用路径数值精确同、三组同dt核心状态事件精确同与fresh正常32真实charge/HP/Hit、10GLB200/errors0；实际锚纠偏约.838932m。高级`.omc/evidence/war-feel/f2/advanced-final/verdict.json`（94646860…）实看14图/四源/独立9测试，接受主镜外肩cue和近镜适度形体。两路均APPROVE_WITH_NOTES/requiredRemaining=[]，requested/actual分开，actual未知。近骑`.4`图另一侧cue来自2.0835s第二次真实reciprocal charge，不能当首cue超TTL。保留低面数和局部遮挡，原模型/2D/W1/core/Q1/S1均保持；Git最终结果只认本批外部live receipt，不预写push。
+
+## 上一批 W1 / F1（2026-10-13 历史）
+
+2026-10-13 W1 `[x]`、F1 `[x]`：两项实际实现、真实游戏检查、必要验证及两路独立复审均在受检范围通过，总控接受。W1本地提交3392abb，F1源码冻结mainab57e057…/feedback2b7b077…；最终全量797/797/build退出0。独立技术和高级源码/视觉均为 `APPROVE_WITH_NOTES`；用户对旧整体战争感已明确不足，新候选认可未知。owner_task=`codex-native-asset-worker / warfeel-w1-f1-20261013`。用户本批授权适当本地commit及最终push仅到既有工作分支，覆盖模型5笔、W1与F1，不merge main、不部署。保留原20GLB及R2/P2/A2/V2/S1和全部早期基准。Git最终tip/远端/writer/service只认下文外部live receipt，不在本文预写执行结果。
 
 ## 新批开工 live 基线（历史采样）
 

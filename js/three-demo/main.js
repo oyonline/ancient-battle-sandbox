@@ -32,6 +32,7 @@ const qaMode=['single','small','duel','four','sixteen'].includes(preview.get('qa
 const qaKind=['pikeman','archer','cavalry'].includes(preview.get('unit'))?preview.get('unit'):'infantry';
 const frontCandidate=preview.get('front')==='candidate';
 const feedbackCandidate=preview.get('feedback')==='candidate';
+const chargefxCandidate=feedbackCandidate&&preview.get('chargefx')==='candidate';
 const feedbackEvents=[],feedbackCounts={};
 const frontApplicable=!['single','duel'].includes(qaMode);
 // QA creates only the requested kind: comparison controls describe that actor.
@@ -100,7 +101,7 @@ scene.add(sun);
 
 function heightAt(x, z) { if(qaMode&&preview.get('terrainScene')!=='slope')return .15;return .15 + 2.5 * Math.exp(-((x + 5) ** 2 / 42 + (z + 5) ** 2 / 50)) + .65 * Math.exp(-((x - 8) ** 2 / 55 + (z - 6) ** 2 / 30)); }
 const corpseSupport=corpseCandidate?new CorpseSupport(heightAt):null;
-const combatFeedback=feedbackCandidate?new CombatFeedback(scene,heightAt):null;
+const combatFeedback=feedbackCandidate?new CombatFeedback(scene,heightAt,{chargeCandidate:chargefxCandidate,chargeView:camera.position}):null;
 const geometry = new THREE.PlaneGeometry(38, 30, 76, 60); geometry.rotateX(-Math.PI / 2);
 const positions = geometry.attributes.position;
 const colors = [];
@@ -203,6 +204,14 @@ function zoom(amount){distance=THREE.MathUtils.clamp(distance+amount,10,65);upda
 renderer.domElement.addEventListener('wheel',event=>{event.preventDefault();zoom(Math.sign(event.deltaY)*2.3);},{passive:false});
 $('zoom-in').onclick=()=>zoom(-4);$('zoom-out').onclick=()=>zoom(4);$('overview').onclick=()=>{distance=cameraCandidate?44:43;focus.set(0,0,cameraCandidate?4:0);updateCamera();};$('focus').onclick=()=>{const living=selected.filter(u=>u.hp>0);if(!living.length)return;focus.set(0,0,0);for(const u of living)focus.add(u.root.position);focus.divideScalar(living.length);distance=18;updateCamera();};
 if(preview.has('coordination')){const g=document.createElement('div');g.className='control-group';for(const v of ['baseline','candidate']){const b=document.createElement('button');b.textContent=v==='baseline'?'动作协调基准':'动作协调候选 Q1';b.onclick=()=>{const p=new URLSearchParams(location.search);p.set('coordination',v);location.search=p.toString();};g.append(b);}document.querySelector('.demo-controls').prepend(g);}
+if(preview.has('chargefx')){
+ const group=document.createElement('div');group.className='control-group';group.append('冲锋反馈 ');
+ const control=document.createElement('select');control.setAttribute('aria-label','冲锋反馈');control.disabled=!feedbackCandidate;
+ if(!feedbackCandidate)control.title='先启用接触反馈';
+ for(const [value,label]of [['baseline','接触反馈 F1'],['candidate','主场冲锋 F2']]){const option=document.createElement('option');option.value=value;option.textContent=label;option.selected=(preview.get('chargefx')==='candidate'?'candidate':'baseline')===value;control.append(option);}
+ control.onchange=()=>{const p=new URLSearchParams(location.search);p.set('chargefx',control.value);location.search=p.toString();};group.append(control);document.querySelector('.demo-controls').prepend(group);
+ window.chargefxPreview={version:preview.get('chargefx')==='candidate'?'candidate':'baseline',active:chargefxCandidate,inspect:()=>({elapsed,active:chargefxCandidate,effects:combatFeedback?.inspect()??null})};
+}
 if(preview.has('feedback')){
  const group=document.createElement('div');group.className='control-group';group.append('交战反馈 ');
  const control=document.createElement('select');control.setAttribute('aria-label','交战反馈');

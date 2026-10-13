@@ -4,9 +4,10 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 
 const feedbackStage=process.env.QA_STAGE==='f1';
-const output=process.env.QA_OUTPUT||(feedbackStage?'.omc/evidence/war-feel/f1/pilot':'.omc/evidence/war-feel/w1/pilot');
-const modes=(process.env.QA_MODES||(feedbackStage?'infantry,archer,cavalry,mixed':'four,sixteen,mixed')).split(',');
-const sources=['js/three-demo/main.js','js/three-demo/combat-model.js','js/three-demo/battle-line.js',...(feedbackStage?['js/three-demo/combat-feedback.js']:[])];
+const chargeStage=process.env.QA_STAGE==='f2';
+const output=process.env.QA_OUTPUT||(chargeStage?'.omc/evidence/war-feel/f2/pilot':feedbackStage?'.omc/evidence/war-feel/f1/pilot':'.omc/evidence/war-feel/w1/pilot');
+const modes=(process.env.QA_MODES||(chargeStage?'mixed,cavalry':feedbackStage?'infantry,archer,cavalry,mixed':'four,sixteen,mixed')).split(',');
+const sources=['js/three-demo/main.js','js/three-demo/combat-model.js','js/three-demo/battle-line.js',...(feedbackStage||chargeStage?['js/three-demo/combat-feedback.js']:[])];
 const hashes=()=>Object.fromEntries(sources.map(file=>[file,createHash('sha256').update(readFileSync(file)).digest('hex')]));
 const before=hashes(),errors=[],requests=[],runs=[];
 mkdirSync(output,{recursive:true});
@@ -47,7 +48,7 @@ async function run(mode,version){
  writeFileSync(dir+'/summary.json',JSON.stringify(summary,null,2));runs.push({mode,version,lastTime:paused.elapsed,alive:paused.units.filter(u=>u.hp>0).length,refills:paused.formation?.refills.length??0,files:pictures.map(p=>p.filename),camera:initial.camera,canvas:initial.canvas,events:trace?.events?.reduce((v,e)=>(v[e.type]=(v[e.type]??0)+1,v),{})});
  const record=runs.at(-1);await context.close();console.log(JSON.stringify(record));
 }
-try{for(const mode of modes)await Promise.all(['baseline','candidate'].map(version=>feedbackStage?runFeedback(mode,version):run(mode,version)));assert.deepEqual(hashes(),before);assert.equal(errors.length,0);assert(requests.every(r=>r.status===200));}
+try{for(const mode of modes)await Promise.all(['baseline','candidate'].map(version=>chargeStage?runCharge(mode,version):feedbackStage?runFeedback(mode,version):run(mode,version)));assert.deepEqual(hashes(),before);assert.equal(errors.length,0);assert(requests.every(r=>r.status===200));}
 finally{writeFileSync(output+'/summary.json',JSON.stringify({sourceHashes:before,sourceAfter:hashes(),runs,errors,requests},null,2));await browser.close();}
 
 async function runFeedback(mode,version){
@@ -87,4 +88,52 @@ async function runFeedback(mode,version){
  const summary={source:'actual normal stepSkirmish event summaries and post-pose presentation, independent wall-clock runs; controlled exact event/state compatibility is tested separately',url,mode,version,initial,samples,pictures,paused,reset};
  writeFileSync(dir+'/summary.json',JSON.stringify(summary,null,2));runs.push({mode,version,lastTime:paused.elapsed,alive:paused.units.filter(u=>u.hp>0).length,counts:paused.counts,created:paused.effects?.created,maximumActive:Math.max(0,...samples.map(s=>s.effects?.active??0)),files:pictures.map(p=>p.filename),camera:initial.camera,canvas:initial.canvas});
  const record=runs.at(-1);await context.close();console.log(JSON.stringify(record));
+}
+
+async function runCharge(mode,version){
+ const dir=output+'/'+mode+'-'+version;mkdirSync(dir,{recursive:true});
+ const context=await browser.newContext({viewport:{width:1280,height:900},recordVideo:{dir,size:{width:1280,height:900}}});
+ const page=await context.newPage();
+ page.on('pageerror',e=>errors.push({mode,version,error:e.message}));
+ page.on('console',e=>{if(e.type()==='error')errors.push({mode,version,error:e.text()});});
+ page.on('response',r=>{if(r.url().endsWith('.glb'))requests.push({mode,version,url:r.url(),status:r.status()});});
+ const params=new URLSearchParams({...fixed,front:'candidate',feedback:'candidate',chargefx:version});
+ if(mode==='cavalry'){params.set('qa','duel');params.set('unit','cavalry');params.set('modelRole','cavalry');}
+ const url='http://127.0.0.1:5301/battle3d.html?'+params;
+ await page.goto(url);await page.waitForFunction(()=>window.feedbackPreview&&window.chargefxPreview&&document.getElementById('loading').hidden);
+ const initial=await page.evaluate(()=>{document.getElementById('reset').click();window.modelPreview.clearSelection();window.lightingPreview.freeze();return {feedback:window.feedbackPreview.inspect(),active:window.chargefxPreview.active,camera:window.cameraPreview.inspect().camera,canvas:[document.querySelector('#viewport canvas').width,document.querySelector('#viewport canvas').height]};});
+ assert.equal(initial.active,version==='candidate');assert.equal(initial.feedback.effects.active,0);
+ await page.screenshot({path:dir+'/initial.png'});
+ await page.evaluate(()=>{
+  window.__chargeCapture={before:[],contact:null,lastImageTime:-1};
+  function observe(){
+   const sample=window.feedbackPreview.inspect(),capture=window.__chargeCapture;
+   if(sample.counts.charge>0){
+    document.getElementById('pause').click();
+    capture.contact={gameTime:sample.elapsed,wallTime:performance.now(),sample:window.feedbackPreview.inspect()};return;
+   }
+   if(sample.fighting&&sample.elapsed-capture.lastImageTime>=.1&&window.frontPreview.inspect().units.some(u=>u.kind==='cavalry'&&u.runup>=3.2&&u.speed>=3.4)){
+    capture.before.push({gameTime:sample.elapsed,wallTime:performance.now(),sample,image:document.querySelector('#viewport canvas').toDataURL('image/png')});
+    if(capture.before.length>3)capture.before.shift();capture.lastImageTime=sample.elapsed;
+   }
+   requestAnimationFrame(observe);
+  }
+  document.getElementById('fight').click();requestAnimationFrame(observe);
+ });
+ await page.waitForFunction(()=>window.__chargeCapture.contact,null,{timeout:45000,polling:'raf'});
+ const capture=await page.evaluate(()=>window.__chargeCapture),before=capture.before.at(-1),phases=[];
+ if(before){writeFileSync(dir+'/charge-before-canvas.png',Buffer.from(before.image.split(',')[1],'base64'));delete before.image;}
+ const start=capture.contact.gameTime;
+ for(const offset of [0,.1,.2,.4]){
+  if(offset){await page.click('#pause');await page.waitForFunction(t=>window.feedbackPreview.inspect().elapsed>=t,start+offset,{polling:'raf'});await page.evaluate(()=>document.getElementById('pause').click());}
+  const sample=await page.evaluate(()=>window.feedbackPreview.inspect());
+  const filename='charge-'+offset.toFixed(2)+'.png';await page.screenshot({path:dir+'/'+filename});
+  assert.deepEqual(await page.evaluate(()=>window.feedbackPreview.inspect()),sample);
+  phases.push({filename,requestOffset:offset,actualOffset:sample.elapsed-start,actualTime:sample.elapsed,sample});
+ }
+ const paused=await page.evaluate(()=>window.feedbackPreview.inspect());await page.waitForTimeout(100);assert.deepEqual(await page.evaluate(()=>window.feedbackPreview.inspect()),paused);
+ await page.click('#reset');const reset=await page.evaluate(()=>window.feedbackPreview.inspect());assert(reset.units.every(u=>u.hp===100));assert.equal(reset.effects.active,0);assert.equal(reset.effects.queued,0);
+ const event=capture.contact.sample.events.filter(e=>e.type==='charge').at(-1);
+ const summary={source:'normal resolved first charge in actual game; read-only pre-contact canvas buffer, native UI pause only after event for short lifespan samples; no synthetic combat event',url,mode,version,initial,event,before,contact:capture.contact,phases,paused,reset};
+ writeFileSync(dir+'/summary.json',JSON.stringify(summary,null,2));const record={mode,version,event,beforeTime:before?.gameTime,contactTime:start,phaseOffsets:phases.map(p=>p.actualOffset),camera:initial.camera,canvas:initial.canvas,peak:Math.max(...phases.map(p=>p.sample.effects.active))};runs.push(record);await context.close();console.log(JSON.stringify(record));
 }

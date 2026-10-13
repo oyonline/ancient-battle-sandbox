@@ -1,6 +1,16 @@
 # 3D 持续总控入口
 
-## 当前面板（2026-10-13，战争感 W1 → F1）
+## 当前面板（2026-10-13，F2 → W2）
+
+用户明确本批先主场冲锋F2，再晚段拥挤W2，实际game+两路独立复审后自主接续；适当commit/push只既有工作分支，不merge/main/deploy，保留20GLB/R2/P2/A2/V2/S1/W1/F1及全部早期基准。
+
+- [x] F2 `chargefx=baseline|candidate`，仅feedbackcandidate生效，基准当前F1；post-pose受击目标接地扇尘/近侧肩外短方向cue，首强续弱/depthTest真。9/9focused、800/800全量、build0，44m真实32与近骑duel短窗、20GLB200/errors=[]、Idle0画布像素差0完成；独立技术和高级视觉均APPROVE_WITH_NOTES/requiredRemaining=[]，总控接受限定范围。主镜帮助定位，仍短小/局部遮挡P3，不称整体战争感显著提升。三态：技术受检通过、内部视觉受检通过、用户新候选认可未知。main05fa0cb…/feedbackd771823…冻结，见 `docs/visual-iteration/war-feel/f2/summary.json`。
+- [ ] W2 新late-crowd纯移动候选尚未施工；只有限占优残局远距ally blocker绕行，稳定side+清通路退出滞回，保护manual/pending/hit/pierce/近接敌/弓射程及真实sweep，不处理所有早期拥挤。F2接受后再开始。
+
+owner_task=`codex-native-asset-worker / warfeel-f2-w2-20261013`，requestednative继承/actualunknown。fresh开工local/true/fetched4c6f208、0/0clean/providerfree，随后normal新claim；Git/lease/service以本轮live回读为准，未本批commit/push。KB提醒170由总控检索、worker精确台账落1卡0600，旧2D滞回经验不算3D已验证；KB未知dirty源仍不接管。详见 [战争感记录](war-feel-iteration.md)。
+
+
+## 上一批战争感 W1 → F1（2026-10-13 历史）
 
 用户新批授权先战线组织W1、再交战反馈F1；每项实际game检查与独立复审后自主继续，适当commit/push仅到既有codex/sword-shield-round1，包含上一模型阶段5笔已复审本地提交；不merge main、不部署。20GLB/R2/P2/A2/V2/S1和早期基准保留，不改2D/伤害/时钟/命令语义。三态分别记录，原整体明确不足、新候选认可未知。
 

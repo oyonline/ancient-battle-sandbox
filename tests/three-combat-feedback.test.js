@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Scene, Group, Bone } from 'three';
+import { Scene, Group, Bone, Vector3 } from 'three';
 import { CombatFeedback } from '../js/three-demo/combat-feedback.js';
 import { createFighter, stepSkirmish, separateBodies } from '../js/three-demo/combat-model.js';
 import { BattleLine } from '../js/three-demo/battle-line.js';
@@ -106,4 +106,46 @@ test('hoof dust requires real displacement and a skinned sole near the terrain',
  effects.clear(); unit.model.position.y = 1; updateSkinMatrices(unit.model); effects.flush([unit], 1 / 60);
  unit.x += .08; unit.root.position.x = unit.x; updateSkinMatrices(unit.model); effects.flush([unit], 1 / 60);
  assert.equal(effects.inspect().created.hoof, undefined); effects.dispose();
+});
+
+test('F2 uses the final victim footprint after event knockback/separation and keeps terrain sources low', () => {
+ const terrain = (x, z) => .15 + x * .02 - z * .01;
+ const viewer = new Vector3(21, 26, 32), viewerBefore = viewer.toArray();
+ const effects = new CombatFeedback(new Scene(), terrain, { chargeCandidate: true, chargeView: viewer });
+ const from = visual(createFighter(0, 'red', 'cavalry', -4, 0)), target = visual(createFighter(1, 'blue', 'cavalry', 1, 0));
+ const event = { type: 'charge', from, target, x: 1, z: 0, nx: 1, nz: 0, first: true };
+ effects.queue(event);
+ target.x = 1.84; target.z = .15; target.root.position.set(target.x, terrain(target.x, target.z), target.z); target.root.updateMatrixWorld(true);
+ const before = state([from, target]); effects.flush([from, target], 1 / 60);
+ const record = effects.inspect().recent.find(e => e.type === 'charge-first');
+ assert.deepEqual(record.position, [1.84, terrain(1.84, .15), .15]); assert.deepEqual(record.eventXZ, [1, 0]);
+ const dust = effects.inspect().particles.filter(p => p.type === 'charge-first');
+ assert.equal(dust.length, 6); assert.ok(dust.some(p => p.position[2] > .15) && dust.some(p => p.position[2] < .15));
+ assert.ok(dust.every(p => Math.abs(p.position[1] - terrain(p.position[0], p.position[2]) - .12) < 1e-9));
+ assert.deepEqual(state([from, target]), before); assert.deepEqual(viewer.toArray(), viewerBefore);
+ assert.ok(effects.particles.every(p => p.mesh.material.depthTest)); effects.dispose();
+});
+
+test('F2 first contact exceeds continuation and same-frame death keeps its native state', () => {
+ const from = visual(createFighter(0, 'red', 'cavalry', -4, 0)), target = visual(createFighter(1, 'blue', 'infantry', 1, 0));
+ target.hp = -1; target.deathTime = 0; target.animation = { state: 'death', actions: new Map() };
+ const scene = new Scene(), effects = new CombatFeedback(scene, () => .15, { chargeCandidate: true });
+ effects.queue({ type: 'charge', from, target, x: 1, z: 0, nx: 1, nz: 0, first: true });
+ effects.queue({ type: 'death', unit: target }); effects.flush([from, target], 1 / 60);
+ const first = effects.inspect(); assert.equal(target.animation.state, 'death'); assert.equal(first.created['charge-cue'], 4);
+ effects.update(0); assert.deepEqual(effects.inspect(), first);
+ effects.update(.5); assert.equal(scene.children.length, 0);
+ effects.clear(); effects.queue({ type: 'charge', from, target, x: 1, z: 0, nx: 1, nz: 0, first: false }); effects.flush([from, target], 1 / 60);
+ const follow = effects.inspect(); assert.equal(follow.created['charge-follow'], 3); assert.equal(follow.created['charge-cue'], 2);
+ assert.ok(Math.max(...first.particles.map(p => p.opacity)) > Math.max(...follow.particles.map(p => p.opacity)));
+ effects.clear(); assert.equal(effects.inspect().active, 0); assert.equal(effects.inspect().queued, 0); effects.dispose();
+});
+
+test('F2 disabled retains F1 event-position charge and linear particle lifetime', () => {
+ const from = visual(createFighter(0, 'red', 'cavalry', -4, 0)), target = visual(createFighter(1, 'blue', 'cavalry', 1.84, .15));
+ const effects = new CombatFeedback(new Scene(), () => .15);
+ effects.queue({ type: 'charge', from, target, x: 1, z: 0, nx: 1, nz: 0, first: true }); effects.flush([from, target], 1 / 60);
+ const born = effects.inspect(); assert.deepEqual(born.recent[0].position, [1, 0, 0]); assert.equal(born.created.hit, 4); assert.equal(born.created['charge-cue'], undefined);
+ effects.update(.1); const dust = effects.inspect().particles.find(p => p.type === 'charge-first');
+ assert.ok(Math.abs(dust.opacity - .32 * (1 - .1 / .48)) < 1e-9); effects.dispose();
 });
