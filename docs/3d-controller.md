@@ -5,8 +5,9 @@
 用户新批授权先战线组织W1、再交战反馈F1；每项实际game检查与独立复审后自主继续，适当commit/push仅到既有codex/sword-shield-round1，包含上一模型阶段5笔已复审本地提交；不merge main、不部署。20GLB/R2/P2/A2/V2/S1和早期基准保留，不改2D/伤害/时钟/命令语义。三态分别记录，原整体明确不足、新候选认可未知。
 
 - [x] W1 `front=baseline|candidate`，纯自动移动槽位/后排候次与有界combat movement seam已实际实现；single/duel/default回原路径。4v4/16v16/mixed完整真实接敌、候补、决胜、暂停/reset与最终791/791/build通过；独立技术和高级源码/视觉最终APPROVE_WITH_NOTES，总控接受受检范围。manual旧0a7b动态277头自点探针53误判仍记REVISE/superseded；最终df86真实occupied-centre修正原277零失败、10800正常帧继承，UI2.62195m离位后补位、6.2845s自然完成并重入。本次UI同槽目标1.30155m非精确self-position；精确零位移合同由pure277覆盖，旧.1epsilon未修。三态：技术限定通过、内部视觉限定通过、用户新候选认可未知。owner_task=`codex-native-asset-worker / warfeel-w1-f1-20261013`。骑兵沿原正z翼自主、晚局部拥挤/容量未测保留。
-- [ ] F1 真实事件驱动交战反馈，尚未实施，须W1独立收口后继续。
-- [ ] 整批冻结tip复审/精确commit/push与真实远端复核；不从旧push授权或tracking缓存声称已推送。
+- [x] F1 独立 `feedback=baseline|candidate`：真实hit/arrow-hit/charge/death后姿态接触碎片、首/续冲锋层次、低位实际移动蹄尘、晚Death一次轻尘完成。797/797/build、双兵/主场两版与真实事件短帧、Idle0像素/材质一致、资源pause/reset完成；独立技术/高级最终APPROVE_WITH_NOTES、总控接受受检范围。高级18实图、独立技术8契约/6focused/1200同dt核心状态事件精确同及fresh正常32四真实点。主镜冲锋小/易遮P3保留；真实骨锚非3D碰撞物理。三态：技术限定通过、内部视觉限定通过、用户新候选认可未知。
+
+本批Git最终tip、remote三读/pushed_verified、writerrelease与livepreview以 `.omc/evidence/war-feel/final/git-receipt.json` 同轮实际执行回读为准。此文档为提交前审定版本，不预写已push，不用tracking缓存证明远端；已批准整批精确提交与现工作分支push，不merge main/部署。
 
 详见 [战争感迭代](war-feel-iteration.md)。新批fresh snapshot localff27af5/trueRemoteef4355f、ahead5/behind0、clean/两provider free后新唯一writer正常claim；进程/git最终状态只认当轮live。KB未知dirty未同步，旧tmp草案stale。
 
@@ -20,7 +21,7 @@
 - [x] V2 马＋骑手限定收口6c6/main1e0dc：生者与flat晚Death高级APPROVE_WITH_NOTES、独立技术APPROVE_WITH_NOTES，总控接受；34骨/旧19/五生者clip保持，真实移动/Charge/Hit/Death/4v4/mixed与21相关测试/build通过。下侧右shin中心浅入4.65–24.43mm列P3，整体马骑侧倒与头胸离地保留；原坡面支撑门由S1在受检范围关闭。
 - [x] S1 共享尸体坡面视觉支撑已实现独立 `corpse=baseline|candidate`；仅 Death model 层随局部坡面渐入倾角，root 保持模拟纯 yaw、原世界竖直接地。20 GLB/规则/Q1/T1保持；受控坡面48点、平地48点与3项模型状态回归、四类自然死亡/正常mixed32→14死（13末态＋1过渡）/暂停恢复/reset32完成，全量783/783与build通过。独立技术与高级视觉最终合并APPROVE_WITH_NOTES，总控接受受检范围；不称全部地形/容量/战争感通过。见 [S1 记录](corpse-support-iteration.md)。
 - 三态：R2完整780测试/build及真实静态/正常动态检查通过；高级独立视觉复审 APPROVE_WITH_NOTES，独立技术QA APPROVE（末次纯标签修正补验通过）；P2技术限定通过/高级视觉APPROVE_WITH_NOTES/独立技术APPROVE；A2资产/生者/主场/Q1on平地死亡限定接受，独立技术和高级视觉 APPROVE_WITH_NOTES，最低Chest.025实际胸带装备，胸腹衣料.0732/皮甲皮带.0931m；V2生者/flat晚Death两路APPROVE_WITH_NOTES，保留马骑侧倒及右shin浅内交叠 notes。S1技术783/build及两路最终APPROVE_WITH_NOTES、四兵自然倒地/主场闭环，由总控接受受检范围。用户对原有整体模型/动作/战争感已明确表示不足；用户明确认可新 R2/P2/A2/V2 与 S1 仍未知。不得从测试或内部视觉通过推断用户美术认可。
-- 唯一施工 worker 为 Codex 原生 `asset_worker`；高级独立 review requested `gpt-6-astra / high`，actual 模型/档位未知。总控只决策/核验。当前 task **NO PUSH / NO MERGE / NO DEPLOY**；普通本地 commit 仍需精确路径、验证与独立复审、writer 安全门。
+- 唯一施工 worker 为 Codex 原生 `asset_worker`；高级独立 review requested `gpt-6-astra / high`，actual 模型/档位未知。总控只决策/核验。该模型阶段当时 **NO PUSH / NO MERGE / NO DEPLOY**（历史授权边界；本页当前W1/F1新批授权见首屏）；普通本地 commit 仍需精确路径、验证与独立复审、writer 安全门。
 - KB 源未同步：目标已有 dirty 且 owner/handoff 尚未确认；`/private/tmp/ancient-r2-kb-01a132c6/index.candidate.md`、`authority.candidate.md` 已是过时历史草案，不能当当前候选或正式权威。详细制作/证据见 [模型标准记录](model-standard-iteration.md)。
 
 

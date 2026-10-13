@@ -1,0 +1,660 @@
+{
+  "status": "F1 bounded scope accepted by controller after independent technical and advanced source/visual APPROVE_WITH_NOTES",
+  "sourceHashes": {
+    "js/three-demo/main.js": "ab57e0572d5720021dcc941909dcc9a41c6d784227f40648db6d282692c360c0",
+    "js/three-demo/combat-feedback.js": "2b7b077afd3c2822de901cb74429e1e5de9981df76570edec9d7d7acc4e57a31",
+    "tests/three-combat-feedback.test.js": "3273851a9154aa798fec8c9963ac4d63e20f97ede4a243834ff9a8f5dc165bdb",
+    "tools/qa-war-feel.mjs": "9d75a0061d574452fcea216f3d3422ea23eeb80fa176c0d0a844db60c5066b0e",
+    "js/three-demo/combat-model.js": "804daff3875291bcb4dd9f5ef21ca5cd2b515192e14cca7809a9bbd3b6485bcb",
+    "js/three-demo/battle-line.js": "df86e132dc69aacc9864a012a742e3a1379bec4043e0fe2a884fa9c55da8542a"
+  },
+  "protected20AssetsUnchanged": true,
+  "w1Commit": "3392abbca2f5a538a9e9bcafc6b6a38db8599014",
+  "feedbackScope": "presentation-only, real resolved events and post-pose anchors; no arrow release/physics change",
+  "pilotRuns": [
+    {
+      "mode": "infantry",
+      "version": "baseline",
+      "lastTime": 14.049599999999984,
+      "alive": 1,
+      "counts": {
+        "attack": 18,
+        "hit": 9,
+        "death": 1
+      },
+      "maximumActive": 0,
+      "files": [
+        "hit.png",
+        "death.png"
+      ],
+      "camera": {
+        "position": [
+          4.7769731647386156,
+          7.150832675335579,
+          6.36929755298482
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 10,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ]
+    },
+    {
+      "mode": "infantry",
+      "version": "candidate",
+      "lastTime": 14.082899999999965,
+      "alive": 1,
+      "counts": {
+        "attack": 18,
+        "hit": 9,
+        "death": 1
+      },
+      "created": {
+        "hit": 36,
+        "death": 3
+      },
+      "maximumActive": 4,
+      "files": [
+        "hit.png",
+        "death.png"
+      ],
+      "camera": {
+        "position": [
+          4.7769731647386156,
+          7.150832675335579,
+          6.36929755298482
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 10,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ]
+    },
+    {
+      "mode": "archer",
+      "version": "baseline",
+      "lastTime": 20.067699999999878,
+      "alive": 0,
+      "counts": {
+        "draw": 16,
+        "shoot": 16,
+        "arrow-hit": 16,
+        "death": 2
+      },
+      "maximumActive": 0,
+      "files": [
+        "arrow-hit.png",
+        "death.png"
+      ],
+      "camera": {
+        "position": [
+          4.7769731647386156,
+          7.150832675335579,
+          6.36929755298482
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 10,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ]
+    },
+    {
+      "mode": "archer",
+      "version": "candidate",
+      "lastTime": 20.050299999999837,
+      "alive": 0,
+      "counts": {
+        "draw": 16,
+        "shoot": 16,
+        "arrow-hit": 16,
+        "death": 2
+      },
+      "created": {
+        "arrow-hit": 48,
+        "death": 6
+      },
+      "maximumActive": 6,
+      "files": [
+        "arrow-hit.png",
+        "death.png"
+      ],
+      "camera": {
+        "position": [
+          4.7769731647386156,
+          7.150832675335579,
+          6.36929755298482
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 10,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ]
+    },
+    {
+      "mode": "cavalry",
+      "version": "baseline",
+      "lastTime": 16.05099999999994,
+      "alive": 1,
+      "counts": {
+        "charge": 2,
+        "attack": 10,
+        "hit": 5,
+        "death": 1
+      },
+      "maximumActive": 0,
+      "files": [
+        "charge.png",
+        "hit.png",
+        "death.png"
+      ],
+      "camera": {
+        "position": [
+          4.7769731647386156,
+          7.150832675335579,
+          6.36929755298482
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 10,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ]
+    },
+    {
+      "mode": "cavalry",
+      "version": "candidate",
+      "lastTime": 16.05099999999995,
+      "alive": 1,
+      "counts": {
+        "charge": 2,
+        "attack": 10,
+        "hit": 5,
+        "death": 1
+      },
+      "created": {
+        "hoof": 42,
+        "charge-first": 12,
+        "hit": 28,
+        "death": 3
+      },
+      "maximumActive": 26,
+      "files": [
+        "charge.png",
+        "hit.png",
+        "death.png"
+      ],
+      "camera": {
+        "position": [
+          4.7769731647386156,
+          7.150832675335579,
+          6.36929755298482
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 10,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ]
+    },
+    {
+      "mode": "mixed",
+      "version": "baseline",
+      "lastTime": 20.16969999999992,
+      "alive": 25,
+      "counts": {
+        "attack": 126,
+        "hit": 64,
+        "draw": 20,
+        "shoot": 19,
+        "arrow-hit": 17,
+        "death": 7,
+        "cancel-shot": 1,
+        "cancel-attack": 1,
+        "charge": 1
+      },
+      "maximumActive": 0,
+      "files": [
+        "hit.png",
+        "arrow-hit.png",
+        "main-8.png",
+        "death.png",
+        "charge.png"
+      ],
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ]
+    },
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "lastTime": 20.16749999999989,
+      "alive": 24,
+      "counts": {
+        "attack": 124,
+        "hit": 65,
+        "draw": 21,
+        "shoot": 18,
+        "arrow-hit": 17,
+        "death": 8,
+        "cancel-shot": 3,
+        "cancel-attack": 2,
+        "charge": 1
+      },
+      "created": {
+        "hoof": 146,
+        "hit": 264,
+        "arrow-hit": 51,
+        "death": 24,
+        "charge-first": 6
+      },
+      "maximumActive": 36,
+      "files": [
+        "hit.png",
+        "arrow-hit.png",
+        "main-8.png",
+        "death.png",
+        "charge.png"
+      ],
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ]
+    }
+  ],
+  "pilotErrors": [],
+  "pilotGLB200": 40,
+  "nativeMainEventWindows": [
+    {
+      "version": "baseline",
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "events": [
+        {
+          "type": "hit",
+          "event": {
+            "time": 4.720900000000003,
+            "type": "hit",
+            "from": 3,
+            "target": 19
+          },
+          "actualTimes": [
+            4.720900000000003,
+            4.837600000000004,
+            4.920900000000005
+          ],
+          "actualOffsets": [
+            0,
+            0.11670000000000069,
+            0.20000000000000195
+          ]
+        },
+        {
+          "type": "arrow-hit",
+          "event": {
+            "time": 6.58770000000002,
+            "type": "arrow-hit",
+            "from": 11,
+            "target": 18
+          },
+          "actualTimes": [
+            6.58770000000002,
+            6.706000000000022,
+            6.789200000000023
+          ],
+          "actualOffsets": [
+            0,
+            0.1183000000000014,
+            0.2015000000000029
+          ]
+        },
+        {
+          "type": "charge",
+          "event": {
+            "time": 17.9898999999999,
+            "type": "charge",
+            "from": 30,
+            "target": 12,
+            "first": true
+          },
+          "actualTimes": [
+            17.9898999999999,
+            18.106599999999894,
+            18.221299999999893
+          ],
+          "actualOffsets": [
+            0,
+            0.11669999999999447,
+            0.2313999999999936
+          ]
+        }
+      ],
+      "errors": [],
+      "GLB200": 5
+    },
+    {
+      "version": "candidate",
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "events": [
+        {
+          "type": "hit",
+          "event": {
+            "time": 4.665200000000003,
+            "type": "hit",
+            "from": 3,
+            "target": 19
+          },
+          "actualTimes": [
+            4.665200000000003,
+            4.796500000000003,
+            4.878500000000003
+          ],
+          "actualOffsets": [
+            0,
+            0.13129999999999953,
+            0.21330000000000027
+          ]
+        },
+        {
+          "type": "arrow-hit",
+          "event": {
+            "time": 6.561900000000017,
+            "type": "arrow-hit",
+            "from": 11,
+            "target": 18
+          },
+          "actualTimes": [
+            6.561900000000017,
+            6.680100000000018,
+            6.76330000000002
+          ],
+          "actualOffsets": [
+            0,
+            0.11820000000000075,
+            0.20140000000000224
+          ]
+        },
+        {
+          "type": "charge",
+          "event": {
+            "time": 18.0973999999999,
+            "type": "charge",
+            "from": 30,
+            "target": 12,
+            "first": true
+          },
+          "actualTimes": [
+            18.0973999999999,
+            18.214099999999902,
+            18.332699999999893
+          ],
+          "actualOffsets": [
+            0,
+            0.11670000000000158,
+            0.23529999999999163
+          ]
+        }
+      ],
+      "errors": [],
+      "GLB200": 5
+    }
+  ],
+  "selectedImages": [
+    {
+      "file": "docs/visual-iteration/war-feel/f1/infantry-baseline-hit.png",
+      "source": ".omc/evidence/war-feel/f1/pilot-surface/infantry-baseline/hit.png",
+      "sha256": "0b85cff4e711b48aa956b18f59396e45915886ae8b57644a4b81977f61a22097"
+    },
+    {
+      "file": "docs/visual-iteration/war-feel/f1/infantry-candidate-hit.png",
+      "source": ".omc/evidence/war-feel/f1/pilot-surface/infantry-candidate/hit.png",
+      "sha256": "5c9729d57adf3796ae41c0d4c609dee7901d51d29ce64eea8f3df06d8857ae0e"
+    },
+    {
+      "file": "docs/visual-iteration/war-feel/f1/archer-baseline-arrow-hit.png",
+      "source": ".omc/evidence/war-feel/f1/pilot-surface/archer-baseline/arrow-hit.png",
+      "sha256": "c22b38f80be682635e17f7a5eb1007640ab346d9aed9ab80d9e4bef940d8ab7f"
+    },
+    {
+      "file": "docs/visual-iteration/war-feel/f1/archer-candidate-arrow-hit.png",
+      "source": ".omc/evidence/war-feel/f1/pilot-surface/archer-candidate/arrow-hit.png",
+      "sha256": "6a579283ba186d871454e4bcde0183dbabee3f8e7098d28326d583a5da4b2a6f"
+    },
+    {
+      "file": "docs/visual-iteration/war-feel/f1/cavalry-baseline-charge.png",
+      "source": ".omc/evidence/war-feel/f1/pilot-surface/cavalry-baseline/charge.png",
+      "sha256": "3653442cf5e89ee08b9ddd7fb0f305b238dcb8b8e5bc137de2404411ea363562"
+    },
+    {
+      "file": "docs/visual-iteration/war-feel/f1/cavalry-candidate-charge.png",
+      "source": ".omc/evidence/war-feel/f1/pilot-surface/cavalry-candidate/charge.png",
+      "sha256": "8e96cdc6e4a38ec8a1dd27fe3498c7f5ef0ec80a9562c28e9bd2a958fe0035e2"
+    },
+    {
+      "file": "docs/visual-iteration/war-feel/f1/main-baseline-hit.png",
+      "source": ".omc/evidence/war-feel/f1/natural-main-event-window/baseline/hit-0.00.png",
+      "sha256": "edac07059462c58a736b2b080c91420cc4089e7b51aa475675a4cefaf1c47098"
+    },
+    {
+      "file": "docs/visual-iteration/war-feel/f1/main-candidate-hit.png",
+      "source": ".omc/evidence/war-feel/f1/natural-main-event-window/candidate/hit-0.00.png",
+      "sha256": "d5c702888b6781cb7671ad4ee4351bb5782c5456c476e1ba2fd2842fdaef42a8"
+    },
+    {
+      "file": "docs/visual-iteration/war-feel/f1/main-baseline-arrow-hit.png",
+      "source": ".omc/evidence/war-feel/f1/natural-main-event-window/baseline/arrow-hit-0.00.png",
+      "sha256": "d870433a323c04f56fa4ad810c14cdbd62d8e3bd68a7033c866190df28fd4d3c"
+    },
+    {
+      "file": "docs/visual-iteration/war-feel/f1/main-candidate-arrow-hit.png",
+      "source": ".omc/evidence/war-feel/f1/natural-main-event-window/candidate/arrow-hit-0.00.png",
+      "sha256": "8fa5f5a84f7c6c9e9314dccbe09c23a47ca2931a20828e1ed84ff18dc2087e3b"
+    },
+    {
+      "file": "docs/visual-iteration/war-feel/f1/main-baseline-charge.png",
+      "source": ".omc/evidence/war-feel/f1/natural-main-event-window/baseline/charge-0.00.png",
+      "sha256": "38ead49ed62a04d27cce909e5e4398f900c34658fb8962879e534b2666158963"
+    },
+    {
+      "file": "docs/visual-iteration/war-feel/f1/main-candidate-charge.png",
+      "source": ".omc/evidence/war-feel/f1/natural-main-event-window/candidate/charge-0.00.png",
+      "sha256": "ee597af59cdbb3ab760b7d8667ccb9da266719bbdb049b1a97a28d54a2170e53"
+    }
+  ],
+  "tests": {
+    "related": 6,
+    "full": 797,
+    "fail": 0,
+    "buildExit": 0,
+    "logs": [
+      "../tests-final.log",
+      "../build-final.log"
+    ]
+  },
+  "notes": [
+    "Main-view effects are small and short; no whole-warfeel completion claim",
+    "A/B wall clocks independent; deterministic compatibility is proved by same-dt pure tests",
+    "Requested .08/.16 images actual phase offsets vary and are recorded",
+    "Target bone anchors show a resolved hit, not mesh collision physics",
+    "No sound/engine/asset/camera/light/simulation change; target capacity and user approval unknown"
+  ],
+  "technicalFinal": {
+    "verdict": "APPROVE_WITH_NOTES",
+    "requiredRemaining": [],
+    "file": ".omc/evidence/qa-standard-20261013/f1-final/verdict.json",
+    "sha256": "7ab31b95cf979701119e4128cf27139f0a4ebdb0eb6ec358542d6b3657f85b87",
+    "scope": "8 independent contracts,6focused,1200 equal-dt core/events exact,protected20GLB/60twoD/9sources; fresh normal32 hit/arrow/lateDeath/firstCharge,pause/reset5GLB200errors0; worker797/build readback"
+  },
+  "advancedFinal": {
+    "verdict": "APPROVE_WITH_NOTES",
+    "requiredRemaining": [],
+    "file": ".omc/evidence/war-feel/f1/advanced-final/verdict.json",
+    "sha256": "cf0e1b33de5f55141840d7a88c9e9c083a3072fb8283e2a7b98da9d7e46804bb",
+    "scope": "18 actual images,6source snapshot/live exact,6independent focused tests",
+    "notes": "P3 main44m charge dust small/easily horse-occluded; moderate improvement"
+  },
+  "requestedAdvanced": "gpt-6-astra/high",
+  "actualAdvanced": "unknown",
+  "userApproval": "unknown",
+  "idleAndReset": {
+    "source": ".omc/evidence/war-feel/f1/idle-reset/summary.json",
+    "canvasPixelSHA": "28b50ac64daaa343934b4d6c108ad013f841099508e8e070d98dd544731051c8",
+    "pairedCanvasBoundsMaterialsExact": true,
+    "naturalHitResetCycles": 3,
+    "fixtureFailuresRetained": true,
+    "judgeExit": 2,
+    "judgeReport": "none valid; project config missing"
+  },
+  "gitReceipt": ".omc/evidence/war-feel/final/git-receipt.json; live execution only, no push assertion in this precommit manifest"
+}

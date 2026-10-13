@@ -1,8 +1,8 @@
 # 战争感 W1 → F1
 
-2026-10-13 当前 W1 `[x]`：战线组织实现、4v4/16v16/mixed实际接敌与补缺至决胜、791/791与build完成；最终df86e132…同时获独立技术与高级源码/视觉 `APPROVE_WITH_NOTES`，总控接受受检范围。两次manual guard失败和修复历史保留，原277动态自点反例最终0失败。用户新候选认可未知。owner_task=`codex-native-asset-worker / warfeel-w1-f1-20261013`，唯一writer正常持新token。F1 `[ ]` 尚未实施，W1精确本地提交后继续。用户新批明确先战线组织、再交战反馈，每项实际游戏验证与独立复审后自主继续，并授权适当本地commit及本批最终push到既有工作分支；不merge main、不部署。原20GLB与R2/P2/A2/V2/S1及所有早期候选/基准保留；内部通过不代表用户整体满意。
+2026-10-13 当前 W1 `[x]`、F1 `[x]`：两项实际实现、真实游戏检查、必要验证及两路独立复审均在受检范围通过，总控接受。W1本地提交3392abb，F1源码冻结mainab57e057…/feedback2b7b077…；最终全量797/797/build退出0。独立技术和高级源码/视觉均为 `APPROVE_WITH_NOTES`；用户对旧整体战争感已明确不足，新候选认可未知。owner_task=`codex-native-asset-worker / warfeel-w1-f1-20261013`。用户本批授权适当本地commit及最终push仅到既有工作分支，覆盖模型5笔、W1与F1，不merge main、不部署。保留原20GLB及R2/P2/A2/V2/S1和全部早期基准。Git最终tip/远端/writer/service只认下文外部live receipt，不在本文预写执行结果。
 
-## 新批 live 基线
+## 新批开工 live 基线（历史采样）
 
 完整读取code-workspace-default与当前MULTI_AGENT_GIT，kb_current链路解析有效。fresh snapshot sampled2026-10-13T05:51:48UTC，local ff27af530042f7eee771a708322e3583c69bb2d2、真实/fetched remote ef4355ff01ec8995eac4dd06dc672e9ec1166944，ahead5/behind0；branch codex/sword-shield-round1，github URL身份一致。GitHub官方API repository id1200045147与正式stable repo_id一致；repo clean、dirtyOwner none，common-dir与global两provider writer_free。5301实际PID69740/HTTP200。本批writer独占仅Git机械互斥，owner只10项精确源码/测试/工具/docs，保护范围外修改。
 
@@ -34,6 +34,27 @@
 
 最终df86实际UI新21采样：真实选兵/地面同槽指令（目标距原位1.30155m，并非精确自身坐标）首次更新保0/refill0；首次观察actor离原位2.62195m>2.2占位阈值后补2，命令在elapsed6.2845s自然完成target=null、同列[2,0]唯一重入后排；reset回[0,2]/全健康/refill0。5GLB200/errors=[]，两关键PNG、连续WebM/actual-summary及冻结manifest绑定同source；高级实际看2图/读21点并认可该样本自然完成。精确原地合同另由控制夹具覆盖。第一次不同raycast/dt长UI采样仍停d=.1000000000000003m、target非空，是历史stop浮点边缘，未修命令规则；不能以本次成功扩大为所有命令都保证完成。首图正常结果和全部失败历史保留。
 
-## 后续与三态
+## 当前三态与保留范围
 
-W1：技术验证791/791/build及独立技术最终 APPROVE_WITH_NOTES；内部源码/视觉高级最终 APPROVE_WITH_NOTES，总控接受受检范围。局部晚段骑兵/近战拥挤、获胜方部分候补未参战、旧manual stop epsilon与未测容量保留为notes。用户已明确旧整体战争感不足，新W1候选认可未知。F1：计划真实attack/hit/charge/draw/shoot/death驱动表现、保留Q1/S1/20GLB与W1，只改变呈现；尚未实施。最终冻结候选复审、精确commit后才按当前新task授权一次push并ls-remote/exactfetch真实核验，未经review代码不先推。
+W1技术791/791/build和独立技术最终通过；内部源码/视觉高级最终APPROVE_WITH_NOTES，总控接受。F1技术797/797/build、独立技术8契约/6focused及1200同dt核心状态/事件逐值同，fresh正常32真实hit/arrow-hit/晚Death/charge四点、pause/reset、5GLB200/errors=[]；高级实看18张近镜/主镜短序列、独立6测试/6source同冻，两路APPROVE_WITH_NOTES，总控接受。两项均不自动代表用户认可，新W1/F1及模型候选的明确用户认可仍未知。
+
+W1晚段骑兵/近战局部拥挤、获胜方部分候补未参战、旧manual .1m stop epsilon保留。F1 44m主镜冲锋反馈小且易被马体遮挡列P3，提升适度，不宣称整体战争感完成；真实结算的骨点表现锚不是3D碰撞物理。首/续charge强弱由受控真实类型事件合同验证，独立自然主场此次只观察first=true。原足滑/坡部局部接地及骑兵简化仍保留，未验证目标设备大军容量或声音。
+
+## F1 最终受检候选
+
+W1已本地提交 `3392abbca2f5a538a9e9bcafc6b6a38db8599014`；最终整批Git状态见下文live receipt。F1独立 `feedback=baseline|candidate`；固定W1及四标准模型/S1/C2/L1，旧无feedback/基准路径保留地面细环、原动画/Q1/飞箭顺序。纯呈现CombatFeedback只接收真实hit/arrow-hit/charge/death摘要，root/骨动画/Q1/S1/T1与world matrices完成后采Chest或HorseBody位置。灰白/暗金短接触碎片、首冲锋强/续击弱土尘、实际位移且低位skinnedHoof的轻尘、真实死亡晚段一次土尘；无attack/draw/cancel伪命中，不改damage、sim fields、资产、单位shared材质或箭释放时序。骨点为已结算命中的表现锚点，不声称真实3D碰撞点。
+
+资源独立geometry/material、128粒子/64事件队列cap，TTL跟游戏dt；暂停不推进，reset清队列/旧unit引用，pagehide只dispose自己资源。第一试稿胸骨内锚点/向体内散射被甲遮，自检修成近侧表面与外散，失败首图保留。可读首冻结 `f1/frozen-f1-first/manifest.json`：mainab57e057…、feedback2b7b077…、test3273851…、QA9d75a006…；W1combat804/helperdf86和20GLB保持。
+
+6个相关合同通过：固定W1同源1800帧simstate/真实event逐值同、取消不造命中、真实arrow-hit、暂停/reset ID复用安全、finite/cap/过期资源回落、实GLB蹄底近地与晚Death仅一次。双兵剑盾/弓/骑和默认主场32两版实机与录像已完成：pilot40GLB200、自然主镜事件短窗10GLB200/errors=[]，暂停逐值稳定/reset归零。最终全量797/797/build退出0；相同reset+Idle0样本两版canvas像素SHA、32单位投影bounds、材质逐值同，另三次真实命中后reset清FX/队列/cache。技术/内部视觉独立最终均APPROVE_WITH_NOTES、requiredRemaining=[]，总控接受受检范围；用户新候选认可未知。
+
+
+F1完整冻结 `f1/frozen-f1-final/manifest.json` 与12精选图在 `docs/visual-iteration/war-feel/f1/`；代码指纹同首可读候选，20GLB复核全同。正常main命中4.6652s、箭击6.5619s、首冲锋18.0974s后使用页面pause取短时序；PNG名.08/.16是请求偏移，实际.118–.131/.201–.235写入manifest，不称精确帧或A/B战斗锁步。极短受击闪在44m主镜表现克制、土尘有限；高级已实看18图限定接受，冲锋偏小/马遮列P3，未用创建数量替代视觉判断。
+
+补充QA采样失败历史保留：首reset读取已跨一个新Idle帧，8个新马缓存被误认清理失败；同任务reset+inspect后三循环通过。首Idle两页面自由布阵步数不同，原separation尚在收敛，未声称相同；相同真实reset+Idle0freeze后canvas hash均28b50ac6…、world投影bounds及材质全同。候选源码未因这两次私有QA夹具校准而更改。judge按规调用退出2、项目配置缺失，无valid report/feedback目标，只留排查输入局限。
+
+独立最终凭证：技术 `.omc/evidence/qa-standard-20261013/f1-final/verdict.json` SHA7ab31b95…，高级 `.omc/evidence/war-feel/f1/advanced-final/verdict.json` SHAcf0e1b33…；高级requested gpt-6-astra/high，actual model/effort未知。此前总控原生turn曾报告selected model at capacity，随后同原生路线恢复完成独立复审；这段为运行时历史，不是项目代码反复失败或自动批准拒绝。技术首paused-CDP截图夹具等待无效并保留，普通poll重取成功，不把invalid截图算通过。
+
+## 本批 Git 实时收口入口
+
+本轮当前授权仅工作分支 `codex/sword-shield-round1`，最终本地F1精确19路径commit后冻结tip，再正式prepush三读/clean/identity/fast-forward门、精确SHA无force push、postpush三读同tip才记pushed_verified，最后正常writer释放/两provider复查；不merge main、不部署。最终执行状态、F1/整批tip、真实remote三读、clean/dirty owner、writerrelease和combined preview健康都记录到 `.omc/evidence/war-feel/final/git-receipt.json`（不入Git）。本文是执行前审定版本，**未生成pushed_verified receipt前不能从本文推断已推送**；不为回填自身commit SHA再修改已push源码/文档，最终结果由同轮receipt和live回读核验。共享模拟箭提取仍未实施，KB未知dirty源仍不接管。

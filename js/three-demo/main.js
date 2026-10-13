@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BattleLine } from './battle-line.js';
+import { CombatFeedback } from './combat-feedback.js';
 import { CorpseSupport, corpseRegions } from './corpse-support.js';
 import { coordinateEvent, syncHeldArrow, arrowReleasePoint, flightPose, syncChargeImpact, restBowArm, restoreBowArm, restoreChargeImpact } from './action-coordination.js';
 import { createMotionQA, createDuelQA, createCrowdQA } from './motion-qa.js';
@@ -30,6 +31,8 @@ const rideStandard=preview.get('ride')==='standard';
 const qaMode=['single','small','duel','four','sixteen'].includes(preview.get('qa'))?preview.get('qa'):null;
 const qaKind=['pikeman','archer','cavalry'].includes(preview.get('unit'))?preview.get('unit'):'infantry';
 const frontCandidate=preview.get('front')==='candidate';
+const feedbackCandidate=preview.get('feedback')==='candidate';
+const feedbackEvents=[],feedbackCounts={};
 const frontApplicable=!['single','duel'].includes(qaMode);
 // QA creates only the requested kind: comparison controls describe that actor.
 const modelControlRole=qaMode?qaKind:['infantry','pikeman','archer','cavalry'].includes(preview.get('modelRole'))?preview.get('modelRole'):rideStandard?'cavalry':bowStandard?'archer':pikeStandard?'pikeman':'infantry';
@@ -97,6 +100,7 @@ scene.add(sun);
 
 function heightAt(x, z) { if(qaMode&&preview.get('terrainScene')!=='slope')return .15;return .15 + 2.5 * Math.exp(-((x + 5) ** 2 / 42 + (z + 5) ** 2 / 50)) + .65 * Math.exp(-((x - 8) ** 2 / 55 + (z - 6) ** 2 / 30)); }
 const corpseSupport=corpseCandidate?new CorpseSupport(heightAt):null;
+const combatFeedback=feedbackCandidate?new CombatFeedback(scene,heightAt):null;
 const geometry = new THREE.PlaneGeometry(38, 30, 76, 60); geometry.rotateX(-Math.PI / 2);
 const positions = geometry.attributes.position;
 const colors = [];
@@ -119,6 +123,7 @@ function createUnit(t,kind,x,z,index){const model=cloneModel(templates[kind],t);
  const ring=new THREE.Mesh(bodyRingGeometry[kind],new THREE.MeshBasicMaterial({color:'#f5df9d',side:THREE.DoubleSide}));scene.add(ring);const joints=[];model.traverse(o=>{if(!o.isMesh&&/^(arm_|leg_|horse_leg_|rider$)/.test(o.name))joints.push({object:o,base:o.quaternion.clone(),name:o.name});});
  const u={...createFighter(units.length,t,kind,x,z),root,model,ring,joints,index};u.locomotion=(motionCandidate&&kind==='infantry')||(pikeCandidate&&kind==='pikeman')||(bowCandidate&&kind==='archer');u.crowd=crowdCandidate&&u.locomotion;u.root.rotation.y=u.heading;u.animation=new AnimationController(model,templates[kind].animations,{locomotion:u.locomotion,terrainHeight:terrainCandidate&&u.locomotion?heightAt:null});if(kind==='cavalry'&&!u.animation.actions.has('charge'))throw new Error('Missing cavalry Charge animation');corpseSupport?.register(model);root.userData.unit=u;units.push(u);}
 function reset(){
+ combatFeedback?.clear();feedbackEvents.length=0;for(const key of Object.keys(feedbackCounts))delete feedbackCounts[key];
  if(motionQA){motionQA.frames=[];motionQA.captureTick=-1;}for(const u of units){u.animation?.dispose();scene.remove(u.root,u.ring);u.model.traverse(o=>{if(o.isMesh)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(m.name==='team_cloth')m.dispose();});});u.ring.material.dispose();}clearBattleMarks();clearArrows();units.length=0;fighting=false;winner=null;paused=false;elapsed=0;distance=qaMode==='duel'?10:qaMode==='sixteen'?31:qaMode==='four'?21:qaMode?18:cameraCandidate?44:43;focus.set(0,qaMode?1.1:0,cameraCandidate?4:0);updateCamera(); marker.visible=false;$('pause').textContent='暂停';$('fight').textContent='开始交战';
  if(qaMode==='duel'){const separation=qaKind==='cavalry'?8:3;createUnit('red',qaKind,-separation,0,0);createUnit('blue',qaKind,separation,0,1);}else if(qaMode==='four'||qaMode==='sixteen'){const count=qaMode==='four'?4:16,rows=qaMode==='four'?2:4;for(const t of ['red','blue'])for(let i=0;i<count;i++){const side=t==='red'?-1:1;createUnit(t,qaKind,side*(4.5+Math.floor(i/rows)*2.2),(i%rows-(rows-1)/2)*2.2+(t==='blue'?.7:0),i);}}else if(qaMode){for(let i=0;i<(qaMode==='small'?4:1);i++)createUnit('red',qaKind,-3,(i-((qaMode==='small'?4:1)-1)/2)*2.2-1,i);}else for(const t of ['red','blue']){const side=t==='red'?-1:1;for(let i=0;i<6;i++)createUnit(t,'infantry',side*(8+Math.floor(i/4)*2.1),(i%4-1.5)*2.1,i);for(let i=0;i<4;i++)createUnit(t,'pikeman',side*12.2,(i-1.5)*2.1,i+6);for(let i=0;i<2;i++)createUnit(t,'archer',side*15,(i-.5)*3,i+10);for(let i=0;i<4;i++)createUnit(t,'cavalry',side*(10.8+i%2*4.2),6+Math.floor(i/2)*4.2,i+12);}
  separateBodies(units);battleLine=frontCandidate&&frontApplicable?new BattleLine(units):null;select(units.filter(u=>u.team===team));$('battle-status').textContent=`自由布阵 · ${healthStatus()}`;}
@@ -160,14 +165,16 @@ function update(dt){
  battleLine?.update(units,dt,fighting);
  const events=stepSkirmish(units,dt,fighting,battleLine?(u,enemy)=>battleLine.intent(u,enemy):null);duelQA?.recordEvents(elapsed,events);crowdQA?.recordEvents(elapsed,events);
  for(const event of events){
+  if(preview.has('feedback')){feedbackCounts[event.type]=(feedbackCounts[event.type]??0)+1;feedbackEvents.push({time:elapsed,type:event.type,from:event.from?.id,target:event.target?.id,unit:event.unit?.id,first:event.first});if(feedbackEvents.length>64)feedbackEvents.shift();}
+  combatFeedback?.queue(event);
   if(coordinationCandidate)coordinateEvent(event);
   if(event.type==='death'){event.unit.animation?.trigger('death');event.unit.ring.visible=false;addBlood(event.x,event.z,event.unit.kind==='cavalry'?.65:.4);}
-  else if(event.type==='charge'){event.target.animation?.trigger('hit');impactRing(event.x,event.z,true);addBlood(event.x,event.z,.24);}
+  else if(event.type==='charge'){event.target.animation?.trigger('hit');if(!combatFeedback)impactRing(event.x,event.z,true);addBlood(event.x,event.z,.24);}
   else if(event.type==='attack'){event.from.animation?.trigger('attack');}
   else if(event.type==='cancel-shot'||event.type==='cancel-attack'){event.from.animation?.cancelAttack(event.from.moving);}
   else if(event.type==='draw'){event.from.animation?.trigger('attack');}
   else if(event.type==='shoot'){addArrow(event.shot,event.from);}
-  else {event.target.animation?.trigger('hit');impactRing(event.x,event.z,false);if(event.target.hp%24<12)addBlood(event.x,event.z,.12);}
+  else {event.target.animation?.trigger('hit');if(!combatFeedback)impactRing(event.x,event.z,false);if(event.target.hp%24<12)addBlood(event.x,event.z,.12);}
  }
  for(const u of units){
   u.root.position.set(u.x,heightAt(u.x,u.z),u.z);u.root.rotation.y=u.heading;
@@ -175,8 +182,9 @@ function update(dt){
   if(u.hp<=0){u.deathTime=(u.deathTime??0)+dt;const t=Math.min(1,u.deathTime/.65);if(u.animation){if(coordinationCandidate){restoreBowArm(u);restoreChargeImpact(u);}u.animation.update(dt,false);if(coordinationCandidate){syncHeldArrow(u);restBowArm(u);}u.model.rotation.z=0;}else u.model.rotation.z=(u.id%2?1:-1)*Math.PI/2*(1-Math.pow(1-t,3));if(corpseSupport){const action=u.animation?.actions.get('death');corpseSupport.apply(u,action?.time??u.deathTime,action?.getClip().duration??.65,settleCorpse);u.corpseSettled=u.animation?u.animation.deathComplete:t===1;}else if(!u.corpseSettled){settleCorpse(u);u.corpseSettled=u.animation?u.animation.deathComplete:t===1;}u.ring.visible=false;continue;}
   if(u.animation){u.model.position.y=0;u.model.rotation.z=0;const actualSpeed=Math.hypot(u.x-(u.animationX??u.x),u.z-(u.animationZ??u.z))/Math.max(dt,.001);const turnRate=Math.atan2(Math.sin(u.heading-(u.animationHeading??u.heading)),Math.cos(u.heading-(u.animationHeading??u.heading)))/Math.max(dt,.001);u.animationX=u.x;u.animationZ=u.z;u.animationHeading=u.heading;if(coordinationCandidate)restoreChargeImpact(u);u.animation.update(dt,u.locomotion?actualSpeed>.04:u.moving,u.kind==='cavalry'&&u.speed>=1.5&&(u.runup>=3.2||u.pierceTime>0||u.chargeFlash>0),{speed:actualSpeed,turnRate});if(coordinationCandidate){syncHeldArrow(u);syncChargeImpact(u);}updateSkinMatrices(u.model);}else animateUnit(u,elapsed,u.moving,u.attacking);u.ring.position.set(u.x,heightAt(u.x,u.z)+.04,u.z);
   if(!u.animation)u.model.rotation.z=Math.sin(elapsed*45+u.id)*.06*Math.min(1,u.hitFlash*5);
-  if(u.kind==='cavalry'&&u.moving&&u.speed>=3.4&&Math.floor(elapsed*10)!==u.dustTick){u.dustTick=Math.floor(elapsed*10);impactRing(u.x-Math.sin(u.heading)*.55,u.z-Math.cos(u.heading)*.55,false);}
+  if(!combatFeedback&&u.kind==='cavalry'&&u.moving&&u.speed>=3.4&&Math.floor(elapsed*10)!==u.dustTick){u.dustTick=Math.floor(elapsed*10);impactRing(u.x-Math.sin(u.heading)*.55,u.z-Math.cos(u.heading)*.55,false);}
  }
+ if(combatFeedback){for(const u of units){u.root.updateMatrixWorld(true);updateSkinMatrices(u.model);}combatFeedback.update(dt);combatFeedback.flush(units,dt);}
  updateArrows();
  if(preview.get('capture')==='1')for(const u of units){const a=u.model.getObjectByName('Arrow');if(u.contactTick!==Math.floor(elapsed*10)){u.contactTick=Math.floor(elapsed*10);u.corpseContact=sampleCorpseContact(u);}u.effectSample={contact:u.corpseContact,chestX:u.model.getObjectByName('Chest')?.rotation.x,heldArrowScale:a?.scale.x,soleContact:u.kind==='cavalry'?null:sampleSoleContact(u),modelY:u.model.position.y,rootY:u.root.position.y,arrowReleased:!!u.arrowReleased,projectiles:u.projectiles.map(s=>({id:s.id,x:s.x,z:s.z,age:s.age})),flight:[...arrowMarks.values()].filter(m=>m.userData.shot.id.startsWith(u.id+':')).map(m=>({id:m.userData.shot.id,origin:m.userData.origin?.toArray(),position:m.position.toArray(),quaternion:m.quaternion.toArray()}))};}
  motionQA?.afterStep(elapsed,dt);duelQA?.afterStep(elapsed);crowdQA?.afterStep(elapsed,dt);
@@ -195,6 +203,13 @@ function zoom(amount){distance=THREE.MathUtils.clamp(distance+amount,10,65);upda
 renderer.domElement.addEventListener('wheel',event=>{event.preventDefault();zoom(Math.sign(event.deltaY)*2.3);},{passive:false});
 $('zoom-in').onclick=()=>zoom(-4);$('zoom-out').onclick=()=>zoom(4);$('overview').onclick=()=>{distance=cameraCandidate?44:43;focus.set(0,0,cameraCandidate?4:0);updateCamera();};$('focus').onclick=()=>{const living=selected.filter(u=>u.hp>0);if(!living.length)return;focus.set(0,0,0);for(const u of living)focus.add(u.root.position);focus.divideScalar(living.length);distance=18;updateCamera();};
 if(preview.has('coordination')){const g=document.createElement('div');g.className='control-group';for(const v of ['baseline','candidate']){const b=document.createElement('button');b.textContent=v==='baseline'?'动作协调基准':'动作协调候选 Q1';b.onclick=()=>{const p=new URLSearchParams(location.search);p.set('coordination',v);location.search=p.toString();};g.append(b);}document.querySelector('.demo-controls').prepend(g);}
+if(preview.has('feedback')){
+ const group=document.createElement('div');group.className='control-group';group.append('交战反馈 ');
+ const control=document.createElement('select');control.setAttribute('aria-label','交战反馈');
+ for(const [value,label]of [['baseline','原命中细环'],['candidate','接触反馈 F1']]){const option=document.createElement('option');option.value=value;option.textContent=label;option.selected=(feedbackCandidate?'candidate':'baseline')===value;control.append(option);}
+ control.onchange=()=>{const p=new URLSearchParams(location.search);p.set('feedback',control.value);location.search=p.toString();};group.append(control);document.querySelector('.demo-controls').prepend(group);
+ window.feedbackPreview={version:feedbackCandidate?'candidate':'baseline',inspect:()=>({elapsed,paused,fighting,counts:{...feedbackCounts},events:feedbackEvents.map(event=>({...event})),effects:combatFeedback?.inspect()??null,units:units.map(u=>({id:u.id,kind:u.kind,team:u.team,x:u.x,z:u.z,hp:u.hp,heading:u.heading,state:u.animation?.state,heldArrowScale:u.model.getObjectByName('Arrow')?.scale.x}))})};
+}
 if(preview.has('front')){
  const group=document.createElement('div');group.className='control-group';group.append('战线组织 ');
  const control=document.createElement('select');control.setAttribute('aria-label','战线组织');
@@ -286,7 +301,7 @@ if(preview.has('building')){const g=document.createElement('div');g.className='c
 
 renderer.setAnimationLoop(now=>{const dt=Math.min((now-last)/1000,.05);last=now;if(ready&&!paused)update(dt);renderer.render(scene,camera);if(crowdQA?.running&&preview.get('capture')==='1'&&Math.floor(elapsed*10)!==crowdQA.captureTick){crowdQA.captureTick=Math.floor(elapsed*10);crowdQA.frames.push({time:elapsed,trace:crowdQA.trace.at(-1),image:renderer.domElement.toDataURL('image/png')});}if(duelQA?.running&&preview.get('capture')==='1'&&elapsed<18&&Math.floor(elapsed*10)!==duelQA.captureTick){duelQA.captureTick=Math.floor(elapsed*10);duelQA.frames.push({time:elapsed,trace:duelQA.trace.at(-1),image:renderer.domElement.toDataURL('image/png')});}if(motionQA?.running&&preview.get('capture')==='1'&&Math.floor(elapsed*10)!==motionQA.captureTick){motionQA.captureTick=Math.floor(elapsed*10);motionQA.frames??=[];const u=units[0],v=new THREE.Vector3(u.x,heightAt(u.x,u.z)+1.3,u.z).project(camera);motionQA.frames.push({time:elapsed,trace:motionQA.trace.at(-1),width:renderer.domElement.width,height:renderer.domElement.height,center:[(v.x+1)*renderer.domElement.width/2,(1-v.y)*renderer.domElement.height/2],image:renderer.domElement.toDataURL('image/png')});}});
 async function start(){try{const paths={infantry:infantryAssetName,pikeman:pikeAssetName,archer:bowAssetName,cavalry:cavalryAssetName,tower:buildingCandidate?'building1/tower':'tower'};templates=Object.fromEntries(await Promise.all(Object.entries(paths).map(async([kind,name])=>[kind,await loader.loadAsync(`${import.meta.env.BASE_URL}assets/3d-sample/${name}.glb`)])));for(const [t,x,z] of [['red',-12,-7],['blue',12,-7]]){const tower=cloneModel(templates.tower,t);tower.position.set(x,heightAt(x,z),z);scene.add(tower);towers.push(tower);}reset();if(qaMode==='four'||qaMode==='sixteen')crowdQA=createCrowdQA({reset,startFight:()=>{fighting=true;},getUnits:()=>units,mode:qaMode,version:crowdCandidate?'candidate':'baseline'});else if(qaMode==='duel')duelQA=createDuelQA({reset,startFight:()=>{fighting=true;},getUnits:()=>units});else if(qaMode)motionQA=createMotionQA({reset,getUnits:()=>units,getElapsed:()=>elapsed,controllerVersion:(qaKind==='cavalry'?rideCandidate:qaKind==='archer'?bowCandidate:qaKind==='pikeman'?pikeCandidate:motionCandidate)?'candidate':'baseline',onTarget:target=>{marker.visible=!!target;if(target)marker.position.set(target[0],.2,target[1]);}});if(buildingComparing)setupBuildingComparison();else if(comparing)setupComparison();if(qaMode&&['pikeman','archer','cavalry'].includes(qaKind)&&!(modelControlsActive&&qaKind===modelControlRole)){const group=document.createElement('div');group.className='control-group';for(const [value,label] of (qaKind==='cavalry'?[['baseline','骑兵基准'],['candidate','骑兵候选 V1']]:qaKind==='archer'?[['baseline','弓兵基准'],['candidate','弓兵候选 A1']]:[['baseline','长矛基准'],['candidate','长矛候选 P1']])){const b=document.createElement('button');b.textContent=label;b.onclick=()=>{const p=new URLSearchParams(location.search);p.set(qaKind==='cavalry'?'ride':qaKind==='archer'?'bow':'pike',value);location.search=p.toString();};group.append(b);}document.querySelector('.demo-controls').prepend(group);}ready=true;$('loading').hidden=true;for(const id of ['fight','pause','reset'])$(id).disabled=buildingComparing&&id!=='reset';}catch(error){showFailure('战场模型未能加载，请重新加载，或进入 2D 经典版。');console.error(error);}}
-window.addEventListener('pagehide',()=>{renderer.setAnimationLoop(null);observer.disconnect();for(const u of units)u.animation?.dispose();const geometries=new Set(),materials=new Set();scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>materials.add(m));});geometries.add(arrowGeometry);geometries.forEach(g=>g.dispose());materials.add(arrowMaterial);materials.add(bloodMaterial);materials.forEach(m=>m.dispose());renderer.dispose();},{once:true});
+window.addEventListener('pagehide',()=>{combatFeedback?.dispose();renderer.setAnimationLoop(null);observer.disconnect();for(const u of units)u.animation?.dispose();const geometries=new Set(),materials=new Set();scene.traverse(o=>{if(o.geometry)geometries.add(o.geometry);if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>materials.add(m));});geometries.add(arrowGeometry);geometries.forEach(g=>g.dispose());materials.add(arrowMaterial);materials.add(bloodMaterial);materials.forEach(m=>m.dispose());renderer.dispose();},{once:true});
 window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 
 if(preview.has('camera')){
