@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { BattleLine } from './battle-line.js';
+import { LateCrowd } from './late-crowd.js';
 import { CombatFeedback } from './combat-feedback.js';
 import { CorpseSupport, corpseRegions } from './corpse-support.js';
 import { coordinateEvent, syncHeldArrow, arrowReleasePoint, flightPose, syncChargeImpact, restBowArm, restoreBowArm, restoreChargeImpact } from './action-coordination.js';
@@ -33,6 +34,7 @@ const qaKind=['pikeman','archer','cavalry'].includes(preview.get('unit'))?previe
 const frontCandidate=preview.get('front')==='candidate';
 const feedbackCandidate=preview.get('feedback')==='candidate';
 const chargefxCandidate=feedbackCandidate&&preview.get('chargefx')==='candidate';
+const lateCrowdCandidate=preview.get('crowdlate')==='candidate';
 const feedbackEvents=[],feedbackCounts={};
 const frontApplicable=!['single','duel'].includes(qaMode);
 // QA creates only the requested kind: comparison controls describe that actor.
@@ -115,7 +117,7 @@ const markerGeometry = new THREE.RingGeometry(.55,.64,32); markerGeometry.rotate
 const bodyRingGeometry=Object.fromEntries(Object.entries(BODY_RADIUS).map(([kind,radius])=>{const g=new THREE.RingGeometry(radius+.04,radius+.11,32);g.rotateX(-Math.PI/2);return [kind,g];}));
 const marker = new THREE.Mesh(markerGeometry,new THREE.MeshBasicMaterial({color:'#f5df9d',side:THREE.DoubleSide})); marker.visible=false;scene.add(marker);
 const loader = new GLTFLoader();
-const units=[]; let templates, team='red', selected=[], fighting=false, paused=false, ready=false, elapsed=0, winner=null,battleLine=null;
+const units=[]; let templates, team='red', selected=[], fighting=false, paused=false, ready=false, elapsed=0, winner=null,battleLine=null,lateCrowd=null;
 const healthStatus = () => ['red','blue'].map(t => `${t==='red'?'红':'蓝'}方 ${units.filter(u=>u.team===t&&u.hp>0).length}`).join(' · ');
 function teamColor(t){return t==='red'?'#b84c38':'#487c9c';}
 function select(list){ selected=list.filter(u=>u.hp>0); $('selection').textContent = `已选${team==='red'?'红':'蓝'}方 ${selected.length} 名 · 点击地面移动`; for(const u of units)u.ring.visible=selected.includes(u)&&u.hp>0; }
@@ -127,7 +129,7 @@ function reset(){
  combatFeedback?.clear();feedbackEvents.length=0;for(const key of Object.keys(feedbackCounts))delete feedbackCounts[key];
  if(motionQA){motionQA.frames=[];motionQA.captureTick=-1;}for(const u of units){u.animation?.dispose();scene.remove(u.root,u.ring);u.model.traverse(o=>{if(o.isMesh)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(m.name==='team_cloth')m.dispose();});});u.ring.material.dispose();}clearBattleMarks();clearArrows();units.length=0;fighting=false;winner=null;paused=false;elapsed=0;distance=qaMode==='duel'?10:qaMode==='sixteen'?31:qaMode==='four'?21:qaMode?18:cameraCandidate?44:43;focus.set(0,qaMode?1.1:0,cameraCandidate?4:0);updateCamera(); marker.visible=false;$('pause').textContent='暂停';$('fight').textContent='开始交战';
  if(qaMode==='duel'){const separation=qaKind==='cavalry'?8:3;createUnit('red',qaKind,-separation,0,0);createUnit('blue',qaKind,separation,0,1);}else if(qaMode==='four'||qaMode==='sixteen'){const count=qaMode==='four'?4:16,rows=qaMode==='four'?2:4;for(const t of ['red','blue'])for(let i=0;i<count;i++){const side=t==='red'?-1:1;createUnit(t,qaKind,side*(4.5+Math.floor(i/rows)*2.2),(i%rows-(rows-1)/2)*2.2+(t==='blue'?.7:0),i);}}else if(qaMode){for(let i=0;i<(qaMode==='small'?4:1);i++)createUnit('red',qaKind,-3,(i-((qaMode==='small'?4:1)-1)/2)*2.2-1,i);}else for(const t of ['red','blue']){const side=t==='red'?-1:1;for(let i=0;i<6;i++)createUnit(t,'infantry',side*(8+Math.floor(i/4)*2.1),(i%4-1.5)*2.1,i);for(let i=0;i<4;i++)createUnit(t,'pikeman',side*12.2,(i-1.5)*2.1,i+6);for(let i=0;i<2;i++)createUnit(t,'archer',side*15,(i-.5)*3,i+10);for(let i=0;i<4;i++)createUnit(t,'cavalry',side*(10.8+i%2*4.2),6+Math.floor(i/2)*4.2,i+12);}
- separateBodies(units);battleLine=frontCandidate&&frontApplicable?new BattleLine(units):null;select(units.filter(u=>u.team===team));$('battle-status').textContent=`自由布阵 · ${healthStatus()}`;}
+ separateBodies(units);battleLine=frontCandidate&&frontApplicable?new BattleLine(units):null;lateCrowd=lateCrowdCandidate&&frontApplicable?new LateCrowd():null;select(units.filter(u=>u.team===team));$('battle-status').textContent=`自由布阵 · ${healthStatus()}`;}
 const localX = new THREE.Vector3(1,0,0);
 const strideRotation = new THREE.Quaternion();
 function animateUnit(u,time,moving,attacking){const walk=Math.sin(time*(u.kind==='cavalry'?10:8)+u.index*.7);for(const joint of u.joints){let angle=0;if(joint.name.startsWith('horse_leg_'))angle=moving?walk*(joint.name.split('_').slice(-2).reduce((phase, value) => phase * Number(value), 1))*.45:0;else if(joint.name.startsWith('leg_'))angle=moving?walk*(joint.name.startsWith('leg_left')?1:-1)*.43:0;else if(joint.name==='rider')angle=u.runup>=3.2||u.chargeFlash>0?.10:0;else if(joint.name.startsWith('arm_right'))angle=u.kind==='cavalry'?(u.runup>=3.2||u.chargeFlash>0?1.15+Math.sin(time*11)*.06:attacking?.55+Math.sin(time*11+u.index)*.13:moving?walk*.06:0):attacking?-.8+Math.sin(time*11+u.index)*.65:moving?walk*.12:0;else angle=moving?walk*.08:0;
@@ -164,7 +166,9 @@ function sampleCorpseContact(u){
 function update(dt){
  elapsed+=dt;motionQA?.beforeStep(elapsed);
  battleLine?.update(units,dt,fighting);
- const events=stepSkirmish(units,dt,fighting,battleLine?(u,enemy)=>battleLine.intent(u,enemy):null);duelQA?.recordEvents(elapsed,events);crowdQA?.recordEvents(elapsed,events);
+ lateCrowd?.update(units,dt,fighting);
+ const movementIntent=lateCrowd?(u,enemy)=>battleLine?.intent(u,enemy)??lateCrowd.intent(u,enemy):battleLine?(u,enemy)=>battleLine.intent(u,enemy):null;
+ const events=stepSkirmish(units,dt,fighting,movementIntent);duelQA?.recordEvents(elapsed,events);crowdQA?.recordEvents(elapsed,events);
  for(const event of events){
   if(preview.has('feedback')){feedbackCounts[event.type]=(feedbackCounts[event.type]??0)+1;feedbackEvents.push({time:elapsed,type:event.type,from:event.from?.id,target:event.target?.id,unit:event.unit?.id,first:event.first});if(feedbackEvents.length>64)feedbackEvents.shift();}
   combatFeedback?.queue(event);
@@ -218,6 +222,13 @@ if(preview.has('feedback')){
  for(const [value,label]of [['baseline','原命中细环'],['candidate','接触反馈 F1']]){const option=document.createElement('option');option.value=value;option.textContent=label;option.selected=(feedbackCandidate?'candidate':'baseline')===value;control.append(option);}
  control.onchange=()=>{const p=new URLSearchParams(location.search);p.set('feedback',control.value);location.search=p.toString();};group.append(control);document.querySelector('.demo-controls').prepend(group);
  window.feedbackPreview={version:feedbackCandidate?'candidate':'baseline',inspect:()=>({elapsed,paused,fighting,counts:{...feedbackCounts},events:feedbackEvents.map(event=>({...event})),effects:combatFeedback?.inspect()??null,units:units.map(u=>({id:u.id,kind:u.kind,team:u.team,x:u.x,z:u.z,hp:u.hp,heading:u.heading,state:u.animation?.state,heldArrowScale:u.model.getObjectByName('Arrow')?.scale.x}))})};
+}
+if(preview.has('crowdlate')){
+ const group=document.createElement('div');group.className='control-group';group.append('晚段绕行 ');
+ const control=document.createElement('select');control.setAttribute('aria-label','晚段绕行');
+ for(const [value,label]of [['baseline','原残局自主'],['candidate','残局绕行 W2']]){const option=document.createElement('option');option.value=value;option.textContent=label;option.selected=(lateCrowdCandidate?'candidate':'baseline')===value;control.append(option);}
+ control.onchange=()=>{const p=new URLSearchParams(location.search);p.set('crowdlate',control.value);location.search=p.toString();};group.append(control);document.querySelector('.demo-controls').prepend(group);
+ window.lateCrowdPreview={version:lateCrowdCandidate?'candidate':'baseline',applicable:frontApplicable,inspect:()=>({elapsed,paused,fighting,planner:lateCrowd?.inspect()??null})};
 }
 if(preview.has('front')){
  const group=document.createElement('div');group.className='control-group';group.append('战线组织 ');

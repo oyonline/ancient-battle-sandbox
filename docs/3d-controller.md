@@ -5,9 +5,9 @@
 用户明确本批先主场冲锋F2，再晚段拥挤W2，实际game+两路独立复审后自主接续；适当commit/push只既有工作分支，不merge/main/deploy，保留20GLB/R2/P2/A2/V2/S1/W1/F1及全部早期基准。
 
 - [x] F2 `chargefx=baseline|candidate`，仅feedbackcandidate生效，基准当前F1；post-pose受击目标接地扇尘/近侧肩外短方向cue，首强续弱/depthTest真。9/9focused、800/800全量、build0，44m真实32与近骑duel短窗、20GLB200/errors=[]、Idle0画布像素差0完成；独立技术和高级视觉均APPROVE_WITH_NOTES/requiredRemaining=[]，总控接受限定范围。主镜帮助定位，仍短小/局部遮挡P3，不称整体战争感显著提升。三态：技术受检通过、内部视觉受检通过、用户新候选认可未知。main05fa0cb…/feedbackd771823…冻结，见 `docs/visual-iteration/war-feel/f2/summary.json`。
-- [ ] W2 新late-crowd纯移动候选尚未施工；只有限占优残局远距ally blocker绕行，稳定side+清通路退出滞回，保护manual/pending/hit/pierce/近接敌/弓射程及真实sweep，不处理所有早期拥挤。F2接受后再开始。
+- [x] W2 独立`crowdlate=baseline|candidate`受检R1修复通过，final helper9126e7c…/test145c758…、maina01/tool d11保持。20相关、812/812全量/build0、新正常mixed至红6胜、gap/pause/reset完成；40route样本中38实际有效固定半径goal、2缓存短grace且不返回goal，最大buddy4.932m，不再14m远圈。独立技术229511…与高级065bfe…均APPROVE_WITH_NOTES/requiredRemaining=[]，总控接受；三态为技术受检通过、内部视觉受检通过、用户认可未知。首690d REVISE/807历史保留；16无route仅兼容，尸体带/投影拥挤P3仍在，不称全部/早期拥挤解决。
 
-owner_task=`codex-native-asset-worker / warfeel-f2-w2-20261013`，requestednative继承/actualunknown。fresh开工local/true/fetched4c6f208、0/0clean/providerfree，随后normal新claim；Git/lease/service以本轮live回读为准，未本批commit/push。KB提醒170由总控检索、worker精确台账落1卡0600，旧2D滞回经验不算3D已验证；KB未知dirty源仍不接管。详见 [战争感记录](war-feel-iteration.md)。
+owner_task=`codex-native-asset-worker / warfeel-f2-w2-20261013`，requestednative继承/actualunknown。fresh开工local/true/fetched4c6f208、0/0clean/providerfree，随后normal新claim；F2本地3288df8后接续W2，两项两门已由总控接受。当前批授权精确W2提交及整工作分支正常push；实际tip/远端三读/pushed_verified、清洁、writer释放、5301健康只认新 `.omc/evidence/war-feel/final-f2-w2/git-receipt.json`，本文为提交前审定记录，不预写执行成功。旧final4c收据保留。KB提醒170由总控检索、worker精确台账落1卡0600；KB未知dirty源仍不接管。详见 [战争感记录](war-feel-iteration.md)。
 
 
 ## 上一批战争感 W1 → F1（2026-10-13 历史）

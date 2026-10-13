@@ -1,0 +1,663 @@
+{
+  "stage": "W2-R1 final",
+  "status": "APPROVE_WITH_NOTES / bounded scope accepted",
+  "requestedModel": "native inherited",
+  "actualModel": "unknown",
+  "sources": {
+    "js/three-demo/main.js": "a01fe8b16fe4a37649180f50e3a4f67be9fc89d08db0a887c086987db01fc4e9",
+    "js/three-demo/late-crowd.js": "9126e7c942181378400c17426eb254b523930539306e8714320a3c87a375d860",
+    "tests/three-late-crowd.test.js": "145c758bcaf6160e5ab60df6a911603e7bd96099fc1de29257302edf145dc138",
+    "tools/qa-war-feel.mjs": "d11dfbc4632f9d9b6111c93696f1afd89df0594ee6b3f12b5f659b8f48152874"
+  },
+  "unchangedIntegration": "main a01fe8b and tool d11dfbc; F2/W1/core/assets unchanged; only helper/test revised from first",
+  "tests": {
+    "newFocused": 12,
+    "relatedWithOriginalW1": 20,
+    "pass": 20,
+    "fail": 0,
+    "log": ".omc/evidence/war-feel/w2/tests-r1-final.log",
+    "full": {
+      "tests": 812,
+      "pass": 812,
+      "fail": 0,
+      "exitCode": 0,
+      "log": ".omc/evidence/war-feel/w2/full-tests-r1-final.log"
+    }
+  },
+  "build": {
+    "exitCode": 0,
+    "log": ".omc/evidence/war-feel/w2/build-r1-final.log"
+  },
+  "naturalCandidate": [
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "lowTime": 38.83589999999995,
+      "lastTime": 46.053000000000374,
+      "living": [
+        {
+          "id": 6,
+          "team": "red",
+          "hp": 100
+        },
+        {
+          "id": 7,
+          "team": "red",
+          "hp": 100
+        },
+        {
+          "id": 10,
+          "team": "red",
+          "hp": 100
+        },
+        {
+          "id": 11,
+          "team": "red",
+          "hp": 100
+        },
+        {
+          "id": 13,
+          "team": "red",
+          "hp": 44
+        },
+        {
+          "id": 15,
+          "team": "red",
+          "hp": 86
+        }
+      ],
+      "routeEvents": [
+        {
+          "time": 38.55249999999993,
+          "type": "enter",
+          "id": 7,
+          "blocker": 6,
+          "side": -1,
+          "reason": "ally-blocked"
+        },
+        {
+          "time": 38.55249999999993,
+          "type": "enter",
+          "id": 15,
+          "blocker": 13,
+          "side": -1,
+          "reason": "ally-blocked"
+        },
+        {
+          "time": 39.90260000000001,
+          "type": "exit",
+          "id": 15,
+          "blocker": 13,
+          "side": -1,
+          "reason": "priority-or-phase"
+        },
+        {
+          "time": 42.73610000000018,
+          "type": "enter",
+          "id": 13,
+          "blocker": 7,
+          "side": -1,
+          "reason": "ally-blocked"
+        },
+        {
+          "time": 42.73610000000018,
+          "type": "enter",
+          "id": 15,
+          "blocker": 13,
+          "side": 1,
+          "reason": "ally-blocked"
+        },
+        {
+          "time": 43.06950000000021,
+          "type": "exit",
+          "id": 7,
+          "blocker": 6,
+          "side": -1,
+          "reason": "no-progress"
+        },
+        {
+          "time": 43.06950000000021,
+          "type": "enter",
+          "id": 7,
+          "blocker": 13,
+          "side": 1,
+          "reason": "ally-blocked"
+        },
+        {
+          "time": 43.58620000000023,
+          "type": "exit",
+          "id": 7,
+          "blocker": 13,
+          "side": 1,
+          "reason": "blocker-cleared"
+        },
+        {
+          "time": 43.86950000000025,
+          "type": "reconsider",
+          "id": 13,
+          "blocker": 7,
+          "side": 1,
+          "reason": "space"
+        },
+        {
+          "time": 44.08620000000027,
+          "type": "enter",
+          "id": 7,
+          "blocker": 6,
+          "side": 1,
+          "reason": "ally-blocked"
+        },
+        {
+          "time": 44.80280000000031,
+          "type": "exit",
+          "id": 13,
+          "blocker": 7,
+          "side": 1,
+          "reason": "blocker-cleared"
+        },
+        {
+          "time": 44.902900000000315,
+          "type": "enter",
+          "id": 13,
+          "blocker": 6,
+          "side": -1,
+          "reason": "ally-blocked"
+        },
+        {
+          "time": 45.302900000000335,
+          "type": "exit",
+          "id": 13,
+          "blocker": 6,
+          "side": -1,
+          "reason": "priority-or-phase"
+        },
+        {
+          "time": 45.302900000000335,
+          "type": "exit",
+          "id": 15,
+          "blocker": 13,
+          "side": 1,
+          "reason": "blocker-nonlocal"
+        },
+        {
+          "time": 45.58630000000036,
+          "type": "exit",
+          "id": 7,
+          "blocker": 6,
+          "side": 1,
+          "reason": "no-progress"
+        }
+      ],
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "finite": true
+    }
+  ],
+  "baselineInherited": {
+    "path": ".omc/evidence/war-feel/w2/pilot-first/mixed-baseline",
+    "lowTime": 38.20239999999995,
+    "endTime": 45.11950000000028,
+    "source": "flag-off path unchanged; independent wall-clock sampling not synchronized"
+  },
+  "routeRelevance": {
+    "source": "readonly after-step snapshot geometry, not exact per-frame planner callback replay",
+    "samples": 40,
+    "irrelevantAfterStepSamples": 2,
+    "maxBodyDistance": 4.932310862343735,
+    "maxLocalExcess": -0.17768913765626415,
+    "remoteOver1mSamples": 0,
+    "minAliveGap": 0.0597917819563607,
+    "winnerLiving": [
+      [
+        6,
+        100
+      ],
+      [
+        7,
+        100
+      ],
+      [
+        10,
+        100
+      ],
+      [
+        11,
+        100
+      ],
+      [
+        13,
+        44
+      ],
+      [
+        15,
+        86
+      ]
+    ],
+    "observedLateAttackerIds": [
+      6,
+      13,
+      15
+    ]
+  },
+  "routeRelevancePath": ".omc/evidence/war-feel/w2/pilot-r1-final/route-relevance.json",
+  "requests": [
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pike-standard/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer-standard/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-standard/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    }
+  ],
+  "errors": [],
+  "images": [
+    {
+      "path": "docs/visual-iteration/war-feel/w2/mixed-baseline-late-0.png",
+      "raw": ".omc/evidence/war-feel/w2/pilot-first/mixed-baseline/late-0.png",
+      "sha256": "837afbca1f02e78c5546c1d244ee9064c373746a6fddd38da0e42ec115f72acd",
+      "sample": {
+        "filename": "late-0.png",
+        "requestedOffset": 0,
+        "actualTime": 38.20239999999995,
+        "actualOffset": 0,
+        "counts": {
+          "red": 8,
+          "blue": 2
+        },
+        "planner": null
+      },
+      "sourceVersion": "first flag-off baseline inherited unchanged"
+    },
+    {
+      "path": "docs/visual-iteration/war-feel/w2/mixed-baseline-late-2.png",
+      "raw": ".omc/evidence/war-feel/w2/pilot-first/mixed-baseline/late-2.png",
+      "sha256": "e92e18b2463f196a145a426b152bdc3a12dfad88ef4261993649483bf4889eb0",
+      "sample": {
+        "filename": "late-2.png",
+        "requestedOffset": 2,
+        "actualTime": 40.48580000000007,
+        "actualOffset": 2.283400000000121,
+        "counts": {
+          "red": 7,
+          "blue": 2
+        },
+        "planner": null
+      },
+      "sourceVersion": "first flag-off baseline inherited unchanged"
+    },
+    {
+      "path": "docs/visual-iteration/war-feel/w2/mixed-baseline-late-4.png",
+      "raw": ".omc/evidence/war-feel/w2/pilot-first/mixed-baseline/late-4.png",
+      "sha256": "1b5805af08d0df6eaff34a666d69771b5924334d8546938b50ecb9d489563dd0",
+      "sample": {
+        "filename": "late-4.png",
+        "requestedOffset": 4,
+        "actualTime": 42.45200000000017,
+        "actualOffset": 4.249600000000221,
+        "counts": {
+          "red": 7,
+          "blue": 2
+        },
+        "planner": null
+      },
+      "sourceVersion": "first flag-off baseline inherited unchanged"
+    },
+    {
+      "path": "docs/visual-iteration/war-feel/w2/mixed-candidate-late-0.png",
+      "raw": ".omc/evidence/war-feel/w2/pilot-r1-final/mixed-candidate/late-0.png",
+      "sha256": "a83a594513cd75847664bbf0f824cb6d43319c366426dad6003b302c760915d8",
+      "sample": {
+        "filename": "late-0.png",
+        "requestedOffset": 0,
+        "actualTime": 38.83589999999995,
+        "actualOffset": 0,
+        "counts": {
+          "red": 6,
+          "blue": 2
+        },
+        "planner": {
+          "time": 38.83589999999995,
+          "routes": [
+            {
+              "id": 7,
+              "blocker": 6,
+              "enemy": 26,
+              "side": -1,
+              "angle": 2.4255412340026377,
+              "travel": 0.00012465095011782168,
+              "reconsidered": false,
+              "invalidSince": null,
+              "progressTime": 38.55249999999993,
+              "progressPoint": {
+                "x": -0.4783074198520222,
+                "z": -4.351161611356588
+              },
+              "enemyDistance": 8.001445670684262,
+              "blockerDistance": 1.9600046683452579,
+              "entryWindow": true
+            },
+            {
+              "id": 15,
+              "blocker": 13,
+              "enemy": 27,
+              "side": -1,
+              "angle": 1.7855590022735117,
+              "travel": 0.24082509010549602,
+              "reconsidered": false,
+              "invalidSince": null,
+              "progressTime": 38.55249999999993,
+              "progressPoint": {
+                "x": 2.2431655126067542,
+                "z": 5.85201192308768
+              },
+              "enemyDistance": 7.43638889615531,
+              "blockerDistance": 4.376794362554286,
+              "entryWindow": true
+            }
+          ],
+          "events": [
+            {
+              "time": 38.55249999999993,
+              "type": "enter",
+              "id": 7,
+              "blocker": 6,
+              "side": -1,
+              "reason": "ally-blocked"
+            },
+            {
+              "time": 38.55249999999993,
+              "type": "enter",
+              "id": 15,
+              "blocker": 13,
+              "side": -1,
+              "reason": "ally-blocked"
+            }
+          ],
+          "cooldowns": []
+        }
+      },
+      "sourceVersion": "R1 final new source"
+    },
+    {
+      "path": "docs/visual-iteration/war-feel/w2/mixed-candidate-late-2.png",
+      "raw": ".omc/evidence/war-feel/w2/pilot-r1-final/mixed-candidate/late-2.png",
+      "sha256": "0b4d0652089970e9403d8b21d1078ac53eb30d30753485f3c4485877e02acf0f",
+      "sample": {
+        "filename": "late-2.png",
+        "requestedOffset": 2,
+        "actualTime": 41.13600000000007,
+        "actualOffset": 2.300100000000114,
+        "counts": {
+          "red": 6,
+          "blue": 2
+        },
+        "planner": {
+          "time": 41.13600000000007,
+          "routes": [
+            {
+              "id": 7,
+              "blocker": 6,
+              "enemy": 26,
+              "side": -1,
+              "angle": 2.4088269264304887,
+              "travel": 0.0168389585222668,
+              "reconsidered": false,
+              "invalidSince": null,
+              "progressTime": 40.81930000000006,
+              "progressPoint": {
+                "x": 2.2140253498827502,
+                "z": -2.210713792000896
+              },
+              "enemyDistance": 4.88933845971806,
+              "blockerDistance": 2.289693310392799,
+              "entryWindow": false
+            }
+          ],
+          "events": [
+            {
+              "time": 38.55249999999993,
+              "type": "enter",
+              "id": 7,
+              "blocker": 6,
+              "side": -1,
+              "reason": "ally-blocked"
+            },
+            {
+              "time": 38.55249999999993,
+              "type": "enter",
+              "id": 15,
+              "blocker": 13,
+              "side": -1,
+              "reason": "ally-blocked"
+            },
+            {
+              "time": 39.90260000000001,
+              "type": "exit",
+              "id": 15,
+              "blocker": 13,
+              "side": -1,
+              "reason": "priority-or-phase"
+            }
+          ],
+          "cooldowns": []
+        }
+      },
+      "sourceVersion": "R1 final new source"
+    },
+    {
+      "path": "docs/visual-iteration/war-feel/w2/mixed-candidate-late-4.png",
+      "raw": ".omc/evidence/war-feel/w2/pilot-r1-final/mixed-candidate/late-4.png",
+      "sha256": "d056d31ab4176f08dc8ecd6c0019ebbb18076a2db85e6f7c9866f4d766706395",
+      "sample": {
+        "filename": "late-4.png",
+        "requestedOffset": 4,
+        "actualTime": 43.102800000000215,
+        "actualOffset": 4.266900000000263,
+        "counts": {
+          "red": 6,
+          "blue": 1
+        },
+        "planner": {
+          "time": 43.102800000000215,
+          "routes": [
+            {
+              "id": 13,
+              "blocker": 7,
+              "enemy": 26,
+              "side": -1,
+              "angle": 1.404474927439281,
+              "travel": 0.007148445824032068,
+              "reconsidered": false,
+              "invalidSince": null,
+              "progressTime": 42.73610000000018,
+              "progressPoint": {
+                "x": 4.5391016461661815,
+                "z": 1.769538687223276
+              },
+              "enemyDistance": 4.61156169375783,
+              "blockerDistance": 3.01,
+              "entryWindow": true
+            },
+            {
+              "id": 15,
+              "blocker": 13,
+              "enemy": 26,
+              "side": 1,
+              "angle": 0.5858708068474789,
+              "travel": 0.06714724742720746,
+              "reconsidered": false,
+              "invalidSince": null,
+              "progressTime": 42.73610000000018,
+              "progressPoint": {
+                "x": 8.06439945456493,
+                "z": 3.783459083390659
+              },
+              "enemyDistance": 5.366017460209135,
+              "blockerDistance": 4.0600000000000005,
+              "entryWindow": true
+            },
+            {
+              "id": 7,
+              "blocker": 13,
+              "enemy": 26,
+              "side": 1,
+              "angle": -1.7371177261505124,
+              "travel": 0.00010111330804174479,
+              "reconsidered": false,
+              "invalidSince": null,
+              "progressTime": 43.06950000000021,
+              "progressPoint": {
+                "x": 4.1112368564214785,
+                "z": -1.1629296508174336
+              },
+              "enemyDistance": 3.9893159064047357,
+              "blockerDistance": 3.009999999999943,
+              "entryWindow": true
+            }
+          ],
+          "events": [
+            {
+              "time": 38.55249999999993,
+              "type": "enter",
+              "id": 7,
+              "blocker": 6,
+              "side": -1,
+              "reason": "ally-blocked"
+            },
+            {
+              "time": 38.55249999999993,
+              "type": "enter",
+              "id": 15,
+              "blocker": 13,
+              "side": -1,
+              "reason": "ally-blocked"
+            },
+            {
+              "time": 39.90260000000001,
+              "type": "exit",
+              "id": 15,
+              "blocker": 13,
+              "side": -1,
+              "reason": "priority-or-phase"
+            },
+            {
+              "time": 42.73610000000018,
+              "type": "enter",
+              "id": 13,
+              "blocker": 7,
+              "side": -1,
+              "reason": "ally-blocked"
+            },
+            {
+              "time": 42.73610000000018,
+              "type": "enter",
+              "id": 15,
+              "blocker": 13,
+              "side": 1,
+              "reason": "ally-blocked"
+            },
+            {
+              "time": 43.06950000000021,
+              "type": "exit",
+              "id": 7,
+              "blocker": 6,
+              "side": -1,
+              "reason": "no-progress"
+            },
+            {
+              "time": 43.06950000000021,
+              "type": "enter",
+              "id": 7,
+              "blocker": 13,
+              "side": 1,
+              "reason": "ally-blocked"
+            }
+          ],
+          "cooldowns": [
+            [
+              "7:6",
+              44.06950000000021
+            ]
+          ]
+        }
+      },
+      "sourceVersion": "R1 final new source"
+    }
+  ],
+  "scope": "Only current local body obstacles within body sum+.31+.8; fixed radius=body sum+.31. An irrelevant nearby blocker suspends our goal for at most.12s, then exits; distant or changed target exits immediately. Useful progress approaches real enemy or improves current body clearance, with one bounded entry window. Native priorities and sweep unchanged.",
+  "notes": [
+    "Natural mixed low38.8359s -> winner46.053s, observed late attackers6/13/15. 40 after-step route samples,2 irrelevant only inside grace (.0167/.0666s), max buddy distance4.9323m, no remote circle.",
+    "Base/fix independent dt and different HP/positions; no universal blocked-time reduction or early congestion claim.",
+    "First 690d stale-blocker draft REVISE and its807/full/first images retained as history, not current approval.",
+    "First R1 test incorrectly expected the new buddy at5.06m to be far; it is inside5.11m local gate, corrected expectation to legitimate reselect+fixed radius. Judge exit2 missing config, no valid report.",
+    "Private capture script only changes version iteration to candidate; product QA source and main unchanged. Prior candidate R1 run superseded by final nearest-contact lifecycle fix.",
+    "User approval unknown."
+  ],
+  "review": {
+    "technical": {
+      "status": "APPROVE_WITH_NOTES",
+      "requiredRemaining": [],
+      "path": ".omc/evidence/qa-standard-20261013/w2-r1-final/verdict.json",
+      "sha256": "2295114446983515caad3d3fe41ad62e61d6678dffcbe650fc856ec353d52bc0"
+    },
+    "internalVisual": {
+      "status": "APPROVE_WITH_NOTES",
+      "requiredRemaining": [],
+      "path": ".omc/evidence/war-feel/w2/advanced-r1-final/verdict.json",
+      "sha256": "065bfe250eaa4127aefc36d9cd6acb8c14e493ee669b3c4a440490eef32a7773",
+      "requested": "gpt-6-astra/high",
+      "actual": "unknown"
+    },
+    "controller": "accepted bounded scope",
+    "user": "unknown"
+  },
+  "finalNotes": [
+    "38 valid actual-goal geometry replays and2 no-goal short-grace caches, never claimed zero cached irrelevance.",
+    "Natural final winner sample46.002s, paused46.053s; source stages and independent dt remain distinct.",
+    "Corpse bands/local projection overlap remain; no universal or early congestion/decision-speed improvement claim."
+  ]
+}

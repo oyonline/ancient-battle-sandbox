@@ -1,11 +1,11 @@
 # 战争感 W1 / F1 / F2 / W2
 
-## 当前批 F2 → W2（2026-10-13，进行中）
+## 当前批 F2 → W2（2026-10-13，受检范围完成）
 
 用户本批明确继续主场冲锋反馈F2，再交战后期拥挤W2；每项实际游戏检查和独立技术/高级复审后自主继续，当前批适当commit/push仅既有工作分支，不merge main/部署。owner_task=`codex-native-asset-worker / warfeel-f2-w2-20261013`。requested native继承，actual未知，无fallback。
 
 - [x] F2 独立 `chargefx=baseline|candidate`，仅`feedback=candidate`时新候选生效；baseline是已通过F1。仅改post-pose target footprint土尘与短方向cue，首强续弱/快速衰减，depthTest真、cap/TTL/暂停/reset保持；不把knockback后但separation前的event.x/z当最终接触位置。最终main05fa0cb…/feedbackd771823…冻结；9/9focused、800/800全量及build退出0，主镜44m/骑duel真实首撞短窗完成，20GLB200/errors=[]、Idle0画布像素差0。两路独立APPROVE_WITH_NOTES/requiredRemaining=[]，总控接受受检范围。技术/内部视觉限定通过，用户新候选认可未知；主镜帮助定位但短小/局部遮挡仍P3，不宣称整体战争感显著增强。
-- [ ] W2 尚未施工：独立晚段movement intent，在敌alive≤2/foot≤1、己方显著占优、远离合法接敌且被ally挡住的有限残局处理绕行/稳定side与退出滞回；不改旧W1/core碰撞/伤害/时钟/命令，不宣称早期23s拥挤全解决。具体卡由总控在F2通过后接续。
+- [x] W2 独立`crowdlate=baseline|candidate`局部late绕行/R1守门受检通过，final helper9126e7c…/test145c758…、maina01/tool d11保持；20相关、812/812全量/build0、新正常mixed至红6胜、两路APPROVE_WITH_NOTES/requiredRemaining=[]，总控接受。首690d两门REVISE/807历史保留。只自动剑盾/矛/骑，弓与旧W1/core/rules不改；技术/内部视觉受检通过、用户认可未知。尸体带与投影重叠P3仍在，不称普遍/早期23s拥挤或决胜速度改善。
 
 开工正式snapshot09:45:45UTC，trueRemote=fetched=local4c6f2086f553ab8ccd2d98fbe649313b5e5ae133、equal0/0、clean/dirtyOwnernone，official GitHub ID1200045147与绑定一致；两writerproviders free、5301 PID69740 HTTP200。随后同owner新task正常claim09:48:35UTC（new0600token、common-dir controlled_shared、机械hotzone仅mutex），精确10项ownership；20GLB/生成器/2D与battle-line/combat-model/旧测试保护。进程/Git/lease不从本文推断live。
 
@@ -19,6 +19,30 @@
 只在实际feedback候选时启F2；新selector在feedback基准时disabled，正常首撞后仍仅一个控件。最终direction cue复用同4/2粒子且收细/集中在真实近侧肩外，readonly camera.position通过new Vector3.subVectors读取、不修改相机；未再加土尘数/面积。主场0/.1/.4与近镜.1两版图用于独立判定，观察为适度改善，用户新候选认可未知。第一稿新控件误插进event loop导致QA等待，已在首有效采样前修正；first-valid/low-cue仅校准历史。补camera不可变assert首次漏Vector3导入，已修且最终9/9；judge按规运行exit2缺项目配置，无有效报告/feedback目标，不将其当通过诊断。
 
 技术正式`.omc/evidence/qa-standard-20261013/f2-final/verdict.json`（cbe4d431…）独立9合同、900帧F1禁用路径数值精确同、三组同dt核心状态事件精确同与fresh正常32真实charge/HP/Hit、10GLB200/errors0；实际锚纠偏约.838932m。高级`.omc/evidence/war-feel/f2/advanced-final/verdict.json`（94646860…）实看14图/四源/独立9测试，接受主镜外肩cue和近镜适度形体。两路均APPROVE_WITH_NOTES/requiredRemaining=[]，requested/actual分开，actual未知。近骑`.4`图另一侧cue来自2.0835s第二次真实reciprocal charge，不能当首cue超TTL。保留低面数和局部遮挡，原模型/2D/W1/core/Q1/S1均保持；Git最终结果只认本批外部live receipt，不预写push。
+
+### W2 R1 最终冻结（限定通过）
+
+`.omc/evidence/war-feel/w2/frozen-w2-r1-final/manifest.json`绑定四源完整SHA与六精选：新candidate低敌后0/2/4s及继承的first flag-off baseline三图，分别独立dt不强等战果。main/tool/F2/旧测试/原规则未改，唯一helper/test窄修：旧blocker必须仍为当前enemy段的实际局部碍者，明显远离或target改变即撤；近边缘失相关时最多.12s保side缓存但不返回自身goal。半径固定两radii+.31，进入/保留仅其+.8局部。`.75s/.08m`进展同时看实际移动和enemy接近/当前body净距，仅一次短入口缓冲允许径向脱离，之后不能靠绕远位移重置成功；原命令/蓄力/Hit/pierce/合法contact/reset优先保持。
+
+12新合同+8旧W1共20通过/build0，含旧buddy移开另body仍挡、换target/远body/54.7202几何、任意绕远进展和native seam不调用时新近敌contact清route。修后自然mixed low38.8359s→46.053s红6胜，5GLB200/errors=[]、pause/reset和实际攻击6/13/15完成。40 after-step路线样本最大body距离4.9323m，均在对应local gate；2个失相关样本位于.0167/.0666s悬置grace，未再持续绕14m旧body。`pilot-r1-final/route-relevance.json`是实际snapshot几何回读，不假充每帧返回goal replay。
+
+上一中间R1采样47.686s收战可作有限正项历史，随后自检发现update仅盯stored enemy会在新近敌contact、core不调用intent时留缓存，已仅helper/test即时按native最近敌distance-radius校正并另采最终source。首R1 fixture错误把5.06m新buddy当远（合法local gate5.11m），修断言为改选新buddy和固定半径；judge exit2缺配置，无有效报告。源码自检完成后不再扫描参数，两路判定最终受检范围，用户认可未知。
+
+技术`.omc/evidence/qa-standard-20261013/w2-r1-final/verdict.json` SHA2295114446983515caad3d3fe41ad62e61d6678dffcbe650fc856ec353d52bc0与高级`.omc/evidence/war-feel/w2/advanced-r1-final/verdict.json` SHA065bfe250eaa4127aefc36d9cd6acb8c14e493ee669b3c4a440490eef32a7773均APPROVE_WITH_NOTES/requiredRemaining=[]。独立技术复读40路线：38有效goal固定半径误差≤8.9e-16，2失相关缓存处于.0167/.0666s grace且不返回goal；旧54.7202与移动旧buddy反例均不再绕旧body，5新合同/6窄probe通过，原保护与812/build守住。真实终局sample46.002s、pause46.053s，不能把pause时刻当精确决胜时刻。高级12/12与三新实图/actual trace确认局部外绕接敌收益，保尸体带/局部投影重叠P3。requested astra/high、actual未知，用户认可未知。
+
+本批仅既有工作分支、正常无force push，不merge main/部署。最终tip、官方身份、pre/post远端三读、release与最小combined preview以新ignored `.omc/evidence/war-feel/final-f2-w2/git-receipt.json` 同轮live回读为准；本文件是提交前审定状态，不为自身SHA递归提交，不覆盖上一批4c的final收据。KB未知dirty源仍不接管。
+
+### W2 首冻结历史（旧 blocker 守门 REVISE）
+
+F2在两门/总控接受后精确15路径本地提交3288df8a34b609bac7941b59ffd03ef17e715476，clean回读后同writer接续W2；整批push尚未执行。W2首冻maina01fe8b…、helper690d863…、test97a072f…、toold11dfbc…；`.omc/evidence/war-feel/w2/frozen-w2-first/manifest.json`绑定四源/原始四WebM/精选8图，`docs/visual-iteration/war-feel/w2/summary.json`是有限摘要。
+
+LateCrowd只写自身route/cache，沿真实身体圆先径向净距→短弧切向，不把远肩目标直线穿过同伴。真实self→enemy剩余段clear或合法近接敌才退回原移动；side按body clearance/真实边界空间选择，最多一次重评，无进展.75s/位移不足.08m或半圈则退出并同blocker冷却约1s。manual/pending/Hit/pierce/死亡/离开late范围即时清自身route，reset新实例清缓存，不写u.target、HP、计时、radius或坐标。真正移动仍由旧sweep/separation执行，无传送。
+
+纯尾随r2及z12.7边界fixture证明安全初步脱离和内侧承诺；30/60Hz同源dt真实伤害残局均结束。正常游戏16基准39.085s/候选38.769s红16胜，低敌采样已到0、route0，仅作不激活兼容。mixed基准45.120s/候选55.087s各红7胜，候选39.418s低敌后真实6/7/13/15进入绕行、有限退出与真实攻击；两版独立dt/战果不可强等或用时长判优。同源dt pure mixed60Hz47.750→47.717、30Hz53.200→53.433均收战，但总体blocked时间未下降，不作普遍优化数据。受检局部为马尾/同伴身体外脱离，不能声称早期拥挤全部解决。
+
+20GLB200/errors=[]，两个模式初始units/camera/canvas逐值一致，mixed44m/16为31m、均1280×646；gap/finite/bounds/pause/reset保持。selected图名请求low后0/2/4s，actual采样时刻见manifest，观察poll不冒称全程事件总数。技术/内部视觉尚未批准，新用户认可未知。
+
+高级复读首mixed实际trace后确认必须返工：215活动route样本中95次旧blocker已不再挡真实enemy线；54.7202s id6继续绕旧id13，距离14.46m、真实阻挡是7/15。首算法只检查任意blocker存在，未重验当前body相关性；radius取max(距旧body,身体净距)放大为远程圈；任意位移避免no-progress而不能证明接近敌人。807/build与收战不能豁免该合同。首冻结不提交，原局部安全脱离正项保留，后续仅helper/test有界修，等待总控卡，不另做广义AI/资产/规则变更。
 
 ## 上一批 W1 / F1（2026-10-13 历史）
 
