@@ -34,7 +34,7 @@ function advanceArrows(units,dt,events){
   owner.projectiles=owner.projectiles.filter(shot=>shot.life>0);
  }
 }
-export function stepSkirmish(units,dt,fighting){
+export function stepSkirmish(units,dt,fighting,movementIntent=null){
  dt=clamp(dt,0,.05);const events=[];advanceArrows(units,dt,events);const alive=units.filter(u=>u.hp>0),plans=[];
  for(const u of alive){
   u.attackCooldown=Math.max(0,u.attackCooldown-dt);u.chargeCooldown=Math.max(0,u.chargeCooldown-dt);u.chargeFlash=Math.max(0,u.chargeFlash-dt);u.hitFlash=Math.max(0,u.hitFlash-dt);u.moving=false;u.attacking=false;if(u.pendingStrike)u.pendingStrike.time-=dt;u.pierceTime=Math.max(0,u.pierceTime-dt);if(u.pierceTime===0)u.momentum=0;
@@ -45,10 +45,11 @@ export function stepSkirmish(units,dt,fighting){
   if(u.crowd)u.blockedBy=undefined;
   const plan={u,enemy,mx:0,mz:0,oldX:u.x,oldZ:u.z};
   if(target){const dx=target.x-u.x,dz=target.z-u.z,d=Math.hypot(dx,dz),stop=enemy?(u.kind==='archer'?7.2:meleeReach(u,enemy)-.08):.1;
+   const intent=fighting&&enemy&&!u.target&&!u.pendingShot&&!u.pendingStrike&&u.hitFlash<=0&&u.pierceTime<=0&&!(u.kind!=='archer'&&d<=meleeReach(u,enemy)+.25)&&!(u.kind==='archer'&&d<=ARCHER.range)?movementIntent?.(u,enemy)??null:null;
    let desired=Math.atan2(dx,dz);
    // A rear swordsman commits to the outer shoulder of a close ally instead
    // of repeatedly walking into its back. Front-rank contact stays still.
-   if(u.crowd&&enemy&&d>stop+.25&&!u.pendingStrike&&u.hitFlash<=0){
+   if(!intent&&u.crowd&&enemy&&d>stop+.25&&!u.pendingStrike&&u.hitFlash<=0){
     let blocker=null,best=Infinity;const nx=dx/Math.max(d,1e-6),nz=dz/Math.max(d,1e-6);
     for(const b of alive){if(b===u||b.team!==u.team)continue;const bx=b.x-u.x,bz=b.z-u.z,forward=bx*nx+bz*nz,lateral=bx*nz-bz*nx,r=u.radius+b.radius+.06;if(forward>.2&&forward<Math.min(d,r+1.15)&&Math.abs(lateral)<r*.8&&forward<best){blocker=b;best=forward;}}
     if(blocker){
@@ -56,13 +57,15 @@ export function stepSkirmish(units,dt,fighting){
      const clearance=u.radius+blocker.radius+.25,wayX=blocker.x+nz*u.routeSide*clearance,wayZ=blocker.z-nx*u.routeSide*clearance;desired=Math.atan2(wayX-u.x,wayZ-u.z);
     }else u.routeBlockerId=null;
    }
+   const mx=intent?intent.x-u.x:dx,mz=intent?intent.z-u.z:dz,md=intent?Math.hypot(mx,mz):d,moveStop=intent?intent.stop:stop;
+   if(intent&&!intent.hold&&md>moveStop)desired=Math.atan2(mx,mz);
    const turn=Math.atan2(Math.sin(desired-u.heading),Math.cos(desired-u.heading));
    if(Math.abs(turn)>.55)u.runup=0;
    u.heading+=clamp(turn,-dt*(u.locomotion?2.6:5),dt*(u.locomotion?2.6:5));
    const aligned=d>1e-8&&(Math.sin(u.heading)*dx+Math.cos(u.heading)*dz)/d>=.985;
    if(u.kind==='archer'&&enemy&&d<=ARCHER.range&&aligned&&u.hitFlash<=0&&u.attackCooldown<=1e-8&&!u.pendingShot){u.pendingShot={time:ARCHER.windup,targetId:enemy.id};u.attackCooldown=ARCHER.cooldown;events.push({type:'draw',from:u,target:enemy});}
    if(u.kind==='archer'&&enemy&&d<3&&!u.pendingShot){const advance=Math.min(3-d,dt*1.7);plan.mx=-dx/Math.max(d,1e-6)*advance;plan.mz=-dz/Math.max(d,1e-6)*advance;}
-   else if(d>stop&&!u.pendingShot){const top=u.kind==='cavalry'?(u.pierceTime>0?3.8*(.5+u.momentum*.5):u.chargeCooldown>0?2.8:4.8):(u.kind==='pikeman'?1.65:1.8);if(u.locomotion){const remainingTurn=Math.abs(Math.atan2(Math.sin(desired-u.heading),Math.cos(desired-u.heading)));const desiredSpeed=Math.min(top,Math.sqrt(12*Math.max(0,d-stop)))*clamp((1.05-remainingTurn)/.65,0,1);u.speed+=clamp(desiredSpeed-u.speed,-dt*8,dt*5);const advance=Math.min(d-stop,u.speed*dt);plan.mx=Math.sin(u.heading)*advance;plan.mz=Math.cos(u.heading)*advance;}else{u.speed=Math.min(top,u.speed+dt*(u.kind==='cavalry'?3.8:6));const advance=Math.min(d-stop,u.speed*dt);plan.mx=dx/d*advance;plan.mz=dz/d*advance;}}
+   else if(md>moveStop&&!intent?.hold&&!u.pendingShot){const top=u.kind==='cavalry'?(u.pierceTime>0?3.8*(.5+u.momentum*.5):u.chargeCooldown>0?2.8:4.8):(u.kind==='pikeman'?1.65:1.8);if(u.locomotion){const remainingTurn=Math.abs(Math.atan2(Math.sin(desired-u.heading),Math.cos(desired-u.heading)));const desiredSpeed=Math.min(top,Math.sqrt(12*Math.max(0,md-moveStop)))*clamp((1.05-remainingTurn)/.65,0,1);u.speed+=clamp(desiredSpeed-u.speed,-dt*8,dt*5);const advance=Math.min(md-moveStop,u.speed*dt);plan.mx=Math.sin(u.heading)*advance;plan.mz=Math.cos(u.heading)*advance;}else{u.speed=Math.min(top,u.speed+dt*(u.kind==='cavalry'?3.8:6));const advance=Math.min(md-moveStop,u.speed*dt);plan.mx=mx/md*advance;plan.mz=mz/md*advance;}}
    else if(enemy)u.attacking=true;else u.target=null;
   }
   if(u.locomotion&&u.stopRequested&&!target){u.speed=Math.max(0,u.speed-dt*8);plan.mx=Math.sin(u.heading)*u.speed*dt;plan.mz=Math.cos(u.heading)*u.speed*dt;}

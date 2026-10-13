@@ -1,0 +1,969 @@
+{
+  "status": "W1 bounded scope accepted by controller after independent technical and advanced source/visual APPROVE_WITH_NOTES",
+  "sourceHashes": {
+    "js/three-demo/main.js": "5d6df87aa9932c12540a56e322e45b7339343b2b3f7c1152fee300fce4609aa5",
+    "js/three-demo/combat-model.js": "804daff3875291bcb4dd9f5ef21ca5cd2b515192e14cca7809a9bbd3b6485bcb",
+    "js/three-demo/battle-line.js": "df86e132dc69aacc9864a012a742e3a1379bec4043e0fe2a884fa9c55da8542a",
+    "tests/three-battle-line.test.js": "2242ef49e59115b7ba84ef372b3f7f81f4271917e04e847a81242ee5ebeb19b8",
+    "tools/qa-war-feel.mjs": "5fe90a15319c1f4017b3800eb28057f3fae0577e33dd6428b859f2ebb028e445"
+  },
+  "firstSourceNormalInheritance": "normal all unit/events/refills three scenes×3600frames exact, new helper onlymanual guard",
+  "assets20Unchanged": true,
+  "conditions": "both front versions identical initial spawn, fixed20GLB/R2P2A2V2/S1/C2L1; independent browser dt/time, not exact outcomes or synchronous poses",
+  "pictures": [
+    {
+      "file": "four-baseline-battle-8.png",
+      "source": ".omc/evidence/war-feel/w1/pilot/four-baseline/battle-8.png",
+      "requestedSeconds": 8,
+      "observedElapsedBeforeScreenshot": 8.686800000000021,
+      "alive": 8,
+      "camera": {
+        "position": [
+          10.031643645951092,
+          13.806748618204715,
+          13.375524861268124
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 21,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "SHA256": "fac6bdea1c3382c71ca552d80658c7ba86c0290faad60ce3255a28b3f37f252f"
+    },
+    {
+      "file": "four-candidate-battle-8.png",
+      "source": ".omc/evidence/war-feel/w1/pilot/four-candidate/battle-8.png",
+      "requestedSeconds": 8,
+      "observedElapsedBeforeScreenshot": 8.018500000000026,
+      "alive": 8,
+      "camera": {
+        "position": [
+          10.031643645951092,
+          13.806748618204715,
+          13.375524861268124
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 21,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "SHA256": "8e1f7ca0f3142582ef1cc52bc689d1e85fc349f196a090585cd06c8971d3cecf"
+    },
+    {
+      "file": "sixteen-baseline-battle-8.png",
+      "source": ".omc/evidence/war-feel/w1/complete-first/sixteen-baseline/battle-8.png",
+      "requestedSeconds": 8,
+      "observedElapsedBeforeScreenshot": 8.203600000000012,
+      "alive": 32,
+      "camera": {
+        "position": [
+          14.808616810689708,
+          19.857581293540296,
+          19.744822414252944
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 31,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "SHA256": "20c0d5eb820fb761c2cba8b3f577b2b65289c3cea458201cfbd1417df7dadd86"
+    },
+    {
+      "file": "sixteen-candidate-battle-8.png",
+      "source": ".omc/evidence/war-feel/w1/complete-first/sixteen-candidate/battle-8.png",
+      "requestedSeconds": 8,
+      "observedElapsedBeforeScreenshot": 8.160300000000003,
+      "alive": 32,
+      "camera": {
+        "position": [
+          14.808616810689708,
+          19.857581293540296,
+          19.744822414252944
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 31,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "SHA256": "b4caadfb38860e92eb971cb2be98195d4a0c6b1eac4024ce3ee1b865fe2be543"
+    },
+    {
+      "file": "mixed-baseline-battle-12.png",
+      "source": ".omc/evidence/war-feel/w1/pilot/mixed-baseline/battle-12.png",
+      "requestedSeconds": 12,
+      "observedElapsedBeforeScreenshot": 12.500000000000002,
+      "alive": 30,
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "SHA256": "2f5db00760690024dce5f4d0f4dd6735c41428375b443c6dfd25a3320269cd19"
+    },
+    {
+      "file": "mixed-candidate-battle-12.png",
+      "source": ".omc/evidence/war-feel/w1/pilot/mixed-candidate/battle-12.png",
+      "requestedSeconds": 12,
+      "observedElapsedBeforeScreenshot": 12.335099999999983,
+      "alive": 30,
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "SHA256": "f8fe3a9567daee77143805f23ec8c46e8be5fb833624af54cab88e4f670f2e8e"
+    },
+    {
+      "file": "mixed-baseline-battle-55.png",
+      "source": ".omc/evidence/war-feel/w1/complete-first/mixed-baseline/battle-55.png",
+      "requestedSeconds": 55,
+      "observedElapsedBeforeScreenshot": 55.68710000000094,
+      "alive": 10,
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "SHA256": "4f82f33b8bab5bf4bc934bdba8c109375f0716e46e2aed885f5b01577e55887e"
+    },
+    {
+      "file": "mixed-candidate-battle-55.png",
+      "source": ".omc/evidence/war-feel/w1/complete-first/mixed-candidate/battle-55.png",
+      "requestedSeconds": 55,
+      "observedElapsedBeforeScreenshot": 55.13880000000092,
+      "alive": 6,
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "canvas": [
+        1280,
+        646
+      ],
+      "SHA256": "14900d14b22c4ede6518972c8b8ba9026a0142c07ad6f380d324fd13cada87fc"
+    },
+    {
+      "file": "manual-occupied-slot.png",
+      "source": ".omc/evidence/war-feel/w1/frozen-w1-occupied-final/manual-occupied-slot.png",
+      "SHA256": "bb376303c3e343c8a93d148b3f32ee077ed929b8f09d093d4209cb7b862040b1"
+    },
+    {
+      "file": "manual-offline-refilled.png",
+      "source": ".omc/evidence/war-feel/w1/frozen-w1-occupied-final/manual-offline-refilled.png",
+      "SHA256": "4b489bb6396f42a4b741729463118d15a0fd489e93c3cba8604a3b2fcde77333"
+    }
+  ],
+  "metrics": [
+    {
+      "mode": "four",
+      "version": "baseline",
+      "source": "actual browser frontPreview physical positions, nearest forward tier; fixed world X/Z common to paired initial battles, not a universal rotated-line measure",
+      "refills": [],
+      "eventsAvailable": true,
+      "minimumPhysicalRadiusGap": 0.05999146686108148,
+      "actualElapsed": 24.621099999999828,
+      "alive": 4,
+      "phaseSamples": [
+        {
+          "time": 4.217899999999999,
+          "team": "red",
+          "frontCount": 2,
+          "worldZSpan": 4.119898955875909,
+          "worldXDepth": 0.019533786944194054,
+          "largestWorldZHole": 4.119898955875909,
+          "allFootZSpan": 6.177665354674429,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 7.986800000000028,
+          "team": "red",
+          "frontCount": 2,
+          "worldZSpan": 4.119839620123298,
+          "worldXDepth": 0.004669416840020757,
+          "largestWorldZHole": 4.119839620123298,
+          "allFootZSpan": 6.17833279602748,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 12.286500000000014,
+          "team": "red",
+          "frontCount": 2,
+          "worldZSpan": 6.583282148649982,
+          "worldXDepth": 0.08731563014834487,
+          "largestWorldZHole": 6.583282148649982,
+          "allFootZSpan": 6.583282148649982,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 17.970599999999948,
+          "team": "red",
+          "frontCount": 2,
+          "worldZSpan": 6.714492769595418,
+          "worldXDepth": 0.09344155614775418,
+          "largestWorldZHole": 6.714492769595418,
+          "allFootZSpan": 6.714492769595418,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 4.217899999999999,
+          "team": "blue",
+          "frontCount": 2,
+          "worldZSpan": 4.119898736014526,
+          "worldXDepth": 0.019389327336701845,
+          "largestWorldZHole": 4.119898736014526,
+          "allFootZSpan": 6.1776708175720785,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 7.986800000000028,
+          "team": "blue",
+          "frontCount": 2,
+          "worldZSpan": 4.119838458707836,
+          "worldXDepth": 0.004545130857891877,
+          "largestWorldZHole": 4.119838458707836,
+          "allFootZSpan": 6.178339647896985,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 12.286500000000014,
+          "team": "blue",
+          "frontCount": 2,
+          "worldZSpan": 6.178711331947877,
+          "worldXDepth": 0.07399690289924932,
+          "largestWorldZHole": 6.178711331947877,
+          "allFootZSpan": 6.178711331947877,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 12.286500000000014,
+          "team": "blue",
+          "frontCount": 2,
+          "worldZSpan": 6.178711331947877,
+          "worldXDepth": 0.07399690289924932,
+          "largestWorldZHole": 6.178711331947877,
+          "allFootZSpan": 6.178711331947877,
+          "boundaryFootCount": 0
+        }
+      ]
+    },
+    {
+      "mode": "four",
+      "version": "candidate",
+      "source": "actual browser frontPreview physical positions, nearest forward tier; fixed world X/Z common to paired initial battles, not a universal rotated-line measure",
+      "refills": [
+        {
+          "time": 10.60250000000001,
+          "team": "blue",
+          "column": 0,
+          "previous": 5,
+          "id": 7,
+          "previousActualDeathTime": 10.583900000000009,
+          "slotDecisionDelayFromActualDeath": 0.01860000000000106,
+          "firstActualAttackAfterPromotion": 11.400800000000004,
+          "actualAttackDelay": 0.798299999999994
+        },
+        {
+          "time": 10.60250000000001,
+          "team": "blue",
+          "column": 1,
+          "previous": 4,
+          "id": 6,
+          "previousActualDeathTime": 10.583900000000009,
+          "slotDecisionDelayFromActualDeath": 0.01860000000000106,
+          "firstActualAttackAfterPromotion": 11.400800000000004,
+          "actualAttackDelay": 0.798299999999994
+        }
+      ],
+      "eventsAvailable": true,
+      "minimumPhysicalRadiusGap": 0.1289093473344125,
+      "actualElapsed": 23.16989999999978,
+      "alive": 4,
+      "phaseSamples": [
+        {
+          "time": 4.233499999999997,
+          "team": "red",
+          "frontCount": 2,
+          "worldZSpan": 2.20473125243564,
+          "worldXDepth": 0.0003784976186824718,
+          "largestWorldZHole": 2.20473125243564,
+          "allFootZSpan": 2.3774260693406735,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 8.018500000000026,
+          "team": "red",
+          "frontCount": 2,
+          "worldZSpan": 2.20473125243564,
+          "worldXDepth": 0.0003784976186824718,
+          "largestWorldZHole": 2.20473125243564,
+          "allFootZSpan": 2.3774260693406735,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 12.333900000000005,
+          "team": "red",
+          "frontCount": 2,
+          "worldZSpan": 2.2057510014185104,
+          "worldXDepth": 0.0004471010509960044,
+          "largestWorldZHole": 2.2057510014185104,
+          "allFootZSpan": 2.3827809661777364,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 18.05289999999993,
+          "team": "red",
+          "frontCount": 2,
+          "worldZSpan": 2.2057510014185104,
+          "worldXDepth": 0.0004471010509960044,
+          "largestWorldZHole": 2.2057510014185104,
+          "allFootZSpan": 2.3827809661777364,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 4.233499999999997,
+          "team": "blue",
+          "frontCount": 2,
+          "worldZSpan": 2.2047312524356393,
+          "worldXDepth": 0.0003784976186824718,
+          "largestWorldZHole": 2.2047312524356393,
+          "allFootZSpan": 2.377426069340673,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 8.018500000000026,
+          "team": "blue",
+          "frontCount": 2,
+          "worldZSpan": 2.2047312524356393,
+          "worldXDepth": 0.0003784976186824718,
+          "largestWorldZHole": 2.2047312524356393,
+          "allFootZSpan": 2.377426069340673,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 12.333900000000005,
+          "team": "blue",
+          "frontCount": 2,
+          "worldZSpan": 2.20625358639855,
+          "worldXDepth": 0.0004970398772936591,
+          "largestWorldZHole": 2.20625358639855,
+          "allFootZSpan": 2.20625358639855,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 18.05289999999993,
+          "team": "blue",
+          "frontCount": 2,
+          "worldZSpan": 2.20625358639855,
+          "worldXDepth": 0.0004970398772936591,
+          "largestWorldZHole": 2.20625358639855,
+          "allFootZSpan": 2.20625358639855,
+          "boundaryFootCount": 0
+        }
+      ]
+    },
+    {
+      "mode": "mixed",
+      "version": "baseline",
+      "source": "actual browser frontPreview physical positions, nearest forward tier; fixed world X/Z common to paired initial battles, not a universal rotated-line measure",
+      "refills": [],
+      "eventsAvailable": false,
+      "minimumPhysicalRadiusGap": 0.05920454897880312,
+      "actualElapsed": 23.400999999999836,
+      "alive": 21,
+      "phaseSamples": [
+        {
+          "time": 3.849700000000001,
+          "team": "red",
+          "frontCount": 4,
+          "worldZSpan": 6.300000000000001,
+          "worldXDepth": 0.0,
+          "largestWorldZHole": 2.1000000000000005,
+          "allFootZSpan": 11.310136243916945,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 8.16670000000003,
+          "team": "red",
+          "frontCount": 4,
+          "worldZSpan": 8.238472914981378,
+          "worldXDepth": 0.00730829121175347,
+          "largestWorldZHole": 4.118354337994719,
+          "allFootZSpan": 12.63276255397973,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 11.799000000000014,
+          "team": "red",
+          "frontCount": 4,
+          "worldZSpan": 8.240185011169554,
+          "worldXDepth": 0.042813780240351096,
+          "largestWorldZHole": 4.119733686561278,
+          "allFootZSpan": 14.146876646101868,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 18.217299999999923,
+          "team": "red",
+          "frontCount": 4,
+          "worldZSpan": 11.137340343542313,
+          "worldXDepth": 0.7210556585350594,
+          "largestWorldZHole": 5.037985451809671,
+          "allFootZSpan": 17.768185404886847,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 3.849700000000001,
+          "team": "blue",
+          "frontCount": 4,
+          "worldZSpan": 6.300000000000001,
+          "worldXDepth": 0.0,
+          "largestWorldZHole": 2.1000000000000005,
+          "allFootZSpan": 11.310136243916945,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 8.16670000000003,
+          "team": "blue",
+          "frontCount": 4,
+          "worldZSpan": 8.238143132990125,
+          "worldXDepth": 0.007699576990951584,
+          "largestWorldZHole": 4.118072265997568,
+          "allFootZSpan": 12.632556187888703,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 11.799000000000014,
+          "team": "blue",
+          "frontCount": 4,
+          "worldZSpan": 8.228625206495753,
+          "worldXDepth": 0.023625680610619204,
+          "largestWorldZHole": 4.041284567576342,
+          "allFootZSpan": 14.327605634975516,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 18.217299999999923,
+          "team": "blue",
+          "frontCount": 3,
+          "worldZSpan": 17.683049618208486,
+          "worldXDepth": 1.6393239196194598,
+          "largestWorldZHole": 10.396466647411554,
+          "allFootZSpan": 17.683049618208486,
+          "boundaryFootCount": 0
+        }
+      ]
+    },
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "source": "actual browser frontPreview physical positions, nearest forward tier; fixed world X/Z common to paired initial battles, not a universal rotated-line measure",
+      "refills": [
+        {
+          "time": 10.751600000000005,
+          "team": "blue",
+          "column": 1,
+          "previous": 18,
+          "id": 24,
+          "previousActualDeathTime": null,
+          "slotDecisionDelayFromActualDeath": null,
+          "firstActualAttackAfterPromotion": null,
+          "actualAttackDelay": null
+        },
+        {
+          "time": 11.884999999999987,
+          "team": "blue",
+          "column": 0,
+          "previous": 19,
+          "id": 25,
+          "previousActualDeathTime": null,
+          "slotDecisionDelayFromActualDeath": null,
+          "firstActualAttackAfterPromotion": null,
+          "actualAttackDelay": null
+        },
+        {
+          "time": 12.768399999999977,
+          "team": "blue",
+          "column": 2,
+          "previous": 17,
+          "id": 21,
+          "previousActualDeathTime": null,
+          "slotDecisionDelayFromActualDeath": null,
+          "firstActualAttackAfterPromotion": null,
+          "actualAttackDelay": null
+        },
+        {
+          "time": 12.768399999999977,
+          "team": "blue",
+          "column": 3,
+          "previous": 16,
+          "id": 20,
+          "previousActualDeathTime": null,
+          "slotDecisionDelayFromActualDeath": null,
+          "firstActualAttackAfterPromotion": null,
+          "actualAttackDelay": null
+        },
+        {
+          "time": 13.76849999999997,
+          "team": "red",
+          "column": 2,
+          "previous": 2,
+          "id": 8,
+          "previousActualDeathTime": null,
+          "slotDecisionDelayFromActualDeath": null,
+          "firstActualAttackAfterPromotion": null,
+          "actualAttackDelay": null
+        },
+        {
+          "time": 18.018799999999917,
+          "team": "red",
+          "column": 1,
+          "previous": 1,
+          "id": 5,
+          "previousActualDeathTime": null,
+          "slotDecisionDelayFromActualDeath": null,
+          "firstActualAttackAfterPromotion": null,
+          "actualAttackDelay": null
+        },
+        {
+          "time": 19.40219999999988,
+          "team": "blue",
+          "column": 1,
+          "previous": 24,
+          "id": 23,
+          "previousActualDeathTime": null,
+          "slotDecisionDelayFromActualDeath": null,
+          "firstActualAttackAfterPromotion": null,
+          "actualAttackDelay": null
+        },
+        {
+          "time": 20.05219999999987,
+          "team": "red",
+          "column": 3,
+          "previous": 3,
+          "id": 9,
+          "previousActualDeathTime": null,
+          "slotDecisionDelayFromActualDeath": null,
+          "firstActualAttackAfterPromotion": null,
+          "actualAttackDelay": null
+        },
+        {
+          "time": 23.067799999999846,
+          "team": "blue",
+          "column": 3,
+          "previous": 20,
+          "id": 22,
+          "previousActualDeathTime": null,
+          "slotDecisionDelayFromActualDeath": null,
+          "firstActualAttackAfterPromotion": null,
+          "actualAttackDelay": null
+        }
+      ],
+      "eventsAvailable": false,
+      "minimumPhysicalRadiusGap": 0.05980792333526708,
+      "actualElapsed": 23.267999999999837,
+      "alive": 22,
+      "phaseSamples": [
+        {
+          "time": 3.717399999999999,
+          "team": "red",
+          "frontCount": 4,
+          "worldZSpan": 6.489291706102875,
+          "worldXDepth": 0.0007183749131831618,
+          "largestWorldZHole": 2.1631112407328956,
+          "allFootZSpan": 6.582668463011733,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 8.034800000000027,
+          "team": "red",
+          "frontCount": 4,
+          "worldZSpan": 6.179182439256764,
+          "worldXDepth": 0.03769605905949014,
+          "largestWorldZHole": 2.059840454350275,
+          "allFootZSpan": 6.434642577454463,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 12.335099999999983,
+          "team": "red",
+          "frontCount": 4,
+          "worldZSpan": 6.339116350190466,
+          "worldXDepth": 0.2643497855666048,
+          "largestWorldZHole": 2.1610508178250174,
+          "allFootZSpan": 6.719354074641573,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 18.085399999999918,
+          "team": "red",
+          "frontCount": 4,
+          "worldZSpan": 6.542146368302296,
+          "worldXDepth": 2.149538176623543,
+          "largestWorldZHole": 4.202636113287187,
+          "allFootZSpan": 6.652618554356364,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 3.717399999999999,
+          "team": "blue",
+          "frontCount": 4,
+          "worldZSpan": 6.489291706102875,
+          "worldXDepth": 0.0007183749131831618,
+          "largestWorldZHole": 2.1631112407328956,
+          "allFootZSpan": 6.582668463011732,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 8.034800000000027,
+          "team": "blue",
+          "frontCount": 4,
+          "worldZSpan": 6.17927137802517,
+          "worldXDepth": 0.04251525896666686,
+          "largestWorldZHole": 2.059894704326871,
+          "allFootZSpan": 6.248927382466542,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 12.335099999999983,
+          "team": "blue",
+          "frontCount": 4,
+          "worldZSpan": 4.4260018305685405,
+          "worldXDepth": 2.1811357952572283,
+          "largestWorldZHole": 2.0600018881808726,
+          "allFootZSpan": 6.375689647706128,
+          "boundaryFootCount": 0
+        },
+        {
+          "time": 18.085399999999918,
+          "team": "blue",
+          "frontCount": 4,
+          "worldZSpan": 5.982842530210178,
+          "worldXDepth": 0.6928044184037399,
+          "largestWorldZHole": 2.175800612551657,
+          "allFootZSpan": 5.982842530210178,
+          "boundaryFootCount": 0
+        }
+      ]
+    }
+  ],
+  "completeOutcomes": [
+    {
+      "mode": "sixteen",
+      "version": "candidate",
+      "actualElapsed": 45.61489999999999,
+      "aliveByTeam": {
+        "red": 16,
+        "blue": 0
+      },
+      "fighting": false,
+      "winnerObserved": true,
+      "refills": 12,
+      "traceEndTime": 32.00479999999987,
+      "traceScope": "native crowdQA stops at32s; events partial. Mixed no crowdQA trace. Outcome above uses current physical HP/teams.",
+      "pauseStable": true,
+      "resetAllHealth100": true,
+      "canvas": [
+        1280,
+        646
+      ],
+      "camera": {
+        "position": [
+          14.808616810689708,
+          19.857581293540296,
+          19.744822414252944
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 31,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      }
+    },
+    {
+      "mode": "sixteen",
+      "version": "baseline",
+      "actualElapsed": 48.65219999999992,
+      "aliveByTeam": {
+        "red": 11,
+        "blue": 0
+      },
+      "fighting": false,
+      "winnerObserved": true,
+      "refills": 0,
+      "traceEndTime": 32.0072,
+      "traceScope": "native crowdQA stops at32s; events partial. Mixed no crowdQA trace. Outcome above uses current physical HP/teams.",
+      "pauseStable": true,
+      "resetAllHealth100": true,
+      "canvas": [
+        1280,
+        646
+      ],
+      "camera": {
+        "position": [
+          14.808616810689708,
+          19.857581293540296,
+          19.744822414252944
+        ],
+        "focus": [
+          0,
+          1.1,
+          0
+        ],
+        "distance": 31,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      }
+    },
+    {
+      "mode": "mixed",
+      "version": "candidate",
+      "actualElapsed": 55.28810000000092,
+      "aliveByTeam": {
+        "red": 6,
+        "blue": 0
+      },
+      "fighting": false,
+      "winnerObserved": true,
+      "refills": 12,
+      "traceEndTime": null,
+      "traceScope": "native crowdQA stops at32s; events partial. Mixed no crowdQA trace. Outcome above uses current physical HP/teams.",
+      "pauseStable": true,
+      "resetAllHealth100": true,
+      "canvas": [
+        1280,
+        646
+      ],
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      }
+    },
+    {
+      "mode": "mixed",
+      "version": "baseline",
+      "actualElapsed": 55.835800000000944,
+      "aliveByTeam": {
+        "red": 10,
+        "blue": 0
+      },
+      "fighting": false,
+      "winnerObserved": true,
+      "refills": 0,
+      "traceEndTime": null,
+      "traceScope": "native crowdQA stops at32s; events partial. Mixed no crowdQA trace. Outcome above uses current physical HP/teams.",
+      "pauseStable": true,
+      "resetAllHealth100": true,
+      "canvas": [
+        1280,
+        646
+      ],
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      }
+    }
+  ],
+  "manualUI": {
+    "source": "actual actor selection/raycast same-slot &far ground commands, native movement and native command completion, pause/reset",
+    "summary": "manual-actual-summary.json",
+    "firstObservedRefillActorDisplacement": 2.621949698489457,
+    "bodySlotThreshold": 2.2,
+    "firstOccupiedID0RetainedRefill0": true,
+    "endActualElapsed": 6.284500000000024,
+    "endTarget": null,
+    "endColumn": [
+      2,
+      0
+    ],
+    "resetColumn": [
+      0,
+      2
+    ],
+    "GLB200": 5,
+    "errors": [],
+    "commandOldStopEpsilon": "earlier differently timed raycast run remained at.1+epsilon; current actual run completed naturally. Both histories preserved, no command source modified",
+    "sameSlotTargetDistance": 1.30155,
+    "exactSelfPointContract": "controlled277 dynamic occupiedfront probes, not exact-self UI raycast"
+  },
+  "tests": {
+    "relatedPass": 30,
+    "fullPass": 791,
+    "fail": 0,
+    "buildExit": 0
+  },
+  "reviewRequestedAdvanced": "gpt-6-astra/high",
+  "reviewActualAdvanced": "unknown",
+  "cavalry": "existing positive-z wing autonomy unchanged, no new two-wing strategy",
+  "remainingNotes": [
+    "local late mixed cavalry/melee congestion",
+    "rear reserves can remain unused on winning side",
+    "legacy manual .1m floating boundary not corrected",
+    "capacity and user approval not established"
+  ],
+  "userApproval": "unknown",
+  "firstSupersededRevisions": [
+    "ab16 first manual target assignment was treated asvacancy",
+    "0a7 relative ideal/peer mean falsely removed53/277 occupiedfronts, superseded"
+  ],
+  "normalEvidencePreserved": true,
+  "technicalFinal": "APPROVE_WITH_NOTES; requiredRemaining=[]; independent277 self-point probes0fail,2700 normal inheritance, final UI and hashes checked",
+  "advancedFinal": "APPROVE_WITH_NOTES; normal24 PNG inherited and final manual2 PNG/21 samples/source independently reviewed"
+}

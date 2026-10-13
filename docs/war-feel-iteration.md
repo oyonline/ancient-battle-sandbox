@@ -1,0 +1,39 @@
+# 战争感 W1 → F1
+
+2026-10-13 当前 W1 `[x]`：战线组织实现、4v4/16v16/mixed实际接敌与补缺至决胜、791/791与build完成；最终df86e132…同时获独立技术与高级源码/视觉 `APPROVE_WITH_NOTES`，总控接受受检范围。两次manual guard失败和修复历史保留，原277动态自点反例最终0失败。用户新候选认可未知。owner_task=`codex-native-asset-worker / warfeel-w1-f1-20261013`，唯一writer正常持新token。F1 `[ ]` 尚未实施，W1精确本地提交后继续。用户新批明确先战线组织、再交战反馈，每项实际游戏验证与独立复审后自主继续，并授权适当本地commit及本批最终push到既有工作分支；不merge main、不部署。原20GLB与R2/P2/A2/V2/S1及所有早期候选/基准保留；内部通过不代表用户整体满意。
+
+## 新批 live 基线
+
+完整读取code-workspace-default与当前MULTI_AGENT_GIT，kb_current链路解析有效。fresh snapshot sampled2026-10-13T05:51:48UTC，local ff27af530042f7eee771a708322e3583c69bb2d2、真实/fetched remote ef4355ff01ec8995eac4dd06dc672e9ec1166944，ahead5/behind0；branch codex/sword-shield-round1，github URL身份一致。GitHub官方API repository id1200045147与正式stable repo_id一致；repo clean、dirtyOwner none，common-dir与global两provider writer_free。5301实际PID69740/HTTP200。本批writer独占仅Git机械互斥，owner只10项精确源码/测试/工具/docs，保护范围外修改。
+
+本批新0600token、controlled_shared，intended main/combat-model/battle-line/combat-feedback、两对应tests、qa-war-feel、controller/本专项/精选目录；实际代码行为更改遵循W1有界卡。开工KB台账169、event evt-20261013-ancient-warfeel-lines-feedback-01a132c6已去重回读0600，0条额外旧经验，不凑提醒。KB原权威未知dirty不接管，旧模型阶段tmp草案已stale。
+
+## W1 范围
+
+独立 `front=baseline|candidate`。旧无参数/default/C1不改变；single/duel不启用W1。新纯BattleLine只产生自动motion intent，不写u.target、真实enemy或坐标，不生成damage/event；原真实敌d/stop/攻击朝向门、射箭/蓄力/近战结算/时钟/扫掠碰撞/分离及单位数组顺序保持。意图不和C1外肩绕行竞争；有意图时取其移动向量，fallback才原C1。pendingStrike/pendingShot/Hit/pierce/manual命令及真实近接敌优先原语义。
+
+初始布阵/reset坐标和模型完全保持。4v4两列两层，16v16四列四层，mixed10步战四列，spacing=max(2.2,2*实际步战最大radius+.2)，按现位置排序稳定ID分槽/排；死去前排提升本/邻列候补，不窃取其他存活前排。线方向只取步战主体，有限滞后/侧向跟随，残局孤立敌/无对方步战释放原自主防僵住；弓在友线后软带，实际8m射程/3m紧急退步及无友军步战释放优先。骑兵保留原自主、既有正z翼，未改spawn或声称新双翼/分批冲锋。
+
+## 首冻结与实际证据
+
+首冻结 `.omc/evidence/war-feel/w1/frozen-w1-first/manifest.json` 绑定main5d6df87…、combat804daff…、battle-lineab16d36…及QA/test源码。20GLB逐hash保持。新增6合同与原C1/战斗共28/28；首次一个pike fixture的.6s漏掉id2原生.18s冷却＋11/24windup，延至.8s后伤害84成立，源码未因此改；judge按规调用exit2缺本项目配置，无有效report，不伪称完成诊断。首build退出0。
+
+纯stepSkirmish同源dt pilot与真实浏览器分开统计：pure4v4 baseline12.58s/W1 19.83s、16v16 26.92/38.40、mixed39.60/47.77各正常决胜，W1补缺2/12/12、mixed真实逻辑draw75/shoot66/arrow-hit63/charge5/death25；这些不是浏览器总数。
+
+真实paired首game 4v4均同camera21m/canvas1280×646、same初始8人、四模型与C2/L1/S1固定；candidate23.17s/基准24.62s均4活，nativeattack72/hit36/death4、候补2。mixed主镜44m/同canvas固定，candidate23.268s22活/refill9、baseline23.401s21活。正常速度WebM、初始及4/8/12/18/23请求时段PNG、actual位置/HP/队列/实际采样时刻/pause/reset记录在 `w1/pilot/`。独立wallclock/dt，不声称同战果或逐帧动作锁步；20GLB200/errors=[]。
+
+约8s实际红步战横向span：4v4 6.178→2.377m；mixed12.633→6.435m，mixed前排X depth约.007→.038m。4v4实际前排Death后18.6ms产生slot决策，候补首次真实Attack延迟.7983s。定义是固定初始X/Z方向上的最近前沿tier与全部步战范围，不是任意转向军阵统计；均保留实际radius碰撞gap，指标不能代替游戏视觉判断。`pilot/metrics.json`。
+
+补充真实16v16至candidate45.615s16活/refill12、baseline48.652s11活；mixed至candidate55.288s6活/refill12、baseline55.836s10活。末态分team HP/胜负/finite/pause/reset和镜头见 `complete-first/outcome-summary.json`，12关键PNG另冻结 `frozen-w1-complete-first/`。原native crowdQA trace固定32s停止，事件是前32s部分记录；后续HP/renderer继续，不能把partial events假充45–55s总数。正常mixed无crowdQA事件记录，不为补全总数改规则/重跑。
+
+高级首source+12实图限定 `APPROVE_WITH_NOTES`（requested gpt-6-astra/high、actual未知），独立重跑28/28；4v4两前排与后排纵深/mixed8–12s前后层次改善可辨，23s局部骑/近战拥挤列P3，不扩完整军阵系统。随后完整game/技术增量由独立两路复审接受；不把首范围结论扩大为最终完整范围。
+
+首稿ab16边界：给存活前排一个“走到原地”manual target、尚未位移即detach/promotion。第一次0a7b修版以其他列均值/理想侧带作槽位基准，初始点通过但独立正常mixed演进277活动头探针仍53次误判，正式REVISE、已superseded（该合同未过）。正常无manual实图/测试正项未丢，不能用初始点通过豁免动态弯曲front。
+
+最新df86e132…仅helper改为既有头收到manual时缓存它真实occupied centre，只在actor自身实际离开body-sized原位才补；manual结束/死亡/reset清缓存，绝不写u.target。test2242ef49…新增不齐mixed前线逐活动头自身坐标指令回归，覆盖200以上演进探针；相关30/30，三类旧first→新helper正常无manual各3600帧全unit/event/refill精确同。main5d6df87…/combat804daff…/20GLB不动，原正常4/16/mixed全部实图可继承，source证明在 `frozen-w1-occupied-final/manifest.json`。最终当前代码全量791/791、build退出0；此前790全量对应0a7旧revision，仅历史记录，不混写为新版本。高级最终same-defect与独立技术最终均为 APPROVE_WITH_NOTES，requiredRemaining=[]；五source hash、20GLB、2D60文件/6项保护呈现代码保持，技术独立2700正常帧精确继承。正式技术凭证 `.omc/evidence/qa-standard-20261013/w1-final/verdict.json`。
+
+最终df86实际UI新21采样：真实选兵/地面同槽指令（目标距原位1.30155m，并非精确自身坐标）首次更新保0/refill0；首次观察actor离原位2.62195m>2.2占位阈值后补2，命令在elapsed6.2845s自然完成target=null、同列[2,0]唯一重入后排；reset回[0,2]/全健康/refill0。5GLB200/errors=[]，两关键PNG、连续WebM/actual-summary及冻结manifest绑定同source；高级实际看2图/读21点并认可该样本自然完成。精确原地合同另由控制夹具覆盖。第一次不同raycast/dt长UI采样仍停d=.1000000000000003m、target非空，是历史stop浮点边缘，未修命令规则；不能以本次成功扩大为所有命令都保证完成。首图正常结果和全部失败历史保留。
+
+## 后续与三态
+
+W1：技术验证791/791/build及独立技术最终 APPROVE_WITH_NOTES；内部源码/视觉高级最终 APPROVE_WITH_NOTES，总控接受受检范围。局部晚段骑兵/近战拥挤、获胜方部分候补未参战、旧manual stop epsilon与未测容量保留为notes。用户已明确旧整体战争感不足，新W1候选认可未知。F1：计划真实attack/hit/charge/draw/shoot/death驱动表现、保留Q1/S1/20GLB与W1，只改变呈现；尚未实施。最终冻结候选复审、精确commit后才按当前新task授权一次push并ls-remote/exactfetch真实核验，未经review代码不先推。

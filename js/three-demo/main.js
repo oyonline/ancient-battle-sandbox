@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { BattleLine } from './battle-line.js';
 import { CorpseSupport, corpseRegions } from './corpse-support.js';
 import { coordinateEvent, syncHeldArrow, arrowReleasePoint, flightPose, syncChargeImpact, restBowArm, restoreBowArm, restoreChargeImpact } from './action-coordination.js';
 import { createMotionQA, createDuelQA, createCrowdQA } from './motion-qa.js';
@@ -28,6 +29,8 @@ const bowStandard=preview.get('bow')==='standard';
 const rideStandard=preview.get('ride')==='standard';
 const qaMode=['single','small','duel','four','sixteen'].includes(preview.get('qa'))?preview.get('qa'):null;
 const qaKind=['pikeman','archer','cavalry'].includes(preview.get('unit'))?preview.get('unit'):'infantry';
+const frontCandidate=preview.get('front')==='candidate';
+const frontApplicable=!['single','duel'].includes(qaMode);
 // QA creates only the requested kind: comparison controls describe that actor.
 const modelControlRole=qaMode?qaKind:['infantry','pikeman','archer','cavalry'].includes(preview.get('modelRole'))?preview.get('modelRole'):rideStandard?'cavalry':bowStandard?'archer':pikeStandard?'pikeman':'infantry';
 const modelControlsActive=preview.has('model')||pikeStandard||bowStandard||rideStandard||preview.has('modelRole')||corpseComparing;
@@ -107,7 +110,7 @@ const markerGeometry = new THREE.RingGeometry(.55,.64,32); markerGeometry.rotate
 const bodyRingGeometry=Object.fromEntries(Object.entries(BODY_RADIUS).map(([kind,radius])=>{const g=new THREE.RingGeometry(radius+.04,radius+.11,32);g.rotateX(-Math.PI/2);return [kind,g];}));
 const marker = new THREE.Mesh(markerGeometry,new THREE.MeshBasicMaterial({color:'#f5df9d',side:THREE.DoubleSide})); marker.visible=false;scene.add(marker);
 const loader = new GLTFLoader();
-const units=[]; let templates, team='red', selected=[], fighting=false, paused=false, ready=false, elapsed=0, winner=null;
+const units=[]; let templates, team='red', selected=[], fighting=false, paused=false, ready=false, elapsed=0, winner=null,battleLine=null;
 const healthStatus = () => ['red','blue'].map(t => `${t==='red'?'红':'蓝'}方 ${units.filter(u=>u.team===t&&u.hp>0).length}`).join(' · ');
 function teamColor(t){return t==='red'?'#b84c38':'#487c9c';}
 function select(list){ selected=list.filter(u=>u.hp>0); $('selection').textContent = `已选${team==='red'?'红':'蓝'}方 ${selected.length} 名 · 点击地面移动`; for(const u of units)u.ring.visible=selected.includes(u)&&u.hp>0; }
@@ -118,7 +121,7 @@ function createUnit(t,kind,x,z,index){const model=cloneModel(templates[kind],t);
 function reset(){
  if(motionQA){motionQA.frames=[];motionQA.captureTick=-1;}for(const u of units){u.animation?.dispose();scene.remove(u.root,u.ring);u.model.traverse(o=>{if(o.isMesh)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(m.name==='team_cloth')m.dispose();});});u.ring.material.dispose();}clearBattleMarks();clearArrows();units.length=0;fighting=false;winner=null;paused=false;elapsed=0;distance=qaMode==='duel'?10:qaMode==='sixteen'?31:qaMode==='four'?21:qaMode?18:cameraCandidate?44:43;focus.set(0,qaMode?1.1:0,cameraCandidate?4:0);updateCamera(); marker.visible=false;$('pause').textContent='暂停';$('fight').textContent='开始交战';
  if(qaMode==='duel'){const separation=qaKind==='cavalry'?8:3;createUnit('red',qaKind,-separation,0,0);createUnit('blue',qaKind,separation,0,1);}else if(qaMode==='four'||qaMode==='sixteen'){const count=qaMode==='four'?4:16,rows=qaMode==='four'?2:4;for(const t of ['red','blue'])for(let i=0;i<count;i++){const side=t==='red'?-1:1;createUnit(t,qaKind,side*(4.5+Math.floor(i/rows)*2.2),(i%rows-(rows-1)/2)*2.2+(t==='blue'?.7:0),i);}}else if(qaMode){for(let i=0;i<(qaMode==='small'?4:1);i++)createUnit('red',qaKind,-3,(i-((qaMode==='small'?4:1)-1)/2)*2.2-1,i);}else for(const t of ['red','blue']){const side=t==='red'?-1:1;for(let i=0;i<6;i++)createUnit(t,'infantry',side*(8+Math.floor(i/4)*2.1),(i%4-1.5)*2.1,i);for(let i=0;i<4;i++)createUnit(t,'pikeman',side*12.2,(i-1.5)*2.1,i+6);for(let i=0;i<2;i++)createUnit(t,'archer',side*15,(i-.5)*3,i+10);for(let i=0;i<4;i++)createUnit(t,'cavalry',side*(10.8+i%2*4.2),6+Math.floor(i/2)*4.2,i+12);}
- separateBodies(units);select(units.filter(u=>u.team===team));$('battle-status').textContent=`自由布阵 · ${healthStatus()}`;}
+ separateBodies(units);battleLine=frontCandidate&&frontApplicable?new BattleLine(units):null;select(units.filter(u=>u.team===team));$('battle-status').textContent=`自由布阵 · ${healthStatus()}`;}
 const localX = new THREE.Vector3(1,0,0);
 const strideRotation = new THREE.Quaternion();
 function animateUnit(u,time,moving,attacking){const walk=Math.sin(time*(u.kind==='cavalry'?10:8)+u.index*.7);for(const joint of u.joints){let angle=0;if(joint.name.startsWith('horse_leg_'))angle=moving?walk*(joint.name.split('_').slice(-2).reduce((phase, value) => phase * Number(value), 1))*.45:0;else if(joint.name.startsWith('leg_'))angle=moving?walk*(joint.name.startsWith('leg_left')?1:-1)*.43:0;else if(joint.name==='rider')angle=u.runup>=3.2||u.chargeFlash>0?.10:0;else if(joint.name.startsWith('arm_right'))angle=u.kind==='cavalry'?(u.runup>=3.2||u.chargeFlash>0?1.15+Math.sin(time*11)*.06:attacking?.55+Math.sin(time*11+u.index)*.13:moving?walk*.06:0):attacking?-.8+Math.sin(time*11+u.index)*.65:moving?walk*.12:0;else angle=moving?walk*.08:0;
@@ -154,7 +157,8 @@ function sampleCorpseContact(u){
 }
 function update(dt){
  elapsed+=dt;motionQA?.beforeStep(elapsed);
- const events=stepSkirmish(units,dt,fighting);duelQA?.recordEvents(elapsed,events);crowdQA?.recordEvents(elapsed,events);
+ battleLine?.update(units,dt,fighting);
+ const events=stepSkirmish(units,dt,fighting,battleLine?(u,enemy)=>battleLine.intent(u,enemy):null);duelQA?.recordEvents(elapsed,events);crowdQA?.recordEvents(elapsed,events);
  for(const event of events){
   if(coordinationCandidate)coordinateEvent(event);
   if(event.type==='death'){event.unit.animation?.trigger('death');event.unit.ring.visible=false;addBlood(event.x,event.z,event.unit.kind==='cavalry'?.65:.4);}
@@ -191,6 +195,13 @@ function zoom(amount){distance=THREE.MathUtils.clamp(distance+amount,10,65);upda
 renderer.domElement.addEventListener('wheel',event=>{event.preventDefault();zoom(Math.sign(event.deltaY)*2.3);},{passive:false});
 $('zoom-in').onclick=()=>zoom(-4);$('zoom-out').onclick=()=>zoom(4);$('overview').onclick=()=>{distance=cameraCandidate?44:43;focus.set(0,0,cameraCandidate?4:0);updateCamera();};$('focus').onclick=()=>{const living=selected.filter(u=>u.hp>0);if(!living.length)return;focus.set(0,0,0);for(const u of living)focus.add(u.root.position);focus.divideScalar(living.length);distance=18;updateCamera();};
 if(preview.has('coordination')){const g=document.createElement('div');g.className='control-group';for(const v of ['baseline','candidate']){const b=document.createElement('button');b.textContent=v==='baseline'?'动作协调基准':'动作协调候选 Q1';b.onclick=()=>{const p=new URLSearchParams(location.search);p.set('coordination',v);location.search=p.toString();};g.append(b);}document.querySelector('.demo-controls').prepend(g);}
+if(preview.has('front')){
+ const group=document.createElement('div');group.className='control-group';group.append('战线组织 ');
+ const control=document.createElement('select');control.setAttribute('aria-label','战线组织');
+ for(const [value,label]of [['baseline','原自主接敌'],['candidate','战线候选 W1']]){const option=document.createElement('option');option.value=value;option.textContent=label;option.selected=preview.get('front')===value;control.append(option);}
+ control.onchange=()=>{const p=new URLSearchParams(location.search);p.set('front',control.value);location.search=p.toString();};group.append(control);document.querySelector('.demo-controls').prepend(group);
+ window.frontPreview={version:frontCandidate?'candidate':'baseline',applicable:frontApplicable,inspect:()=>({elapsed,fighting,paused,formation:battleLine?.inspect()??null,units:units.map(u=>({id:u.id,team:u.team,kind:u.kind,x:u.x,z:u.z,heading:u.heading,hp:u.hp,radius:u.radius,moving:u.moving,speed:u.speed,state:u.animation?.state,target:u.target,combatTargetId:u.combatTargetId,blockedBy:u.blockedBy,pendingStrike:u.pendingStrike,pendingShot:u.pendingShot,runup:u.runup,pierceTime:u.pierceTime}))})};
+}
 if(modelControlsActive)window.modelPreview={clearSelection:()=>{select([]);renderer.render(scene,camera);},inspectPoint:(x,y)=>{const r=renderer.domElement.getBoundingClientRect();pointer.set((x-r.left)/r.width*2-1,-(y-r.top)/r.height*2+1);raycaster.setFromCamera(pointer,camera);return raycaster.intersectObjects(units.filter(u=>u.root.visible).map(u=>u.root),true).slice(0,4).map(hit=>({material:(Array.isArray(hit.object.material)?hit.object.material[hit.face.materialIndex]:hit.object.material).name,point:hit.point.toArray()}));}};
 if(modelControlsActive)window.modelPreview.inspectShaft=()=>{
  const unit=units.find(u=>u.team==='red'&&u.kind==='pikeman');if(!unit)return null;updateSkinMatrices(unit.model);

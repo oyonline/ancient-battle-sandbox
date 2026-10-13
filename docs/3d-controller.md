@@ -1,6 +1,16 @@
 # 3D 持续总控入口
 
-## 当前面板（2026-10-13，模型标准阶段）
+## 当前面板（2026-10-13，战争感 W1 → F1）
+
+用户新批授权先战线组织W1、再交战反馈F1；每项实际game检查与独立复审后自主继续，适当commit/push仅到既有codex/sword-shield-round1，包含上一模型阶段5笔已复审本地提交；不merge main、不部署。20GLB/R2/P2/A2/V2/S1和早期基准保留，不改2D/伤害/时钟/命令语义。三态分别记录，原整体明确不足、新候选认可未知。
+
+- [x] W1 `front=baseline|candidate`，纯自动移动槽位/后排候次与有界combat movement seam已实际实现；single/duel/default回原路径。4v4/16v16/mixed完整真实接敌、候补、决胜、暂停/reset与最终791/791/build通过；独立技术和高级源码/视觉最终APPROVE_WITH_NOTES，总控接受受检范围。manual旧0a7b动态277头自点探针53误判仍记REVISE/superseded；最终df86真实occupied-centre修正原277零失败、10800正常帧继承，UI2.62195m离位后补位、6.2845s自然完成并重入。本次UI同槽目标1.30155m非精确self-position；精确零位移合同由pure277覆盖，旧.1epsilon未修。三态：技术限定通过、内部视觉限定通过、用户新候选认可未知。owner_task=`codex-native-asset-worker / warfeel-w1-f1-20261013`。骑兵沿原正z翼自主、晚局部拥挤/容量未测保留。
+- [ ] F1 真实事件驱动交战反馈，尚未实施，须W1独立收口后继续。
+- [ ] 整批冻结tip复审/精确commit/push与真实远端复核；不从旧push授权或tracking缓存声称已推送。
+
+详见 [战争感迭代](war-feel-iteration.md)。新批fresh snapshot localff27af5/trueRemoteef4355f、ahead5/behind0、clean/两provider free后新唯一writer正常claim；进程/git最终状态只认当轮live。KB未知dirty未同步，旧tmp草案stale。
+
+## 已完成模型标准阶段面板（2026-10-13 历史，S1受检收口）
 
 用户明确评价当前候选的模型、动作反馈、整体战争感三类不足同时存在，战争感最突出；2026-10-13 已授权先剑盾造型标杆 R2，再依次长矛、弓兵、骑兵（马＋骑手），每项真实游戏静态与动作检查、必要验证、独立复审通过后自主继续，无需逐项等确认。共享模拟首次2D箭逻辑提取后移，尚未实施。保留 R1.1/M1/D1/C1/P1/A1/V1/Q1/T1/B1/C2/L1 基准。
 
