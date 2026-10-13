@@ -6,12 +6,12 @@
 
 - [x] R2 剑盾连续成人形体、衣甲厚度、肩肘/髋膝/靴与持械关系；独立资产 `sword-standard/infantry-rigged.glb`，未设默认。
 - [x] P2 长矛模型标准，独立135115c7…资产：持矛通道、连续袖权重、体侧LateDeath及单兵坡面枪尖支撑回归闭环；同条件静态/真实动态、780/build、两路独立复审限定通过，总控接受。
-- [x] A2 资产/生者/主场/平地晚Death限定接受，最终b5789081…；19骨/旧18资产保持，真实Q1弦手与躯干支撑修复、780/build/正常动态完成。**A2坡面门开放**：原可达坡尸仍悬空，一向比A1新增17.8mm，未称全坡通过。
-- [x] V2 马＋骑手限定收口6c6/main1e0dc：生者与flat晚Death高级APPROVE_WITH_NOTES、独立技术APPROVE_WITH_NOTES，总控接受；34骨/旧19/五生者clip保持，真实移动/Charge/Hit/Death/4v4/mixed与21相关测试/build通过。下侧右shin中心浅入4.65–24.43mm列P3，整体马骑侧倒与头胸离地保留；坡面S1仍开放。
-- [ ] S1 共享尸体坡面视觉支撑，列为本批最终收口项；纯renderer opt-in，保T1/Q1/资产基准及规则/时钟/命令，V2形体复审后实施。
-- 三态：R2完整780测试/build及真实静态/正常动态检查通过；高级独立视觉复审 APPROVE_WITH_NOTES，独立技术QA APPROVE（末次纯标签修正补验通过）；P2技术限定通过/高级视觉APPROVE_WITH_NOTES/独立技术APPROVE；A2仅资产/生者/主场/平地死亡范围由总控接受，独立技术最终APPROVE_WITH_NOTES，最低Chest.025实际胸带装备，胸腹衣料.0732/皮甲皮带.0931m；高级造型/生者/main与平地补图限定通过，总控正式接受Q1on平地范围；A2完整坡面目标未过。用户明确认可 R2/P2/A2 及整体美术未知。不得从原780测试通过推断美术认可。
+- [x] A2 资产/生者/主场/平地晚Death限定接受，最终b5789081…；19骨/旧18资产保持，真实Q1弦手与躯干支撑修复、780/build/正常动态完成。原可达坡尸悬空及一向新增17.8mm由随后S1在受检范围闭环；保留阶段故障历史，不称任意地形全通过。
+- [x] V2 马＋骑手限定收口6c6/main1e0dc：生者与flat晚Death高级APPROVE_WITH_NOTES、独立技术APPROVE_WITH_NOTES，总控接受；34骨/旧19/五生者clip保持，真实移动/Charge/Hit/Death/4v4/mixed与21相关测试/build通过。下侧右shin中心浅入4.65–24.43mm列P3，整体马骑侧倒与头胸离地保留；原坡面支撑门由S1在受检范围关闭。
+- [x] S1 共享尸体坡面视觉支撑已实现独立 `corpse=baseline|candidate`；仅 Death model 层随局部坡面渐入倾角，root 保持模拟纯 yaw、原世界竖直接地。20 GLB/规则/Q1/T1保持；受控坡面48点、平地48点与3项模型状态回归、四类自然死亡/正常mixed32→14死（13末态＋1过渡）/暂停恢复/reset32完成，全量783/783与build通过。独立技术与高级视觉最终合并APPROVE_WITH_NOTES，总控接受受检范围；不称全部地形/容量/战争感通过。见 [S1 记录](corpse-support-iteration.md)。
+- 三态：R2完整780测试/build及真实静态/正常动态检查通过；高级独立视觉复审 APPROVE_WITH_NOTES，独立技术QA APPROVE（末次纯标签修正补验通过）；P2技术限定通过/高级视觉APPROVE_WITH_NOTES/独立技术APPROVE；A2资产/生者/主场/Q1on平地死亡限定接受，独立技术和高级视觉 APPROVE_WITH_NOTES，最低Chest.025实际胸带装备，胸腹衣料.0732/皮甲皮带.0931m；V2生者/flat晚Death两路APPROVE_WITH_NOTES，保留马骑侧倒及右shin浅内交叠 notes。S1技术783/build及两路最终APPROVE_WITH_NOTES、四兵自然倒地/主场闭环，由总控接受受检范围。用户对原有整体模型/动作/战争感已明确表示不足；用户明确认可新 R2/P2/A2/V2 与 S1 仍未知。不得从测试或内部视觉通过推断用户美术认可。
 - 唯一施工 worker 为 Codex 原生 `asset_worker`；高级独立 review requested `gpt-6-astra / high`，actual 模型/档位未知。总控只决策/核验。当前 task **NO PUSH / NO MERGE / NO DEPLOY**；普通本地 commit 仍需精确路径、验证与独立复审、writer 安全门。
-- KB 源未同步：目标已有 dirty 且 owner/handoff 尚未确认；候选保留 `/private/tmp/ancient-r2-kb-01a132c6/index.candidate.md`、`authority.candidate.md`，不能当正式权威。详细制作/证据见 [模型标准记录](model-standard-iteration.md)。
+- KB 源未同步：目标已有 dirty 且 owner/handoff 尚未确认；`/private/tmp/ancient-r2-kb-01a132c6/index.candidate.md`、`authority.candidate.md` 已是过时历史草案，不能当当前候选或正式权威。详细制作/证据见 [模型标准记录](model-standard-iteration.md)。
 
 
 当前目标：固定斜俯镜头下的 32 人战斗观感验证版，简洁统一成人士兵风格，保持 2D 识别特征。当前阶段基准 R1.1：public/assets/3d-sample/round1-1/infantry-rigged.glb。详细视觉历史和证据只维护 [视觉迭代记录](soldier-visual-iteration.md)。
@@ -24,7 +24,7 @@
 
 普通可回退本地工作已授权：一个主问题→实现→实际运行→效果检查→独立复审→返工或保存基准→继续下一项，无需每项再等 OK。分开记录技术验证、内部视觉验收、用户明确认可；最后一态仅凭用户反馈。保留基准与证据，不减兵种/碰撞/人数或绕过真实交战。付费、主要引擎调整、外部发布或真实不可解阻断带具体结果找用户；现有权限/Git约束仍适用。
 
-## 当前待办与下一轮
+## 历史快照：L1 收口时的待办与下一轮（2026-10-12）
 
 当前主问题：L1 灯光候选技术 / 独立内部限定通过，用户明确认可未知；详见 [光照记录](lighting-iteration.md)。M1/D1/C1/P1/A1/V1/Q1/T1/B1/C2 基准保留。下一阶段已做[共享模拟只读差异审计](shared-simulation-audit.md)，首次箭逻辑提取仅建议，尚未实施。
 1. [x] 行走、转向、起停（M1内部通过，保留P2）。
