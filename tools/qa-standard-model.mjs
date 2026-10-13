@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import assert from 'node:assert/strict';
 
 const role=process.env.QA_ROLE||'infantry';
-assert(['infantry','pikeman'].includes(role),'Unsupported model standard QA role');
+assert(['infantry','pikeman','archer'].includes(role),'Unsupported model standard QA role');
 const versions=role==='infantry'?[['baseline','baseline'],['r2','candidate']]:[['candidate','baseline'],['standard','candidate']];
 const output=process.env.QA_OUTPUT || `.omc/evidence/model-standard/${role}-first-pass`;
 mkdirSync(output,{recursive:true});
@@ -13,7 +13,7 @@ const executables=['chromium-1228','chromium-1208'].map(version=>join(homedir(),
 const browser=await chromium.launch({executablePath:executables.find(existsSync),headless:true});
 const errors=[],network=[];
 const base='http://127.0.0.1:5301/battle3d.html?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=candidate&terrain=candidate&building=candidate&camera=candidate&light=candidate';
-const queryFor=version=>{const url=new URL(base);if(role==='infantry')url.searchParams.set('model',version);else{url.searchParams.set('model','r2');url.searchParams.set('pike',version);url.searchParams.set('modelRole','pikeman');url.searchParams.set('unit','pikeman');}return url.href;};
+const queryFor=version=>{const url=new URL(base);if(role==='infantry')url.searchParams.set('model',version);else{url.searchParams.set('model','r2');url.searchParams.set('pike',role==='pikeman'?version:'standard');url.searchParams.set('modelRole',role);url.searchParams.set('unit',role);if(role==='archer')url.searchParams.set('bow',version);}return url.href;};
 const summary={role,viewport:[1280,900],source:'actual Three.js GLB loader and skinned vertices in battle3d.html',static:[],errors,network};
 try {
  async function dynamicRun(model,label,mode,duration,apiName){
@@ -65,6 +65,7 @@ try {
    ['attack-1','attack',.12,.6435011088],['attack-2','attack',.30,.6435011088],['attack-3','attack',.46,.6435011088],['attack-4','attack',.66,.6435011088],
    ['hit','hit',.125,.6435011088],['death','death',1.25,.6435011088]];
   if(role==='pikeman')samples.push(...[['attack-side-1','attack',.12,2.2142974356],['attack-side-2','attack',.30,2.2142974356],['attack-side-3','attack',.46,2.2142974356],['attack-side-4','attack',.66,2.2142974356],...[0,.08,.20,.54,1.25].map(t=>['death-entry-'+t,'death',t,2.2142974356])]);
+  if(role==='archer')samples.push(...[['draw-side','attack',.30,2.2142974356],['release-side','attack',.46,2.2142974356],['recovery-side','attack',.66,2.2142974356],...[0,.20,.54,1.25].map(t=>['death-entry-'+t,'death',t,2.2142974356])]);
   for(const [name,clip,time,angle]of samples){
    const result=await page.evaluate(({clip,time,angle})=>{window.soldierPreview.sample(clip,time,angle);const canvas=document.querySelector('#viewport canvas');return {asset:window.soldierPreview.asset,canvas:[canvas.width,canvas.height],...window.soldierPreview.inspect()};},{clip,time,angle});
    assert(result.finite,`${label} ${name} contains invalid skinned vertices`);

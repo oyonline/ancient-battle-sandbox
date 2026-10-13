@@ -9,7 +9,7 @@ import json
 import math
 import sys
 import bpy
-from mathutils import Vector
+from mathutils import Vector, Quaternion
 
 
 def smooth_mesh(mesh):
@@ -23,6 +23,8 @@ def standard_geometry(ctx):
     parts, finish, loft = ctx['parts'], ctx['finish'], ctx['loft']
     steel, red, dark = ctx['steel'], ctx['red'], ctx['dark']
     cream, leather = ctx['cream'], ctx['leather']
+    light_armour=ctx['KIND']=='archer'
+    shell=leather if light_armour else steel
     remove_terms = ('trouser', 'boot shaft', 'knee cup', 'shin plate', 'hip layer',
                     'tunic', 'torso', 'tabard', 'waist belt', 'belt over',
                     'upper sleeve', 'sleeve lower', 'lower sleeve', 'forearm',
@@ -40,10 +42,10 @@ def standard_geometry(ctx):
     smooth_mesh(loft('standard cuirass torso', [
         (1.52, 0, -.008, .275, .192), (1.64, 0, -.021, .265, .192),
         (1.86, 0, -.031, .315, .211), (2.025, 0, -.025, .353, .221),
-        (2.105, 0, -.024, .303, .201), (2.18, 0, -.027, .170, .139)], steel, 20))
+        (2.105, 0, -.024, .303, .201), (2.18, 0, -.027, .170, .139)], shell, 20))
     smooth_mesh(loft('standard mail hip', [
         (1.10, 0, .019, .294, .191), (1.18, 0, .016, .316, .213),
-        (1.36, 0, .010, .315, .211), (1.54, 0, -.012, .277, .198)], dark, 20))
+        (1.36, 0, .010, .315, .211), (1.54, 0, -.012, .277, .198)], red if light_armour else dark, 20))
 
     # The cloth wraps the curved cuirass. Its cut and folds follow chest and hip;
     # a split begins below the belt, instead of a straight plank down the back.
@@ -89,9 +91,11 @@ def standard_geometry(ctx):
             part.location.z += .074
             part.location.y -= .018
     # Neck coif has a single shoulder-to-jaw taper, not stacked neck rings.
-    smooth_mesh(loft('standard mail neck', [(2.085,0,-.023,.189,.141),
+    neck_rows=([(2.085,0,-.023,.189,.141),(2.16,0,-.025,.162,.132),
+        (2.235,0,-.029,.145,.124)] if light_armour else [(2.085,0,-.023,.189,.141),
         (2.18,0,-.025,.162,.132), (2.29,0,-.031,.153,.132),
-        (2.39,0,-.032,.160,.137)], dark,20))
+        (2.39,0,-.032,.160,.137)])
+    smooth_mesh(loft('standard mail neck',neck_rows,cream if light_armour else dark,20))
 
     def tube(name, rings, material, count=16):
         vertices, faces = [], []
@@ -125,7 +129,7 @@ def standard_geometry(ctx):
                (elbow-upper*.10,.105), (elbow,.102), (elbow+lower*.15,.109),
                (elbow+lower*.42,.099), (elbow+lower*.75,.081), (wrist+lower*.04,.067)]
         sleeve=tube('standard soft arm '+side,rings,red)
-        if ctx['KIND']=='pikeman':
+        if ctx['KIND'] in ('pikeman','archer'):
             # A pike forearm folds back across the upper-arm axis. Projection
             # cannot distinguish its segments; tube ring order provides an
             # unambiguous continuous skin transition.
@@ -141,12 +145,13 @@ def standard_geometry(ctx):
                 ctx['standard_arm_ring_weights'][key]=ring_weights[vertex.index//16]
         # Forged forearm sleeve overlaps the continuous gambeson at both ends.
         tube('standard forearm plate '+side,[(elbow+lower*.24,.112),
-            (elbow+lower*.40,.108),(elbow+lower*.70,.090),(elbow+lower*.87,.078)],steel)
+            (elbow+lower*.40,.108),(elbow+lower*.70,.090),(elbow+lower*.87,.078)],shell)
         # The shoulder is an open curved cap along the upper-arm axis, with a
         # thin rolled edge. It does not form a detached sphere or full hoop.
         direction=upper.normalized();u=direction.cross(Vector((0,1,0))).normalized()*sign;v=direction.cross(u).normalized()
         verts=[];faces=[]
         for offset,radius in [(-.090,.142),(-.035,.175),(.055,.176),(.150,.149),(.205,.125)]:
+            if light_armour:offset*=.85;radius*=.80
             center=shoulder+direction*offset
             for j in range(13):
                 angle=-1.40+j/12*2.80
@@ -154,8 +159,8 @@ def standard_geometry(ctx):
         for i in range(4):
             for j in range(12):q=i*13+j;faces.append((q,q+1,q+14,q+13))
         data=bpy.data.meshes.new('continuous pauldron');data.from_pydata(verts,[],faces);data.update()
-        obj=bpy.data.objects.new('standard shoulder plate '+side,data);bpy.context.collection.objects.link(obj);finish(obj,obj.name,steel)
-        obj.modifiers.new('forged plate thickness','SOLIDIFY').thickness=.018;smooth_mesh(obj)
+        obj=bpy.data.objects.new('standard shoulder plate '+side,data);bpy.context.collection.objects.link(obj);finish(obj,obj.name,shell)
+        obj.modifiers.new('forged plate thickness','SOLIDIFY').thickness=.012 if light_armour else .018;smooth_mesh(obj)
         tube('standard glove cuff '+side,[(wrist-lower*.15,.071),(wrist+lower*.13,.070)],leather)
 
     # Full thighs, a clear calf taper and a continuous ankle: plates remain thin
@@ -178,7 +183,7 @@ def standard_geometry(ctx):
         for i in range(3):
             for j in range(10):q=i*11+j;faces.append((q,q+1,q+12,q+11))
         data=bpy.data.meshes.new('fitted continuous greave');data.from_pydata(verts,[],faces);data.update()
-        obj=bpy.data.objects.new('standard shin plate '+side,data);bpy.context.collection.objects.link(obj);finish(obj,obj.name,steel)
+        obj=bpy.data.objects.new('standard shin plate '+side,data);bpy.context.collection.objects.link(obj);finish(obj,obj.name,shell)
         obj.modifiers.new('forged greave thickness','SOLIDIFY').thickness=.012;smooth_mesh(obj)
     # Broaden the real blade across its edge axis; the tip/hilt and motion axis
     # remain unchanged so the main camera can read a blade rather than a line.
@@ -201,8 +206,8 @@ def standard_weights(ctx, fallback, name, point):
     if name.startswith('standard soft arm '):
         side=name[-1];shoulder,elbow,wrist=ctx['standard_arm_axes'][side]
         ring_weight=ctx.get('standard_arm_ring_weights',{}).get((side,*[round(value,6) for value in point]))
-        if ctx['KIND']=='pikeman':
-            assert ring_weight is not None, f'P2 sleeve ring weight missing: {side} {point[:]}'
+        if ctx['KIND'] in ('pikeman','archer'):
+            assert ring_weight is not None, f'Folded sleeve ring weight missing: {side} {point[:]}'
         if ring_weight is not None:return ring_weight
         upper=elbow-shoulder;lower=wrist-elbow
         t=(point-shoulder).dot(upper)/upper.length_squared
@@ -348,6 +353,63 @@ def standard_pike_pose(ctx, action, frame):
     solve_arm('L',left_goal.translation.copy(),left_goal)
 
 
+def standard_archer_death(ctx, frame):
+    """Relax the right arm near the Q1-positioned bow, keeping its string local.
+
+    Q1 still owns the left-arm correction at runtime. Predict that existing
+    correction for the author's nock constraint; do not alter the left arm.
+    """
+    if frame<13:return
+    rig=ctx['rig'];bones=rig.data.bones;pose=rig.pose.bones
+    bpy.context.view_layer.update()
+    progress=min(1,(frame-5)/18)
+    left=pose['Hand.L'].matrix.copy()
+    # A measured -0.38rad roll removes the released stave's downward camber
+    # support. The left wrist/arm stays in place and the grip moves rigidly.
+    bow_axis=((left @ bones['Hand.L'].matrix_local.inverted()).to_3x3() @ ctx['weapon_axis']).normalized()
+    rolled=Quaternion(bow_axis,-.38*progress).to_matrix().to_4x4() @ left
+    rolled.translation=left.translation;pose['Hand.L'].matrix=rolled
+    bpy.context.view_layer.update();left=pose['Hand.L'].matrix.copy()
+    shoulder=pose['UpperArm.L'].matrix.translation.copy()
+    current=left.translation-shoulder
+    if left.translation.z<.12 and current.length>1e-5:
+        vertical=min(current.length*.95,.12-shoulder.z)
+        horizontal=math.sqrt(max(0,current.length_squared-vertical*vertical))
+        desired=Vector((current.x,current.y,0)).normalized()*horizontal
+        desired.z=vertical
+        correction=current.normalized().rotation_difference(desired.normalized())
+        correction=correction.slerp(type(correction)((1,0,0,0)),1-min(1,(frame/24-.35)/.30))
+        left.translation=shoulder+correction @ current
+    left_deform=left @ bones['Hand.L'].matrix_local.inverted()
+    # The bow endpoints are both Hand.L. A lightly relaxed nock stays 8cm
+    # behind their chord, rather than following a hand down across the corpse.
+    nock=left_deform @ (ctx['lc']+Vector((0,-.13+.08,0)))
+    hand_rest=bones['Hand.R'].matrix_local
+    goal=left_deform @ hand_rest
+    goal.translation+=nock-(goal @ hand_rest.inverted()) @ ctx['rc']
+    previous=pose['Hand.R'].matrix.copy()
+    wrist=previous.translation.lerp(goal.translation,progress)
+    rotation=previous.to_quaternion().slerp(goal.to_quaternion(),progress)
+    goal=rotation.to_matrix().to_4x4();goal.translation=wrist
+    chest_delta=pose['Chest'].matrix @ bones['Chest'].matrix_local.inverted()
+    shoulder=pose['UpperArm.R'].matrix.translation.copy()
+    upper=pose['UpperArm.R'];lower=pose['Forearm.R'];l1=upper.bone.length;l2=lower.bone.length
+    direction=wrist-shoulder;distance=direction.length
+    assert abs(l1-l2)+1e-5<distance<=l1+l2-.002, f'A2 Death {frame} right unreachable {distance}/{l1+l2}'
+    axis=direction.normalized();along=(l1*l1-l2*l2+distance*distance)/(2*distance)
+    height=math.sqrt(max(1e-8,l1*l1-along*along))
+    lateral=chest_delta.to_3x3() @ Vector((1,0,0));lateral.z=0;lateral.normalize()
+    pole=lateral*.35+Vector((0,0,.15));pole-=axis*pole.dot(axis)
+    elbow=shoulder+axis*along+pole.normalized()*height
+    ctx['align_bone'](upper,shoulder,elbow);ctx['align_bone'](lower,elbow,wrist)
+    pose['Hand.R'].matrix=goal;bpy.context.view_layer.update()
+    scales=[*upper.scale,*lower.scale]
+    assert max(abs(value-1) for value in scales)<2e-5, f'A2 Death {frame} stretched right arm'
+    actual=(pose['Hand.R'].matrix @ hand_rest.inverted()) @ ctx['rc']
+    ctx.setdefault('archer_death_checks',[]).append({'frame':frame,'reach':distance,'maxReach':l1+l2,
+        'scales':scales,'nockTarget':nock[:],'actualNock':actual[:],'releaseBlend':progress,'lateBowRoll':-.38*progress})
+
+
 def standard_pike_euler_continuity(ctx, action, frame):
     """Equivalent Euler values follow the short path between P2 arm keys."""
     if frame==0:ctx['pike_previous_eulers']={}
@@ -381,24 +443,31 @@ source=source.replace("if KIND!='infantry' and name!='Death':","if KIND=='pikema
 source=source.replace("if KIND!='cavalry' and name=='Death' and frame>=13:",
     "if KIND not in ('cavalry','pikeman') and name=='Death' and frame>=13:")
 source=source.replace('for frame,pose in poses:',
-    "for frame,pose in poses:\n  if KIND=='pikeman' and name=='Death' and frame in (23,30):pose=next(p for f,p in poses if f==30)")
+    "for frame,pose in poses:\n  if KIND in ('pikeman','archer') and name=='Death' and frame in (23,30):pose=next(p for f,p in poses if f==30)")
 key_marker="for pb in rig.pose.bones:pb.keyframe_insert('location',frame=frame);"
 assert source.count(key_marker)==1, 'Base animation-key insertion point changed'
-source=source.replace(key_marker,"if KIND=='pikeman':standard_pike_euler_continuity(globals(),name,frame)\n  "+key_marker)
+source=source.replace(key_marker,"if KIND=='archer' and name=='Death':standard_archer_death(globals(),frame)\n  if KIND in ('pikeman','archer'):standard_pike_euler_continuity(globals(),name,frame)\n  "+key_marker)
 source=source.replace(weights_marker,"baseline_weights_for=weights_for\ndef weights_for(n,v):\n return standard_weights(globals(),baseline_weights_for,n,v)\n"+weights_marker)
 out=Path(sys.argv[sys.argv.index('--')+1])
 kind=sys.argv[sys.argv.index('--kind')+1] if '--kind' in sys.argv else 'infantry'
-assert kind in ('infantry','pikeman'), 'Only internally established model stages may generate'
-variant_flag='--duel' if kind=='infantry' else '--pikeman-candidate'
+assert kind in ('infantry','pikeman','archer'), 'Only authorized model stages may generate'
+variant_flag={'infantry':'--duel','pikeman':'--pikeman-candidate','archer':'--archer-candidate'}[kind]
 sys.argv=[str(base),'--',str(out),'--kind',kind,variant_flag]
 ctx={'__file__':str(base),'standard_geometry':standard_geometry,'standard_weights':standard_weights,
-    'standard_pike_pose':standard_pike_pose,'standard_pike_euler_continuity':standard_pike_euler_continuity}
+    'standard_pike_pose':standard_pike_pose,'standard_pike_euler_continuity':standard_pike_euler_continuity,
+    'standard_archer_death':standard_archer_death}
 exec(compile(source,str(base),'exec'),ctx)
 metadata_path=out/(kind+'-rig-metadata.json')
 metadata=json.loads(metadata_path.read_text())
-metadata.update(standardVersion='R2' if kind=='infantry' else 'P2',baseAuthoringSha256=hashlib.sha256(base.read_bytes()).hexdigest(),
+metadata.update(standardVersion={'infantry':'R2','pikeman':'P2','archer':'A2'}[kind],baseAuthoringSha256=hashlib.sha256(base.read_bytes()).hexdigest(),
     meshScope='continuous anatomy, layered cloth/plate, soft shoulder/elbow weights, fitted calf/ankle, readable sword edge',
-    animationScope=('existing D1' if kind=='infantry' else 'existing P1')+' six clips and original 18-bone bind hierarchy')
+    animationScope={'infantry':'existing D1 six clips and original 18-bone bind hierarchy',
+        'pikeman':'existing P1 six clips and original 18-bone bind hierarchy',
+        'archer':'existing A1 six clips and original 19-bone hierarchy including Arrow; bow/string mesh retained'}[kind])
+if kind=='archer':
+    metadata['meshScope']='adult continuous anatomy and shaped cloth with light leather jerkin/shoulder/forearm guards; original hood/quiver/bow/string/arrow retained'
+    metadata['animationScope']='A1 live/shot timings retained; late right Death arm follows the Q1-positioned bow chord, fixed limbs; final body pose at23 and hold30'
+    metadata['lateDeathRightChecks']=ctx.get('archer_death_checks',[])
 if kind=='pikeman':
     metadata['animationScope']='P2 outboard dual-hand poses; original P1 18-bone bind and six-clip timings retained'
     metadata['pikeGripPose']={'outboardOffset':.13,'rearPullback':.06,'frontGripSlide':.10,'attackThrust':.16,'death':'new guard entry; forward hand releases during fall; shaft lies down'}

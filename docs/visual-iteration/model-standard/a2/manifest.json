@@ -1,0 +1,134 @@
+{
+  "stage": "A2 late-Death scoped repair",
+  "state": "frozen asset/source; flat correction validated; slope residual domain remains unpassed",
+  "assetSHA256": "b5789081913da6f6c6d052602af6fe49e3e18b42b889d32dc6963db9dc2cfe27",
+  "mainSHA256": "627120f71637e76b3f82cfa3009d605b649afa88c3c4f8c38e181f0a058280a4",
+  "generatorSHA256": "c2f27941c712005d1ed1c8d94ba9c4512cf4cca4d163443f6120008d37c82dc3",
+  "baselineFrozen": "/Users/linshen/Cursor/ancient-battle-sandbox/.omc/evidence/model-standard/a2/frozen-a2-first",
+  "baselineStatus": "188d alive geometry/actions positive evidence preserved; late-Death superseded",
+  "scope": "new A2 late Death only: right nock near bow plane, fixed-bone-length right arm, left hand axial bow roll; final body pose at23/30 hold. Global Q1/rules/clock unchanged.",
+  "viewport": [
+    1280,
+    900
+  ],
+  "actualRuntime": "/Users/linshen/Cursor/ancient-battle-sandbox/.omc/evidence/model-standard/a2/runtime-death-roll1",
+  "controlledBoundaries": "/Users/linshen/Cursor/ancient-battle-sandbox/.omc/evidence/model-standard/a2/death-roll1-boundaries-final",
+  "technicalStatus": "independent APPROVE_WITH_NOTES: asset/alive and Q1-on flat; S1 slope open",
+  "visualStatus": "pending independent supplemental verdict",
+  "userApproval": "unknown",
+  "knownRegions": "Chest-dominant min.025 is quiver chest strap equipment (v1273); actual torso cloth.073224, leather jerkin/belt.093081, hips.043951,legs.032783,feet.106636,head.138108m. No claim whole-body skin touches terrain.",
+  "controlledBaseline": "/Users/linshen/Cursor/ancient-battle-sandbox/.omc/evidence/model-standard/a2/death-baseline-boundaries",
+  "files": {
+    "actual-q1-death.png": "3a2e71bc5d280be14a0512c98cbad1dd435f965daa8df0de9f1f342440020372",
+    "slope-3.785-1.250.png": "40c1665fd4e10c10cb7ebb2fa06f269491536515ebe956b9f0f264f46b76b69f",
+    "slope-0.644-1.250.png": "64543d8ba703fd08004bf61ea02318438a1a29c7780119bcc5c7bcef572ec95d",
+    "flat-0.644-1.104.png": "43bae899b3e76f04ca621378252bd19a0a5fcb723cd90cf51ae8e787c5f013d1",
+    "flat-0.644-1.250.png": "f9307f7458fd3bae38f841e12b178ce25b954916432d5294b6388273e67e57e3",
+    "flat-3.785-1.250.png": "db7a23ccefd82497363701b2d57e2ac9da8caff9ae7fb353d051abd349a93044"
+  },
+  "invalidFixture": "previous death-roll1-boundaries is marked INVALID (positive hp made syncHeldArrow scale1); excluded from verdict",
+  "slopeLimit": "qaSlope(-3,-1) no corpse terrain tilt: torso A1/A2 by heading .6435=.4086/.4264,2.214=.1088/.025,3.785=.3551/.3159,5.356=.1122/.0761. New A2 wrist/bow correction does not solve shared rigid-corpse slope conformity.",
+  "selected": [
+    {
+      "filename": "baseline-near-front.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-first/baseline-near-front.png",
+      "candidateAssetSHA": "188d1e06a26687943e1379fd2b0e61ada9f38d1ef137f7a2a8d91de9716d5cff",
+      "scope": "original approved geometry/alive; final b578 geometry and five live clips equivalent"
+    },
+    {
+      "filename": "candidate-near-front.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-first/candidate-near-front.png",
+      "candidateAssetSHA": "188d1e06a26687943e1379fd2b0e61ada9f38d1ef137f7a2a8d91de9716d5cff",
+      "scope": "original approved geometry/alive; final b578 geometry and five live clips equivalent"
+    },
+    {
+      "filename": "candidate-near-side.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-first/candidate-near-side.png",
+      "candidateAssetSHA": "188d1e06a26687943e1379fd2b0e61ada9f38d1ef137f7a2a8d91de9716d5cff",
+      "scope": "original approved geometry/alive; final b578 geometry and five live clips equivalent"
+    },
+    {
+      "filename": "candidate-near-back.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-first/candidate-near-back.png",
+      "candidateAssetSHA": "188d1e06a26687943e1379fd2b0e61ada9f38d1ef137f7a2a8d91de9716d5cff",
+      "scope": "original approved geometry/alive; final b578 geometry and five live clips equivalent"
+    },
+    {
+      "filename": "baseline-draw-side.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-first/baseline-draw-side.png",
+      "candidateAssetSHA": "188d1e06a26687943e1379fd2b0e61ada9f38d1ef137f7a2a8d91de9716d5cff",
+      "scope": "original approved geometry/alive; final b578 geometry and five live clips equivalent"
+    },
+    {
+      "filename": "candidate-draw-side.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-first/candidate-draw-side.png",
+      "candidateAssetSHA": "188d1e06a26687943e1379fd2b0e61ada9f38d1ef137f7a2a8d91de9716d5cff",
+      "scope": "original approved geometry/alive; final b578 geometry and five live clips equivalent"
+    },
+    {
+      "filename": "baseline-main.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-first/baseline-main.png",
+      "candidateAssetSHA": "188d1e06a26687943e1379fd2b0e61ada9f38d1ef137f7a2a8d91de9716d5cff",
+      "scope": "original approved geometry/alive; final b578 geometry and five live clips equivalent"
+    },
+    {
+      "filename": "candidate-main.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-first/candidate-main.png",
+      "candidateAssetSHA": "188d1e06a26687943e1379fd2b0e61ada9f38d1ef137f7a2a8d91de9716d5cff",
+      "scope": "original approved geometry/alive; final b578 geometry and five live clips equivalent"
+    },
+    {
+      "filename": "actual-q1-death.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-death-final/actual-q1-death.png",
+      "candidateAssetSHA": "b5789081913da6f6c6d052602af6fe49e3e18b42b889d32dc6963db9dc2cfe27",
+      "scope": "effective Q1 Death; slope residual is open S1, not approval"
+    },
+    {
+      "filename": "flat-0.644-1.104.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-death-final/flat-0.644-1.104.png",
+      "candidateAssetSHA": "b5789081913da6f6c6d052602af6fe49e3e18b42b889d32dc6963db9dc2cfe27",
+      "scope": "effective Q1 Death; slope residual is open S1, not approval"
+    },
+    {
+      "filename": "flat-0.644-1.250.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-death-final/flat-0.644-1.250.png",
+      "candidateAssetSHA": "b5789081913da6f6c6d052602af6fe49e3e18b42b889d32dc6963db9dc2cfe27",
+      "scope": "effective Q1 Death; slope residual is open S1, not approval"
+    },
+    {
+      "filename": "flat-3.785-1.250.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-death-final/flat-3.785-1.250.png",
+      "candidateAssetSHA": "b5789081913da6f6c6d052602af6fe49e3e18b42b889d32dc6963db9dc2cfe27",
+      "scope": "effective Q1 Death; slope residual is open S1, not approval"
+    },
+    {
+      "filename": "slope-0.644-1.250.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-death-final/slope-0.644-1.250.png",
+      "candidateAssetSHA": "b5789081913da6f6c6d052602af6fe49e3e18b42b889d32dc6963db9dc2cfe27",
+      "scope": "effective Q1 Death; slope residual is open S1, not approval"
+    },
+    {
+      "filename": "slope-3.785-1.250.png",
+      "source": ".omc/evidence/model-standard/a2/frozen-a2-death-final/slope-3.785-1.250.png",
+      "candidateAssetSHA": "b5789081913da6f6c6d052602af6fe49e3e18b42b889d32dc6963db9dc2cfe27",
+      "scope": "effective Q1 Death; slope residual is open S1, not approval"
+    }
+  ],
+  "imageSHA256": {
+    "baseline-near-front.png": "30adbdaf764f6fbea47b3329f7431357c035b21b15d2c8ac62a20a157daab9bf",
+    "candidate-near-front.png": "1f319f4ae6b90a3268e643ed2c13293526ad4295628ef9ebf5df9a61ebbdb2e9",
+    "candidate-near-side.png": "d571b29e401dcdf546b81da28fb6c240c6ee09009242aca5a38be958ffd6e640",
+    "candidate-near-back.png": "e484b41630cbf94725c986a4e25e6333674612e616602c13ddede3bc22f5bbcd",
+    "baseline-draw-side.png": "7e38ebf6005964ec4e9df7ba501351c462856a04153cb631efdcacbd88a7d7cd",
+    "candidate-draw-side.png": "6d9db5fc73e88e32547dc2298720b4a48f012622adb4b7f3d8a3d3cee0dcf9df",
+    "baseline-main.png": "5142615009a9f5f485e9bbecf88503520245d829d41357ac548775287f1fe5e6",
+    "candidate-main.png": "f1ee3d06fa5f7a7fd6c2ee6e6334b42b5c6698bf007325e53091ad37e6251a25",
+    "actual-q1-death.png": "3a2e71bc5d280be14a0512c98cbad1dd435f965daa8df0de9f1f342440020372",
+    "flat-0.644-1.104.png": "43bae899b3e76f04ca621378252bd19a0a5fcb723cd90cf51ae8e787c5f013d1",
+    "flat-0.644-1.250.png": "f9307f7458fd3bae38f841e12b178ce25b954916432d5294b6388273e67e57e3",
+    "flat-3.785-1.250.png": "db7a23ccefd82497363701b2d57e2ac9da8caff9ae7fb353d051abd349a93044",
+    "slope-0.644-1.250.png": "64543d8ba703fd08004bf61ea02318438a1a29c7780119bcc5c7bcef572ec95d",
+    "slope-3.785-1.250.png": "40c1665fd4e10c10cb7ebb2fa06f269491536515ebe956b9f0f264f46b76b69f"
+  },
+  "nativeQ1OffNote": "existing drawn string persists: A2 nock-plane distance.7158 vsA1.7431m; length ratio1.6417 vs1.5258, ~15cm extra string length, no new detached anchors/limb stretch. Q1-on actual ratio1.0075455."
+}

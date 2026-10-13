@@ -1,0 +1,67 @@
+{
+  "priorFrozenSHA": "188d1e06a26687943e1379fd2b0e61ada9f38d1ef137f7a2a8d91de9716d5cff",
+  "newSHA": "b5789081913da6f6c6d052602af6fe49e3e18b42b889d32dc6963db9dc2cfe27",
+  "primitives": [
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": true
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": true
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": false
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": true
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": true
+    },
+    {
+      "attributesEqual": {
+        "POSITION": true,
+        "NORMAL": true,
+        "TEXCOORD_0": true,
+        "JOINTS_0": true,
+        "WEIGHTS_0": true
+      },
+      "indicesEqual": true
+    }
+  ],
+  "materialsEqual": true
+}

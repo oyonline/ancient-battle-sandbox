@@ -70,3 +70,26 @@ KB 源尚未同步：目标已有 dirty，owner/handoff 未确认；仅保留总
 P2三态：技术验证限定通过；高级独立视觉APPROVE_WITH_NOTES、独立技术APPROVE，总控接受；用户明确认可P2/整体美术未知。高级requested gpt-6-astra/high、actual未知。前f3完整动态/全量780/build引用的是同一main32ef接线；最终只LateDeath右侧局部修复，不重复与改动无关的full，另完成目标坡/实际死亡和独立补验。保留靴底约6.5mm边界、T1局部足滑/坡足gap、主场44m细节提升含蓄、轻微衣甲视觉notes及此前系统局限；不证明数百兵性能。精选16图和绑定最终manifest见docs/visual-iteration/model-standard/p2/；真实连续录像raw不进Git。
 
 下一项A2按轻装、兜帽、箭袋、连续躯干/袖与腿型实施；保留原19骨Arrow、Bow/String蒙皮与Q1释放接口，弯臂按明确环序权重，先不改骑兵。混合A/B固定model=r2&pike=standard，只替换弓兵。完成后独立复审再继续V2（马与骑手），不等用户逐项确认。
+
+
+## A2 弓兵：资产、生者与平地晚Death限定接受，坡面门开放
+
+最终独立 `archer-standard/archer-rigged.glb` SHA256 `b5789081913da6f6c6d052602af6fe49e3e18b42b889d32dc6963db9dc2cfe27`；原188d首候选的造型/生者正项保留，晚Death已superseded。`bow=standard` 继承 A1 移动/C1/T1/Q1行为，`bow=candidate` 保留A1；`modelRole=archer` 只选对照角色。混合A/B固定SwordR2+PikeP2，只换弓兵；紧凑role selector、状态与metadata和实际资产一致。
+
+沿用成人胸腰髋、短曲面罩袍与连续腿型，胸/肩/前臂/护胫采用轻皮革，肩片半径收20%、厚12mm，髋层红布；保留象牙兜帽、箭袋、背带、弓/弦/箭身份。只A2将首稿过厚颈块收至2.235m下颏；头/脸仍沿A1简化设计。折肘袖按明确ring权重，缺map fail-loud。7,061顶点/13,514三角/6种原材料；19骨、Arrow parent HandR、bind/inverseBind、96脚点与旧18GLB保持。
+
+初始188d六clip数值相同，但真实Q1尸体最低HandR/leather：全mesh gap=.025，torso=.13773、legs=.14551、head=.25084，整段躯干悬空被高级review REVISE，不能因A1也有而豁免。仅新A2晚Death修改固定骨长Right肩肘腕，使弦中央随右手回到左手弓平面附近，保留8cm微拉；第一次Right-only去掉原右臂支点后剩HandL/Bow约33mm，再只作Late HandL绕弓长轴-.38rad（约22°）小roll，Left肩肘腕位置和全局Q1保持。右手nock随新弓平面求解，最大reach=.83420/.95403m，scale偏差≤6e-7。0/5入口、射击动作和事件保持，13→23平滑形成末态，23/30身体末态hold，Death duration仍1.25。最终Idle/Walk/Turn/Attack/Hit插值值与A1差0；Death仅Hips平移/旋转、HandL旋转、Right三骨旋转有有界实差。位置/法线/UV/蒙皮与188d相同，材质相同；一primitive索引导出排序不同，但oriented triangle multiset相同，不宣称整个GLB bytes同。
+
+首候选42实机静态在 `a2/frozen-a2-first/`：前侧背、Walk4、Attack4/侧draw-release-recovery、Hit、Death入口及main；两版viewport1280×900，near1280×695/main1280×666各自配对同，FOV38/L1、near10m/mainC2 44m，20GLB200/errors=[]。高级独立造型/生者与main限定 APPROVE_WITH_NOTES；保留肩片偏平、hood脸简化、主场44m细节含蓄。
+
+首候选正常动态 `dynamic-a2-first/` 实际两版24秒移动、18秒双兵各draw/shoot/arrow-hit16及death2、32秒4v4各draw78/shoot56/arrow-hit56/death6（8→2→reset8）、mixed32→27→reset32；40GLB200/errors=[]、有限bounds、8连续WebM。mixed实际暂停14.3437/14.3835，不宣称逐帧同步。全量780/780及build通过，Death-only后另最终build通过，不机械重跑无关全量。独立技术实际draw→release→flight→hit→death接口已验证，flight方向dot≥.999918；Q1全局源未改。
+
+最终b578真实Q1双兵死亡 `.omc/evidence/model-standard/a2/runtime-death-roll1/`：elapsed14.7009、native Death完成1.25，full/主权重Chest=.025（最低v1273实际是原箭袋胸带第4段装备）、hips=.04395、legs=.03278、feet=.10664、head=.13811m；排除装备后胸腹布料=.073224、皮甲/皮带=.093081m。整段悬空明显改善，但不得称皮肤/全躯干贴地.025。弦心距弦端中点=.08000012m、弦长/端距=1.0075455，没有拖成跨尸体长V。最小冻结补件 `a2/frozen-a2-death-final/` 绑定GLB/main627120f…/generator c2f27941…及6张新有效图、分区/兼容与平坡对照报告。
+
+有效控制夹具在实际battle3d actor中，以hp=-1、native mixer、原Q1 restBowArm及settleCorpse，固定(-3,-1)、平/坡四向、23/24→26.5/24中间→30/24→hold1.65，共32点：flat四向full/主权重Chest均=.025，最低装备与真正胸腹衣料分开记录。之前 `death-roll1-boundaries/` 夹具漏hp死亡使Q1持箭scale1、Arrow成为假支点，已明确INVALID并排除；修正是私有QA脚本，不是模型修复。最终有效组见 `death-roll1-boundaries-final/`。
+
+**坡面门仍开放**：当前尸体root只有Y朝向，无随坡倾斜；正常可达qaSlope(-3,-1)大悬空为共享rigid-corpse限制。相同条件A1→A2 torso gap：heading .6435 `.4086→.4264m`（新增17.8mm、FootR支点）；2.214 `.1088→.025`；3.785 `.3551→.3159`；5.356 `.1122→.0761`。后三向改善不能豁免首向新增，也不能用Foot/body最低值替代胸髋支撑。旧A1同条件报告 `death-baseline-boundaries/` 保留。
+
+总控2026-10-13范围裁决：A2资产/生者/主场/平地晚Death限定接受；坡面完整目标未通过。单列本批最后S1共享尸体坡面视觉支撑（纯renderer opt-in，保留T1/Q1及旧资产对照，不改规则/时钟/命令），在V2马＋骑手形体复审后实施，避免四类GLB盲调腕高。技术/内部视觉按上述限定范围记录，用户明确认可A2/整体美术仍未知；高级requested gpt-6-astra/high、actual未知。独立技术最终限定APPROVE_WITH_NOTES（Q1 on平地/资产；S1坡面开放）：25GLB200/errors=[]，自然持箭scale=.001，平地late/hold稳定，19bind/旧18/非Death/网格属性保持；实际最低点归原胸带装备，衣料/皮甲分区如上。Q1off原本仍有拉弦，A2 nock到弓平面距.7158 vsA1 .7431m略减，但弦长比1.6417 vs旧1.5258、总长约增加15cm，记为注意项；未见新增端点脱离/骨伸长证据，不宣称off是松弦。独立原始qa-standard-20261013/a2-death-fix/{summary,structural-summary}.json；总控结合高级既有造型/生者/main APPROVE_WITH_NOTES与实际平地补图判断，正式接受Q1on平地限定范围；高级坡面整体目标保持开放，不能写全坡通过。当前NO PUSH/MERGE/DEPLOY；KB源未同步的既有dirty owner-handoff限制保持。
+
+下一项V2独立马＋骑手模型：连续马身肩胯、弧线颈头、肌肉/细腱/平底蹄，骑乘坐标胸腰/袖/腿适配；保34骨/鞍缰/6动作与现规则。V2后S1仍待实施，整批尚未完成。

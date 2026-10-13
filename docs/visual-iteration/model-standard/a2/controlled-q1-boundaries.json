@@ -1,0 +1,1073 @@
+{
+  "source": "Controlled late-death fixture on actual battle3d actor after real duel death; native mixer, Q1 restBowArm and settleCorpse; no shared-source changes",
+  "rawSource": ".omc/evidence/model-standard/a2/death-roll1-boundaries-final/summary.json",
+  "samples": [
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 0.6435011088,
+      "time": 0.9583333333333334,
+      "actionTime": 0.9583333333333334,
+      "fullGap": 0.024999999999999994,
+      "regions": {
+        "feet": 0.1066360654556757,
+        "torso": 0.024999999999999994,
+        "hips": 0.04395106272259838,
+        "legs": 0.03278336597569123,
+        "head": 0.13810815968273862
+      },
+      "lift": 0.14049892029272976,
+      "nockChordDistance": 0.07999933924724839,
+      "stringLength": 1.309809279124202,
+      "chordLength": 1.3000002963695376,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.024999999999999994,
+        "vertex": 1273,
+        "point": [
+          -2.524975911094229,
+          0.175,
+          -0.5761579104384886
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 0.6435011088,
+      "time": 1.1041666666666667,
+      "actionTime": 1.1041666666666667,
+      "fullGap": 0.024999999999999994,
+      "regions": {
+        "feet": 0.1066360654556757,
+        "torso": 0.024999999999999994,
+        "hips": 0.04395106272259838,
+        "legs": 0.03278336597569123,
+        "head": 0.13810815968273862
+      },
+      "lift": 0.14049892029272976,
+      "nockChordDistance": 0.07999933924724839,
+      "stringLength": 1.309809279124202,
+      "chordLength": 1.3000002963695376,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.024999999999999994,
+        "vertex": 1273,
+        "point": [
+          -2.524975911094229,
+          0.175,
+          -0.5761579104384886
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 0.6435011088,
+      "time": 1.25,
+      "actionTime": 1.25,
+      "fullGap": 0.02499999999999994,
+      "regions": {
+        "feet": 0.10663583104228827,
+        "torso": 0.02499999999999994,
+        "hips": 0.04395103191434532,
+        "legs": 0.032783322954145794,
+        "head": 0.1381081239489709
+      },
+      "lift": 0.14049888948447664,
+      "nockChordDistance": 0.08000011242463853,
+      "stringLength": 1.3098094653575132,
+      "chordLength": 1.300000293687783,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.02499999999999994,
+        "vertex": 1273,
+        "point": [
+          -2.5249758692502318,
+          0.17499999999999993,
+          -0.5761578623453383
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 0.6435011088,
+      "time": 1.65,
+      "actionTime": 1.25,
+      "fullGap": 0.02499999999999994,
+      "regions": {
+        "feet": 0.10663583104228827,
+        "torso": 0.02499999999999994,
+        "hips": 0.04395103191434532,
+        "legs": 0.032783322954145794,
+        "head": 0.1381081239489709
+      },
+      "lift": 0.14049888948447664,
+      "nockChordDistance": 0.08000011242463853,
+      "stringLength": 1.3098094653575132,
+      "chordLength": 1.300000293687783,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.02499999999999994,
+        "vertex": 1273,
+        "point": [
+          -2.5249758692502318,
+          0.17499999999999993,
+          -0.5761578623453383
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 2.2142974356,
+      "time": 0.9583333333333334,
+      "actionTime": 0.9583333333333334,
+      "fullGap": 0.024999999999999994,
+      "regions": {
+        "feet": 0.1066360654556757,
+        "torso": 0.024999999999999994,
+        "hips": 0.04395106272259838,
+        "legs": 0.03278336597569123,
+        "head": 0.13810815968273862
+      },
+      "lift": 0.14049892029272973,
+      "nockChordDistance": 0.0799993631326132,
+      "stringLength": 1.3098094280851826,
+      "chordLength": 1.3000004405750298,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.024999999999999994,
+        "vertex": 1273,
+        "point": [
+          -2.576157910440912,
+          0.175,
+          -1.4750240889079342
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 2.2142974356,
+      "time": 1.1041666666666667,
+      "actionTime": 1.1041666666666667,
+      "fullGap": 0.024999999999999994,
+      "regions": {
+        "feet": 0.1066360654556757,
+        "torso": 0.024999999999999994,
+        "hips": 0.04395106272259838,
+        "legs": 0.03278336597569123,
+        "head": 0.13810815968273862
+      },
+      "lift": 0.14049892029272973,
+      "nockChordDistance": 0.0799993631326132,
+      "stringLength": 1.3098094280851826,
+      "chordLength": 1.3000004405750298,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.024999999999999994,
+        "vertex": 1273,
+        "point": [
+          -2.576157910440912,
+          0.175,
+          -1.4750240889079342
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 2.2142974356,
+      "time": 1.25,
+      "actionTime": 1.25,
+      "fullGap": 0.024999999999999994,
+      "regions": {
+        "feet": 0.10663583104228833,
+        "torso": 0.024999999999999994,
+        "hips": 0.04395103191434532,
+        "legs": 0.03278332295414582,
+        "head": 0.13810812394897096
+      },
+      "lift": 0.1404988894844766,
+      "nockChordDistance": 0.08000012449952308,
+      "stringLength": 1.3098095195430228,
+      "chordLength": 1.3000003453098685,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.024999999999999994,
+        "vertex": 1273,
+        "point": [
+          -2.5761578623477623,
+          0.175,
+          -1.4750241307519303
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 2.2142974356,
+      "time": 1.65,
+      "actionTime": 1.25,
+      "fullGap": 0.024999999999999994,
+      "regions": {
+        "feet": 0.10663583104228833,
+        "torso": 0.024999999999999994,
+        "hips": 0.04395103191434532,
+        "legs": 0.03278332295414582,
+        "head": 0.13810812394897096
+      },
+      "lift": 0.1404988894844766,
+      "nockChordDistance": 0.08000012449952308,
+      "stringLength": 1.3098095195430228,
+      "chordLength": 1.3000003453098685,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.024999999999999994,
+        "vertex": 1273,
+        "point": [
+          -2.5761578623477623,
+          0.175,
+          -1.4750241307519303
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 3.7850937624,
+      "time": 0.9583333333333334,
+      "actionTime": 0.9583333333333334,
+      "fullGap": 0.024999999999999994,
+      "regions": {
+        "feet": 0.1066360654556757,
+        "torso": 0.024999999999999994,
+        "hips": 0.04395106272259838,
+        "legs": 0.03278336597569123,
+        "head": 0.13810815968273862
+      },
+      "lift": 0.14049892029272976,
+      "nockChordDistance": 0.07999935202781248,
+      "stringLength": 1.309809426738048,
+      "chordLength": 1.300000441951237,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.024999999999999994,
+        "vertex": 1273,
+        "point": [
+          -3.4750240889100974,
+          0.175,
+          -1.4238420895566628
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 3.7850937624,
+      "time": 1.1041666666666667,
+      "actionTime": 1.1041666666666667,
+      "fullGap": 0.024999999999999994,
+      "regions": {
+        "feet": 0.1066360654556757,
+        "torso": 0.024999999999999994,
+        "hips": 0.04395106272259838,
+        "legs": 0.03278336597569123,
+        "head": 0.13810815968273862
+      },
+      "lift": 0.14049892029272976,
+      "nockChordDistance": 0.07999935202781248,
+      "stringLength": 1.309809426738048,
+      "chordLength": 1.300000441951237,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.024999999999999994,
+        "vertex": 1273,
+        "point": [
+          -3.4750240889100974,
+          0.175,
+          -1.4238420895566628
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 3.7850937624,
+      "time": 1.25,
+      "actionTime": 1.25,
+      "fullGap": 0.02499999999999994,
+      "regions": {
+        "feet": 0.10663583104228827,
+        "torso": 0.02499999999999994,
+        "hips": 0.04395103191434532,
+        "legs": 0.032783322954145794,
+        "head": 0.1381081239489709
+      },
+      "lift": 0.14049888948447664,
+      "nockChordDistance": 0.08000011794787647,
+      "stringLength": 1.3098095045307292,
+      "chordLength": 1.3000003317970126,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.02499999999999994,
+        "vertex": 1273,
+        "point": [
+          -3.4750241307540937,
+          0.17499999999999993,
+          -1.4238421376498134
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 3.7850937624,
+      "time": 1.65,
+      "actionTime": 1.25,
+      "fullGap": 0.02499999999999994,
+      "regions": {
+        "feet": 0.10663583104228827,
+        "torso": 0.02499999999999994,
+        "hips": 0.04395103191434532,
+        "legs": 0.032783322954145794,
+        "head": 0.1381081239489709
+      },
+      "lift": 0.14049888948447664,
+      "nockChordDistance": 0.08000011794787647,
+      "stringLength": 1.3098095045307292,
+      "chordLength": 1.3000003317970126,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.02499999999999994,
+        "vertex": 1273,
+        "point": [
+          -3.4750241307540937,
+          0.17499999999999993,
+          -1.4238421376498134
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 5.3558900892,
+      "time": 0.9583333333333334,
+      "actionTime": 0.9583333333333334,
+      "fullGap": 0.02499999999999994,
+      "regions": {
+        "feet": 0.10663606545567564,
+        "torso": 0.02499999999999994,
+        "hips": 0.04395106272259833,
+        "legs": 0.032783365975691175,
+        "head": 0.13810815968273857
+      },
+      "lift": 0.14049892029272976,
+      "nockChordDistance": 0.07999936006496954,
+      "stringLength": 1.3098094321115865,
+      "chordLength": 1.3000004453869254,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.02499999999999994,
+        "vertex": 1273,
+        "point": [
+          -3.423842089554239,
+          0.17499999999999993,
+          -0.5249759110877392
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 5.3558900892,
+      "time": 1.1041666666666667,
+      "actionTime": 1.1041666666666667,
+      "fullGap": 0.02499999999999994,
+      "regions": {
+        "feet": 0.10663606545567564,
+        "torso": 0.02499999999999994,
+        "hips": 0.04395106272259833,
+        "legs": 0.032783365975691175,
+        "head": 0.13810815968273857
+      },
+      "lift": 0.14049892029272976,
+      "nockChordDistance": 0.07999936006496954,
+      "stringLength": 1.3098094321115865,
+      "chordLength": 1.3000004453869254,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.02499999999999994,
+        "vertex": 1273,
+        "point": [
+          -3.423842089554239,
+          0.17499999999999993,
+          -0.5249759110877392
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 5.3558900892,
+      "time": 1.25,
+      "actionTime": 1.25,
+      "fullGap": 0.02499999999999994,
+      "regions": {
+        "feet": 0.10663583104228827,
+        "torso": 0.02499999999999994,
+        "hips": 0.04395103191434532,
+        "legs": 0.032783322954145794,
+        "head": 0.1381081239489709
+      },
+      "lift": 0.14049888948447664,
+      "nockChordDistance": 0.08000012143183606,
+      "stringLength": 1.3098095235694118,
+      "chordLength": 1.3000003501217625,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.02499999999999994,
+        "vertex": 1273,
+        "point": [
+          -3.4238421376473895,
+          0.17499999999999993,
+          -0.5249758692437428
+        ]
+      }
+    },
+    {
+      "terrainScene": "flat",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 5.3558900892,
+      "time": 1.65,
+      "actionTime": 1.25,
+      "fullGap": 0.02499999999999994,
+      "regions": {
+        "feet": 0.10663583104228827,
+        "torso": 0.02499999999999994,
+        "hips": 0.04395103191434532,
+        "legs": 0.032783322954145794,
+        "head": 0.1381081239489709
+      },
+      "lift": 0.14049888948447664,
+      "nockChordDistance": 0.08000012143183606,
+      "stringLength": 1.3098095235694118,
+      "chordLength": 1.3000003501217625,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.02499999999999994,
+        "vertex": 1273,
+        "point": [
+          -3.4238421376473895,
+          0.17499999999999993,
+          -0.5249758692437428
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 0.6435011088,
+      "time": 0.9583333333333334,
+      "actionTime": 0.9583333333333334,
+      "fullGap": 0.02499999999999991,
+      "regions": {
+        "feet": 0.02499999999999991,
+        "torso": 0.42637001795056695,
+        "hips": 0.34250551763702974,
+        "legs": 0.1404159757467458,
+        "head": 0.7279877723010753
+      },
+      "lift": 0.380352132613061,
+      "nockChordDistance": 0.07999933924724835,
+      "stringLength": 1.309809279124202,
+      "chordLength": 1.3000002963695376,
+      "lowest": {
+        "boneMaterial": "FootR / brown leather",
+        "gap": 0.02499999999999991,
+        "vertex": 49,
+        "point": [
+          -3.4854910442652303,
+          2.1610112576043456,
+          -2.0078167819702606
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 0.6435011088,
+      "time": 1.1041666666666667,
+      "actionTime": 1.1041666666666667,
+      "fullGap": 0.02499999999999991,
+      "regions": {
+        "feet": 0.02499999999999991,
+        "torso": 0.42637001795056695,
+        "hips": 0.34250551763702974,
+        "legs": 0.1404159757467458,
+        "head": 0.7279877723010753
+      },
+      "lift": 0.380352132613061,
+      "nockChordDistance": 0.07999933924724835,
+      "stringLength": 1.309809279124202,
+      "chordLength": 1.3000002963695376,
+      "lowest": {
+        "boneMaterial": "FootR / brown leather",
+        "gap": 0.02499999999999991,
+        "vertex": 49,
+        "point": [
+          -3.4854910442652303,
+          2.1610112576043456,
+          -2.0078167819702606
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 0.6435011088,
+      "time": 1.25,
+      "actionTime": 1.25,
+      "fullGap": 0.024999999999999467,
+      "regions": {
+        "feet": 0.024999999999999467,
+        "torso": 0.4263701028144715,
+        "hips": 0.3425055483783477,
+        "legs": 0.14041600953406452,
+        "head": 0.7279876846464779
+      },
+      "lift": 0.3803521633543794,
+      "nockChordDistance": 0.08000011242463846,
+      "stringLength": 1.3098094653575127,
+      "chordLength": 1.3000002936877826,
+      "lowest": {
+        "boneMaterial": "FootR / brown leather",
+        "gap": 0.024999999999999467,
+        "vertex": 49,
+        "point": [
+          -3.485490675375807,
+          2.1610110847405295,
+          -2.007816261759042
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 0.6435011088,
+      "time": 1.65,
+      "actionTime": 1.25,
+      "fullGap": 0.024999999999999467,
+      "regions": {
+        "feet": 0.024999999999999467,
+        "torso": 0.4263701028144715,
+        "hips": 0.3425055483783477,
+        "legs": 0.14041600953406452,
+        "head": 0.7279876846464779
+      },
+      "lift": 0.3803521633543794,
+      "nockChordDistance": 0.08000011242463846,
+      "stringLength": 1.3098094653575127,
+      "chordLength": 1.3000002936877826,
+      "lowest": {
+        "boneMaterial": "FootR / brown leather",
+        "gap": 0.024999999999999467,
+        "vertex": 49,
+        "point": [
+          -3.485490675375807,
+          2.1610110847405295,
+          -2.007816261759042
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 2.2142974356,
+      "time": 0.9583333333333334,
+      "actionTime": 0.9583333333333334,
+      "fullGap": 0.025000000000000133,
+      "regions": {
+        "feet": 0.17066368691250644,
+        "torso": 0.025000000000000133,
+        "hips": 0.0768483510620559,
+        "legs": 0.04657664755782087,
+        "head": 0.19882792233069724
+      },
+      "lift": 0.18455247133461516,
+      "nockChordDistance": 0.07999936313261279,
+      "stringLength": 1.3098094280851837,
+      "chordLength": 1.300000440575031,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.025000000000000133,
+        "vertex": 1273,
+        "point": [
+          -2.576157910440912,
+          1.883575530870224,
+          -1.4750240889079342
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 2.2142974356,
+      "time": 1.1041666666666667,
+      "actionTime": 1.1041666666666667,
+      "fullGap": 0.025000000000000133,
+      "regions": {
+        "feet": 0.17066368691250644,
+        "torso": 0.025000000000000133,
+        "hips": 0.0768483510620559,
+        "legs": 0.04657664755782087,
+        "head": 0.19882792233069724
+      },
+      "lift": 0.18455247133461516,
+      "nockChordDistance": 0.07999936313261279,
+      "stringLength": 1.3098094280851837,
+      "chordLength": 1.300000440575031,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.025000000000000133,
+        "vertex": 1273,
+        "point": [
+          -2.576157910440912,
+          1.883575530870224,
+          -1.4750240889079342
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 2.2142974356,
+      "time": 1.25,
+      "actionTime": 1.25,
+      "fullGap": 0.024999999999999467,
+      "regions": {
+        "feet": 0.17066338434301387,
+        "torso": 0.024999999999999467,
+        "hips": 0.0768483231187791,
+        "legs": 0.04657658836262568,
+        "head": 0.1988278616290058
+      },
+      "lift": 0.18455244108692903,
+      "nockChordDistance": 0.08000012449952315,
+      "stringLength": 1.3098095195430233,
+      "chordLength": 1.300000345309869,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.024999999999999467,
+        "vertex": 1273,
+        "point": [
+          -2.5761578623477623,
+          1.8835755314307907,
+          -1.4750241307519303
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 2.2142974356,
+      "time": 1.65,
+      "actionTime": 1.25,
+      "fullGap": 0.024999999999999467,
+      "regions": {
+        "feet": 0.17066338434301387,
+        "torso": 0.024999999999999467,
+        "hips": 0.0768483231187791,
+        "legs": 0.04657658836262568,
+        "head": 0.1988278616290058
+      },
+      "lift": 0.18455244108692903,
+      "nockChordDistance": 0.08000012449952315,
+      "stringLength": 1.3098095195430233,
+      "chordLength": 1.300000345309869,
+      "lowest": {
+        "boneMaterial": "Chest / brown leather",
+        "gap": 0.024999999999999467,
+        "vertex": 1273,
+        "point": [
+          -2.5761578623477623,
+          1.8835755314307907,
+          -1.4750241307519303
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 3.7850937624,
+      "time": 0.9583333333333334,
+      "actionTime": 0.9583333333333334,
+      "fullGap": 0.025000000000000355,
+      "regions": {
+        "feet": 0.9583604025054573,
+        "torso": 0.3159100418159877,
+        "hips": 0.4276672095532581,
+        "legs": 0.6481799747557024,
+        "head": 0.3118794064883472
+      },
+      "lift": 0.6648942055131655,
+      "nockChordDistance": 0.07999935202781228,
+      "stringLength": 1.309809426738049,
+      "chordLength": 1.300000441951238,
+      "lowest": {
+        "boneMaterial": "HandL / brown leather",
+        "gap": 0.025000000000000355,
+        "vertex": 4304,
+        "point": [
+          -4.506949307189867,
+          2.392287135471459,
+          -2.5950782412126228
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 3.7850937624,
+      "time": 1.1041666666666667,
+      "actionTime": 1.1041666666666667,
+      "fullGap": 0.025000000000000355,
+      "regions": {
+        "feet": 0.9583604025054573,
+        "torso": 0.3159100418159877,
+        "hips": 0.4276672095532581,
+        "legs": 0.6481799747557024,
+        "head": 0.3118794064883472
+      },
+      "lift": 0.6648942055131655,
+      "nockChordDistance": 0.07999935202781228,
+      "stringLength": 1.309809426738049,
+      "chordLength": 1.300000441951238,
+      "lowest": {
+        "boneMaterial": "HandL / brown leather",
+        "gap": 0.025000000000000355,
+        "vertex": 4304,
+        "point": [
+          -4.506949307189867,
+          2.392287135471459,
+          -2.5950782412126228
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 3.7850937624,
+      "time": 1.25,
+      "actionTime": 1.25,
+      "fullGap": 0.024999999999999467,
+      "regions": {
+        "feet": 0.9583601420620502,
+        "torso": 0.315910198356538,
+        "hips": 0.42766733786377853,
+        "legs": 0.6481800984199477,
+        "head": 0.3118796611135739
+      },
+      "lift": 0.6648943338236859,
+      "nockChordDistance": 0.08000011794787665,
+      "stringLength": 1.3098095045307279,
+      "chordLength": 1.3000003317970108,
+      "lowest": {
+        "boneMaterial": "HandL / brown leather",
+        "gap": 0.024999999999999467,
+        "vertex": 4304,
+        "point": [
+          -4.5069490735381414,
+          2.392287251457481,
+          -2.5950788464509924
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 3.7850937624,
+      "time": 1.65,
+      "actionTime": 1.25,
+      "fullGap": 0.024999999999999467,
+      "regions": {
+        "feet": 0.9583601420620502,
+        "torso": 0.315910198356538,
+        "hips": 0.42766733786377853,
+        "legs": 0.6481800984199477,
+        "head": 0.3118796611135739
+      },
+      "lift": 0.6648943338236859,
+      "nockChordDistance": 0.08000011794787665,
+      "stringLength": 1.3098095045307279,
+      "chordLength": 1.3000003317970108,
+      "lowest": {
+        "boneMaterial": "HandL / brown leather",
+        "gap": 0.024999999999999467,
+        "vertex": 4304,
+        "point": [
+          -4.5069490735381414,
+          2.392287251457481,
+          -2.5950788464509924
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 5.3558900892,
+      "time": 0.9583333333333334,
+      "actionTime": 0.9583333333333334,
+      "fullGap": 0.025000000000000133,
+      "regions": {
+        "feet": 0.1741178344059433,
+        "torso": 0.07607375971842734,
+        "hips": 0.07146394683734325,
+        "legs": 0.07753777406611961,
+        "head": 0.21750330073336532
+      },
+      "lift": 0.15177537313295542,
+      "nockChordDistance": 0.07999936006496951,
+      "stringLength": 1.3098094321115858,
+      "chordLength": 1.300000445386925,
+      "lowest": {
+        "boneMaterial": "HandL / brown leather",
+        "gap": 0.025000000000000133,
+        "vertex": 3854,
+        "point": [
+          -4.433453389012952,
+          1.8663551972427455,
+          -0.5922563715637563
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 5.3558900892,
+      "time": 1.1041666666666667,
+      "actionTime": 1.1041666666666667,
+      "fullGap": 0.025000000000000133,
+      "regions": {
+        "feet": 0.1741178344059433,
+        "torso": 0.07607375971842734,
+        "hips": 0.07146394683734325,
+        "legs": 0.07753777406611961,
+        "head": 0.21750330073336532
+      },
+      "lift": 0.15177537313295542,
+      "nockChordDistance": 0.07999936006496951,
+      "stringLength": 1.3098094321115858,
+      "chordLength": 1.300000445386925,
+      "lowest": {
+        "boneMaterial": "HandL / brown leather",
+        "gap": 0.025000000000000133,
+        "vertex": 3854,
+        "point": [
+          -4.433453389012952,
+          1.8663551972427455,
+          -0.5922563715637563
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 5.3558900892,
+      "time": 1.25,
+      "actionTime": 1.25,
+      "fullGap": 0.024999999999999023,
+      "regions": {
+        "feet": 0.17411759626103018,
+        "torso": 0.07607380200758596,
+        "hips": 0.0714639513545281,
+        "legs": 0.07753777668012396,
+        "head": 0.21750325948183158
+      },
+      "lift": 0.15177537765014049,
+      "nockChordDistance": 0.08000012143183649,
+      "stringLength": 1.3098095235694125,
+      "chordLength": 1.3000003501217627,
+      "lowest": {
+        "boneMaterial": "HandL / brown leather",
+        "gap": 0.024999999999999023,
+        "vertex": 3854,
+        "point": [
+          -4.433454099386162,
+          1.8663552633702352,
+          -0.5922564974905502
+        ]
+      }
+    },
+    {
+      "terrainScene": "slope",
+      "position": [
+        -3,
+        -1
+      ],
+      "heading": 5.3558900892,
+      "time": 1.65,
+      "actionTime": 1.25,
+      "fullGap": 0.024999999999999023,
+      "regions": {
+        "feet": 0.17411759626103018,
+        "torso": 0.07607380200758596,
+        "hips": 0.0714639513545281,
+        "legs": 0.07753777668012396,
+        "head": 0.21750325948183158
+      },
+      "lift": 0.15177537765014049,
+      "nockChordDistance": 0.08000012143183649,
+      "stringLength": 1.3098095235694125,
+      "chordLength": 1.3000003501217627,
+      "lowest": {
+        "boneMaterial": "HandL / brown leather",
+        "gap": 0.024999999999999023,
+        "vertex": 3854,
+        "point": [
+          -4.433454099386162,
+          1.8663552633702352,
+          -0.5922564974905502
+        ]
+      }
+    }
+  ],
+  "errors": [],
+  "requests": [
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer-standard/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pike-standard/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pike-standard/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer-standard/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    }
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "kind": "archer",
+  "releaseSeconds": 0.4583333333333333,
+  "clips": {
+    "Idle": {
+      "duration": 2,
+      "frames": 48
+    },
+    "Walk": {
+      "duration": 0.75,
+      "frames": 18
+    },
+    "Turn": {
+      "duration": 0.5,
+      "frames": 12
+    },
+    "Attack": {
+      "duration": 0.875,
+      "frames": 21
+    },
+    "Hit": {
+      "duration": 0.417,
+      "frames": 10
+    },
+    "Death": {
+      "duration": 1.25,
+      "frames": 30
+    }
+  },
+  "front": "Three +Z (Blender -Y)",
+  "height": 2.824495553970337,
+  "vertices": 7061,
+  "triangles": 13514,
+  "bones": 19,
+  "materials": [
+    "brown leather",
+    "aged golden shield rim",
+    "skin in helmet shadow",
+    "ivory linen tabard",
+    "pale steel blade",
+    "team_cloth"
+  ],
+  "swordBladeScale": null,
+  "componentBoundsBlender": {
+    "body": {
+      "min": [
+        -0.5252470970153809,
+        -0.8366159796714783,
+        -0.0064999982714653015
+      ],
+      "max": [
+        0.6780399084091187,
+        0.43279406428337097,
+        2.612299919128418
+      ]
+    },
+    "weapon": {
+      "min": [
+        0.06200000271201134,
+        -1.1800000667572021,
+        1.4955044984817505
+      ],
+      "max": [
+        0.1379999965429306,
+        -0.15999996662139893,
+        2.824495553970337
+      ]
+    },
+    "torso": {
+      "min": [
+        -0.3529999852180481,
+        -0.2639999985694885,
+        1.1200000047683716
+      ],
+      "max": [
+        0.3529999852180481,
+        0.23999999463558197,
+        2.2300000190734863
+      ]
+    }
+  },
+  "bodyRadiusConservative": 1.076877158656972,
+  "cavalryCandidate": false,
+  "authoring": "parameterized standalone Blender source; actual armature and vertex weights",
+  "standardVersion": "A2",
+  "baseAuthoringSha256": "a21d8c56d8111629a0061cd19131c86db99577c3be94c621010863a20fdd9903",
+  "meshScope": "adult continuous anatomy and shaped cloth with light leather jerkin/shoulder/forearm guards; original hood/quiver/bow/string/arrow retained",
+  "animationScope": "A1 live/shot timings retained; late right Death arm follows the Q1-positioned bow chord, fixed limbs; final body pose at23 and hold30",
+  "lateDeathRightChecks": [
+    {
+      "frame": 13,
+      "reach": 0.6030599979100056,
+      "maxReach": 0.9540354013442993,
+      "scales": [
+        0.9999998807907104,
+        1.0,
+        1.0,
+        1.0000004768371582,
+        0.9999996423721313,
+        1.0
+      ],
+      "nockTarget": [
+        -0.056068334728479385,
+        -1.432822585105896,
+        0.7304317355155945
+      ],
+      "actualNock": [
+        0.1117236316204071,
+        -1.0949349403381348,
+        0.8122729659080505
+      ],
+      "releaseBlend": 0.4444444444444444,
+      "lateBowRoll": -0.1688888888888889
+    },
+    {
+      "frame": 23,
+      "reach": 0.8342010609633513,
+      "maxReach": 0.9540354013442993,
+      "scales": [
+        0.9999998807907104,
+        1.0,
+        1.000000238418579,
+        1.0000004768371582,
+        0.9999994039535522,
+        1.0
+      ],
+      "nockTarget": [
+        -0.05537520349025726,
+        -1.7151495218276978,
+        0.030871417373418808
+      ],
+      "actualNock": [
+        -0.05537516251206398,
+        -1.7151497602462769,
+        0.030871588736772537
+      ],
+      "releaseBlend": 1,
+      "lateBowRoll": -0.38
+    },
+    {
+      "frame": 30,
+      "reach": 0.8342010609633513,
+      "maxReach": 0.9540354013442993,
+      "scales": [
+        0.9999998807907104,
+        1.0,
+        1.000000238418579,
+        1.0000004768371582,
+        0.9999994039535522,
+        1.0
+      ],
+      "nockTarget": [
+        -0.05537520349025726,
+        -1.7151495218276978,
+        0.030871417373418808
+      ],
+      "actualNock": [
+        -0.05537516251206398,
+        -1.7151497602462769,
+        0.030871588736772537
+      ],
+      "releaseBlend": 1,
+      "lateBowRoll": -0.38
+    }
+  ]
+}
