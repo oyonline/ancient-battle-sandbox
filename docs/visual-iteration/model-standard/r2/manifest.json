@@ -1,0 +1,90 @@
+{
+  "status": "frozen_for_independent_review",
+  "assetSha256": "35aec7367cb8e8eabe7809e1aea449fcc81374fa73ffd81d8cb07d6c4883035e",
+  "generatorSha256": "40399b9188b87c03b60cb5b6f06fd9913ff961b9790f547b894417a4d4dc3fbe",
+  "capture": "actual battle3d.html GLTFLoader, new independent headless Chromium page, no offline renders",
+  "viewport": [
+    1280,
+    900
+  ],
+  "cameraNearDistance": 10,
+  "cameraMainDistance": 44,
+  "fov": 38,
+  "light": "candidate L1",
+  "invariants": {
+    "bones": 18,
+    "boneTransformsEqual": true,
+    "inverseBindValuesEqual": true,
+    "clips": [
+      {
+        "name": "Idle",
+        "channelsEqual": true,
+        "maxFloatDifference": 0,
+        "valuesExactlyEqual": true
+      },
+      {
+        "name": "Walk",
+        "channelsEqual": true,
+        "maxFloatDifference": 0,
+        "valuesExactlyEqual": true
+      },
+      {
+        "name": "Turn",
+        "channelsEqual": true,
+        "maxFloatDifference": 0,
+        "valuesExactlyEqual": true
+      },
+      {
+        "name": "Attack",
+        "channelsEqual": true,
+        "maxFloatDifference": 2.384185791015625e-07,
+        "valuesExactlyEqual": false
+      },
+      {
+        "name": "Hit",
+        "channelsEqual": true,
+        "maxFloatDifference": 0,
+        "valuesExactlyEqual": true
+      },
+      {
+        "name": "Death",
+        "channelsEqual": true,
+        "maxFloatDifference": 1.7881393432617188e-07,
+        "valuesExactlyEqual": false
+      }
+    ],
+    "oldAssetsUnchanged": true,
+    "oldAssetsCount": 16
+  },
+  "pngSha256": {
+    "baseline-hit.png": "a067f580479a1ed4166503eedc5820ccab04f7f271fc53cdb6630d99391af679",
+    "candidate-death.png": "fd8e7dd996a01443d29f1264b0cb198bdcf89f439f06eb615034d041cad81ac0",
+    "candidate-near-front.png": "03e012ad03b63e78040e1bbd363440b0421ede4052de4ca6d1de70f08670df28",
+    "candidate-near-side.png": "6824bf577160a1dd3e5fb62520805489946015a2d8ad2ef09ee776ab7ec7aca1",
+    "baseline-attack-3.png": "634cfd526371086ca0fa7fd20bd55926e50c0990964c27c53967a0457d0a8678",
+    "baseline-near-back.png": "3343c4401fd28c6f872e161046d47e2fb34293f6bdbafca6e1455a4b14231407",
+    "baseline-walk-2.png": "15741af1924a2cc63d691afe340945ba5637f22a49ebbf7ac3a8dc41f3884261",
+    "candidate-attack-3.png": "bb7f5b939f439a2c0f0e871bd2f535278528ba7814a2549b4239e34d30e003dd",
+    "candidate-hit.png": "21752054ff09cfdc8c8f44b426cedae0ec30cda678572c36ac7f0b8b223e0a7e",
+    "baseline-death.png": "d5c7b65879776037a60b607bbe2cae77991bd9b9e58db0b4a4c03498575db919",
+    "baseline-near-front.png": "bac9b19cea55662406b42ec20f20edaed30e40342da2a14e82beeafec6a2b193",
+    "baseline-near-side.png": "e13cbbd61c3a2725e455a4211f6ba1a64684d48f93068223df6ab4a3129cb790",
+    "candidate-near-back.png": "b8efb32da7f176c8ecd3cd80ed7590fe36b42fca5dc1b7b58c95c94690cc6468",
+    "candidate-main.png": "380135f5f4ed792558b0ec7d54cd49d568887d957bd1069ff39c8f64880b0a4d",
+    "baseline-main.png": "dd8064b6c060eeecab0729bde42c17fd0c535c186bbc1f0194e48a55bd5b04a2",
+    "candidate-walk-2.png": "2409e2c57625aad48cd0d522ba2f10844fa19b8b5d145da92cebad2b7518892d"
+  },
+  "capturedAtUtc": "2026-10-13T01:36:28.748636+00:00",
+  "rawManifestPath": ".omc/evidence/model-standard/frozen-r2-final/manifest.json",
+  "canvasByScene": {
+    "near": [
+      1280,
+      695
+    ],
+    "main": [
+      1280,
+      666
+    ]
+  },
+  "canvasMeasurement": "paired main values read from actual cameraPreview.inspect in static summary; near viewport verified by independent QA"
+}

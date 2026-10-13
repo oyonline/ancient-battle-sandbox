@@ -1,0 +1,521 @@
+{
+  "startedAt": "2026-10-13T01:50:35.185Z",
+  "finalMainSha256": "7742525ee05fc64ba2441e64d6700c88c7973fcff2ffa8c2ed118cfcb5a83621",
+  "revertedLabelOnlySha256": "790497efc57abf262073e6039225e8dfa1fed0ae88d330a1fcd82785951b338b",
+  "glbSha256": "35aec7367cb8e8eabe7809e1aea449fcc81374fa73ffd81d8cb07d6c4883035e",
+  "errors": [],
+  "requests": [
+    {
+      "label": "r2-standalone",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "r2-standalone",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "r2-standalone",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "r2-standalone",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "r2-standalone",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline-switch",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline-switch",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline-switch",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline-switch",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline-switch",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline-static-metadata",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline-static-metadata",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline-static-metadata",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline-static-metadata",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline-static-metadata",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-baseline-near",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-baseline-near",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-baseline-near",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-baseline-near",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-baseline-near",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-baseline-main",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-baseline-main",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-baseline-main",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-baseline-main",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-baseline-main",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-r2-near",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-r2-near",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-r2-near",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-r2-near",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-r2-near",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-r2-main",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-r2-main",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-r2-main",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-r2-main",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "layout-r2-main",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    }
+  ],
+  "standalone": {
+    "before": {
+      "query": "?model=r2",
+      "canvas": [
+        1280,
+        695
+      ],
+      "canvasCss": [
+        1280,
+        695
+      ],
+      "footerHeight": 145,
+      "buttons": [
+        "剑盾 D1 基准",
+        "剑盾造型标准 R2",
+        "红方",
+        "蓝方",
+        "全队",
+        "剑盾",
+        "长矛",
+        "弓兵",
+        "骑兵",
+        "开始交战",
+        "暂停",
+        "重置",
+        "＋",
+        "－",
+        "全景",
+        "看选中"
+      ]
+    },
+    "after": {
+      "query": "?model=baseline",
+      "canvas": [
+        1280,
+        695
+      ],
+      "canvasCss": [
+        1280,
+        695
+      ],
+      "footerHeight": 145,
+      "buttons": [
+        "剑盾 D1 基准",
+        "剑盾造型标准 R2",
+        "红方",
+        "蓝方",
+        "全队",
+        "剑盾",
+        "长矛",
+        "弓兵",
+        "骑兵",
+        "开始交战",
+        "暂停",
+        "重置",
+        "＋",
+        "－",
+        "全景",
+        "看选中"
+      ]
+    },
+    "staticMetadata": {
+      "query": "?model=baseline&still=1&view=near&solo=1",
+      "canvas": [
+        1280,
+        695
+      ],
+      "canvasCss": [
+        1280,
+        695
+      ],
+      "footerHeight": 145,
+      "asset": "duel1/infantry-rigged.glb",
+      "buttons": [
+        "剑盾 D1 基准",
+        "剑盾造型标准 R2",
+        "默认机位",
+        "最近机位",
+        "红方",
+        "蓝方",
+        "全队",
+        "剑盾",
+        "长矛",
+        "弓兵",
+        "骑兵",
+        "开始交战",
+        "暂停",
+        "重置",
+        "＋",
+        "－",
+        "全景",
+        "看选中"
+      ]
+    }
+  },
+  "layouts": [
+    {
+      "model": "baseline",
+      "scene": "near",
+      "query": "?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=candidate&terrain=candidate&building=candidate&camera=candidate&light=candidate&model=baseline&still=1&view=near&solo=1",
+      "canvas": [
+        1280,
+        695
+      ],
+      "canvasCss": [
+        1280,
+        695
+      ],
+      "footerHeight": 145,
+      "asset": "duel1/infantry-rigged.glb",
+      "camera": {
+        "position": [
+          -3.2230268352613844,
+          7.84004059655607,
+          9.51929755298482
+        ],
+        "focus": [
+          -8,
+          1.789207921220491,
+          3.1500000000000004
+        ],
+        "distance": 10,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "buttons": [
+        "剑盾 D1 基准",
+        "剑盾造型标准 R2",
+        "默认机位",
+        "最近机位",
+        "建筑比例基准",
+        "建筑比例候选 B1",
+        "动作协调基准",
+        "动作协调候选 Q1",
+        "红方",
+        "蓝方",
+        "全队",
+        "剑盾",
+        "长矛",
+        "弓兵",
+        "骑兵",
+        "开始交战",
+        "暂停",
+        "重置",
+        "＋",
+        "－",
+        "全景",
+        "看选中",
+        "光照基准",
+        "光照候选 L1"
+      ]
+    },
+    {
+      "model": "baseline",
+      "scene": "main",
+      "query": "?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=candidate&terrain=candidate&building=candidate&camera=candidate&light=candidate&model=baseline",
+      "canvas": [
+        1280,
+        666
+      ],
+      "canvasCss": [
+        1280,
+        666
+      ],
+      "footerHeight": 174,
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "buttons": [
+        "建筑比例基准",
+        "建筑比例候选 B1",
+        "剑盾 D1 基准",
+        "剑盾造型标准 R2",
+        "动作协调基准",
+        "动作协调候选 Q1",
+        "红方",
+        "蓝方",
+        "全队",
+        "剑盾",
+        "长矛",
+        "弓兵",
+        "骑兵",
+        "开始交战",
+        "暂停",
+        "重置",
+        "＋",
+        "－",
+        "全景",
+        "看选中",
+        "取景基准",
+        "取景候选 C2",
+        "光照基准",
+        "光照候选 L1"
+      ]
+    },
+    {
+      "model": "r2",
+      "scene": "near",
+      "query": "?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=candidate&terrain=candidate&building=candidate&camera=candidate&light=candidate&model=r2&still=1&view=near&solo=1",
+      "canvas": [
+        1280,
+        695
+      ],
+      "canvasCss": [
+        1280,
+        695
+      ],
+      "footerHeight": 145,
+      "asset": "sword-standard/infantry-rigged.glb",
+      "camera": {
+        "position": [
+          -3.2230268352613844,
+          7.84004059655607,
+          9.51929755298482
+        ],
+        "focus": [
+          -8,
+          1.789207921220491,
+          3.1500000000000004
+        ],
+        "distance": 10,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "buttons": [
+        "剑盾 D1 基准",
+        "剑盾造型标准 R2",
+        "默认机位",
+        "最近机位",
+        "建筑比例基准",
+        "建筑比例候选 B1",
+        "动作协调基准",
+        "动作协调候选 Q1",
+        "红方",
+        "蓝方",
+        "全队",
+        "剑盾",
+        "长矛",
+        "弓兵",
+        "骑兵",
+        "开始交战",
+        "暂停",
+        "重置",
+        "＋",
+        "－",
+        "全景",
+        "看选中",
+        "光照基准",
+        "光照候选 L1"
+      ]
+    },
+    {
+      "model": "r2",
+      "scene": "main",
+      "query": "?motion=candidate&duel=candidate&crowd=candidate&pike=candidate&bow=candidate&ride=candidate&coordination=candidate&terrain=candidate&building=candidate&camera=candidate&light=candidate&model=r2",
+      "canvas": [
+        1280,
+        666
+      ],
+      "canvasCss": [
+        1280,
+        666
+      ],
+      "footerHeight": 174,
+      "camera": {
+        "position": [
+          21.018681924849908,
+          26.623663771476547,
+          32.024909233133215
+        ],
+        "focus": [
+          0,
+          0,
+          4
+        ],
+        "distance": 44,
+        "fov": 38,
+        "direction": [
+          0.47769731647386154,
+          0.6050832675335579,
+          0.6369297552984821
+        ]
+      },
+      "buttons": [
+        "建筑比例基准",
+        "建筑比例候选 B1",
+        "剑盾 D1 基准",
+        "剑盾造型标准 R2",
+        "动作协调基准",
+        "动作协调候选 Q1",
+        "红方",
+        "蓝方",
+        "全队",
+        "剑盾",
+        "长矛",
+        "弓兵",
+        "骑兵",
+        "开始交战",
+        "暂停",
+        "重置",
+        "＋",
+        "－",
+        "全景",
+        "看选中",
+        "取景基准",
+        "取景候选 C2",
+        "光照基准",
+        "光照候选 L1"
+      ]
+    }
+  ],
+  "verdict": "APPROVE label-only addendum",
+  "finishedAt": "2026-10-13T01:50:45.025Z"
+}

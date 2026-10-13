@@ -1,0 +1,142 @@
+{
+  "sampledAt": "2026-10-13T01:39:10.564941+00:00",
+  "head": "ef4355ff01ec8995eac4dd06dc672e9ec1166944",
+  "finalGlbSha256": "35aec7367cb8e8eabe7809e1aea449fcc81374fa73ffd81d8cb07d6c4883035e",
+  "mainSha256": "790497efc57abf262073e6039225e8dfa1fed0ae88d330a1fcd82785951b338b",
+  "original16": [
+    {
+      "path": "public/assets/3d-sample/archer-rigged.glb",
+      "sha256": "14b9cf5348eb4bd30cae4befb0bd15ed628899dae32500f26f8aeb9effe80abf",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/archer1/archer-rigged.glb",
+      "sha256": "a86fce43b1bf022e7a0d1acf7e0e039e0ce53da94354868cd37f55b4f43deb11",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/building1/tower.glb",
+      "sha256": "8932d1896158503d6dd5903ed887ec5381ccc6fbefc6d743b599b806a9f82666",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/cavalry-rigged.glb",
+      "sha256": "1e6ba2d0f9142e6608cc45e315ac31c79c0830579d3c363b128c42bf7d6b958f",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/cavalry.glb",
+      "sha256": "dcfaf6b41e64c464c6cc6840d234e6a97ff0b89a5169929f8957539848d659d7",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "sha256": "f8360500293593247185536fe0547ace7634928f06e1b54ac8d07ff6eeb73e46",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/duel1/infantry-rigged.glb",
+      "sha256": "61180645e4a8ee8533da2e8c41f9eecbbc48511bba5529ce53168c12be83ffcb",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/infantry-rigged.glb",
+      "sha256": "3fb6c804576bf2683da48f658ca2343bccb1e5c0d302026d2c30b3270245ba9d",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/infantry.glb",
+      "sha256": "37b813c77388381bdf5b2d8f902e6be048312d89965aa2340769c09b60ca2c43",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/locomotion1/infantry-rigged.glb",
+      "sha256": "edd8cc96e804f3d63ca1408c5c63111f382d17196538fb153bcba868a57ad504",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "sha256": "b3c60a64134fb091988bd4c692274df9136673c30a2a3d270cfc311b06389d15",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/round1-1/infantry-rigged.glb",
+      "sha256": "50b7dbda0589910fd6ba7053d6239e2b58abb5c6f15b8f4cb9c145f61919b2ca",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/round1/infantry-before.glb",
+      "sha256": "3fb6c804576bf2683da48f658ca2343bccb1e5c0d302026d2c30b3270245ba9d",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/round1/infantry-rigged.glb",
+      "sha256": "122b85368ad4b21ed25d5c10a467cb9653d029dae43a3299d6190e4390543963",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/spear-rigged.glb",
+      "sha256": "eb02d13c6bfdbde76e72ee4d64c77b2666ef7553fe74114c2cfe79492a2f11e0",
+      "same": true
+    },
+    {
+      "path": "public/assets/3d-sample/tower.glb",
+      "sha256": "6067afed4436e25af9b01ee0451385da3a095d9f35739902f799cf52dbb75c97",
+      "same": true
+    }
+  ],
+  "allOriginal16Unchanged": true,
+  "skeletonSame": true,
+  "boneCounts": [
+    18,
+    18
+  ],
+  "inverseBindSame": true,
+  "clips": [
+    {
+      "name": "Idle",
+      "channels": 54,
+      "inputsIdentical": true,
+      "maxOutputAbsDelta": 0.0
+    },
+    {
+      "name": "Walk",
+      "channels": 54,
+      "inputsIdentical": true,
+      "maxOutputAbsDelta": 0.0
+    },
+    {
+      "name": "Turn",
+      "channels": 54,
+      "inputsIdentical": true,
+      "maxOutputAbsDelta": 0.0
+    },
+    {
+      "name": "Attack",
+      "channels": 54,
+      "inputsIdentical": true,
+      "maxOutputAbsDelta": 2.384185791015625e-07
+    },
+    {
+      "name": "Hit",
+      "channels": 54,
+      "inputsIdentical": true,
+      "maxOutputAbsDelta": 0.0
+    },
+    {
+      "name": "Death",
+      "channels": 54,
+      "inputsIdentical": true,
+      "maxOutputAbsDelta": 1.7881393432617188e-07
+    }
+  ],
+  "unchangedEntrypointsAndRules": {
+    "index.html": true,
+    "battle3d.html": true,
+    "classic.html": true,
+    "js/main.js": true,
+    "js/three-demo/combat-model.js": true,
+    "js/three-demo/terrain-contact.js": true,
+    "js/three-demo/animation-controller.js": true
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "kind": "infantry",
+  "releaseSeconds": null,
+  "clips": {
+    "Idle": {
+      "duration": 2,
+      "frames": 48
+    },
+    "Walk": {
+      "duration": 0.75,
+      "frames": 18
+    },
+    "Turn": {
+      "duration": 0.5,
+      "frames": 12
+    },
+    "Attack": {
+      "duration": 0.875,
+      "frames": 21
+    },
+    "Hit": {
+      "duration": 0.417,
+      "frames": 10
+    },
+    "Death": {
+      "duration": 1.25,
+      "frames": 30
+    }
+  },
+  "front": "Three +Z (Blender -Y)",
+  "height": 2.6122968196868896,
+  "vertices": 7507,
+  "triangles": 14582,
+  "bones": 18,
+  "materials": [
+    "brown leather",
+    "aged golden shield rim",
+    "skin in helmet shadow",
+    "dark forged armour",
+    "pale steel blade",
+    "dark eye slit",
+    "team_cloth",
+    "ivory linen tabard",
+    "charcoal steel mail"
+  ],
+  "swordBladeScale": 1.25,
+  "componentBoundsBlender": {
+    "body": {
+      "min": [
+        -0.6442649960517883,
+        -0.4174386262893677,
+        -0.0064999982714653015
+      ],
+      "max": [
+        0.7219393849372864,
+        0.26100000739097595,
+        2.6122968196868896
+      ]
+    },
+    "shield": {
+      "min": [
+        -0.8425365686416626,
+        -0.53371661901474,
+        1.2595617771148682
+      ],
+      "max": [
+        -0.2574635148048401,
+        -0.35633331537246704,
+        2.2457408905029297
+      ]
+    },
+    "weapon": {
+      "min": [
+        0.5098833441734314,
+        -0.586399495601654,
+        1.5075429677963257
+      ],
+      "max": [
+        1.1360282897949219,
+        -0.22493110597133636,
+        2.483510732650757
+      ]
+    },
+    "torso": {
+      "min": [
+        -0.3529999852180481,
+        -0.2639999985694885,
+        1.1200000047683716
+      ],
+      "max": [
+        0.3529999852180481,
+        0.23999999463558197,
+        2.2300000190734863
+      ]
+    }
+  },
+  "bodyRadiusConservative": 0.8339373371195115,
+  "cavalryCandidate": false,
+  "authoring": "parameterized standalone Blender source; actual armature and vertex weights",
+  "standardVersion": "R2",
+  "baseAuthoringSha256": "a21d8c56d8111629a0061cd19131c86db99577c3be94c621010863a20fdd9903",
+  "meshScope": "continuous anatomy, layered cloth/plate, soft shoulder/elbow weights, fitted calf/ankle, readable sword edge",
+  "animationScope": "existing D1 six clips and original 18-bone bind hierarchy"
+}

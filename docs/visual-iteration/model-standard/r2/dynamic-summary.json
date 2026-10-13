@@ -1,0 +1,341 @@
+{
+  "viewport": [
+    1280,
+    900
+  ],
+  "source": "actual Three.js GLB loader and skinned vertices in battle3d.html",
+  "static": [],
+  "errors": [],
+  "network": [
+    {
+      "label": "baseline",
+      "mode": "single",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "single",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "single",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "single",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "single",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "duel",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "duel",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "duel",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "duel",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "duel",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "four",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "four",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "four",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "four",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "four",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "mixed",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "mixed",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "mixed",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/duel1/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "mixed",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "baseline",
+      "mode": "mixed",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "single",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "single",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "single",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "single",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "single",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "duel",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "duel",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "duel",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "duel",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "duel",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "four",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "four",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "four",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "four",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "four",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "mixed",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/sword-standard/infantry-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "mixed",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/pikeman1/spear-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "mixed",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/building1/tower.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "mixed",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/archer1/archer-rigged.glb",
+      "status": 200
+    },
+    {
+      "label": "candidate",
+      "mode": "mixed",
+      "url": "http://127.0.0.1:5301/assets/3d-sample/cavalry1/cavalry-rigged.glb",
+      "status": 200
+    }
+  ],
+  "dynamic": [
+    {
+      "label": "baseline",
+      "mode": "single",
+      "actualTime": 24.101899999999787,
+      "initial": 1,
+      "alive": 1,
+      "resetAlive": 1,
+      "eventCounts": {}
+    },
+    {
+      "label": "baseline",
+      "mode": "duel",
+      "actualTime": 18.1011999999999,
+      "initial": 2,
+      "alive": 1,
+      "resetAlive": 2,
+      "eventCounts": {
+        "attack": 18,
+        "hit": 9,
+        "death": 1
+      }
+    },
+    {
+      "label": "baseline",
+      "mode": "four",
+      "actualTime": 32.15209999999963,
+      "initial": 8,
+      "alive": 4,
+      "resetAlive": 8,
+      "eventCounts": {
+        "attack": 72,
+        "hit": 36,
+        "death": 4
+      }
+    },
+    {
+      "label": "baseline",
+      "mode": "mixed",
+      "actualTime": 14.477400000000042,
+      "initial": 32,
+      "alive": 27,
+      "resetAlive": 32,
+      "eventCounts": {}
+    },
+    {
+      "label": "candidate",
+      "mode": "single",
+      "actualTime": 24.085599999999754,
+      "initial": 1,
+      "alive": 1,
+      "resetAlive": 1,
+      "eventCounts": {}
+    },
+    {
+      "label": "candidate",
+      "mode": "duel",
+      "actualTime": 18.101199999999928,
+      "initial": 2,
+      "alive": 1,
+      "resetAlive": 2,
+      "eventCounts": {
+        "attack": 18,
+        "hit": 9,
+        "death": 1
+      }
+    },
+    {
+      "label": "candidate",
+      "mode": "four",
+      "actualTime": 32.15219999999957,
+      "initial": 8,
+      "alive": 4,
+      "resetAlive": 8,
+      "eventCounts": {
+        "attack": 72,
+        "hit": 36,
+        "death": 4
+      }
+    },
+    {
+      "label": "candidate",
+      "mode": "mixed",
+      "actualTime": 15.734500000000057,
+      "initial": 32,
+      "alive": 27,
+      "resetAlive": 32,
+      "eventCounts": {}
+    }
+  ]
+}
