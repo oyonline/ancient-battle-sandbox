@@ -112,17 +112,33 @@ def standard_geometry(ctx):
         return obj
 
     ctx['standard_arm_axes'] = {}
+    ctx['standard_arm_ring_weights'] = {}
     for side, sign in [('L', -1), ('R', 1)]:
-        shoulder = Vector((sign*.31,-.018,2.09))
-        elbow = Vector((-.539,-.066,1.645) if side=='L' else (.479,-.006,1.63))
-        wrist = Vector((-.52,-.32,1.74) if side=='L' else (.578,-.23,1.64))
+        bones=ctx['rig'].data.bones
+        shoulder=bones['UpperArm.'+side].head_local.copy()
+        elbow=bones['UpperArm.'+side].tail_local.copy()
+        wrist=bones['Forearm.'+side].tail_local.copy()
         ctx['standard_arm_axes'][side] = (shoulder,elbow,wrist)
         upper=elbow-shoulder; lower=wrist-elbow
         rings=[(shoulder-upper*.060,.130), (shoulder+upper*.14,.139),
                (shoulder+upper*.38,.128), (shoulder+upper*.67,.117),
                (elbow-upper*.10,.105), (elbow,.102), (elbow+lower*.15,.109),
                (elbow+lower*.42,.099), (elbow+lower*.75,.081), (wrist+lower*.04,.067)]
-        tube('standard soft arm '+side,rings,red)
+        sleeve=tube('standard soft arm '+side,rings,red)
+        if ctx['KIND']=='pikeman':
+            # A pike forearm folds back across the upper-arm axis. Projection
+            # cannot distinguish its segments; tube ring order provides an
+            # unambiguous continuous skin transition.
+            ring_weights=[{'Chest':.53,'UpperArm.'+side:.47},
+                {'Chest':.27,'UpperArm.'+side:.73},
+                {'UpperArm.'+side:1},{'UpperArm.'+side:1},
+                {'UpperArm.'+side:.80,'Forearm.'+side:.20},
+                {'UpperArm.'+side:.50,'Forearm.'+side:.50},
+                {'UpperArm.'+side:.20,'Forearm.'+side:.80},
+                {'Forearm.'+side:1},{'Forearm.'+side:1},{'Forearm.'+side:1}]
+            for vertex in sleeve.data.vertices:
+                key=(side,*[round(value,6) for value in vertex.co])
+                ctx['standard_arm_ring_weights'][key]=ring_weights[vertex.index//16]
         # Forged forearm sleeve overlaps the continuous gambeson at both ends.
         tube('standard forearm plate '+side,[(elbow+lower*.24,.112),
             (elbow+lower*.40,.108),(elbow+lower*.70,.090),(elbow+lower*.87,.078)],steel)
@@ -166,23 +182,28 @@ def standard_geometry(ctx):
         obj.modifiers.new('forged greave thickness','SOLIDIFY').thickness=.012;smooth_mesh(obj)
     # Broaden the real blade across its edge axis; the tip/hilt and motion axis
     # remain unchanged so the main camera can read a blade rather than a line.
-    blade=next(part for part in parts if part.name=='sword - ridged steel blade')
-    vertices=blade.data.vertices
-    center=(vertices[0].co+vertices[2].co)*.5
-    blade_axis=(vertices[6].co-center).normalized()
-    ctx['standard_blade_rest_axis']=blade_axis.copy()
-    cross=(vertices[2].co-vertices[0].co)
-    cross=(cross-blade_axis*cross.dot(blade_axis)).normalized()
-    for vertex in vertices:
-        if vertex.index == 6:
-            continue
-        offset=(vertex.co-center).dot(cross)
-        vertex.co += cross*offset*.40
+    if ctx['KIND']=='infantry':
+        blade=next(part for part in parts if part.name=='sword - ridged steel blade')
+        vertices=blade.data.vertices
+        center=(vertices[0].co+vertices[2].co)*.5
+        blade_axis=(vertices[6].co-center).normalized()
+        ctx['standard_blade_rest_axis']=blade_axis.copy()
+        cross=(vertices[2].co-vertices[0].co)
+        cross=(cross-blade_axis*cross.dot(blade_axis)).normalized()
+        for vertex in vertices:
+            if vertex.index == 6:
+                continue
+            offset=(vertex.co-center).dot(cross)
+            vertex.co += cross*offset*.40
 
 
 def standard_weights(ctx, fallback, name, point):
     if name.startswith('standard soft arm '):
         side=name[-1];shoulder,elbow,wrist=ctx['standard_arm_axes'][side]
+        ring_weight=ctx.get('standard_arm_ring_weights',{}).get((side,*[round(value,6) for value in point]))
+        if ctx['KIND']=='pikeman':
+            assert ring_weight is not None, f'P2 sleeve ring weight missing: {side} {point[:]}'
+        if ring_weight is not None:return ring_weight
         upper=elbow-shoulder;lower=wrist-elbow
         t=(point-shoulder).dot(upper)/upper.length_squared
         # Soft chest influence at the shoulder and continuous elbow transition.
@@ -213,6 +234,133 @@ def standard_weights(ctx, fallback, name, point):
     return fallback(name,point)
 
 
+def standard_pike_pose(ctx, action, frame):
+    """P2's outboard channel: fixed limb lengths, exact shared shaft grip.
+
+    Mesh and bind positions stay native P1. Only the new P2 action poses move
+    the rear hand / shaft together and let the front hand slide on that shaft.
+    """
+    rig=ctx['rig'];bones=rig.data.bones;pose=rig.pose.bones
+    bpy.context.view_layer.update()
+    chest_delta=pose['Chest'].matrix @ bones['Chest'].matrix_local.inverted()
+    shaft_axis=Vector((0,-1,0))
+    thrust=0
+    if action=='Attack':
+        thrust={0:0,4:-.08,8:-.12,11:.16,16:.07,21:0}.get(frame,0)
+    offset=Vector((.13,.06,0))
+    rear_center=chest_delta @ (ctx['rc']+offset)+Vector((0,-thrust,0))
+    hand_rest=bones['Hand.R'].matrix_local
+    hand_matrix=chest_delta @ hand_rest
+    hand_matrix.translation += chest_delta.to_3x3() @ offset + Vector((0,-thrust,0))
+    desired_axis=shaft_axis
+    if action=='Death':
+        # Entry uses the new guard. The shaft lies down with the body; the
+        # forward hand releases during the fall rather than snapping at t=0.
+        progress=max(0,min(1,(frame-5)/8))
+        body_axis=(chest_delta.to_3x3() @ shaft_axis).normalized()
+        desired_axis=(body_axis*(1-progress)+Vector((.70,-.70,.015)).normalized()*progress).normalized()
+    current_axis=((hand_matrix @ hand_rest.inverted()).to_3x3() @ shaft_axis).normalized()
+    rotation=current_axis.rotation_difference(desired_axis)
+    rotated=rotation.to_matrix().to_4x4() @ hand_matrix
+    rotated.translation=hand_matrix.translation
+    rotated.translation += rear_center-(rotated @ hand_rest.inverted()) @ ctx['rc']
+
+    def solve_arm(side, wrist, hand_goal, elbow_pole=None):
+        shoulder=chest_delta @ bones['UpperArm.'+side].head_local
+        upper=pose['UpperArm.'+side];lower=pose['Forearm.'+side]
+        l1=upper.bone.length;l2=lower.bone.length;direction=wrist-shoulder;distance=direction.length
+        assert abs(l1-l2)+1e-5 < distance <= l1+l2-.002, f'P2 {action} {frame} {side} unreachable {distance:.6f}/{l1+l2:.6f}'
+        axis=direction.normalized();along=(l1*l1-l2*l2+distance*distance)/(2*distance)
+        height=math.sqrt(max(1e-8,l1*l1-along*along))
+        pole=(elbow_pole-shoulder if elbow_pole is not None else
+              chest_delta @ Vector(ctx['arm_targets'][side][0])-shoulder)
+        pole=pole-axis*pole.dot(axis)
+        if pole.length<1e-6:pole=Vector((1 if side=='R' else -1,0,0))-axis*axis.x
+        elbow=shoulder+axis*along+pole.normalized()*height
+        ctx['align_bone'](upper,shoulder,elbow)
+        ctx['align_bone'](lower,elbow,wrist)
+        pose['Hand.'+side].matrix=hand_goal
+        bpy.context.view_layer.update()
+        scales=[*upper.scale,*lower.scale]
+        assert max(abs(value-1) for value in scales)<2e-5, f'P2 {action} {frame} stretched {side}'
+        ctx.setdefault('pike_pose_checks',[]).append({'clip':action,'frame':frame,'side':side,
+            'reach':distance,'maximumReach':l1+l2,'scales':scales,'wrist':wrist[:]})
+
+    if action=='Death' and frame>=13:
+        # The native fall leaves the forward glove below the entire torso.
+        # Settle connected arms next to the body, using its actual lower mesh
+        # envelope; neither a glove nor the full-length shaft props it up.
+        body=ctx['body']
+        def skinned_point(vertex):
+            result=Vector((0,0,0))
+            for group in vertex.groups:
+                name=body.vertex_groups[group.group].name
+                result+=(pose[name].matrix @ bones[name].matrix_local.inverted() @ vertex.co)*group.weight
+            return result
+        body_indices=[v.index for v in body.data.vertices if v.groups and
+            body.vertex_groups[max(v.groups,key=lambda g:g.weight).group].name
+            in ('Hips','Spine','Chest','Head','Thigh.L','Thigh.R','Shin.L','Shin.R','Foot.L','Foot.R')]
+        floor=min(skinned_point(body.data.vertices[i]).z for i in body_indices)
+        lateral=chest_delta.to_3x3() @ Vector((1,0,0));lateral.z=0;lateral.normalize()
+        lengthwise=chest_delta.to_3x3() @ Vector((0,0,1));lengthwise.z=0;lengthwise.normalize()
+        progress=min(1,(frame-5)/18)
+        desired_axis=-lengthwise
+        current_axis=((hand_matrix @ hand_rest.inverted()).to_3x3() @ shaft_axis).normalized()
+        rotation=current_axis.rotation_difference(desired_axis)
+        right=rotation.to_matrix().to_4x4() @ hand_matrix
+        right.translation=hand_matrix.translation
+        # Hand rotations are independent of arm reach. Translation stays at
+        # the wrist and the original grip vertices stay attached to Hand.R.
+        for side in ('R','L'):
+            shoulder=chest_delta @ bones['UpperArm.'+side].head_local
+            side_sign=1 if side=='R' else -1
+            settled=shoulder+lateral*(side_sign*.10)-lengthwise*.65
+            settled.z=floor+.160+(.050 if side=='R' else 0)
+            if side=='R':
+                hand=right.copy();guard=rotated.translation
+            else:
+                hand=chest_delta @ bones['Hand.L'].matrix_local
+                guard=(rotated @ hand_rest.inverted() @ bones['Hand.L'].matrix_local).translation
+                guard+=(rotated @ hand_rest.inverted()).to_3x3() @ Vector((0,.10,0))
+            wrist=guard.lerp(settled,progress)
+            # During the half-fall the boots still define the body envelope.
+            # Follow a reachable arc; the final horizontal pose reaches the
+            # envelope target directly, without stretching either arm.
+            reach=(wrist-shoulder).length
+            limit=bones['UpperArm.'+side].length+bones['Forearm.'+side].length-.020
+            if reach>limit:wrist=shoulder+(wrist-shoulder).normalized()*limit
+            hand.translation=wrist
+            elbow_pole=shoulder+lateral*(side_sign*.22)-lengthwise*.30+Vector((0,0,.20))
+            solve_arm(side,wrist,hand,elbow_pole)
+        ctx.setdefault('pike_death_checks',[]).append({'frame':frame,'bodyEnvelopeZ':floor,
+            'armWristZBySide':{'R':floor+.210,'L':floor+.160},'shaftAxis':desired_axis[:],'releaseBlend':progress,
+            'lowestVertices':sorted([{'vertex':v.index,'point':skinned_point(v)[:],
+                'bone':body.vertex_groups[max(v.groups,key=lambda g:g.weight).group].name}
+                for v in body.data.vertices if v.groups],key=lambda v:v['point'][2])[:4],
+            'shoulders':[pose['UpperArm.'+side].matrix.translation[:] for side in ('R','L')],
+            'elbows':[pose['Forearm.'+side].matrix.translation[:] for side in ('R','L')]})
+        return
+
+    solve_arm('R',rotated.translation.copy(),rotated)
+    right_deform=pose['Hand.R'].matrix @ hand_rest.inverted()
+    left_goal=right_deform @ bones['Hand.L'].matrix_local
+    left_goal.translation += right_deform.to_3x3() @ Vector((0,.10,0))
+    solve_arm('L',left_goal.translation.copy(),left_goal)
+
+
+def standard_pike_euler_continuity(ctx, action, frame):
+    """Equivalent Euler values follow the short path between P2 arm keys."""
+    if frame==0:ctx['pike_previous_eulers']={}
+    previous=ctx['pike_previous_eulers']
+    for bone in ctx['rig'].pose.bones:
+        if bone.name in previous:
+            before=bone.rotation_euler.copy()
+            bone.rotation_euler.make_compatible(previous[bone.name])
+            if max(abs(a-b) for a,b in zip(before,bone.rotation_euler))>math.pi:
+                ctx.setdefault('pike_euler_checks',[]).append({'clip':action,'frame':frame,'bone':bone.name})
+        previous[bone.name]=bone.rotation_euler.copy()
+
+
 bpy.context.preferences.filepaths.save_version=0
 base = Path(__file__).resolve().with_name('generate-rigged-soldier.py')
 # Only this independent output is generated. The baseline script / assets are
@@ -226,14 +374,35 @@ source=source.replace(geometry_marker,'standard_geometry(globals())\n'+geometry_
 axis_marker='blade_rest_axis=(blade_part.data.vertices[6].co-(blade_part.data.vertices[0].co+blade_part.data.vertices[2].co)*.5).normalized()'
 assert source.count(axis_marker)==1, 'Base blade-axis insertion point changed'
 source=source.replace(axis_marker,'blade_rest_axis=standard_blade_rest_axis')
+pose_marker='solve_variant_arms(name,frame)'
+assert source.count(pose_marker)==1, 'Base variant pose insertion point changed'
+source=source.replace(pose_marker,"standard_pike_pose(globals(),name,frame) if KIND=='pikeman' else solve_variant_arms(name,frame)")
+source=source.replace("if KIND!='infantry' and name!='Death':","if KIND=='pikeman' or (KIND!='infantry' and name!='Death'):")
+source=source.replace("if KIND!='cavalry' and name=='Death' and frame>=13:",
+    "if KIND not in ('cavalry','pikeman') and name=='Death' and frame>=13:")
+source=source.replace('for frame,pose in poses:',
+    "for frame,pose in poses:\n  if KIND=='pikeman' and name=='Death' and frame in (23,30):pose=next(p for f,p in poses if f==30)")
+key_marker="for pb in rig.pose.bones:pb.keyframe_insert('location',frame=frame);"
+assert source.count(key_marker)==1, 'Base animation-key insertion point changed'
+source=source.replace(key_marker,"if KIND=='pikeman':standard_pike_euler_continuity(globals(),name,frame)\n  "+key_marker)
 source=source.replace(weights_marker,"baseline_weights_for=weights_for\ndef weights_for(n,v):\n return standard_weights(globals(),baseline_weights_for,n,v)\n"+weights_marker)
 out=Path(sys.argv[sys.argv.index('--')+1])
-# Force the preserved infantry D1 authoring route regardless of caller flags.
-sys.argv=[str(base),'--',str(out),'--kind','infantry','--duel']
-ctx={'__file__':str(base),'standard_geometry':standard_geometry,'standard_weights':standard_weights}
+kind=sys.argv[sys.argv.index('--kind')+1] if '--kind' in sys.argv else 'infantry'
+assert kind in ('infantry','pikeman'), 'Only internally established model stages may generate'
+variant_flag='--duel' if kind=='infantry' else '--pikeman-candidate'
+sys.argv=[str(base),'--',str(out),'--kind',kind,variant_flag]
+ctx={'__file__':str(base),'standard_geometry':standard_geometry,'standard_weights':standard_weights,
+    'standard_pike_pose':standard_pike_pose,'standard_pike_euler_continuity':standard_pike_euler_continuity}
 exec(compile(source,str(base),'exec'),ctx)
-metadata=json.loads((out/'infantry-rig-metadata.json').read_text())
-metadata.update(standardVersion='R2',baseAuthoringSha256=hashlib.sha256(base.read_bytes()).hexdigest(),
+metadata_path=out/(kind+'-rig-metadata.json')
+metadata=json.loads(metadata_path.read_text())
+metadata.update(standardVersion='R2' if kind=='infantry' else 'P2',baseAuthoringSha256=hashlib.sha256(base.read_bytes()).hexdigest(),
     meshScope='continuous anatomy, layered cloth/plate, soft shoulder/elbow weights, fitted calf/ankle, readable sword edge',
-    animationScope='existing D1 six clips and original 18-bone bind hierarchy')
-(out/'infantry-rig-metadata.json').write_text(json.dumps(metadata,indent=2)+'\n')
+    animationScope=('existing D1' if kind=='infantry' else 'existing P1')+' six clips and original 18-bone bind hierarchy')
+if kind=='pikeman':
+    metadata['animationScope']='P2 outboard dual-hand poses; original P1 18-bone bind and six-clip timings retained'
+    metadata['pikeGripPose']={'outboardOffset':.13,'rearPullback':.06,'frontGripSlide':.10,'attackThrust':.16,'death':'new guard entry; forward hand releases during fall; shaft lies down'}
+    (out/'pike-pose-checks.json').write_text(json.dumps(ctx['pike_pose_checks'],indent=2)+'\n')
+    metadata['lateDeathPoseChecks']=ctx.get('pike_death_checks',[])
+    metadata['eulerContinuityChecks']=ctx.get('pike_euler_checks',[])
+metadata_path.write_text(json.dumps(metadata,indent=2)+'\n')

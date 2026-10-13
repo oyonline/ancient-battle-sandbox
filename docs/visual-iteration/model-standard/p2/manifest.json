@@ -1,0 +1,273 @@
+{
+  "status": "accepted_by_controller_after_independent_technical_and_visual_review",
+  "supersedesAssetSha256": "f3d0f31da1869854e8eb540ece5c54dfa063bb022072b42dbaca568418252777",
+  "assetSha256": "135115c7a5b01514ce75e13c614979d162242eeedd358e3cbb3f12aef0f920cb",
+  "sourceSha256": "32ef9dcacde10f11557d911c117e48d43e6709afe4cb2b7396084c935341a402",
+  "generatorSha256": "b7dd7e5807495575476b003285a4b40b9d7dc6f9f72d17ceb14acdab4cc5af52",
+  "scope": "Only new P2 late Death right wrist and attached full shaft +50mm; left hand/bind/timings/rules/global grounding/old17 unchanged",
+  "capture": "actual battle3d.html GLTFLoader and skinned mesh, independent headless Chromium, no offline render",
+  "viewport": [
+    1280,
+    900
+  ],
+  "canvasByScene": {
+    "near": [
+      1280,
+      695
+    ],
+    "main": [
+      1280,
+      666
+    ]
+  },
+  "comparison": "Only pike P1/P2 differs; both sword R2 and other candidate flags fixed",
+  "light": "L1",
+  "fov": 38,
+  "cameraNearDistance": 10,
+  "cameraMainDistance": 44,
+  "staticSamples": 46,
+  "glbRequests": 20,
+  "allHTTP200": true,
+  "errors": [],
+  "invariants": {
+    "bones": 18,
+    "boneTransformsEqual": true,
+    "inverseBindValuesEqual": true,
+    "clips": [
+      {
+        "name": "Idle",
+        "channelTargetsEqual": true,
+        "duration": 2.0,
+        "durationEqual": true,
+        "maximumInterpolatedFloatDifference": 0.16132209822535515,
+        "changedTracks": [
+          "UpperArm.L.rotation",
+          "Forearm.L.rotation",
+          "Hand.L.rotation",
+          "UpperArm.R.rotation",
+          "Forearm.R.rotation",
+          "Hand.R.translation",
+          "Hand.R.rotation"
+        ]
+      },
+      {
+        "name": "Walk",
+        "channelTargetsEqual": true,
+        "duration": 0.75,
+        "durationEqual": true,
+        "maximumInterpolatedFloatDifference": 0.16091980412602425,
+        "changedTracks": [
+          "UpperArm.L.rotation",
+          "Forearm.L.rotation",
+          "Hand.L.rotation",
+          "UpperArm.R.rotation",
+          "Forearm.R.rotation",
+          "Hand.R.translation",
+          "Hand.R.rotation"
+        ]
+      },
+      {
+        "name": "Turn",
+        "channelTargetsEqual": true,
+        "duration": 0.5,
+        "durationEqual": true,
+        "maximumInterpolatedFloatDifference": 0.16091977804899216,
+        "changedTracks": [
+          "UpperArm.L.rotation",
+          "Forearm.L.rotation",
+          "Hand.L.rotation",
+          "UpperArm.R.rotation",
+          "Forearm.R.rotation",
+          "Hand.R.translation",
+          "Hand.R.rotation"
+        ]
+      },
+      {
+        "name": "Attack",
+        "channelTargetsEqual": true,
+        "duration": 0.875,
+        "durationEqual": true,
+        "maximumInterpolatedFloatDifference": 1.9375613331794739,
+        "changedTracks": [
+          "UpperArm.L.rotation",
+          "Forearm.L.rotation",
+          "Forearm.L.scale",
+          "Hand.L.rotation",
+          "Hand.L.scale",
+          "UpperArm.R.rotation",
+          "Forearm.R.rotation",
+          "Hand.R.translation",
+          "Hand.R.rotation"
+        ]
+      },
+      {
+        "name": "Hit",
+        "channelTargetsEqual": true,
+        "duration": 0.4166666567325592,
+        "durationEqual": true,
+        "maximumInterpolatedFloatDifference": 0.16091977804899216,
+        "changedTracks": [
+          "UpperArm.L.rotation",
+          "Forearm.L.rotation",
+          "Hand.L.rotation",
+          "UpperArm.R.rotation",
+          "Forearm.R.rotation",
+          "Hand.R.translation",
+          "Hand.R.rotation"
+        ]
+      },
+      {
+        "name": "Death",
+        "channelTargetsEqual": true,
+        "duration": 1.25,
+        "durationEqual": true,
+        "maximumInterpolatedFloatDifference": 1.9258326888084412,
+        "changedTracks": [
+          "Hips.translation",
+          "Hips.rotation",
+          "UpperArm.L.rotation",
+          "Forearm.L.rotation",
+          "Hand.L.rotation",
+          "UpperArm.R.rotation",
+          "UpperArm.R.scale",
+          "Forearm.R.rotation",
+          "Hand.R.translation",
+          "Hand.R.rotation",
+          "Hand.R.scale"
+        ]
+      }
+    ],
+    "footVerticesCount": 96,
+    "footVerticesEqual": true,
+    "oldCount": 17,
+    "oldAssetsUnchanged": true
+  },
+  "deathAddendum": {
+    "source": "../pose11-death-slope/summary.json",
+    "count": 108,
+    "scenes": [
+      "normal slope at(-12.2,-3.15)",
+      "QA flat at(-3,-1)",
+      "QA slope at(-3,-1)"
+    ],
+    "times": [
+      0.9583333333333334,
+      1,
+      1.04,
+      1.08,
+      1.12,
+      1.16,
+      1.2,
+      1.25,
+      2
+    ],
+    "angles": [
+      0.6435011088,
+      3.7850937624,
+      0,
+      3.1415926536
+    ],
+    "bodySubset": "dominant Hips/Spine/Chest/Head/Thigh/Shin/Foot excludes arms/pole",
+    "bodyGapMax": 0.03937948388280521,
+    "fullGapRange": [
+      0.02499999441309919,
+      0.025000000000000355
+    ],
+    "targetQASlopeMaxBodyGap": 0.02499999999999991,
+    "shaftTorsoHitsMax": 0,
+    "normalDeathSource": "../contact-runtime-death-fix/summary.json"
+  },
+  "files": {
+    "baseline-death-entry-1.25.png": "cc366da8f0e73a2866cf4461dd828db24caa4adbcb2dccdbbd0ea5ee33a7a518",
+    "candidate-attack-side-3.png": "5195ef39a4168ce93bf37642b1e739674aa03e0b3f1527ec29ce8b083605f7b1",
+    "candidate-near-front.png": "c2d279f003ec8e5df5e0c09cdb4d0dda9e6312ec218e26a18daad10b802cda5a",
+    "candidate-near-side.png": "34ed1f45993aa5ca458d864cdd4351586be46f50ed90f568742a389cdb584566",
+    "baseline-near-back.png": "ab5afc8959141e87d6cc8c251af87140ef8c0ff60be78249529f2afcd2aec8e8",
+    "baseline-walk-2.png": "bd49d8e6e7bc170132adf276cf6aa4b4c48379f23ab60a87309317af4d6109cb",
+    "baseline-attack-side-3.png": "9d13ece4a1a50ecc791101ad6eff3c8494472ae8eaa7b427ebf6508fe5952643",
+    "baseline-near-front.png": "0dc991372c04f4732c0eebd5eae6d182b2b9653880487823a4d92a8017c95dee",
+    "baseline-near-side.png": "2623524da477bdedf0ddaca1367157c29c401f61511072377ad1c399594bb12f",
+    "candidate-death-entry-1.25.png": "e37e54869d9db1e7c6177e4fbdd48410092e6e543962f4e52d7226619b3b8e24",
+    "runtime-thrust.png": "a248ea128dbf0c19a77af59b8c99ea38bd394f8bd713ab8119faf8d0ed248107",
+    "candidate-near-back.png": "8ae2e5f8afd2c9446a143b8953893cbf5686df673e66c241e735a874a5a63505",
+    "candidate-main.png": "86b482d6ba8b71b2d78b4bbd06c55748b1f4aaa269853020da360203ea98b275",
+    "baseline-main.png": "73db6727240dd137716b62881f95293fd9cbf4f0dfebfb3d34a7c58576139f43",
+    "candidate-walk-2.png": "9e995080b0743203df88fd86e65aba33e6f6782b338270c1291de4fe1e30df3e",
+    "runtime-death-settled.png": "da21e0641e207f1207d07eafef67d5dbb15243ff5b3134bc253eeade34a8a6ea"
+  },
+  "selectedFiles": [
+    "baseline-death-entry-1.25.png",
+    "candidate-attack-side-3.png",
+    "candidate-near-front.png",
+    "candidate-near-side.png",
+    "baseline-near-back.png",
+    "baseline-walk-2.png",
+    "baseline-attack-side-3.png",
+    "baseline-near-front.png",
+    "baseline-near-side.png",
+    "candidate-death-entry-1.25.png",
+    "runtime-thrust.png",
+    "candidate-near-back.png",
+    "candidate-main.png",
+    "baseline-main.png",
+    "candidate-walk-2.png",
+    "runtime-death-settled.png"
+  ],
+  "runtimeThrustNote": "Actual Attack .4668 first final version f3: active clip unchanged by subsequent right-arm Death-only fix; runtime Death is separately repeated on135",
+  "rawCaptureFiles": {
+    "baseline-hit.png": "14b9d344bbe54e3a9fc305568991e0775f9dff812d13bc7b8c53b98c7036874b",
+    "baseline-death-entry-0.png": "a9843e77ffd6e694361a70f7561d43d85f11a308a60b45a63c21e22154807251",
+    "candidate-death-entry-0.54.png": "a3ca14d4637c6b17c747de17262483605f5bbc088d43f4ed6c0887a61423648c",
+    "baseline-attack-4.png": "19fa845753b3107cb7507c5687ab8e76da5100b0dbac87d57154781d81c9ec69",
+    "candidate-death.png": "4b09cf040490e199e198edd3bbaae5c6821848125b01896928a8aa7fa0311a16",
+    "candidate-attack-side-1.png": "a966ba693b5ebed1e618e5c3fde26acf95b8ffd749cf2bc2b3e00dea42ad11db",
+    "baseline-death-entry-1.25.png": "cc366da8f0e73a2866cf4461dd828db24caa4adbcb2dccdbbd0ea5ee33a7a518",
+    "candidate-attack-side-3.png": "5195ef39a4168ce93bf37642b1e739674aa03e0b3f1527ec29ce8b083605f7b1",
+    "candidate-attack-side-2.png": "c12ee9b6cabf4c0545c2e452b66d1acbc55eb391c09dd34a2e0863859fc88a26",
+    "candidate-death-entry-0.08.png": "c128a38545362876ebea86d5ab550b7a4877229ff81ee0d112abaf0958d5478a",
+    "baseline-attack-2.png": "374759cddd75cb995116c3b6ee4e62fb6f22f544745ab8321b9f0e45171b40c9",
+    "candidate-near-front.png": "c2d279f003ec8e5df5e0c09cdb4d0dda9e6312ec218e26a18daad10b802cda5a",
+    "candidate-near-side.png": "34ed1f45993aa5ca458d864cdd4351586be46f50ed90f568742a389cdb584566",
+    "baseline-attack-3.png": "35e6db6fd20c0d9dd246133a146693df9915e911ef3e3599701f5a5427850b20",
+    "baseline-attack-1.png": "c5ef9163dde9bc24a13a0a2a1d8c7ffe851f2c0b7a58929cb0b2bdd31405cc59",
+    "baseline-near-back.png": "ab5afc8959141e87d6cc8c251af87140ef8c0ff60be78249529f2afcd2aec8e8",
+    "candidate-attack-side-4.png": "2cd094e769e9eb4e9b20f1a11d69b4209ba666d788d20f19bf43a3f84162f588",
+    "baseline-walk-2.png": "bd49d8e6e7bc170132adf276cf6aa4b4c48379f23ab60a87309317af4d6109cb",
+    "candidate-attack-1.png": "d94b32eaac12f513f8c1d668c556a8838eda103dad069f42cee11fbf8dda2bac",
+    "baseline-walk-3.png": "02721446c4ca619a0f7e0f9965a00c84d2660e75436746ff0cbce78bff18e240",
+    "baseline-walk-1.png": "bf4c67e772b2143a4deb97953f22879ac1535daa1cbb2a9d1f4624ecb5a9d0f4",
+    "candidate-attack-3.png": "c7b00c661a2861ae9cecbe310e47f4aea437f943be1425a2fe07629efae28d13",
+    "candidate-hit.png": "1856f76223c854319a758f14ca53d40a8141a8df3325afbd052add562eab4d02",
+    "baseline-death.png": "d2c8bf117dc573610822021cb10efda822ee3bba11b9d1b06cf7a4ddfcd6112b",
+    "candidate-attack-2.png": "49cb3dfa9c1dabbc6271a809031c7e47aa18ec23368f0c8f80b943058c274c91",
+    "baseline-attack-side-4.png": "33cc06221ce72bb98244837ff7c7728fd494650edb776434d109f1d899cae201",
+    "baseline-walk-4.png": "e11701fd919d812701a007f3e71af1d1c936266207050f32029de285b6bbac1f",
+    "baseline-death-entry-0.54.png": "c0235eb98afaf2d4de561286014b4bc1a06e93ec0f014b54dcaae4495e6d4c6e",
+    "baseline-attack-side-1.png": "ab81e56618bec47365fabc0e12b2df1e47d6b453740d3cf052f0e6877aef8c2d",
+    "baseline-attack-side-3.png": "9d13ece4a1a50ecc791101ad6eff3c8494472ae8eaa7b427ebf6508fe5952643",
+    "candidate-attack-4.png": "ed99b4f78105c6aaa9aa56b930d4d9feef8794a9dc6ad7de6dad73d8b9211dba",
+    "baseline-attack-side-2.png": "61bbbbbd1e541788117e64a1da5fa299006a2e680d90a676bfc738a27543a3e0",
+    "baseline-near-front.png": "0dc991372c04f4732c0eebd5eae6d182b2b9653880487823a4d92a8017c95dee",
+    "candidate-walk-4.png": "504dcde2faf9abcf0d19fb9ca6d9ec66a7a872297bfbb68043c71c2f6d72d4cb",
+    "baseline-near-side.png": "2623524da477bdedf0ddaca1367157c29c401f61511072377ad1c399594bb12f",
+    "candidate-death-entry-1.25.png": "e37e54869d9db1e7c6177e4fbdd48410092e6e543962f4e52d7226619b3b8e24",
+    "baseline-death-entry-0.2.png": "e6486a7e5ddc205c37d9d3fc15e045ce36ab65c5fba47285732f1aae95a89297",
+    "candidate-near-back.png": "8ae2e5f8afd2c9446a143b8953893cbf5686df673e66c241e735a874a5a63505",
+    "candidate-death-entry-0.2.png": "5ffe7e6625032287859c9e0edc5907caa89004e408c5e7cf0f4e33d083c90501",
+    "candidate-main.png": "86b482d6ba8b71b2d78b4bbd06c55748b1f4aaa269853020da360203ea98b275",
+    "baseline-main.png": "73db6727240dd137716b62881f95293fd9cbf4f0dfebfb3d34a7c58576139f43",
+    "candidate-walk-2.png": "9e995080b0743203df88fd86e65aba33e6f6782b338270c1291de4fe1e30df3e",
+    "candidate-walk-3.png": "8f616af1e8874f86a6e290ee46b5c2bbb62ee2a8be3f73537182a61a3cfad490",
+    "candidate-walk-1.png": "255beec512dd1fbf3110322122565646cf68d3f750bbad2b2be9e664e1f70f04",
+    "candidate-death-entry-0.png": "fc9a6aef624ff80ccf51ad112b3f3586dd53e01488bf16e6c2bc3d44c9320b85",
+    "baseline-death-entry-0.08.png": "71b20e7ad3ce28b25cae0b0895e5c613c55bccc74ba4f4a5108c65d8f29f3c34"
+  },
+  "review": {
+    "technical": "APPROVE",
+    "visual": "APPROVE_WITH_NOTES",
+    "requestedModel": "gpt-6-astra",
+    "requestedEffort": "high",
+    "actualModelEffort": "unknown",
+    "userApproval": "unknown"
+  }
+}

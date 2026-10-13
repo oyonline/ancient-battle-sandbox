@@ -1,0 +1,24 @@
+{
+  "comparisonReference": "private assert-coverage export has frozen f3 exact positions/normal/skin/bind/animation accessors; UV/triangle re-export differences recorded separately",
+  "changedTracksOver2e-6": [
+    {
+      "clip": "Death",
+      "bone": "UpperArm.R",
+      "path": "rotation",
+      "maxDifference": 0.02778813242912298
+    },
+    {
+      "clip": "Death",
+      "bone": "Forearm.R",
+      "path": "rotation",
+      "maxDifference": 0.10887517035007477
+    },
+    {
+      "clip": "Death",
+      "bone": "Hand.R",
+      "path": "rotation",
+      "maxDifference": 1.4699357748031616
+    }
+  ],
+  "leftAndNonDeathUnchangedWithin2e-6": true
+}

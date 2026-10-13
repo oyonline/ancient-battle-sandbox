@@ -5,8 +5,9 @@
 用户明确评价当前候选的模型、动作反馈、整体战争感三类不足同时存在，战争感最突出；2026-10-13 已授权先剑盾造型标杆 R2，再依次长矛、弓兵、骑兵（马＋骑手），每项真实游戏静态与动作检查、必要验证、独立复审通过后自主继续，无需逐项等确认。共享模拟首次2D箭逻辑提取后移，尚未实施。保留 R1.1/M1/D1/C1/P1/A1/V1/Q1/T1/B1/C2/L1 基准。
 
 - [x] R2 剑盾连续成人形体、衣甲厚度、肩肘/髋膝/靴与持械关系；独立资产 `sword-standard/infantry-rigged.glb`，未设默认。
-- [~] P2 长矛模型标准（方案已批准，尚未生成）；[ ] A2 弓兵模型标准；[ ] V2 骑兵整体模型标准。
-- 三态：R2完整780测试/build及真实静态/正常动态检查通过；高级独立视觉复审 APPROVE_WITH_NOTES，独立技术QA APPROVE（末次纯标签修正补验通过）；用户明确认可 R2 及整体美术未知。不得从原780测试通过推断美术认可。
+- [x] P2 长矛模型标准，独立135115c7…资产：持矛通道、连续袖权重、体侧LateDeath及单兵坡面枪尖支撑回归闭环；同条件静态/真实动态、780/build、两路独立复审限定通过，总控接受。
+- [~] A2 弓兵轻装模型标准（有界方案已授权，尚未生成）；[ ] V2 骑兵整体模型标准（马＋骑手）。
+- 三态：R2完整780测试/build及真实静态/正常动态检查通过；高级独立视觉复审 APPROVE_WITH_NOTES，独立技术QA APPROVE（末次纯标签修正补验通过）；P2技术限定通过/高级视觉APPROVE_WITH_NOTES/独立技术APPROVE；用户明确认可 R2/P2 及整体美术未知。不得从原780测试通过推断美术认可。
 - 唯一施工 worker 为 Codex 原生 `asset_worker`；高级独立 review requested `gpt-6-astra / high`，actual 模型/档位未知。总控只决策/核验。当前 task **NO PUSH / NO MERGE / NO DEPLOY**；普通本地 commit 仍需精确路径、验证与独立复审、writer 安全门。
 - KB 源未同步：目标已有 dirty 且 owner/handoff 尚未确认；候选保留 `/private/tmp/ancient-r2-kb-01a132c6/index.candidate.md`、`authority.candidate.md`，不能当正式权威。详细制作/证据见 [模型标准记录](model-standard-iteration.md)。
 

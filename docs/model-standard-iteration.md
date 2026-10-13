@@ -48,3 +48,25 @@
 本轮 stable repo_id `github-repository:1200045147`；既有 `codex/sword-shield-round1`、开工 HEAD / 真远端 / exact fetch 一致 `ef4355ff01ec8995eac4dd06dc672e9ec1166944`，开工干净。唯一 writer `codex-native-asset-worker`，controlled_shared hot-zone `.`，review/调查只读。普通本地 commit 依唯一 writer / 精确文件 / 验证及独立 review 门，本地精确提交结果以收口Git回读为准；**本 task NO PUSH / NO MERGE / NO DEPLOY**。
 
 KB 源尚未同步：目标已有 dirty，owner/handoff 未确认；仅保留总控候选 `/private/tmp/ancient-r2-kb-01a132c6/index.candidate.md` / `authority.candidate.md`，不能称作已落正式权威。当前施工推进状态以本仓记录与 live 实测为准。
+
+
+## P2 长矛：技术与内部复审限定通过
+
+独立 `pike-standard/spear-rigged.glb` 最终补件SHA256 `135115c7a5b01514ce75e13c614979d162242eeedd358e3cbb3f12aef0f920cb`；前稿 `f3d0f31…`因下述独立QA坡面回归已superseded，原截图/manifest/故障证据保留。`pike=standard` 继承 P1 原移动、Q1、T1和C1候选行为；`pike=candidate` 保留P1。`modelRole=pikeman` 仅选择造型视角/紧凑对照控件；配对混合主场两版都固定 `model=r2`，只替换长矛，旧入口不受影响。状态文字按实际资产来源派生，原始剑盾不误标D1。
+
+复用已成立的胸腰髋、衣甲覆盖、短曲面罩袍与腿型；双臂按P1真实bind坐标造型。首稿保留旧持矛姿态，但实测杆中线x=.23穿胸；高级独立初审REVISE，不能因P1也存在而豁免。仅新P2后手/矛共同外移.13m、后收.06m，前手沿同杆后移.10m；最大刺击位移.21→.16m，事件时序/范围/伤害未改。固定骨长双臂IK实测104关键姿态，左臂最远.942837m / 最大.962083m，约19.25mm余量；upper/forearm scale 最大偏差1.3113e-6。
+
+旧P1晚Death前手/袖低于人体，整体接地只保证全网格最低点，body-only实际仍悬空.3625m。初次新动作更高，已拒绝。P2晚段13→23双臂放体侧、左手释放、右手握全长杆沿尸体体侧铺平，跳过原作者在求解后再次覆写Hand.R方向的旧分支；0/5保持新guard入口。按原最终身体姿态在23帧形成末态，23→30保持，clip仍1.25秒。完整6clip名称、duration与18骨bind/inverseBind保持，动作数值明确有变，不宣称clip bytes或采样key数量相同（constant track优化会缩短部分输入数组）。Euler连续展开检查无跨π修正，不能把插值问题归因于已证实的Euler翻转。
+
+返工实测还发现新袖子在回折右臂上误权重：实际前臂环因坐标投影落在上臂轴内，部分顶点归UpperArmR，晚态拉到身体下。现只新P2按tube明确环序分配Chest→UpperArm→肘混合→Forearm，消除支点；不重导已冻结R2。原17 GLB SHA保持；新网格5,467顶点/10,418三角/9种原材质，脚部主权重顶点96（每脚48）原始位置保持。
+
+真实正式对照 `.omc/evidence/model-standard/p2/frozen-p2-final/` 共46采样，20GLB HTTP200，errors=[]；前/侧/背、Walk4、Attack4及侧视4、Hit、Death0/.08/.20/.54/1.25与main，1280×900视口，近景1280×695/main1280×666分别配对相同；固定L1/FOV38，近10m/mainC2 44m。manifest绑定GLB、当前main/generator和PNG SHA。额外 `.omc/evidence/model-standard/p2/pose10-death-slope/` 是72次真实23~30逐中间帧+hold：四朝向、原坡与QA平地，fullGap≈.025m、bodyGap最大.039379m，两者最大差.014379m，shaft torsoHits均0；body定义为主权重Hips/Spine/Chest/Head/Thigh/Shin/Foot网格，排除双臂与杆，不宣称人体每处均贴坡。
+
+正常动态已完成两版24s移动、18sduel各14攻击/7命中/1死亡、32s4v4各56/28/4死亡（cancel1）、混合32→27→reset32；暂停实际时刻P1 14.4587 / P2 14.2782，不宣称两个wallclockrun同步。40GLB HTTP200/errors=[]、8连续WebM和trace保留dynamic-p2-final/；新P2实际duel末态full/bodyGap=.025（P1同跑bodyGap约.2807）。补真实Attack .4668极值、HP100→84命中、Death .05入口/1.25末态图与summary见contact-runtime-final/。正常权限全量780/780及build通过。高级正式APPROVE_WITH_NOTES；P3缺ring mapping静默fallback已改P2专用assert，真实全生成coverage与missing-key故障探针通过，公共f3 GLB不变；临时重导重要蒙皮/位置/normal/bind/动画数据相同，UV与一组三角索引有重导差，不声称bytes完全同。
+
+独立技术QA仍在收口，并发现新增边界：qa=single、terrainScene=slope原单兵点x-3/z-1、朝向.6435，Death23~30/hold枪尖支撑导致bodyGap=.068868/fullGap=.025（该点不在上述QA平地72样本范围）；同点旧P1 bodyGap=.025，属于新局部回归。总控批准仅新P2 LateDeath右腕/全杆+50mm局部余隙，左手/旧资产/全局接地/时长不动。新135版目标坡四向bodyGap均.025，108真实末段/保持采样（原坡/单兵平地/单兵坡）最大bodyGap=.039379，fullGap≈.025；一次新真实duel死亡 body/full=.025。与f3重要数据等同的本地assert-coverage导出作有界semantic比对，仅Death右臂3骨track实差>2e-6，左手/非Death保持；浮点导出不声明bytes同。补件新图/manifest/.glb源码快照在frozen-p2-death-fix/，实际坡点见pose11-death-slope/，正常死亡见contact-runtime-death-fix/；两路独立补审已通过，总控正式接受P2。独立技术QA APPROVE：24实机点覆盖三个场景×前反方向×23/26.5中点/30/hold，body/full≈.025、杆torsoHits0；真实duel Death完成t10.6508/body与full=.024999996，实际坡走2.5498s/153帧有推进且finite，25GLB HTTP200/errors=[]，main32ef前后稳定、18bind/6实际duration/old17保持。高级视觉补审 APPROVE_WITH_NOTES，实看新side/Death.54/1.25与单兵坡前反5图及新SHA，确认腕袖连续、右手仍接杆、无新矛穿身或整尸体架起；范围限定本模型和实际采样，非全设备/全坡面/战争感完成。独立原始记录见qa-standard-20261013/p2-death-fix/。技术、内部视觉、用户明确认可分开，P2用户认可未知。NO PUSH/MERGE/DEPLOY；KB源因既有dirty owner-handoff未知尚未同步，仍见本篇R2的候选路径记录。
+
+
+P2三态：技术验证限定通过；高级独立视觉APPROVE_WITH_NOTES、独立技术APPROVE，总控接受；用户明确认可P2/整体美术未知。高级requested gpt-6-astra/high、actual未知。前f3完整动态/全量780/build引用的是同一main32ef接线；最终只LateDeath右侧局部修复，不重复与改动无关的full，另完成目标坡/实际死亡和独立补验。保留靴底约6.5mm边界、T1局部足滑/坡足gap、主场44m细节提升含蓄、轻微衣甲视觉notes及此前系统局限；不证明数百兵性能。精选16图和绑定最终manifest见docs/visual-iteration/model-standard/p2/；真实连续录像raw不进Git。
+
+下一项A2按轻装、兜帽、箭袋、连续躯干/袖与腿型实施；保留原19骨Arrow、Bow/String蒙皮与Q1释放接口，弯臂按明确环序权重，先不改骑兵。混合A/B固定model=r2&pike=standard，只替换弓兵。完成后独立复审再继续V2（马与骑手），不等用户逐项确认。
