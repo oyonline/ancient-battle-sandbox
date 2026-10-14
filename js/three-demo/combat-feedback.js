@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 
-const HIT_TYPES = new Set(['hit', 'arrow-hit', 'charge', 'death']);
+const HIT_TYPES = new Set(['hit', 'block', 'arrow-hit', 'charge', 'death']);
 const UP = new THREE.Vector3(0, 1, 0);
 const finite = v => Number.isFinite(v.x + v.y + v.z);
 
 // Visuals consume resolved events and final world poses. No fighter or material
 // belonging to a soldier is changed here; all rendered resources are owned.
 export class CombatFeedback {
- constructor(scene, heightAt, { maxParticles = 128, maxEvents = 64, chargeCandidate = false, chargeView = null } = {}) {
-  this.scene = scene; this.heightAt = heightAt;
+ constructor(scene, heightAt, { maxParticles = 128, maxEvents = 64, chargeCandidate = false, chargeView = null, spatialScale = 1 } = {}) {
+  this.scene = scene; this.heightAt = heightAt;this.spatialScale=spatialScale;this.effectOrigin=null;
   this.chargeCandidate = chargeCandidate; this.chargeView = chargeView;
   this.maxParticles = maxParticles; this.maxEvents = maxEvents;
   this.events = []; this.particles = []; this.deaths = new Map();
@@ -44,6 +44,7 @@ export class CombatFeedback {
  spawn(type, point, velocity, size, life, color, opacity, shard = false, envelope = null) {
   if (!finite(point) || !finite(velocity) || !Number.isFinite(size + life)) return;
   if (this.particles.length >= this.maxParticles) { this.dropped++; return; }
+  if(this.spatialScale!==1){point=point.clone();if(this.effectOrigin)point.sub(this.effectOrigin).multiplyScalar(this.spatialScale).add(this.effectOrigin);velocity=velocity.clone().multiplyScalar(this.spatialScale);size*=this.spatialScale;}
   const material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity,
    depthWrite: false, depthTest: true, fog: true });
   const mesh = new THREE.Mesh(shard ? this.shardGeometry : this.dustGeometry, material);
@@ -58,13 +59,13 @@ export class CombatFeedback {
   this.created[type] = (this.created[type] ?? 0) + 1;
  }
  impact(event) {
-  const point = this.anchor(event.target); if (!point) return;
+  const point = event.type==='block'?event.target.model?.getObjectByName('HandL')?.getWorldPosition(new THREE.Vector3()):this.anchor(event.target); if (!point) return;this.effectOrigin=point.clone();
   const direction = this.direction(event);
   // A resolved hit is displayed on the facing side of the victim. This is a
   // presentation anchor, not a claim of mesh/arrow collision at this bone.
-  point.addScaledVector(direction, event.target.kind === 'cavalry' ? -1.05 : -.43);
+  if(event.type!=='block')point.addScaledVector(direction, event.target.kind === 'cavalry' ? -1.05 : -.43);
   const lateral = new THREE.Vector3(direction.z, 0, -direction.x);
-  const count = event.type === 'arrow-hit' ? 3 : 4;
+  const count = ['arrow-hit','block'].includes(event.type) ? 3 : 4;
   for (let i = 0; i < count; i++) {
    const side = (i - (count - 1) / 2) * .52;
    const velocity = direction.clone().multiplyScalar(-1.0)
@@ -75,6 +76,7 @@ export class CombatFeedback {
   this.record(event.type, point, { target: event.target.id });
  }
  dust(type, point, direction, count, strength = 1) {
+  this.effectOrigin=point.clone();this.effectOrigin.y=this.heightAt(point.x,point.z);
   const lateral = new THREE.Vector3(direction.z, 0, -direction.x);
   for (let i = 0; i < count; i++) {
    const side = (i - (count - 1) / 2) / Math.max(1, count - 1);
@@ -93,7 +95,7 @@ export class CombatFeedback {
   const point = event.target.root?.getWorldPosition(new THREE.Vector3())
    ?? new THREE.Vector3(event.target.x, 0, event.target.z);
   if (!finite(point)) return;
-  point.y = this.heightAt(point.x, point.z);
+  point.y = this.heightAt(point.x, point.z);this.effectOrigin=point.clone();
   const direction = this.direction(event), lateral = new THREE.Vector3(direction.z, 0, -direction.x);
   const horse = event.target.kind === 'cavalry', first = !!event.first;
   const count = first ? 6 : 3, strength = first ? 1 : .6;
@@ -158,7 +160,7 @@ export class CombatFeedback {
   this.horses.set(unit, { x: unit.x, z: unit.z, cooldown: Math.max(0, (previous?.cooldown ?? 0) - dt) });
   if (!previous || unit.hp <= 0) return;
   const dx = unit.x - previous.x, dz = unit.z - previous.z, distance = Math.hypot(dx, dz);
-  if (!unit.moving || distance < .002 || distance / dt < 1.4 || previous.cooldown > 0) return;
+  if (!unit.moving || distance < .002*this.spatialScale || distance / dt < 1.4*this.spatialScale || previous.cooldown > 0) return;
   const contacts = [], vertex = new THREE.Vector3();
   for (const vertices of this.hoofCatalog(unit.model).values()) {
    let lowest = Infinity, contact = null;
@@ -167,7 +169,7 @@ export class CombatFeedback {
     const gap = vertex.y - this.heightAt(vertex.x, vertex.z);
     if (gap < lowest) { lowest = gap; contact = vertex.clone(); }
    }
-   if (lowest >= -.015 && lowest <= .075 && contact) contacts.push(contact);
+   if (lowest >= -.015*this.spatialScale && lowest <= .075*this.spatialScale && contact) contacts.push(contact);
   }
   if (!contacts.length) return;
   const direction = new THREE.Vector3(-dx, 0, -dz).normalize();

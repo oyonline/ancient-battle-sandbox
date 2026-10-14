@@ -1,0 +1,174 @@
+{
+  "date": "2026-10-14",
+  "scope": "fixed30 dual swords only, three real attacks/random damage/conditional block",
+  "userAuthorization": "implement now with reasonable initial values; no user acceptance claimed",
+  "url": "http://localhost:5301/battle3d.html?impact=sword",
+  "seed": 728,
+  "oldSword": "?impact=sword&duelRules=previous",
+  "preserved": "impact charge, old vitality16, original mixed32, allGLB,2D",
+  "rules": {
+    "hp": 140,
+    "slash": {
+      "damage": [
+        12,
+        19
+      ],
+      "contact": 0.48,
+      "duration": 1.05,
+      "blockChanceWhenEligible": 0.32,
+      "blockedFraction": 0.2
+    },
+    "cleave": {
+      "damage": [
+        20,
+        31
+      ],
+      "contact": 0.72,
+      "duration": 1.38,
+      "blockChanceWhenEligible": 0.22,
+      "blockedFraction": 0.45
+    },
+    "thrust": {
+      "damage": [
+        8,
+        14
+      ],
+      "contact": 0.3,
+      "duration": 0.78,
+      "blockChanceWhenEligible": 0.32,
+      "blockedFraction": 0.2
+    },
+    "block": "living frontal guard only; rounded residual damage; own block event",
+    "random": "sample-owned seed, inclusive integer damage, weighted attack choice, maximum2 consecutive same move; reset same seed, new battle new seed",
+    "clock": "fixed120Hz, shared pose/contact metadata, up to one tick discretization; pause no advancement",
+    "interrupt": "early windup can cancel; last100ms committed; 850ms interrupt protection after stun; simultaneous contact resolved together"
+  },
+  "defaultBattle": {
+    "seconds": 16.7167,
+    "attack": 23,
+    "hit": 16,
+    "block": 2,
+    "cancel": 5,
+    "death": 1,
+    "attacksPerSide": [
+      12,
+      11
+    ],
+    "hp": [
+      -2,
+      2
+    ],
+    "displayHP": [
+      0,
+      2
+    ],
+    "allThreeActualHit": true,
+    "errors": [],
+    "pauseStable": true,
+    "survivorFinalPhase": "guard"
+  },
+  "reviewFix": {
+    "finding": "P2 simultaneous deaths incorrectly labelled blue victory",
+    "seed": 2120,
+    "fixed": "duel-only outcome displays draw",
+    "browserObserved": "双方同归于尽 · 平局",
+    "receipt": "/private/tmp/ancient-duel-writer-20261014/final/draw-and-old-smoke.json"
+  },
+  "verification": {
+    "fullBeforeOutcomeFix": {
+      "pass": 830,
+      "total": 830,
+      "exit": 0,
+      "log": "/private/tmp/ancient-duel-writer-20261014/tests.log"
+    },
+    "focusedAfterOutcomeFix": {
+      "pass": 19,
+      "exit": 0,
+      "log": "/private/tmp/ancient-duel-writer-20261014/focused-final.log"
+    },
+    "buildAfterOutcomeFix": {
+      "exit": 0,
+      "log": "/private/tmp/ancient-duel-writer-20261014/build-final.log"
+    },
+    "browser": {
+      "errors": [],
+      "reset": "same seed and full140HP after2rAF",
+      "pause": "entire inspect equal after200ms",
+      "oldEntrypoints": "old single strike, charge, vitality30, mixed32 loaded",
+      "receipt": "/private/tmp/ancient-duel-writer-20261014/final/controls.json"
+    },
+    "technical": "APPROVE; independent10 newduel tests, prior18focused, 300seed no lock,20seed dt equivalence; P2 closed",
+    "visual": {
+      "verdict": "APPROVE_WITH_NOTES",
+      "requiredRemaining": [],
+      "receipt": "/private/tmp/ancient-duel-review-20261014/verdict.json",
+      "minimumLivingSoleGapMetres": -0.00336,
+      "notes": [
+        "block recoil is short and restrained",
+        "local stylized action sample; no user acceptance claimed"
+      ]
+    },
+    "visualUserAcceptance": "pending"
+  },
+  "frozenHashes": {
+    "js/three-demo/sword-duel.js": "054e4a81c9f1f83759378f584d3d8500b447bac1b9a44d7835fbb169e52cb479",
+    "js/three-demo/duel-performance.js": "485251a7b41f04bfecb31fd31f803ad5dea34b611890b8c1350a11f37e2b2ebd",
+    "js/three-demo/main.js": "d97080ff1c3e52b4982ff740b1a8c25dde4b9d457743e3a427a63bcf3186cd71",
+    "js/three-demo/animation-controller.js": "847ed9eefc5ba03090b8d1e97404d854c1f94b6f784ea9a211917d8da3753709",
+    "js/three-demo/impact-performance.js": "f90ada7d4533db0835e69dcdac099a65537602e51982efa06662639b4937e14d",
+    "js/three-demo/combat-feedback.js": "7eeaf214befc729f1d9ae66183f5503ea724c6d1639c667ba5c12247f86fa709",
+    "css/three-demo.css": "5d76956ee7c64b395f90e98929ded4a6be3c7fd5466079b548871189a1c7e5df",
+    "tests/three-sword-duel.test.js": "5ae19b18d7cdeb2d9f164bd3b273f06485a32aced42b7c0b1051e284c34fcb79"
+  },
+  "evidence": {
+    "final": "/private/tmp/ancient-duel-writer-20261014/final",
+    "selected": {
+      "thrust": {
+        "sourceFrame": 123,
+        "time": 2.1416666666666617
+      },
+      "slash": {
+        "sourceFrame": 169,
+        "time": 2.9083333333333257
+      },
+      "cleave": {
+        "sourceFrame": 324,
+        "time": 5.491666666666729
+      },
+      "block": {
+        "sourceFrame": 572,
+        "time": 9.625000000000094
+      }
+    },
+    "invalid": "initial first recording interrupted by HMR, excluded; first-stable valid initial stage; final is frozen motion"
+  },
+  "filesThisWave": [
+    "js/three-demo/sword-duel.js",
+    "js/three-demo/duel-performance.js",
+    "js/three-demo/main.js",
+    "js/three-demo/impact-performance.js",
+    "js/three-demo/animation-controller.js",
+    "js/three-demo/combat-feedback.js",
+    "css/three-demo.css",
+    "tests/three-sword-duel.test.js",
+    "docs/sword-duel-sample.md",
+    "docs/3d-controller.md",
+    "docs/impact-sample.md",
+    "docs/visual-iteration/sword-duel/"
+  ],
+  "git": {
+    "branch": "codex/sword-shield-round1",
+    "head": "17382c65c1f659ea62ccbfaa1b74439418d5bac0",
+    "owner": "codex-native-soldier-cavalry-worker",
+    "mode": "same registered dirty handoff; bounded writer transactions",
+    "commit": false,
+    "push": false,
+    "merge": false,
+    "deploy": false,
+    "receipts": "/private/tmp/ancient-duel-writer-20261014"
+  },
+  "model": {
+    "requested": "inherited",
+    "actual": "unknown"
+  }
+}

@@ -40,8 +40,8 @@ export function prepareClipBounds(model, clips) {
 
 // One controller and mixer per cloned skeleton. Shared clips remain immutable.
 export class AnimationController {
- constructor(model, clips, {locomotion=false,terrainHeight=null}={}) {
-  this.locomotion=locomotion;this.stateAge=0;this.feet=locomotion?new PlantedFeet(model):null;
+ constructor(model, clips, {locomotion=false,terrainHeight=null,motionScale=1,mounted=false}={}) {
+  this.locomotion=locomotion;this.motionScale=motionScale;this.mounted=mounted;this.stateAge=0;this.feet=locomotion?new PlantedFeet(model,motionScale):null;
   this.model = model;
   let skinned = false;
   model.traverse(object => { if (object.isSkinnedMesh) skinned = true; });
@@ -62,7 +62,7 @@ export class AnimationController {
    else this.oneShot = null;
   };
   this.mixer.addEventListener('finished', this.onFinished);
-  this.terrain=terrainHeight&&this.feet?new TerrainContact(model,this.feet,terrainHeight):null;
+  this.terrain=terrainHeight&&this.feet?new TerrainContact(model,this.feet,terrainHeight,motionScale):null;
   this.play('idle');
  }
  play(name, restart = false) {
@@ -76,10 +76,10 @@ export class AnimationController {
   if (previous && previous !== next) next.crossFadeFrom(previous, name === 'death' ? .08 : .12, false);
   this.state = name;this.stateAge=0;
  }
- trigger(name) {
+ trigger(name, {recover=false}={}) {
   name = name.toLowerCase();
   if (this.dead || this.disposed) return;
-  if (name === 'attack' && this.oneShot === 'hit') return;
+  if (name === 'attack' && this.oneShot === 'hit'&&!recover) return;
   if (!['attack', 'hit', 'death'].includes(name)) throw new Error(`Invalid animation event: ${name}`);
   if (name === 'death') this.dead = true;
   this.oneShot = name;
@@ -93,7 +93,9 @@ export class AnimationController {
   if (this.disposed) return;
   this.terrain?.restore();
   if (!this.dead && !this.oneShot){const turning=this.locomotion&&motion&&Math.abs(motion.turnRate)>.25&&motion.speed<.12&&this.actions.has('turn');this.play(turning?'turn':moving?(charging&&this.actions.has('charge')?'charge':'walk'):'idle');}
-  if(this.locomotion&&motion){if(this.state==='walk')this.actions.get('walk').setEffectiveTimeScale(Math.max(0,Math.min(2.5,motion.speed/1.8)));if(this.state==='turn')this.actions.get('turn').setEffectiveTimeScale(Math.max(.25,Math.min(1.5,Math.abs(motion.turnRate)/2.6)));}
+  if(this.locomotion&&motion){if(this.state==='walk')this.actions.get('walk').setEffectiveTimeScale(Math.max(0,Math.min(2.5,motion.speed/(1.8*this.motionScale))));if(this.state==='turn')this.actions.get('turn').setEffectiveTimeScale(Math.max(.25,Math.min(1.5,Math.abs(motion.turnRate)/2.6)));}
+  if(this.mounted&&motion&&['walk','charge'].includes(this.state))this.actions.get(this.state).setEffectiveTimeScale(Math.max(0,Math.min(2,motion.speed/this.motionScale/(this.state==='charge'?1.6/(.48*.75):1.35/.56))));
+  if(this.state==='attack'&&Number.isFinite(motion?.attackPresentationTime)){const action=this.actions.get('attack');action.time=Math.max(0,Math.min(action.getClip().duration,motion.attackPresentationTime)-dt);}
   this.mixer.update(dt);this.stateAge+=dt;
   if(this.feet){refreshSkinWorld(this.model);const action=this.actions.get(this.state);this.terrain?.rememberLift();this.feet.update(this.state,action.time/action.getClip().duration,this.stateAge,dt);this.terrain?.apply(this.state,action.time/action.getClip().duration);}
  }

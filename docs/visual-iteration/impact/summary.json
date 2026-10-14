@@ -1,0 +1,124 @@
+{
+  "date": "2026-10-14",
+  "userDecision": {
+    "size": "remaining 30 percent accepted",
+    "priorMotion": "explicitly rejected: wooden, weak speed/impact/combat feel",
+    "newMotion": "awaiting user playtest; internal reviews are not user acceptance"
+  },
+  "urls": [
+    "http://localhost:5301/battle3d.html?impact=sword",
+    "http://localhost:5301/battle3d.html?impact=charge"
+  ],
+  "previousComparison": "impactFeel=previous; same assets, scale, scenario and camera",
+  "scope": {
+    "actors": 2,
+    "scale": 0.3,
+    "attackContactSeconds": 0.4583333333333333,
+    "releaseSeconds": 0.068,
+    "chargeVisualDisplacementSeconds": 0.18,
+    "simulation": "unchanged HP/damage/timers; render-only recoil and bounded hold",
+    "terrain": "flat isolated sample",
+    "preserved": "old 16/32 presets, 2D and every GLB"
+  },
+  "verification": {
+    "focused": {
+      "passed": 9,
+      "exit": 0,
+      "log": "/private/tmp/ancient-impact-writer-20261014/focused.log"
+    },
+    "full": {
+      "passed": 819,
+      "total": 821,
+      "exit": 1,
+      "failures": "2 existing arena-server tests: sandbox listen EPERM",
+      "log": "/private/tmp/ancient-impact-writer-20261014/tests.log"
+    },
+    "failedFileNormalPermissionRerun": {
+      "passed": 2,
+      "exit": 0,
+      "log": "/private/tmp/ancient-impact-writer-20261014/arena-normal.log"
+    },
+    "judge": {
+      "exit": 2,
+      "reason": "project config ancient-battle-sandbox.json absent; no triage or feedback result"
+    },
+    "build": {
+      "exit": 0,
+      "log": "/private/tmp/ancient-impact-writer-20261014/build.log"
+    },
+    "diffCheck": 0,
+    "browser": {
+      "errors": [],
+      "pause": "complete inspect stable for 250ms both modes",
+      "reset": "new100HP actors after two real rAF; immediate matrices may be stale",
+      "end18seconds": {
+        "sword": {
+          "hit": 9,
+          "death": 1
+        },
+        "charge": {
+          "charge": 1,
+          "hit": 11,
+          "death": 1
+        }
+      },
+      "oldEntrypoints": "mixed32 and vitality30/100 HTTP200 loaded without errors",
+      "receipt": "/private/tmp/ancient-impact-writer-20261014/controls.json"
+    }
+  },
+  "visual": {
+    "verdict": "APPROVE_WITH_NOTES",
+    "requiredRemaining": [],
+    "independentReceipt": "/private/tmp/ancient-impact-review-20261014/verdict.json",
+    "independentEvidence": "/private/tmp/ancient-impact-review-20261014/final/",
+    "writerEvidence": "/private/tmp/ancient-impact-writer-20261014/third",
+    "minimumSoleGapMetres": {
+      "sword": -0.001972339,
+      "charge": -0.0046247756
+    },
+    "notes": [
+      "initial duel windups remain largely mirrored",
+      "stylized spear impact, not full rigid-body collision",
+      "user acceptance still pending"
+    ]
+  },
+  "technical": {
+    "verdict": "APPROVE",
+    "independentFocused": 9,
+    "extra": "real GLB pose restoration/death priority,32128 finite vertices, normalized foot world angle maximum2.72e-6rad",
+    "receipt": "Current thread independent code_audit message 2026-10-14"
+  },
+  "frozenHashes": {
+    "js/three-demo/impact-performance.js": "12464ed063972866ad3a583c5359e7f1c62a6fc6e1b7f2837e0abe7ed95cdf05",
+    "js/three-demo/main.js": "56a891b3ea7d80be6061584803440a97345df66cf616cf740f4a38b359d4f02a",
+    "js/three-demo/animation-controller.js": "b254af973b30506d44ed2a13d44277de4422b4d4a596f42670a428c28e54b7e9",
+    "js/three-demo/vitality-sample.js": "9156766f4c38ac42d0367075b5bdf3137c4c64f489c665bdabe46aa8af5e0228",
+    "tests/three-impact-performance.test.js": "b6ae87f9e1dce28b8e31091b72dd835fa98a48fbb9612ff2fe0d51d702c93c26"
+  },
+  "changedThisWave": [
+    "js/three-demo/impact-performance.js",
+    "js/three-demo/main.js",
+    "js/three-demo/animation-controller.js",
+    "js/three-demo/vitality-sample.js",
+    "tests/three-impact-performance.test.js",
+    "index.html",
+    "docs/3d-controller.md",
+    "docs/vitality-sample.md",
+    "docs/impact-sample.md",
+    "docs/visual-iteration/impact/summary.json"
+  ],
+  "git": {
+    "branch": "codex/sword-shield-round1",
+    "head": "17382c65c1f659ea62ccbfaa1b74439418d5bac0",
+    "owner": "codex-native-soldier-cavalry-worker",
+    "commit": false,
+    "push": false,
+    "merge": false,
+    "deploy": false,
+    "protocol": "fresh exact remote/dirty manifest + bounded writer transaction; release/status receipts in /private/tmp/ancient-impact-writer-20261014"
+  },
+  "model": {
+    "requested": "inherited",
+    "actual": "unknown"
+  }
+}
