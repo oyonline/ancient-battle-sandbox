@@ -1,0 +1,150 @@
+{
+  "revision": "ac-natural-20261014-final2",
+  "status": "tested_frozen_independently_approved_local_only",
+  "url": "http://localhost:5301/ac-duel.html",
+  "reference_height_m": 0.7836890459060669,
+  "scope": "Death source shoe geometry and lower stance entry only; runtime, original materials and 8 alive clips retained",
+  "numerical_tolerance_m": 0.001,
+  "source_clearance_m": 0.0007836890459060669,
+  "checks": {
+    "targeted": {
+      "command": "node --test tests/three-civilian-models.test.js tests/three-sword-duel.test.js",
+      "pass": 18,
+      "fail": 0,
+      "skip": 0,
+      "exit_code": 0,
+      "log": "final-tests.log"
+    },
+    "build": {
+      "command": "npm run build",
+      "exit_code": 0,
+      "log": "final-build.log"
+    },
+    "rules": {
+      "seed": 728,
+      "both_asset_orders_tested": true,
+      "hp": [
+        -2,
+        2
+      ],
+      "draws": 80,
+      "zero_dt_pose_invariant": true,
+      "sha256": "054e4a81c9f1f83759378f584d3d8500b447bac1b9a44d7835fbb169e52cb479"
+    },
+    "author_death_support": {
+      "civilian-a": {
+        "hz": 120,
+        "context": "idle with live lastPose to Death",
+        "worst_shoe_m": {
+          "footl": -0.0002991128913575952,
+          "footr": -0.0005144941150223414
+        },
+        "max_frame_model_shift_m": 0.0013862460719588259,
+        "max_frame_joint_rotation_degrees": 9.173357671485354,
+        "end_support_m": {
+          "hips": 0,
+          "chest": 0.022280132098884943,
+          "head": 0.00019641928083470334,
+          "footl": 0.00078451442793003,
+          "footr": 0.0007829523923239745,
+          "core": 0
+        }
+      },
+      "civilian-c": {
+        "hz": 120,
+        "context": "idle with live lastPose to Death",
+        "worst_shoe_m": {
+          "footl": -9.181047920525653e-06,
+          "footr": -0.00025122868530777064
+        },
+        "max_frame_model_shift_m": 0.0008857127754309405,
+        "max_frame_joint_rotation_degrees": 7.980566644018672,
+        "end_support_m": {
+          "hips": 0.018639781602431876,
+          "chest": 0.010107495047321852,
+          "head": 1.865695098413056e-15,
+          "footl": 0.0007845208122834006,
+          "footr": 0.000783509902435784,
+          "core": 1.865695098413056e-15
+        }
+      }
+    },
+    "unchanged_alive": [
+      {
+        "model": "civilian-a",
+        "unchangedAliveClips": 8,
+        "unchangedTracks": 1584
+      },
+      {
+        "model": "civilian-c",
+        "unchangedAliveClips": 8,
+        "unchangedTracks": 1584
+      }
+    ]
+  },
+  "freeze": {
+    "revision": "ac-natural-20261014-final2",
+    "url": "http://localhost:5301/ac-duel.html",
+    "hashes": {
+      "tools/prepare-civilian-models.py": "7e53c964d86b333e2e0117347739aaa1ebaa11949ed7b46b6838c2b07bdff026",
+      "js/three-demo/civilian-animation.js": "3bdbd06640f86c3ec472115a49abbe51e1e4afd55cb28193b0718178f09b3774",
+      "js/three-demo/civilian-performance.js": "42538ab22615c04a70cf2a1ec1dacb74831efd79b0bcd43d86fb6e1f2a7e25df",
+      "js/three-demo/civilian-ik.js": "b4ef7738b9768097c73abfa0b516001e2b8e6db518ce5b0bdc4d669af2c3bb08",
+      "js/three-demo/civilian-duel.js": "f40a5edbd6c85d75b78c049e11b4a8ff436a3aa44450dd0451d7c91a75d12358",
+      "tests/three-civilian-models.test.js": "fed5a7e132c77e73fdce7a0ed4a31fc42771511b67da1313a3f85c7cd6f611b6",
+      "ac-duel.html": "6fa0d1343de593751b31f3ee55341203cbe7bd1698b69f70e54f30af9fc10206",
+      "local-assets/ac/civilian-a.glb": "b7ad2f93fdbc363ed1473f89645bfb1ab71894638cc63d268d38a0295e4e5502",
+      "local-assets/ac/civilian-c.glb": "17491abaeef8864c661638acfd9c9700f787d30c54b7c7325519d32e3d344ced",
+      "local-assets/ac/civilian-a.json": "1cc1e0e817561e864ea5c032c3886b48814cb2e5679c5fbe8c8aa7f003570f41",
+      "local-assets/ac/civilian-c.json": "5f49acae47f457057234dcc5946045c66d86efedc457fae6b5ad6a32ed92dd5f",
+      "js/three-demo/sword-duel.js": "054e4a81c9f1f83759378f584d3d8500b447bac1b9a44d7835fbb169e52cb479"
+    },
+    "source": "apply-foot-final2 short writer transaction",
+    "scope": "A C 30pct Death shoes only; native and real transitions with 1mm numerical tolerance",
+    "sampled_at": "2026-10-14T09:27:23.570717+00:00",
+    "candidate": "export10",
+    "toleranceMeters": 0.001
+  },
+  "independent_review": {
+    "status": "APPROVE",
+    "verificationStatus": "PASS",
+    "requiredRemaining": [],
+    "receipt": "review/verdict.json",
+    "sampling_hz": 240,
+    "worst_shoe_mm": {
+      "civilian-a": -0.5144941150224593,
+      "civilian-c": -0.2512286853078357
+    },
+    "old_failure_window_min_mm": {
+      "civilian-a": 0.17197106354075592,
+      "civilian-c": 0.5614375225131193
+    }
+  },
+  "git": {
+    "head": "17382c65c1f659ea62ccbfaa1b74439418d5bac0",
+    "branch": "codex/sword-shield-round1",
+    "source_dirty_owner": "codex-native-ac-natural-worker",
+    "writer_owner": "codex-native-ac-foot-worker",
+    "candidate_writer_status": "writer_free",
+    "commit": false,
+    "push": false
+  },
+  "limitations": [
+    "Authored keyframes with bounded offline IK; not ragdoll physics",
+    "1mm sampling tolerance; no claim of mathematical zero penetration or user visual satisfaction"
+  ],
+  "visual": {
+    "independent_review": "APPROVE; no visible sole cuts, sudden whole-body lift or new abrupt fall",
+    "capture_hz": 60,
+    "real_death_time_s": 16.733333333333025,
+    "key_images": [
+      "review/visual/a-death-low-side-entry.jpg",
+      "review/visual/a-death-low-side-middle.jpg",
+      "review/visual/a-death-low-side-full.jpg",
+      "review/visual/c-death-low-side-entry.jpg",
+      "review/visual/c-death-low-side-middle.jpg",
+      "review/visual/c-death-low-side-full.jpg"
+    ],
+    "capture_unchanged": true
+  }
+}

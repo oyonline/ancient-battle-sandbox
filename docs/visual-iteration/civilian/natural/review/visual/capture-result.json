@@ -1,0 +1,65 @@
+{
+  "before": {
+    "js/three-demo/civilian-performance.js": "42538ab22615c04a70cf2a1ec1dacb74831efd79b0bcd43d86fb6e1f2a7e25df",
+    "js/three-demo/civilian-duel.js": "f40a5edbd6c85d75b78c049e11b4a8ff436a3aa44450dd0451d7c91a75d12358",
+    "local-assets/ac/civilian-a.glb": "b7ad2f93fdbc363ed1473f89645bfb1ab71894638cc63d268d38a0295e4e5502",
+    "local-assets/ac/civilian-c.glb": "17491abaeef8864c661638acfd9c9700f787d30c54b7c7325519d32e3d344ced"
+  },
+  "after": {
+    "js/three-demo/civilian-performance.js": "42538ab22615c04a70cf2a1ec1dacb74831efd79b0bcd43d86fb6e1f2a7e25df",
+    "js/three-demo/civilian-duel.js": "f40a5edbd6c85d75b78c049e11b4a8ff436a3aa44450dd0451d7c91a75d12358",
+    "local-assets/ac/civilian-a.glb": "b7ad2f93fdbc363ed1473f89645bfb1ab71894638cc63d268d38a0295e4e5502",
+    "local-assets/ac/civilian-c.glb": "17491abaeef8864c661638acfd9c9700f787d30c54b7c7325519d32e3d344ced"
+  },
+  "unchanged": true,
+  "results": [
+    {
+      "name": "a-death-low-side",
+      "errors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)"
+      ],
+      "traceFrames": 241,
+      "shots": 98,
+      "firstDeath": 16.733333333333025,
+      "camera": {
+        "position": [
+          0.008224325812702101,
+          0.6940924459599894,
+          2.688004722721114
+        ],
+        "target": [
+          0,
+          0.44,
+          0
+        ]
+      },
+      "pair": [
+        "civilian-a",
+        "civilian-c"
+      ]
+    },
+    {
+      "name": "c-death-low-side",
+      "errors": [],
+      "traceFrames": 241,
+      "shots": 98,
+      "firstDeath": 16.733333333333025,
+      "camera": {
+        "position": [
+          0.008224325812702101,
+          0.6940924459599894,
+          2.688004722721114
+        ],
+        "target": [
+          0,
+          0.44,
+          0
+        ]
+      },
+      "pair": [
+        "civilian-c",
+        "civilian-a"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "timestamp": "2026-10-14T09:33:37.331Z",
+  "models": [
+    {
+      "model": "civilian-a",
+      "baselineSha": "2d528c202035482de8e7a90eb17b03fe2194039dd1401e2ac0df479378e7008d",
+      "candidateSha": "b7ad2f93fdbc363ed1473f89645bfb1ab71894638cc63d268d38a0295e4e5502",
+      "geometrySkinWeightsAndMaterialsIdentical": true,
+      "nonDeathClipsIdentical": true,
+      "nonDeathClips": [
+        "Idle",
+        "Walk",
+        "Slash",
+        "Cleave",
+        "Thrust",
+        "Block",
+        "Guard",
+        "Hit"
+      ],
+      "metadataIdentical": true,
+      "normalization": {
+        "sourceHeight": 179.301234126091,
+        "normalization": 0.014569318679925145,
+        "heightAt30": 0.7836890459060669
+      }
+    },
+    {
+      "model": "civilian-c",
+      "baselineSha": "d63e69caa4ab077b2a307ec6d49c07737ea0e895b8051fcb891d85132c1b9bef",
+      "candidateSha": "17491abaeef8864c661638acfd9c9700f787d30c54b7c7325519d32e3d344ced",
+      "geometrySkinWeightsAndMaterialsIdentical": true,
+      "nonDeathClipsIdentical": true,
+      "nonDeathClips": [
+        "Idle",
+        "Walk",
+        "Slash",
+        "Cleave",
+        "Thrust",
+        "Block",
+        "Guard",
+        "Hit"
+      ],
+      "metadataIdentical": true,
+      "normalization": {
+        "sourceHeight": 181.48356974124908,
+        "normalization": 0.014394122968880225,
+        "heightAt30": 0.7836890459060669
+      }
+    }
+  ],
+  "pass": true
+}

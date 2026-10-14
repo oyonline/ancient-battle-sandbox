@@ -1,0 +1,120 @@
+{
+  "status": "implemented_and_independently_reviewed; awaiting_user_impression",
+  "url": "http://localhost:5301/ac-duel.html",
+  "scope": "A/C local adult sword-buckler duel; fixed30%; unchanged SwordDuel",
+  "reference_height_m": 0.7836890459060669,
+  "seed": 728,
+  "implementation": {
+    "real_assets": true,
+    "old_presets_preserved": true,
+    "rule_sha256": "054e4a81c9f1f83759378f584d3d8500b447bac1b9a44d7835fbb169e52cb479"
+  },
+  "checks": {
+    "focused": {
+      "pass": 15,
+      "fail": 0,
+      "skip": 0,
+      "exit_code": 0,
+      "log": "/private/tmp/ancient-ac-models-20261014/focused-final.log"
+    },
+    "build": {
+      "exit_code": 0,
+      "log": "/private/tmp/ancient-ac-models-20261014/build-final.log"
+    },
+    "routes": {
+      "get_head_pass": 18,
+      "get_head_total": 18,
+      "lan_handler_denied": true,
+      "dist_page_present": true,
+      "private_assets_in_dist": false,
+      "evidence": "/private/tmp/ancient-ac-models-20261014/routes.json"
+    },
+    "browser": {
+      "errors": [],
+      "pause_clock_rng_frozen": true,
+      "paused_status": "已暂停",
+      "reset_hp": [
+        140,
+        140
+      ],
+      "final_hp": [
+        -2,
+        2
+      ],
+      "evidence": "/private/tmp/ancient-ac-models-20261014/final/controls.json"
+    },
+    "death_support_m": {
+      "civilian-a": {
+        "hips": 0.005089875030039437,
+        "chest": 0.013450769196807988,
+        "head": -1.335457300299936e-10,
+        "footl": 0.00648106932703324,
+        "footr": 0.006480963614969526,
+        "core": -1.335457300299936e-10
+      },
+      "civilian-c": {
+        "hips": 4.1860404031979215e-11,
+        "chest": 0.010773184339179787,
+        "head": 0.014186443607760002,
+        "footl": 0.0034045983254409884,
+        "footr": 0.00340458229919377,
+        "core": 4.1860404031979215e-11
+      }
+    },
+    "security_policy": {
+      "pass": 1,
+      "fail": 0,
+      "exit_code": 0,
+      "evidence": "/private/tmp/ancient-ac-models-20261014/security-test.log"
+    }
+  },
+  "evidence": {
+    "freeze": "/private/tmp/ancient-ac-models-20261014/frozen-final.sha256",
+    "normal_speed_previous_revision": "/private/tmp/ancient-ac-models-20261014/adult-grip",
+    "final_battle": "/Users/linshen/Cursor/ancient-battle-sandbox/docs/visual-iteration/civilian/battle.png",
+    "final_death_side": "/Users/linshen/Cursor/ancient-battle-sandbox/docs/visual-iteration/civilian/death-side.png"
+  },
+  "limitations": [
+    "constrained keyframe presentation, not ragdoll physics",
+    "C asset is local-only and excluded from Git/build",
+    "user has not yet approved the final look",
+    "death middle phase remains somewhat rigid; final side support is corrected"
+  ],
+  "requested_model_effort": "inherited",
+  "actual_model_effort": "unknown",
+  "git": {
+    "commit": false,
+    "push": false,
+    "writer": "writer_free after archival transaction (receipt required)",
+    "writer_free_receipt": "/private/tmp/ancient-ac-models-20261014/closeout-writer-status.json",
+    "dirty_owner": "codex-native-soldier-cavalry-worker, accumulated authorized same-agent work"
+  },
+  "review_fix_history": [
+    {
+      "finding": "Vite custom fs.deny replaced default secret-file patterns",
+      "resolution": "Preserved .env/.env.*/*.{crt,pem}/**/.git/** and appended local-assets; resolved config/path policy test passed without reading sensitive contents"
+    }
+  ],
+  "reviews": {
+    "technical": "APPROVE",
+    "visual": "APPROVE_WITH_NOTES",
+    "requiredRemaining": [],
+    "technical_receipt": "docs/visual-iteration/civilian/technical-review.json",
+    "visual_receipt": "docs/visual-iteration/civilian/visual-review.json",
+    "independent_rule_check": {
+      "events": 47,
+      "draws": 80,
+      "hp": [
+        -2,
+        2
+      ],
+      "matches_unrendered_baseline": true
+    },
+    "independent_zero_dt": {
+      "critical_samples": 61,
+      "extra_renders_each": 3,
+      "max_quaternion_delta_rad": 6.66e-08,
+      "max_position_delta_m": 2.22e-16
+    }
+  }
+}

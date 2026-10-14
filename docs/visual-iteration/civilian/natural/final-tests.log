@@ -1,0 +1,118 @@
+TAP version 13
+# Subtest: smooth aiming retains exact authoritative contact peaks and zero entry/exit slope
+ok 1 - smooth aiming retains exact authoritative contact peaks and zero entry/exit slope
+  ---
+  duration_ms: 1.017958
+  type: 'test'
+  ...
+# Subtest: legal guard preparation consumes no RNG and does not manufacture block force
+ok 2 - legal guard preparation consumes no RNG and does not manufacture block force
+  ---
+  duration_ms: 82.17375
+  type: 'test'
+  ...
+# Subtest: real block loads shield and rebounds blade without cumulative pause poses; death clears both
+ok 3 - real block loads shield and rebounds blade without cumulative pause poses; death clears both
+  ---
+  duration_ms: 76.653167
+  type: 'test'
+  ...
+# Subtest: adult A/C preserve normalization with finite authored collapse through settling
+ok 4 - adult A/C preserve normalization with finite authored collapse through settling
+  ---
+  duration_ms: 1394.589125
+  type: 'test'
+  ...
+# Subtest: both real seed728 asset orders retain rule invariance and continuous death support under zero-dt renders
+ok 5 - both real seed728 asset orders retain rule invariance and continuous death support under zero-dt renders
+  ---
+  duration_ms: 4523.08775
+  type: 'test'
+  ...
+# Subtest: local-only model policy preserves Vite default secret-file denials
+ok 6 - local-only model policy preserves Vite default secret-file denials
+  ---
+  duration_ms: 101.035666
+  type: 'test'
+  ...
+# Subtest: exported adult strikes close the full guard wrist frame and never flip elbows or knees between frames
+ok 7 - exported adult strikes close the full guard wrist frame and never flip elbows or knees between frames
+  ---
+  duration_ms: 84.741375
+  type: 'test'
+  ...
+# Subtest: real alive to death transitions keep both adult shoe surfaces above the floor through settling and pause
+ok 8 - real alive to death transitions keep both adult shoe surfaces above the floor through settling and pause
+  ---
+  duration_ms: 5984.324542
+  type: 'test'
+  ...
+# Subtest: three strikes have distinct contact and damage ranges, integer inclusive endpoint damage
+ok 9 - three strikes have distinct contact and damage ranges, integer inclusive endpoint damage
+  ---
+  duration_ms: 1.833416
+  type: 'test'
+  ...
+# Subtest: block requires living frontal guard without stun; attacks/back hits cannot roll a block
+ok 10 - block requires living frontal guard without stun; attacks/back hits cannot roll a block
+  ---
+  duration_ms: 0.077458
+  type: 'test'
+  ...
+# Subtest: successful block emits its own event, applies rounded reduced HP and never a full hit
+ok 11 - successful block emits its own event, applies rounded reduced HP and never a full hit
+  ---
+  duration_ms: 0.263584
+  type: 'test'
+  ...
+# Subtest: contact happens once within one fixed tick of the shared strike contact time
+ok 12 - contact happens once within one fixed tick of the shared strike contact time
+  ---
+  duration_ms: 0.375375
+  type: 'test'
+  ...
+# Subtest: actual hit cancels early windup, committed strike survives interruption and death cancels all
+ok 13 - actual hit cancels early windup, committed strike survives interruption and death cancels all
+  ---
+  duration_ms: 0.094166
+  type: 'test'
+  ...
+# Subtest: simultaneous committed contacts resolve without array-order first-hit privilege
+ok 14 - simultaneous committed contacts resolve without array-order first-hit privilege
+  ---
+  duration_ms: 0.071791
+  type: 'test'
+  ...
+# Subtest: seed outcome is reproducible across frame partitions and resets; pause consumes no RNG
+ok 15 - seed outcome is reproducible across frame partitions and resets; pause consumes no RNG
+  ---
+  duration_ms: 12.88325
+  type: 'test'
+  ...
+# Subtest: weighted choice varies by seed, caps repeated same strikes without scripted blocks, both fighters act
+ok 16 - weighted choice varies by seed, caps repeated same strikes without scripted blocks, both fighters act
+  ---
+  duration_ms: 19.465625
+  type: 'test'
+  ...
+# Subtest: battle end clears surviving recovery without new attacks or RNG draws
+ok 17 - battle end clears surviving recovery without new attacks or RNG draws
+  ---
+  duration_ms: 0.389291
+  type: 'test'
+  ...
+# Subtest: seed2120 simultaneous lethal strikes produce a draw, never a blue victory
+ok 18 - seed2120 simultaneous lethal strikes produce a draw, never a blue victory
+  ---
+  duration_ms: 3.677833
+  type: 'test'
+  ...
+1..18
+# tests 18
+# suites 0
+# pass 18
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 12372.426167

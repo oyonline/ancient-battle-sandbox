@@ -1,0 +1,49 @@
+{
+  "models": [
+    {
+      "key": "a",
+      "title": ".Fuse Civilian 1",
+      "author": "Leonardo Carvalho",
+      "source_url": "https://sketchfab.com/3d-models/fuse-civilian-1-6fc4bddf4d364e6b9fa2f050011e03ce",
+      "license": "CC BY 4.0",
+      "acquired": "2026-10-14 official Sketchfab Download UI after user login",
+      "original_sha256": "d6dff7203dfb0b39a19c139802457c2380f9a91607c1a446067345b76b61b4e6",
+      "original_bytes": 16311788,
+      "derived_glb_sha256": "0025af2ea05b27d6f239b80213801da89a9c1dcb4deeb22f919254d7268bd013",
+      "derived_metadata_sha256": "d6271522359bbd6c270eb941f4a8d3ea9f23475594c0da3c29d96429ddbb3300",
+      "redistribution": "not included in Git or production dist",
+      "changes": [
+        "diffuse/specular-glossiness to metallic-roughness material conversion",
+        "preserved skin weights; semantic motion retarget and adult hand trajectories",
+        "original sword and buckler geometry; curled grip",
+        "reference height normalization before .3 scale"
+      ]
+    },
+    {
+      "key": "c",
+      "title": "Medieval Civilian 3",
+      "author": "Leonardo Carvalho",
+      "source_url": "https://sketchfab.com/3d-models/medieval-civilian-3-d99ca22f06134e8dab28fdfa75d87f31",
+      "license": "Free Standard; local preview only",
+      "acquired": "2026-10-14 official Sketchfab Download UI after user login",
+      "original_sha256": "e8355bbfa29dd3461018746c18ec09e47b86b3122fa49af7ae1da22548da97a0",
+      "original_bytes": 14423084,
+      "derived_glb_sha256": "44e838f7014f7bf1520f136d8de17a24ff0ddccaf84b28833e77acf7374bec16",
+      "derived_metadata_sha256": "b6b82d7775e3a4c593c0a020ae5d1baa076fbe5e37479b8a9419aebe5fb4f23d",
+      "redistribution": "not included in Git or production dist",
+      "changes": [
+        "diffuse/specular-glossiness to metallic-roughness material conversion",
+        "preserved skin weights; semantic motion retarget and adult hand trajectories",
+        "original sword and buckler geometry; curled grip",
+        "reference height normalization before .3 scale"
+      ]
+    }
+  ],
+  "motion_source": {
+    "author": "Kay Lousberg",
+    "pack": "KayKit Adventurers 1.0",
+    "license": "CC0",
+    "source_url": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+    "usage": "native torso/leg base motions; adult wrist paths separately authored"
+  }
+}

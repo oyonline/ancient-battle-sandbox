@@ -11,3 +11,6 @@ tools/ai_raw_v2/
 tools/style_samples/
 pnpm-lock.yaml
 pnpm-workspace.yaml
+
+# Licensed civilian sources and derived previews stay local; never in public/dist.
+local-assets/

@@ -1,0 +1,38 @@
+{
+  "verdict": "APPROVE_WITH_NOTES",
+  "requiredRemaining": [],
+  "scope": "A/C 30% adult sword/shield sample; final bounded visual review, not full matrix or aesthetic acceptance",
+  "url": "http://localhost:5301/ac-duel.html",
+  "freeze": "/private/tmp/ancient-ac-models-20261014/frozen-final.sha256",
+  "independentEvidence": {
+    "directory": "/private/tmp/ancient-ac-visual-20261014/final",
+    "frames": 96,
+    "errors": [],
+    "elapsed": 22.48990000009532,
+    "hp": [
+      -2,
+      2
+    ]
+  },
+  "observed": [
+    "Final low-side normal-runtime death sequence has continuous knee bend, forward fall and chest/head settling; adjacent sampled frames show no visible pose teleport.",
+    "Raised lower leg and 33.9mm left sole penetration from prior revision are removed. Independent final A vertex minima: hips5.09mm, chest13.45mm, head approximately0, each toe/foot group6.48mm.",
+    "Final guard keeps shield facing forward instead of horizontal tray.",
+    "Prior independently captured revised three-strike trajectories, true first block contact/rebound, closed sword grip and improved adult elbow posture remain applicable; final animation changes are limited to shield and death support."
+  ],
+  "notes": [
+    "Death still reads as an authored fall with a short stiff-body phase, not physical collapse/ragdoll.",
+    "Small residual ground clearance remains: A chest13.45mm and toes6.48mm at this 30% scale. It no longer reads as whole-body levitation from inspected low angles.",
+    "Independent final normal-seed run covers A death; C death support numbers are worker/technical evidence, not a second independently replayed final duel.",
+    "This approves removal of scoped visible defects and reviewability of the sample, not a claim of commercial animation quality or user aesthetic approval."
+  ],
+  "evidenceFiles": [
+    "end.png",
+    "death-side.png",
+    "death-sequence.jpg",
+    "contact-adjacent.jpg",
+    "ground.json",
+    "trace.json"
+  ],
+  "upstreamEvidence": "/private/tmp/ancient-ac-visual-20261014/corrected/"
+}

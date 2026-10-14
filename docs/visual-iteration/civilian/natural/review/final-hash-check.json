@@ -1,0 +1,25 @@
+{
+  "revision": "ac-natural-20261014-final2",
+  "matchesFreeze": true,
+  "frozenPathCount": 12,
+  "runtimeUnchangedFromFinal1": [
+    "js/three-demo/civilian-animation.js",
+    "js/three-demo/civilian-performance.js",
+    "js/three-demo/civilian-ik.js",
+    "js/three-demo/sword-duel.js"
+  ],
+  "hashes": {
+    "tools/prepare-civilian-models.py": "7e53c964d86b333e2e0117347739aaa1ebaa11949ed7b46b6838c2b07bdff026",
+    "js/three-demo/civilian-animation.js": "3bdbd06640f86c3ec472115a49abbe51e1e4afd55cb28193b0718178f09b3774",
+    "js/three-demo/civilian-performance.js": "42538ab22615c04a70cf2a1ec1dacb74831efd79b0bcd43d86fb6e1f2a7e25df",
+    "js/three-demo/civilian-ik.js": "b4ef7738b9768097c73abfa0b516001e2b8e6db518ce5b0bdc4d669af2c3bb08",
+    "js/three-demo/civilian-duel.js": "f40a5edbd6c85d75b78c049e11b4a8ff436a3aa44450dd0451d7c91a75d12358",
+    "tests/three-civilian-models.test.js": "fed5a7e132c77e73fdce7a0ed4a31fc42771511b67da1313a3f85c7cd6f611b6",
+    "ac-duel.html": "6fa0d1343de593751b31f3ee55341203cbe7bd1698b69f70e54f30af9fc10206",
+    "local-assets/ac/civilian-a.glb": "b7ad2f93fdbc363ed1473f89645bfb1ab71894638cc63d268d38a0295e4e5502",
+    "local-assets/ac/civilian-c.glb": "17491abaeef8864c661638acfd9c9700f787d30c54b7c7325519d32e3d344ced",
+    "local-assets/ac/civilian-a.json": "1cc1e0e817561e864ea5c032c3886b48814cb2e5679c5fbe8c8aa7f003570f41",
+    "local-assets/ac/civilian-c.json": "5f49acae47f457057234dcc5946045c66d86efedc457fae6b5ad6a32ed92dd5f",
+    "js/three-demo/sword-duel.js": "054e4a81c9f1f83759378f584d3d8500b447bac1b9a44d7835fbb169e52cb479"
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "verdict": "APPROVE",
+  "scope": "Local-only A/C adult Mixamo sword-and-buckler preview, fixed 30%, new civilian adapters and Vite route. Technical approval, not a public-distribution license clearance or artistic verdict.",
+  "frozen_manifest": "/private/tmp/ancient-ac-models-20261014/frozen-final.sha256",
+  "frozen_files_verified": 12,
+  "prior_kay_library_rules_files_unchanged": 9,
+  "resolved_finding": {
+    "severity": "P1",
+    "issue": "Custom Vite fs.deny replaced default protection for env/key/git files",
+    "fix": "Preserve default four patterns and append local-assets deny",
+    "independent_verification": "resolveConfig and isFileServingAllowed deny .env, .env.local, private.pem, .git/config, local-assets/ac/civilian-a.glb; no secret contents accessed"
+  },
+  "independent_animation": {
+    "phase": "animation review",
+    "passed": true,
+    "seed": 728,
+    "history": 47,
+    "draws": 80,
+    "hp": [
+      -2,
+      2
+    ],
+    "ruleTraceExact": true,
+    "normalization": 0.3,
+    "zeroChecks": 61,
+    "maxAngle": 6.664001874625056e-08,
+    "maxPosition": 2.220446049250313e-16,
+    "death": [
+      {
+        "asset": "civilian-a",
+        "support": {
+          "hips": 0.005089875030039437,
+          "chest": 0.013450769196807988,
+          "head": -1.335457300299936e-10,
+          "footl": 0.00648106932703324,
+          "footr": 0.006480963614969637,
+          "core": -1.335457300299936e-10
+        }
+      },
+      {
+        "asset": "civilian-c",
+        "support": {
+          "hips": 4.1860404031979215e-11,
+          "chest": 0.010773184339179787,
+          "head": 0.014186443607760002,
+          "footl": 0.0034045983254409884,
+          "footr": 0.00340458229919377,
+          "core": 4.1860404031979215e-11
+        }
+      }
+    ]
+  },
+  "probe_script": "/private/tmp/ancient-ac-review-probe.mjs",
+  "worker_evidence_reviewed": [
+    "focused-final.log 15/15 before policy-only repair",
+    "security-test.log 1/1 after policy repair",
+    "build-final.log exit 0",
+    "routes.json 18 GET/HEAD cases and LAN denial",
+    "final/controls.json errors empty, pause/reset, terminal state"
+  ],
+  "independent_scope_checks": {
+    "private_models_gitignored": true,
+    "dist_private_asset_filename_scan_empty": true,
+    "old_frozen_files_byte_identical": true
+  },
+  "limitations": [
+    "A/C raw and derived assets remain local and outside public/dist; no public release approval.",
+    "Geometry/material visual acceptance remains with root visual lane.",
+    "Detailed per-mesh art/weight quality and broad device performance are outside this focused review."
+  ],
+  "frozen_files": [
+    {
+      "path": "js/three-demo/civilian-animation.js",
+      "sha256": "3bdbd06640f86c3ec472115a49abbe51e1e4afd55cb28193b0718178f09b3774"
+    },
+    {
+      "path": "js/three-demo/civilian-performance.js",
+      "sha256": "d0625fb9e34fd390bd2a531346e6a0508660ae5ab8f38f2aad9a5ed340988861"
+    },
+    {
+      "path": "js/three-demo/civilian-duel.js",
+      "sha256": "f40a5edbd6c85d75b78c049e11b4a8ff436a3aa44450dd0451d7c91a75d12358"
+    },
+    {
+      "path": "tools/prepare-civilian-models.py",
+      "sha256": "3a1d0fd494d238da1902c3990e2380013050bc77f7ad4ec30c357a48d6a68f06"
+    },
+    {
+      "path": "tools/convert-civilian-materials.py",
+      "sha256": "c2a13fec9ce8f4e9711490d0e9b349ad3388ed02eac85deef07558c1dcded58c"
+    },
+    {
+      "path": "tests/three-civilian-models.test.js",
+      "sha256": "678924851bbfa88b3686ed8bcca427c624380738fbf3b187aeb6d8e6ba669b4f"
+    },
+    {
+      "path": "vite.config.js",
+      "sha256": "450b9f1b6c98b38257636981f386eea5984701e05bbe7d47621c93d9aac20e0f"
+    },
+    {
+      "path": "ac-duel.html",
+      "sha256": "6fa0d1343de593751b31f3ee55341203cbe7bd1698b69f70e54f30af9fc10206"
+    },
+    {
+      "path": "local-assets/ac/civilian-a.glb",
+      "sha256": "0025af2ea05b27d6f239b80213801da89a9c1dcb4deeb22f919254d7268bd013"
+    },
+    {
+      "path": "local-assets/ac/civilian-a.json",
+      "sha256": "d6271522359bbd6c270eb941f4a8d3ea9f23475594c0da3c29d96429ddbb3300"
+    },
+    {
+      "path": "local-assets/ac/civilian-c.glb",
+      "sha256": "44e838f7014f7bf1520f136d8de17a24ff0ddccaf84b28833e77acf7374bec16"
+    },
+    {
+      "path": "local-assets/ac/civilian-c.json",
+      "sha256": "b6b82d7775e3a4c593c0a020ae5d1baa076fbe5e37479b8a9419aebe5fb4f23d"
+    }
+  ]
+}
