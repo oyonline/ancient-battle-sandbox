@@ -1,5 +1,26 @@
 # 3D 持续总控入口
 
+## 当前 KayKit 动作优化（2026-10-14）
+
+用户已选择KayKit风格，授权继续关节/真实格挡/倒地优化，固定30%和原三招规则。`model-duel.html`默认同款Kay优化，`?kay=previous`可看同seed旧动作；Q比较、原模型和骑兵保留。新资产与表现层独立，20focused/build0；范围、源Walk接地基线、死亡转脚限制见[本轮说明](kaykit-refinement.md)。用户本轮动作认可仍待试玩。
+
+## 当前公开模型比较（2026-10-14）
+
+用户反馈自制模型关节/风格不足，授权 Quaternius 与 KayKit 各一名接固定30%真实三招。独立 `model-duel.html` 已接 Quaternius RPG2020 Warrior 与 KayKit Adventurers1.0 Knight，原样板保留；同身高、同seed、同规则，可混合/同款/换边与拖转。不是最新Fantasy/Adventurers2.0；Q盾和重定向三招来自Kay，Q原模型/权重/剑保留。15focused/build成功；技术与视觉受检结论及已知衣摆折衷见[比较说明](library-model-comparison.md)。用户美术认可待试玩。
+
+## 当前双剑盾三招规则样板（2026-10-14）
+
+用户授权固定30%双剑盾新增横斩/劈砍/刺击、随机伤害范围和真实条件格挡。`battle3d.html?impact=sword`默认seed728已实现，140HP、三种可辨动作、独立block、实时HP/事件与换种子；旧单招可通过按钮进入`duelRules=previous`，骑兵及其他模式保留。一次全量830/830；review发现双亡胜负P2已修复，修后20focused/build0、seed2120实机平局。范围/证据见[三招样板](sword-duel-sample.md)，用户认可待试玩。
+
+## 当前动作样板（2026-10-14）
+
+用户认可剩 30% 尺寸，但明确否定上一版动作速度、冲击和战斗感；上一轮内部通过不代表用户认可。新增 `battle3d.html?impact=sword` 和 `?impact=charge` 两个固定 30% 真实交战样板，可按钮切换、重开、暂停、近看、对照上一版动作。复用模型，强化准备 / 短促发力 / 恢复、方向受击与承重，冲锋核心击退仅在呈现端连续化。说明与边界见 [动作样板](impact-sample.md)。新候选仍待用户实玩评价。
+
+## 上一轮形体与尺度样板（保留）
+
+用户授权剑盾 + 骑兵先做一组，优化模型细节和自然有力的动作，原尺寸与剩 30% 实战对照。独立入口 `battle3d.html?sample=vitality&size=100` 已实现，首页可进入；每队 6 剑盾 + 2 骑兵，原混合 32 与 20 GLB 保留。模型实例、接触/移动长度、阵列、反馈随尺寸适配；世界/地形/镜头不等比缩小，秒/HP/伤害不加速。技术 review APPROVE、816/816 与 build0；内部视觉 APPROVE_WITH_NOTES；随后用户认可 30% 尺寸、明确否定本轮动作表现，分别记录于 [本批说明](vitality-sample.md) / [最终证据](visual-iteration/vitality/summary.json)。无 commit/push/merge/deploy；Git/writer 状态只认 live。本批仅有限改进，不称模型与战争感全面完成。
+
+
 ## 当前面板（2026-10-13，F2 → W2）
 
 用户明确本批先主场冲锋F2，再晚段拥挤W2，实际game+两路独立复审后自主接续；适当commit/push只既有工作分支，不merge/main/deploy，保留20GLB/R2/P2/A2/V2/S1/W1/F1及全部早期基准。

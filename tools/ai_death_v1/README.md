@@ -16,4 +16,5 @@ python3 tools/build_death_sprites.py
 生成结果位于 `assets/units/death/`，清单更新至 `assets/manifest.json` 和 `assets/manifest.js`。
 
 用本地服务打开 `tools/visual-check.html` 可查看四兵种红蓝样板、逐步推进倒地、切换慢放、冲锋小战和千人混战。
+当前状态：该旧页受依赖布局迁移遗留影响，待修复；不作为本轮验收入口。
 最后一帧与接触阴影直接盖印到战场留痕层，运行时不再切换为另一张尸体图。
