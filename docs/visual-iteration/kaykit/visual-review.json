@@ -1,0 +1,97 @@
+{
+  "verdict": "APPROVE_WITH_NOTES",
+  "requiredRemaining": [],
+  "scope": "KayKit Knight fixed30% sword duel; perceptual review of transitions, actual block/load/rebound, and death landing; not style acceptance or a full-body physics guarantee",
+  "url": "http://localhost:5301/model-duel.html",
+  "previousURL": "http://localhost:5301/model-duel.html?kay=previous",
+  "observedImprovements": [
+    "Attack/idle/reaction transitions and weapon alignment feel less abrupt while three attacks stay distinct.",
+    "Shield prepares before contact; actual block includes visible body brace and a short attacker stop/rebound.",
+    "Death_B knee-softening and forward collapse is more natural than baseline upward hop/backward flip.",
+    "Final continuous turn during soft-knee phase leaves landing space; fallen helmet no longer intersects survivor legs or abdomen. No visible teleport or instant rotation in reviewed sequence."
+  ],
+  "evidence": {
+    "independentBaseline": "/private/tmp/ancient-library-review-20261014/kay-baseline/",
+    "independentFirstRevision": "/private/tmp/ancient-library-review-20261014/kay-first-own/",
+    "frozenFinalNormalRuntime": "/private/tmp/ancient-kay-refine-20261014/final/",
+    "finalDeathSheet": "/private/tmp/ancient-library-review-20261014/kay-death-final.png",
+    "finalBlockSheet": "/private/tmp/ancient-library-review-20261014/kay-block-final.png",
+    "errors": [],
+    "events": {
+      "attack": 23,
+      "hit": 16,
+      "block": 2,
+      "death": 1
+    },
+    "endHP": [
+      -2,
+      2
+    ]
+  },
+  "notes": [
+    "Death direction is a continuous in-place pivot, with some foot turning rather than fully solved stepping/contact.",
+    "Native cartoon death remains authored rather than physical/ragdoll; this pass does not claim natural relaxation for every possible contact.",
+    "Worker corrected vertex probe: shared native Walking_A minimum−16.49mm in both variants; nonwalk refined−6.35mm vs previous−5.89mm, difference0.46mm. These are worker measurements. No visually material foot regression seen in independent targeted windows."
+  ],
+  "frozenHashes": {
+    "js/three-demo/kay-refinement.js": {
+      "expected": "48a4662308de55d128521df1b98d2c18baacaf6b2abae2ee2b6d7136f05f059e",
+      "actual": "48a4662308de55d128521df1b98d2c18baacaf6b2abae2ee2b6d7136f05f059e"
+    },
+    "js/three-demo/library-duel.js": {
+      "expected": "fb8ad20f837bd2876c6fb65724d4660ebe46ad0c76fd384f02f99ca028db77b0",
+      "actual": "fb8ad20f837bd2876c6fb65724d4660ebe46ad0c76fd384f02f99ca028db77b0"
+    },
+    "js/three-demo/library-animation.js": {
+      "expected": "95d279441117122bb7296097d543ec6518371850a6f4bce217fdae308afdc9c5",
+      "actual": "95d279441117122bb7296097d543ec6518371850a6f4bce217fdae308afdc9c5"
+    },
+    "js/three-demo/sword-duel.js": {
+      "expected": "054e4a81c9f1f83759378f584d3d8500b447bac1b9a44d7835fbb169e52cb479",
+      "actual": "054e4a81c9f1f83759378f584d3d8500b447bac1b9a44d7835fbb169e52cb479"
+    },
+    "public/assets/3d-sample/libraries/kaykit-refined.glb": {
+      "expected": "99d09b000e614231a06ae99bbeba5410d77760787ad4b690fc5b2c79232a2ed9",
+      "actual": "99d09b000e614231a06ae99bbeba5410d77760787ad4b690fc5b2c79232a2ed9"
+    },
+    "public/assets/3d-sample/libraries/kaykit-refined.json": {
+      "expected": "1a75f67a439b671e41be3e117dfc3e92e0d8654b90e56886f094d4c023389213",
+      "actual": "1a75f67a439b671e41be3e117dfc3e92e0d8654b90e56886f094d4c023389213"
+    },
+    "model-duel.html": {
+      "expected": "0886b1813ef5a87645bd9b06436482b1c87c7c445efea06aad1d9556dc6e140c",
+      "actual": "0886b1813ef5a87645bd9b06436482b1c87c7c445efea06aad1d9556dc6e140c"
+    },
+    "tools/prepare-library-models.py": {
+      "expected": "a46e64e8329e2e4cbc5b1e5141dc7cd63d7b7f190449bfa960295b3fb3d4d083",
+      "actual": "a46e64e8329e2e4cbc5b1e5141dc7cd63d7b7f190449bfa960295b3fb3d4d083"
+    },
+    "tests/three-kay-refinement.test.js": {
+      "expected": "cd56681bd63a2b40d32335dd2942254266337c5266382c2394a27236afadf4c9",
+      "actual": "cd56681bd63a2b40d32335dd2942254266337c5266382c2394a27236afadf4c9"
+    }
+  },
+  "freezeFile": "/private/tmp/ancient-kay-refine-20261014/frozen-final.sha256",
+  "targetedAliasFixReview": {
+    "method": "Independent isolated headless Chrome; normal runtime requestAnimationFrame canvas captures, no manual simulation stepping",
+    "frameCount": 90,
+    "windowsSeconds": [
+      [
+        7.7,
+        8.3
+      ],
+      [
+        9.3,
+        10.2
+      ]
+    ],
+    "errors": [],
+    "finding": "Continuous shoulder/wrist and weapon recovery in corrected window including t8.016; no visible hold-then-jump. Actual first block preserves braced shield/body response and attacker release/rebound.",
+    "evidence": [
+      "transition.png",
+      "block.png",
+      "trace.json"
+    ],
+    "death": "Unchanged; prior final continuous fall/side-angle evidence carried forward"
+  }
+}

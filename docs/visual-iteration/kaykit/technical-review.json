@@ -1,0 +1,38 @@
+{
+  "reviewer": "code_audit",
+  "scope": "KayKit refinement only; no full-suite rerun, no implementation edits",
+  "verdict": "APPROVE",
+  "manifest": "/private/tmp/ancient-kay-refine-20261014/frozen-final.sha256",
+  "manifest_entries_verified": 9,
+  "history": [
+    {
+      "verdict": "REVISE",
+      "finding": "Transition slerpQuaternions output aliased its second quaternion argument; Three copies the first argument before slerping, so transition held the prior pose and then jumped.",
+      "reproduction": "Natural seed 728, 60 Hz, frame 480 / 8.0166667 s: first zero-dt render changed red handl by 2.1501500540583987 radians.",
+      "probe": "/private/tmp/ancient-kay-zero-dt-review.mjs"
+    },
+    {
+      "verdict": "APPROVE",
+      "fix": "Clone the destination quaternion before slerpQuaternions.",
+      "same_probe_max_angle_radians": 4.2146848510894035e-8
+    }
+  ],
+  "independent_checks": {
+    "kay_focused_tests": "5/5 passed; includes 1260-frame real-event/transition zero-dt regression",
+    "natural_sequence_seconds": 21,
+    "rule_history_hp_x_z_rng_exact_match_without_renderer": true,
+    "events": 47,
+    "rng_draws": 80,
+    "final_hp": [-2, 2],
+    "interrupt_hits_with_hit_state_no_brace": 11,
+    "protected_hits_with_recoil_overlay_no_brace": 4,
+    "real_blocks": 2,
+    "block_frame_tip_displacements_m": [0.021141720038495574, 0.02662293693105907],
+    "block_guard_weights": [0.9571689175356387, 0.9496405406519537],
+    "post_overlay_death_core_samples": 42,
+    "minimum_death_core_world_y_m": 3.795429161929098e-10,
+    "probe": "/private/tmp/ancient-kay-final-review.mjs"
+  },
+  "isolation": "SwordDuel, original LibraryAnimation, original KayKit and Quaternius GLBs retained previous approved SHA-256 values.",
+  "limitations": "Technical approval does not replace visual/artistic approval. Existing Walking_A sole dip and disclosed minor foot contact remain outside this targeted change. No full-suite rerun."
+}

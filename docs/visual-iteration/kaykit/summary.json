@@ -1,0 +1,64 @@
+{
+  "scope": "KayKit joints, real block and death at fixed30; user selected source style, candidate acceptance unknown",
+  "url": "http://localhost:5301/model-duel.html",
+  "previous": "http://localhost:5301/model-duel.html?kay=previous",
+  "referenceHeight": 0.7836890459,
+  "rulesUnchanged": true,
+  "seed": 728,
+  "tests": {
+    "focused": {
+      "pass": 20,
+      "fail": 0,
+      "exit": 0
+    },
+    "buildExit": 0
+  },
+  "normalBattle": {
+    "errors": [],
+    "hit": 16,
+    "block": 2,
+    "death": 1,
+    "hp": [
+      -2,
+      2
+    ],
+    "draws": 80
+  },
+  "supportMeters": {
+    "nativeWalkBoth": -0.01649134,
+    "combatNew": -0.00634848,
+    "combatPrevious": -0.00588749,
+    "deathCoreMin": 3.795e-10,
+    "deathTerminalFoot": -0.00626299
+  },
+  "blockTipStepMeters": [
+    0.02114172,
+    0.02662294
+  ],
+  "pauseStable": true,
+  "evidence": {
+    "freeze": "/private/tmp/ancient-kay-refine-20261014/frozen-final.sha256",
+    "raw": "/private/tmp/ancient-kay-refine-20261014/final-corrected",
+    "probe": "/private/tmp/ancient-kay-refine-20261014/probe-final.json",
+    "previousProbe": "/private/tmp/ancient-kay-refine-20261014/probe-previous.json",
+    "focused": "/private/tmp/ancient-kay-refine-20261014/focused-final.log",
+    "build": "/private/tmp/ancient-kay-refine-20261014/build-final.log"
+  },
+  "review": {
+    "technical": "APPROVE",
+    "visual": "APPROVE_WITH_NOTES",
+    "requiredRemaining": [],
+    "technicalReceipt": "technical-review.json",
+    "visualReceipt": "visual-review.json"
+  },
+  "notes": [
+    "Source native walking foot dip retained identically",
+    "Death pivots during knee-softening; not full planted-foot physics",
+    "User judges movement and style"
+  ],
+  "requested": "inherited",
+  "actual": "unknown",
+  "git": "no commit/push/merge/deploy",
+  "reviewFix": "Quaternion interpolation aliased target/output; fixed by copying target, whole seeded event sequence zero-dt regression passes",
+  "serviceHttpStatus": 200
+}

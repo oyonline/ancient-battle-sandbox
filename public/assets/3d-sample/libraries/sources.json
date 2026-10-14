@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Quaternius RPG Characters \u2014 Nov 2020",
+    "author": "Quaternius",
+    "page": "https://opengameart.org/content/lowpoly-rpg-characters",
+    "sourceUrl": "https://opengameart.org/sites/default/files/rpg_characters_-_nov_2020.zip",
+    "sourceSha256": "5399e0cfaf313ff362455de4086488d093465434b1b93b0ced649f3773a15fd7",
+    "license": "CC0 1.0",
+    "downloadDate": "2026-10-14"
+  },
+  {
+    "name": "KayKit Adventurers Character Pack 1.0",
+    "author": "Kay Lousberg",
+    "page": "https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0",
+    "sourceUrl": "https://raw.githubusercontent.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0/main/addons/kaykit_character_pack_adventures/Characters/gltf/Knight.glb",
+    "sourceSha256": "60428e3abc09ba83e595d256e3af8c5c976b46cdae599f0802fc82b4a3445168",
+    "license": "CC0 1.0",
+    "downloadDate": "2026-10-14"
+  }
+]

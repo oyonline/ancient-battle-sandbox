@@ -1,0 +1,47 @@
+{
+  "verdict": "APPROVE_WITH_NOTES",
+  "requiredRemaining": [],
+  "scope": "Quaternius RPG Warrior 2020 and KayKit Knight1.0 fixed30% actual sword duel; final review limited to corrected death grounding/continuous transition; prior four visual fixes carried forward",
+  "url": "http://localhost:5301/model-duel.html",
+  "independentEvidence": {
+    "capture": "isolated headless Chrome normal runtime; seed728; frames elapsed16.016–19.183; side camera via UI drag; no simulation step manipulation",
+    "errors": [],
+    "events": {
+      "attack": 23,
+      "hit": 16,
+      "block": 2,
+      "death": 1
+    },
+    "endHP": [
+      -2,
+      2
+    ],
+    "images": [
+      "death-sequence.png",
+      "death-side.png"
+    ],
+    "trace": "trace.json",
+    "ground": "ground.json"
+  },
+  "observed": {
+    "death": "Continuous native fall followed by stable pelvis support; no whole-body suspended gap attributable to skirt tip",
+    "pelvisMinimumMeters": -2.158998639589793e-09,
+    "skirtMinimumMeters": -0.02374598984387219
+  },
+  "notes": [
+    "Native death pose remains rigid/arched: torso underside approximately0.055m and head underside0.072m above ground despite grounded pelvis; this is not a full ragdoll or natural relaxed corpse.",
+    "Skirt/armor hem penetrates terrain by about2.37cm as an explicit tradeoff for body support.",
+    "Noninterrupt hit body response is subtle; source proportions/styles are for user preference, not deemed artistically accepted."
+  ],
+  "closed": [
+    "Premature attack contact",
+    "Missing noninterrupt hit response",
+    "Quaternius source material mismatch",
+    "Quaternius shield attachment",
+    "Death body support grounding"
+  ],
+  "hashes": {
+    "js/three-demo/library-animation.js": "95d279441117122bb7296097d543ec6518371850a6f4bce217fdae308afdc9c5",
+    "js/three-demo/library-duel.js": "ead06a13e2da82165a578259f056864c16c1290d1a6045915e8756be734d0659"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-14",
+  "scope": "Two external CC0 sword/shield appearances at fixed30; same existing SwordDuel; user acceptance unknown",
+  "url": "http://localhost:5301/model-duel.html",
+  "sources": [
+    "Quaternius RPG Characters Nov2020 Warrior",
+    "KayKit Adventurers1.0 Knight"
+  ],
+  "referenceHeight": 0.7836890459060669,
+  "rulesSha256": "054e4a81c9f1f83759378f584d3d8500b447bac1b9a44d7835fbb169e52cb479",
+  "tests": {
+    "focused": "15/15, exit0",
+    "build": "exit0; dist/model-duel.html exists",
+    "fullSuite": "not rerun: isolated page, bounded affected set per coordinator"
+  },
+  "evidence": {
+    "freeze": "/private/tmp/ancient-library-writer-20261014/frozen.sha256",
+    "normalBattle": "/private/tmp/ancient-library-writer-20261014/corrected",
+    "controls": "/private/tmp/ancient-library-writer-20261014/final-controls/summary.json",
+    "sourcePreview": [
+      "/private/tmp/ancient-library-writer-20261014/qrpg-source.png",
+      "/private/tmp/ancient-library-writer-20261014/kay-source.png"
+    ],
+    "visualReview": "/private/tmp/ancient-library-review-20261014/final/verdict.json",
+    "writerRelease": "/private/tmp/ancient-library-writer-20261014/1791954520-writer-release.json",
+    "writerStatus": "/private/tmp/ancient-library-writer-20261014/1791954520-writer-status.json"
+  },
+  "controls": {
+    "pauseStable": true,
+    "appearancesSameSeedResult": {
+      "draws": 80,
+      "hp": [
+        -2,
+        2
+      ]
+    },
+    "errors": []
+  },
+  "knownNotes": [
+    "Q skirt edge about2.37cm below ground while core-body support is0; deliberate clothing compromise",
+    "Stylized source proportions retained; no claim that user approves style",
+    "Pose targeting is visual adaptation, not mesh collision combat",
+    "Native Q Death remains a stiff arch; hip support is0, torso/head about5.5/7.2cm above ground. Not a ragdoll."
+  ],
+  "reviews": {
+    "technical": "APPROVE, actual GLBs/242 death samples and frozen11 files",
+    "visual": "APPROVE_WITH_NOTES; requiredRemaining=[]"
+  },
+  "git": "No commit/push/merge/deploy; final writer receipt recorded at closeout",
+  "requested": "inherited",
+  "actual": "unknown"
+}
