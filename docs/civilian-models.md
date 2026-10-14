@@ -44,3 +44,15 @@ final1 独立复核发现末帧通过仍不能覆盖中段：A/C 鞋底曾在倒
 本轮冻结摘要与独立审/关键帧归档见 `docs/visual-iteration/civilian/natural/`，逐帧与原始日志在 `/private/tmp/ancient-ac-natural-20261014/`。仅完成本机候选，未 commit、push 或部署。
 
 独立收据：[verdict.json](visual-iteration/civilian/natural/review/verdict.json)。实页面关键图：[A 全过程](visual-iteration/civilian/natural/review/visual/a-death-low-side-full.jpg)、[C 全过程](visual-iteration/civilian/natural/review/visual/c-death-low-side-full.jpg)。
+
+
+## 2026-10-14 交锋承重轮
+
+本轮本机候选保留 A/C 原身体网格、UV、PBR、皮肤权重及 0.7836890459m 高度（30%）。`SwordDuel`、伤害/格挡抽样、接触时刻与模拟单位坐标/朝向均不改，未 commit 或 push。
+
+- 盾后横柄由实际卷曲中指指节的几何圆拟合，增加横握柄与支柱；各指沿自身局部轴卷合，拇指独立对掌。原 skin 着色确认 A 的上翘轮廓属于 Index 群，A 左 Index 后两节按实际皮肤指垫有限拟合，保留 Thumb 掌侧小自然角，避免误拉掌皮。
+- 手臂 IK 使用完整解剖 frame，去掉方向对齐后残留的源 axial twist。状态过渡混合未叠加表现覆盖的源姿态，避免反复抬盾；真实格挡的髋胸承力独立于抬盾准备权重。回弹作用在腕/躯干，不再在 110ms 内追赶整段 clip-time。
+- 独立脚步层在模拟坐标之外编排有限踏入、侧移、退步与回收。落地脚保持世界锚，摆动脚实际离地；前脚落定后髋承重。步幅随成人实际骨长及尺度限制，不改规则距离。接触按近侧胸部真实 skin 三角面、真实盾 Wood/Rim/Boss 几何校准；胸骨/盾心 marker 只作诊断，不等同实体碰触。
+- 倒地事件一次捕获已呈现姿态，不回 Idle；先膝软失衡、左盾支撑，再躯干落下与右臂放松。原鞋底全程几何约束保留，腕部残差沿原 bend plane 修正，并同时约束手皮肤和剑盾接地，避免全身抬升或大幅反关节。
+
+验证范围为 seed728 正常与交换阵营的真实 `step → event → update → aim`，并覆盖 slash/cleave/thrust/guard/hurt 多入口倒地、零 dt 骨骼/模型/时钟/脚锚幂等、真实鞋/身体/装备支撑及有限关节。冻结回执、独立探针、实际握柄与低侧关键帧见本轮 `docs/visual-iteration/civilian/weight/`。数值与技术核验不代表用户对自然程度已经满意；这是受约束关键帧表现，非物理布娃娃。

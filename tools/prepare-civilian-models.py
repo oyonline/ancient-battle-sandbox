@@ -86,15 +86,65 @@ for key,path in [('civilian-a',a_path),('civilian-c',c_path)]:
   bpy.ops.mesh.primitive_cylinder_add(vertices=20,radius=radius,depth=depth,location=pos);o=bpy.context.object
   if rotate:o.rotation_euler.x=math.pi/2
   o.data.materials.append(mat);return attach(o,name,bone,pos)
- unit=height/180;grips={}
+ unit=height/180;grips={};gripAxes={};palmNormals={};gripRadii={}
+ thumbAngles={'civilian-a':{'Left':(.48,.44,.66,.48),'Right':(.5,-.65,1.1,.4)},'civilian-c':{'Left':(.6,-.6,.85,.85),'Right':(.55,-.7,1.05,.95)}}[key]
+ # Fit the handle to the three actually curled middle phalanges, not a wrist offset.
+ curls={'Index':(.73,1.02,.68),'Middle':(.85,1.08,.72),'Ring':(.91,1.04,.74),'Pinky':(.96,.99,.72)}
+ for label,sign in [('Left',-1),('Right',1)]:
+  for finger,angles in curls.items():
+   if key=='civilian-a' and label=='Left' and finger=='Index':angles=(.73,1.02,.68)
+   for number,angle in enumerate(angles,1):
+    bone=rig.pose.bones[names[label+'Hand'+finger+str(number)]];bone.rotation_mode='QUATERNION';bone.rotation_quaternion=Quaternion(Vector((1,0,0)),angle)
+  opposition,*flex=thumbAngles[label]
+  for number,angle in enumerate(flex,1):
+   bone=rig.pose.bones[names[label+'HandThumb'+str(number)]];bone.rotation_mode='QUATERNION';bone.rotation_quaternion=Quaternion(Vector((0,0,1)),sign*opposition if number==1 else 0)@Quaternion(Vector((1,0,0)),angle)
+ bpy.context.view_layer.update()
+ indexFit={}
+ if key=='civilian-a':
+  # This rig's visible raised digit is Index-weighted. Fit its actual pad;
+  # leave the Thumb-weighted palm web in the small original rotation.
+  chain=[rig.pose.bones[names['LeftHandIndex'+str(i)]]for i in [1,2,3]]
+  old=[bone.rotation_quaternion.copy()for bone in chain]
+  for bone in chain:bone.matrix_basis=Matrix.Identity(4)
+  bpy.context.view_layer.update();pad=Vector();count=0;dg=bpy.context.evaluated_depsgraph_get()
+  for o in objects:
+   if o.type!='MESH' or not o.vertex_groups:continue
+   evaluated=o.evaluated_get(dg)
+   for vertex in o.data.vertices:
+    if vertex.groups and o.vertex_groups[max(vertex.groups,key=lambda g:g.weight).group].name in {names['LeftHandIndex3'],names['LeftHandIndex4']}:
+     pad+=evaluated.matrix_world@evaluated.data.vertices[vertex.index].co;count+=1
+  localPad=chain[2].matrix.inverted()@(pad/count)
+  for bone,q in zip(chain,old):bone.rotation_quaternion=q
+  bpy.context.view_layer.update();a,b,c=[rig.pose.bones[names['LeftHandMiddle'+str(i)]].head.copy()for i in [1,2,3]];u=b-a;v=c-a;n=u.cross(v);center=a+(v.length_squared*n.cross(u)+u.length_squared*v.cross(n))/(2*n.length_squared)
+  axis=(chain[0].head-rig.pose.bones[names['LeftHandPinky1']].head).normalized();near=chain[0].head-center;near-=axis*near.dot(axis);radius=max(1.1*unit,min(2.4*unit,(center-b).length-.8*unit));target=center+axis*(chain[0].head-center).dot(axis)+near.normalized()*(radius+.35*unit)
+  first,second=chain[1:];a,b,c=first.head.copy(),second.head.copy(),second.matrix@localPad;l1=(b-a).length;l2=(c-b).length;direction=(target-a).normalized();d=max(math.sqrt(l1*l1+l2*l2+2*l1*l2*math.cos(1.55)),min((target-a).length,(l1+l2)*.98));target=a+direction*d;pole=b-a;pole-=direction*pole.dot(direction)
+  if pole.length<.001:pole=rest[names['LeftHand']].to_quaternion()@Vector((0,0,1));pole-=direction*pole.dot(direction)
+  pole.normalize();along=(l1*l1-l2*l2+d*d)/(2*d);joint=a+direction*along+pole*math.sqrt(max(0,l1*l1-along*along));first.matrix=Matrix.Translation(a)@(b-a).rotation_difference(joint-a).to_matrix().to_4x4()@Matrix.Translation(-a)@first.matrix;bpy.context.view_layer.update();b=second.head.copy();c=second.matrix@localPad;second.matrix=Matrix.Translation(b)@(c-b).rotation_difference(target-b).to_matrix().to_4x4()@Matrix.Translation(-b)@second.matrix;bpy.context.view_layer.update();indexFit={bone.name:bone.matrix_basis.decompose()[1]for bone in chain}
  for label,side in [('Right','r'),('Left','l')]:
-  hand=rest[names[label+'Hand']].translation;finger=rest[names[label+'HandMiddle1']].translation;grips[side]=hand+(finger-hand).normalized()*11*unit+Vector((0,0,-2*unit))
- g=grips['r'];cylinder('SwordGrip','RightHand',g,1.5*unit,12*unit,leather);cylinder('SwordPommel','RightHand',g+Vector((0,0,-8*unit)),2.7*unit,3*unit,steel)
+  a,b,c=[rig.pose.bones[names[label+'HandMiddle'+str(i)]].head.copy() for i in [1,2,3]];u=b-a;v=c-a;n=u.cross(v)
+  center=a+(v.length_squared*n.cross(u)+u.length_squared*v.cross(n))/(2*n.length_squared)
+  grips[side]=center;gripRadii[side]=max(1.1*unit,min(2.4*unit,(center-b).length-.8*unit));gripAxes[side]=(rig.pose.bones[names[label+'HandIndex1']].head-rig.pose.bones[names[label+'HandPinky1']].head).normalized();palmNormals[side]=rest[names[label+'Hand']].to_quaternion()@Vector((0,0,1))
+ for bone in rig.pose.bones:bone.matrix_basis=Matrix.Identity(4)
+ bpy.context.view_layer.update()
+ across=gripAxes['l'];normal=palmNormals['l'];old=Matrix((across,normal.cross(across),normal)).transposed();front=Vector((0,-1,0));horizontal=Vector((1,0,0));target=Matrix((horizontal,front.cross(horizontal),front)).transposed();leftGripQ=(target@old.inverted()).to_quaternion()@rest[names['LeftHand']].to_quaternion()
+ g=grips['r'];cylinder('SwordGrip','RightHand',g,gripRadii['r'],12*unit,leather);cylinder('SwordPommel','RightHand',g+Vector((0,0,-8*unit)),2.7*unit,3*unit,steel)
  bpy.ops.mesh.primitive_cube_add(size=1,location=g+Vector((0,0,7*unit)));guard=bpy.context.object;guard.dimensions=(16*unit,3*unit,2.5*unit);guard.data.materials.append(steel);attach(guard,'SwordGuard','RightHand',guard.location)
  verts=[(-2.8,-.55,7),(2.8,-.55,7),(-2.8,.55,7),(2.8,.55,7),(-2.1,0,64),(2.1,0,64),(0,0,77)];verts=[g+Vector(v)*unit for v in verts];mesh=bpy.data.meshes.new('SteelBlade');mesh.from_pydata(verts,[],[(0,1,5,6,4),(2,4,6,5,3),(0,4,2),(1,3,5),(0,2,3,1)]);mesh.materials.append(steel);o=bpy.data.objects.new('SwordBlade',mesh);bpy.context.collection.objects.link(o);attach(o,'SwordBlade','RightHand',(0,0,0))
  tip=bpy.data.objects.new('SwordTip',None);bpy.context.collection.objects.link(tip);attach(tip,'SwordTip','RightHand',g+Vector((0,0,77*unit)))
- g=grips['l']+Vector((0,-3*unit,0));cylinder('BucklerRim','LeftHand',g,23*unit,2.5*unit,steel,True);cylinder('BucklerWood','LeftHand',g+Vector((0,-1.5*unit,0)),21.5*unit,1*unit,wood,True);cylinder('BucklerBoss','LeftHand',g+Vector((0,-3*unit,0)),7*unit,4*unit,steel,True)
+ g=grips['l']+Vector((0,-7*unit,0));cylinder('BucklerRim','LeftHand',g,23*unit,2.5*unit,steel,True);cylinder('BucklerWood','LeftHand',g+Vector((0,-1.5*unit,0)),21.5*unit,1*unit,wood,True);cylinder('BucklerBoss','LeftHand',g+Vector((0,-3*unit,0)),7*unit,4*unit,steel,True)
+ handle=cylinder('BucklerHandle','LeftHand',grips['l'],gripRadii['l'],8.5*unit,leather)
+ across=gripAxes['l'];m=Vector((0,0,1)).rotation_difference(across).to_matrix().to_4x4();m.translation=grips['l'];handle.matrix_world=m
+ for sign in [-1,1]:
+  mount=cylinder('BucklerMount'+str(sign),'LeftHand',grips['l']+across*sign*3.7*unit+palmNormals['l']*3.0*unit,1.0*unit,5.5*unit,steel);m=Vector((0,0,1)).rotation_difference(palmNormals['l']).to_matrix().to_4x4();m.translation=mount.matrix_world.translation;mount.matrix_world=m
+
+ grip=bpy.data.objects.new('ShieldGrip',None);bpy.context.collection.objects.link(grip);attach(grip,'ShieldGrip','LeftHand',grips['l'])
  center=bpy.data.objects.new('ShieldContact',None);bpy.context.collection.objects.link(center);attach(center,'ShieldContact','LeftHand',g+Vector((0,-5*unit,0)))
+ # Equipment starts in the same anatomical grip frame as the closed hand.
+ for o in objects:
+  if o.name.startswith('Sword'):fix=Vector((0,0,1)).rotation_difference(gripAxes['r']);pivot=grips['r']
+  elif o.name in ['BucklerRim','BucklerWood','BucklerBoss','ShieldContact']:fix=Vector((0,-1,0)).rotation_difference(palmNormals['l']);pivot=grips['l']
+  else:continue
+  o.matrix_world=Matrix.Translation(pivot)@fix.to_matrix().to_4x4()@Matrix.Translation(-pivot)@o.matrix_world
  rig.animation_data_create();scene=bpy.context.scene;scene.render.fps=30;samples={}
  for name,act in acts.items():
   k.animation_data.action=act;duration=float(act.frame_range[1])/24;frames=round(duration*30);records=[]
@@ -125,7 +175,14 @@ for key,path in [('civilian-a',a_path),('civilian-c',c_path)]:
     contact={'Slash':.256,'Cleave':.587,'Thrust':.42}.get(name);load=math.sin(math.pi*min(1,age/contact)) if contact else 0;release=smooth((age-contact)/.10)*math.exp(-max(0,age-contact)*5) if contact and age>=contact else 0
     offset=Vector((0,.015*load-.025*release,-.014*load-.012*release))*height
     if name=='Walk':offset=Vector((0,0,.004*math.sin(age/duration*4*math.pi)))*height
-    q=rest[names['Hips']].to_quaternion();m=q.to_matrix().to_4x4();m.translation=rest[names['Hips']].translation+offset;pelvis.matrix=m;bpy.context.view_layer.update()
+    twist=0
+    if contact:
+     wind=smooth(age/max(.1,contact*.65))*(1-smooth((age-contact*.65)/(contact*.35)))
+     drive=smooth((age-contact*.65)/(contact*.35))*(1-smooth((age-contact-.06)/max(.1,duration-contact-.06)))
+     twist=(-.16*wind+.21*drive) if name=='Slash' else (-.07*wind+.09*drive)
+    q=Quaternion(Vector((0,0,1)),twist*.45)@rest[names['Hips']].to_quaternion();m=q.to_matrix().to_4x4();m.translation=rest[names['Hips']].translation+offset;pelvis.matrix=m;bpy.context.view_layer.update()
+    if contact:turn(rig.pose.bones[names['Spine']],Vector((0,0,1)),twist*.55)
+
    for label,side in [('Left','l'),('Right','r')]:
     foot=rig.pose.bones[names[label+'Foot']];goal=rest[names[label+'Foot']].translation.copy();q=rest[names[label+'Foot']].to_quaternion();pole=Vector((.10 if side=='l' else -.10,-1,0))
     if name=='Walk':
@@ -151,17 +208,23 @@ for key,path in [('civilian-a',a_path),('civilian-c',c_path)]:
      if side=='r':
       goal=curve(paths.get(name,[(0,ready),(duration,ready)]),age)*height;direction=curve(axes.get(name,[(0,up),(duration,up)]),age).normalized();q=wrist_frame(axes.get(name,[(0,up),(duration,up)]),age,restQ)
      else:
-      goal=Vector((.16,-.14,.61))*height;q=restQ
+      goal=Vector((.16,-.14,.61))*height;q=leftGripQ
      ik(rig.pose.bones[names[label+'Arm']],rig.pose.bones[names[label+'ForeArm']],hand,goal,q,Vector((-1 if side=='r' else 1,.20,-.35)),.18)
    else:
     for label,side in [('Right','r'),('Left','l')]:
-     hand=rig.pose.bones[names[label+'Hand']];w=smooth((age-.45)/1.55);start=Vector((-.15 if side=='r' else .16,-.13,.61));end=Vector((-.16 if side=='r' else .18,-.22,.045));goal=start.lerp(end,w)*height;q=rest[names[label+'Hand']].to_quaternion();ik(rig.pose.bones[names[label+'Arm']],rig.pose.bones[names[label+'ForeArm']],hand,goal,q,Vector((-1 if side=='r' else 1,.15,-.25)),.18)
-   # Finger flexion toward the palm; native source has no finger animation.
+     hand=rig.pose.bones[names[label+'Hand']];w=smooth((age-(.30 if side=='l' else .40))/(1.0 if side=='l' else 1.2));start=Vector((-.15 if side=='r' else .16,-.13,.61));end=Vector((-.16 if side=='r' else .18,-.22,.045));goal=start.lerp(end,w)*height;q=rest[names[label+'Hand']].to_quaternion();ik(rig.pose.bones[names[label+'Arm']],rig.pose.bones[names[label+'ForeArm']],hand,goal,q,Vector((-1 if side=='r' else 1,.15,-.25)),.18)
+   # Flex each phalanx in its own local frame; oppose the thumb separately.
+   curls={'Index':(.73,1.02,.68),'Middle':(.85,1.08,.72),'Ring':(.91,1.04,.74),'Pinky':(.96,.99,.72)}
    for label,sign in [('Left',-1),('Right',1)]:
-    axis=rig.pose.bones[names[label+'Hand']].matrix.to_quaternion()@Vector((1,0,0))
-    for finger in ['Index','Middle','Ring','Pinky']:
-     for number,angle in [(1,1.05),(2,1.15),(3,.80)]:turn(rig.pose.bones[names[label+'Hand'+finger+str(number)]],axis,sign*angle)
-    for number,angle in [(1,.45),(2,.65),(3,.50)]:turn(rig.pose.bones[names[label+'HandThumb'+str(number)]],axis,sign*angle)
+    for finger,angles in curls.items():
+     if key=='civilian-a' and label=='Left' and finger=='Index':angles=(.73,1.02,.68)
+     for number,angle in enumerate(angles,1):
+      bone=rig.pose.bones[names[label+'Hand'+finger+str(number)]];bone.rotation_mode='QUATERNION';bone.rotation_quaternion=Quaternion(Vector((1,0,0)),angle)
+    opposition,*flex=thumbAngles[label]
+    for number,angle in enumerate(flex,1):
+     bone=rig.pose.bones[names[label+'HandThumb'+str(number)]];bone.rotation_mode='QUATERNION';bone.rotation_quaternion=Quaternion(Vector((0,0,1)),sign*opposition if number==1 else 0)@Quaternion(Vector((1,0,0)),angle)
+   for bn,q in indexFit.items():rig.pose.bones[bn].rotation_quaternion=q
+   bpy.context.view_layer.update()
    if name=='Death' and age>1.35:
     floors=support_floors(objects,names);settle=smooth((age-1.35)/.90)
     for label,side in [('Left','l'),('Right','r')]:
@@ -171,15 +234,6 @@ for key,path in [('civilian-a',a_path),('civilian-c',c_path)]:
     # Bake cloth contact into the root trajectory; the runtime then only needs
     # sub-frame residual grounding instead of lifting the finished body 4 cm.
     floor=support_floors(objects,names)['core'];m=pelvis.matrix.copy();m.translation.z+=max(0,bb[0]-floor)*settle;pelvis.matrix=m;bpy.context.view_layer.update()
-   if name=='Death' and age<.47:
-    # Keep only the ready lower-body frame through the .22 s transition;
-    # blending two different planted stances otherwise arcs the shoes below it.
-    entry=smooth((age-.22)/.25)
-    lower=['Hips']+[label+joint for label in ['Left','Right'] for joint in ['UpLeg','Leg','Foot','ToeBase','Toe_End']]
-    for target in lower:
-     b=rig.pose.bones[names[target]];loc,q,scale=b.matrix_basis.decompose();initial=samples['Idle'][1][0][b.name]
-     b.rotation_mode='QUATERNION';b.location=initial[0].lerp(loc,entry);b.rotation_quaternion=initial[1].slerp(q,entry);b.scale=initial[2].lerp(scale,entry)
-    bpy.context.view_layer.update()
    if name=='Death':
     # The whole collapse, including the kneeling interval, must respect the
     # original shoe surfaces. Final contact alone misses mid-collapse floor cuts.
@@ -211,10 +265,10 @@ for key,path in [('civilian-a',a_path),('civilian-c',c_path)]:
  bpy.context.view_layer.update();idleHands={s:rig.pose.bones[names[label+'Hand']].matrix.to_quaternion().copy()for label,s in [('Left','l'),('Right','r')]}
  for b in rig.pose.bones:b.matrix_basis=Matrix.Identity(4)
  bpy.context.view_layer.update()
- for side,label,prefix,current,desired in [('r','Right','Sword',Vector((0,0,1)),Vector((0,-.70,.71)).normalized()),('l','Left','Buckler',Vector((0,-1,0)),Vector((0,-1,0)))]:
+ for side,label,prefix,current,desired in [('r','Right','Sword',gripAxes['r'],Vector((0,-.70,.71)).normalized()),('l','Left','Buckler',palmNormals['l'],Vector((0,-1,0)))]:
   restQ=rest[names[label+'Hand']].to_quaternion();delta=idleHands[side]@restQ.inverted();actual=delta@current;worldFix=actual.rotation_difference(desired);fix=delta.inverted()@worldFix@delta;pivot=grips[side]
   for o in objects:
-   if o.name.startswith(prefix)or(side=='l' and o.name=='ShieldContact'):
+   if o.name.startswith(prefix)or(side=='l' and o.name in ['ShieldContact','ShieldGrip']):
     o.matrix_world=Matrix.Translation(pivot)@fix.to_matrix().to_4x4()@Matrix.Translation(-pivot)@o.matrix_world
  bpy.context.view_layer.update()
  bpy.ops.object.select_all(action='DESELECT')
@@ -223,5 +277,5 @@ for key,path in [('civilian-a',a_path),('civilian-c',c_path)]:
  for tr in rig.animation_data.nla_tracks:tr.mute=False
  bpy.ops.export_scene.gltf(filepath=str(out/(key+'.glb')),export_format='GLB',use_selection=True,export_apply=False,export_animations=True,export_animation_mode='NLA_TRACKS',export_force_sampling=True,export_skins=True)
  clean=lambda n:re.sub(r'[\[\].:/]','',n)
- meta={'model':key,'sourceHeight':height,'sourceFloor':bb[0],'referenceHeight':2.6122968196868896,'normalization':2.6122968196868896/height,'front':'Three +Z','bones':{sem:clean(names[bn])for sem,bn in semantic.items()},'bodySupport':[clean(names[n])for n in ['Hips','Spine','Spine1','Spine2','Head']],'sourceRestMatrices':{n:[list(r)for r in m]for n,m in rest.items()},'contactCalibration':{'slash':.256,'cleave':.587,'thrust':.42},'clips':{n:{'source':('authored adult collapse' if n=='Death' else 'KayKit CC0 torso base plus adult stable-pole IK '+clips[n]),'duration':d}for n,(_,_,d)in samples.items()},'weapons':{'swordTip':'SwordTip','shieldContact':'ShieldContact','gripCm':{s:list(v)for s,v in grips.items()}},'license':'CC BY 4.0' if key.endswith('a')else'Free Standard — local preview only'}
+ meta={'model':key,'sourceHeight':height,'sourceFloor':bb[0],'referenceHeight':2.6122968196868896,'normalization':2.6122968196868896/height,'front':'Three +Z','bones':{sem:clean(names[bn])for sem,bn in semantic.items()},'bodySupport':[clean(names[n])for n in ['Hips','Spine','Spine1','Spine2','Head']],'sourceRestMatrices':{n:[list(r)for r in m]for n,m in rest.items()},'contactCalibration':{'slash':.256,'cleave':.587,'thrust':.42},'clips':{n:{'source':('authored adult collapse' if n=='Death' else 'KayKit CC0 torso base plus adult stable-pole IK '+clips[n]),'duration':d}for n,(_,_,d)in samples.items()},'weapons':{'swordTip':'SwordTip','shieldContact':'ShieldContact','shieldGrip':'ShieldGrip','gripCm':{s:list(v)for s,v in grips.items()},'gripRadiiCm':gripRadii,'gripFit':'curled middle phalange circle; original skin weights'},'license':'CC BY 4.0' if key.endswith('a')else'Free Standard — local preview only'}
  (out/(key+'.json')).write_text(json.dumps(meta,indent=2));print('EXPORTED',key,bb,height)

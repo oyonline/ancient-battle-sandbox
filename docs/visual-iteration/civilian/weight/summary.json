@@ -1,0 +1,97 @@
+{
+  "revision": "ac-weight-20261014-final1",
+  "state": "canonical installed and verified",
+  "frozen_paths": 15,
+  "candidate_tests": {
+    "pass": 10,
+    "fail": 0,
+    "skip": 0,
+    "log": "/private/tmp/ancient-ac-weight-20261014/final-candidate-tests.log"
+  },
+  "independent_probe": {
+    "pass": 17,
+    "fail": 0,
+    "log": "/private/tmp/ancient-ac-weight-20261014/probe/final1-independent-tests.log",
+    "data": "/private/tmp/ancient-ac-weight-20261014/probe/final1-independent.json",
+    "normal_and_swapped_seed": 728,
+    "rules_unchanged": true,
+    "draws": 80,
+    "hp": [
+      -2,
+      2
+    ],
+    "height_m": 0.783689045906,
+    "peak_sword_elbow_deg": 13.0530275606,
+    "peak_sword_wrist_step_m": 0.051681195,
+    "peak_shield_wrist_step_m": 0.039477447,
+    "max_planted_drift_m": 0.007143,
+    "all_32_hit_blade_axis_body_distance_max_m": 3.59e-07,
+    "all_4_block_blade_axis_shield_distance_m": 0,
+    "paused_pose_model_clocks_feet_unchanged": true,
+    "lift_land_per_actor": "11 or 16 complete episodes, including support by opposite planted foot",
+    "terminal_support_lower_bounds_m": {
+      "right_hand": 0.0003,
+      "sword_blade": 0.002255,
+      "buckler_boss": 0.001
+    }
+  },
+  "visuals": {
+    "grip": "/private/tmp/ancient-ac-weight-20261014/visual-final/grip",
+    "actual_fight_and_death": "/private/tmp/ancient-ac-weight-20261014/visual-final/combat",
+    "normal_speed": "/private/tmp/ancient-ac-weight-20261014/visual-final/video/normal-speed.webm"
+  },
+  "limits": [
+    "No mathematical-zero floor claim; 1mm numerical tolerance",
+    "Choreographed constrained collapse; not ragdoll physics",
+    "Technical approval is not user satisfaction",
+    "Models and raw evidence stay local only; no commit or push"
+  ],
+  "independent_assets_review": {
+    "original_body_geometry_skin_inverse_bind_pbr_embedded_textures_unchanged": true,
+    "receipt": "/private/tmp/ancient-ac-weight-20261014/review/assets-final1.json"
+  },
+  "canonical_tests": {
+    "pass": 20,
+    "fail": 0,
+    "skip": 0,
+    "log": "/private/tmp/ancient-ac-weight-20261014/final-canonical-tests.log"
+  },
+  "build": {
+    "exit_code": 0,
+    "log": "/private/tmp/ancient-ac-weight-20261014/final-build.log",
+    "private_ac_assets_in_dist": false
+  },
+  "review": {
+    "verdict": "APPROVE",
+    "requiredRemaining": [],
+    "receipt": "/private/tmp/ancient-ac-weight-20261014/review/verdict.json"
+  },
+  "canonical_hash_receipt": "/private/tmp/ancient-ac-weight-20261014/canonical-hash-receipt.json",
+  "service_readback": "/private/tmp/ancient-ac-weight-20261014/service-readback.json",
+  "writer": "released after each short transaction; final receipt in local evidence",
+  "git": {
+    "head": "33b0144ce8be69f532366672aaf4cfd4896dacd4",
+    "branch": "codex/sword-shield-round1",
+    "staged": false,
+    "commit": false,
+    "push": false
+  },
+  "owner": "codex-native-ac-weight-worker",
+  "frozen_hashes": {
+    "tools/prepare-civilian-models.py": "31541385ca2cad21e2388dd4151c612291e51812664cc4e2de1a58c411de7dae",
+    "js/three-demo/civilian-ik.js": "abaca6045b16a1bcb64c22a33c4efdc329adf719160aed96c6ff1350619f91ed",
+    "js/three-demo/civilian-performance.js": "28fc0d2c076df64d1ae6099c03581f210a044e255047d60726bcf75bab69b4b9",
+    "js/three-demo/civilian-footwork.js": "b1a01221d1cd0368bf75b533654b414e834bf643fb9570e43e76a5dc746d2789",
+    "tests/three-civilian-models.test.js": "49ebfd9f2a5527fb4fbcc74eb238d73d5c074d97cd8abf0a981b3b36992771cc",
+    "docs/civilian-models.md": "610ac365b4961814d7b673ed1b9b95bc1dffd0c5162865d3c3ec20dd7132754e",
+    "local-assets/ac/civilian-a.glb": "c1ef50a6e79e0cbcfcda07f3d75c172471d885819e8fe68d116436b8a6d4f65e",
+    "local-assets/ac/civilian-a.json": "5e44ebf3635d2dc43a49a274d68304f35c3e398c7d4a5eee352bb607155aa393",
+    "local-assets/ac/civilian-c.glb": "d501bc6122e21fedf567a5b82b5942275a494e9ed7bf21155c52606196d62eb5",
+    "local-assets/ac/civilian-c.json": "28333663d66b7829f37a4141a343b793de4f75c509e88b6ab7498e582b18d1e1",
+    "js/three-demo/civilian-animation.js": "3bdbd06640f86c3ec472115a49abbe51e1e4afd55cb28193b0718178f09b3774",
+    "js/three-demo/civilian-duel.js": "f40a5edbd6c85d75b78c049e11b4a8ff436a3aa44450dd0451d7c91a75d12358",
+    "js/three-demo/sword-duel.js": "054e4a81c9f1f83759378f584d3d8500b447bac1b9a44d7835fbb169e52cb479",
+    "js/three-demo/impact-performance.js": "f90ada7d4533db0835e69dcdac099a65537602e51982efa06662639b4937e14d",
+    "js/three-demo/combat-model.js": "0a93c2a616f1465067e7170bc437ef8969f4a89e49336951286a50579532b87a"
+  }
+}
