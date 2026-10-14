@@ -5,14 +5,14 @@ export const ARCHER={range:8,windup:11/24,cooldown:1.8,speed:12,damage:14,maxDis
 export function meleeReach(a,b){return a.radius+b.radius+(a.kind==='pikeman'?.9:.22);}
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
 export function createFighter(id,team,kind,x,z){return {id,team,kind,x,z,radius:BODY_RADIUS[kind],hp:100,heading:team==='red'?Math.PI/2:-Math.PI/2,speed:0,runup:0,chargeCooldown:0,pierceTime:0,momentum:0,pierceHits:new Set(),attackCooldown:id%5*.09,target:null,moving:false,attacking:false,chargeFlash:0,hitFlash:0,deathTime:null,pendingShot:null,pendingStrike:null,projectiles:[],shotSequence:0};}
-export function separateBodies(units,iterations=10){
+export function separateBodies(units,iterations=10,boundaryScale=1){
  const alive=units.filter(u=>u.hp>0);
  for(let pass=0;pass<iterations;pass++)for(let i=0;i<alive.length;i++)for(let j=i+1;j<alive.length;j++){
   const a=alive[i],b=alive[j],dx=b.x-a.x,dz=b.z-a.z,d=Math.hypot(dx,dz),contact=a.radius+b.radius+.06;
   if(d>=contact)continue;
   const angle=((a.id*17+b.id*31)%360)*Math.PI/180;
   const nx=d>1e-8?dx/d:Math.cos(angle),nz=d>1e-8?dz/d:Math.sin(angle),push=(contact-d)*.51;
-  a.x=clamp(a.x-nx*push,-17,17);a.z=clamp(a.z-nz*push,-13,13);b.x=clamp(b.x+nx*push,-17,17);b.z=clamp(b.z+nz*push,-13,13);
+  a.x=clamp(a.x-nx*push,-17*boundaryScale,17*boundaryScale);a.z=clamp(a.z-nz*push,-13*boundaryScale,13*boundaryScale);b.x=clamp(b.x+nx*push,-17*boundaryScale,17*boundaryScale);b.z=clamp(b.z+nz*push,-13*boundaryScale,13*boundaryScale);
  }
 }
 export function chargeReady(u,enemy){const dx=enemy.x-u.x,dz=enemy.z-u.z,d=Math.hypot(dx,dz);return u.kind==='cavalry'&&u.chargeCooldown<=0&&u.runup>=CHARGE.runup&&u.speed>=CHARGE.speed&&d>1e-8&&(Math.sin(u.heading)*dx+Math.cos(u.heading)*dz)/d>=CHARGE.alignment;}
@@ -34,7 +34,7 @@ function advanceArrows(units,dt,events){
   owner.projectiles=owner.projectiles.filter(shot=>shot.life>0);
  }
 }
-export function stepSkirmish(units,dt,fighting,movementIntent=null){
+export function stepSkirmish(units,dt,fighting,movementIntent=null,{boundaryScale=1}={}){
  dt=clamp(dt,0,.05);const events=[];advanceArrows(units,dt,events);const alive=units.filter(u=>u.hp>0),plans=[];
  for(const u of alive){
   u.attackCooldown=Math.max(0,u.attackCooldown-dt);u.chargeCooldown=Math.max(0,u.chargeCooldown-dt);u.chargeFlash=Math.max(0,u.chargeFlash-dt);u.hitFlash=Math.max(0,u.hitFlash-dt);u.moving=false;u.attacking=false;if(u.pendingStrike)u.pendingStrike.time-=dt;u.pierceTime=Math.max(0,u.pierceTime-dt);if(u.pierceTime===0)u.momentum=0;
@@ -79,20 +79,20 @@ export function stepSkirmish(units,dt,fighting,movementIntent=null){
   }
   p.mx*=fraction;p.mz*=fraction;if(u.crowd)u.blockedBy=p.blocker?.id;
  }
- for(const p of plans){const u=p.u;const nextX=u.x+p.mx,nextZ=u.z+p.mz;u.x=clamp(nextX,-17,17);u.z=clamp(nextZ,-13,13);p.mx=u.x-p.oldX;p.mz=u.z-p.oldZ;if(u.x!==nextX||u.z!==nextZ){u.pierceTime=0;u.momentum=0;u.runup=0;u.speed=0;}const actual=Math.hypot(p.mx,p.mz);u.moving=actual>.001;const forward=p.mx*Math.sin(u.heading)+p.mz*Math.cos(u.heading);if(u.moving&&forward>actual*.94&&u.speed>=CHARGE.speed)u.runup+=forward;}
+ for(const p of plans){const u=p.u;const nextX=u.x+p.mx,nextZ=u.z+p.mz;u.x=clamp(nextX,-17*boundaryScale,17*boundaryScale);u.z=clamp(nextZ,-13*boundaryScale,13*boundaryScale);p.mx=u.x-p.oldX;p.mz=u.z-p.oldZ;if(u.x!==nextX||u.z!==nextZ){u.pierceTime=0;u.momentum=0;u.runup=0;u.speed=0;}const actual=Math.hypot(p.mx,p.mz);u.moving=actual>.001;const forward=p.mx*Math.sin(u.heading)+p.mz*Math.cos(u.heading);if(u.moving&&forward>actual*.94&&u.speed>=CHARGE.speed)u.runup+=forward;}
  // Resolve contact while speed/run-up still describe the approach, then brake for ordinary melee.
  for(const p of plans){const u=p.u,e=p.blocker&&p.blocker.team!==u.team?p.blocker:p.enemy;if(!e||u.hp<=0||e.hp<=0||u.kind==='archer')continue;const d=Math.hypot(e.x-u.x,e.z-u.z),reach=meleeReach(u,e);if(d>reach)continue;
   u.attacking=true;
   const approach=(Math.sin(u.heading)*(e.x-u.x)+Math.cos(u.heading)*(e.z-u.z))/Math.max(d,1e-6);
   const continuation=u.pierceTime>0&&u.speed>=1.5&&approach>=.9&&(u.moving||p.blocker===e)&&!u.pierceHits.has(e.id)&&u.pierceHits.size<4&&u.momentum>.1;
-  if(chargeReady(u,e)||continuation){const nx=(e.x-u.x)/Math.max(d,1e-6),nz=(e.z-u.z)/Math.max(d,1e-6);const first=!continuation;if(first){u.momentum=1;u.pierceTime=.9;u.pierceHits.clear();}u.pierceHits.add(e.id);e.hp-=first?CHARGE.damage:10*u.momentum;e.pendingShot=null;e.pendingStrike=null;e.x=clamp(e.x+nx*CHARGE.knockback*(first?1:.35),-17,17);e.z=clamp(e.z+nz*CHARGE.knockback*(first?1:.35),-13,13);u.chargeCooldown=CHARGE.cooldown;u.attackCooldown=1;u.chargeFlash=.7;u.runup=0;u.momentum=Math.max(0,u.momentum-(e.kind==='cavalry'?.4:.26));if(u.pierceHits.size>=4||u.momentum<=.1)u.pierceTime=0;e.hitFlash=.45;events.push({type:'charge',from:u,target:e,x:e.x,z:e.z,nx,nz,first});}
+  if(chargeReady(u,e)||continuation){const nx=(e.x-u.x)/Math.max(d,1e-6),nz=(e.z-u.z)/Math.max(d,1e-6);const first=!continuation;if(first){u.momentum=1;u.pierceTime=.9;u.pierceHits.clear();}u.pierceHits.add(e.id);e.hp-=first?CHARGE.damage:10*u.momentum;e.pendingShot=null;e.pendingStrike=null;e.x=clamp(e.x+nx*CHARGE.knockback*(first?1:.35),-17*boundaryScale,17*boundaryScale);e.z=clamp(e.z+nz*CHARGE.knockback*(first?1:.35),-13*boundaryScale,13*boundaryScale);u.chargeCooldown=CHARGE.cooldown;u.attackCooldown=1;u.chargeFlash=.7;u.runup=0;u.momentum=Math.max(0,u.momentum-(e.kind==='cavalry'?.4:.26));if(u.pierceHits.size>=4||u.momentum<=.1)u.pierceTime=0;e.hitFlash=.45;events.push({type:'charge',from:u,target:e,x:e.x,z:e.z,nx,nz,first});}
   else if(u.pierceTime===0&&u.attackCooldown<=0&&!u.pendingStrike&&u.hitFlash<=0&&approach>=.9){u.pendingStrike={time:11/24,targetId:e.id};u.attackCooldown=u.kind==='cavalry'?1.15:u.kind==='pikeman'?1.3:1;events.push({type:'attack',from:u,target:e});}
  }
  for(const u of units){if(!u.pendingStrike||u.pendingStrike.time>1e-8)continue;const aimed=units.find(e=>e.id===u.pendingStrike.targetId&&e.hp>0);u.pendingStrike=null;
   if(u.hp<=0||u.target||u.hitFlash>0||!aimed||Math.hypot(aimed.x-u.x,aimed.z-u.z)>meleeReach(u,aimed)||(Math.sin(u.heading)*(aimed.x-u.x)+Math.cos(u.heading)*(aimed.z-u.z))/Math.max(.001,Math.hypot(aimed.x-u.x,aimed.z-u.z))<.9){events.push({type:'cancel-attack',from:u});continue;}
   aimed.hp-=u.kind==='cavalry'?14:u.kind==='pikeman'?16:12;aimed.pendingShot=null;aimed.pendingStrike=null;aimed.hitFlash=.45;u.attackFlash=.24;events.push({type:'hit',from:u,target:aimed,x:aimed.x,z:aimed.z});
  }
- separateBodies(units);
+ separateBodies(units,10,boundaryScale);
  for(const p of plans){const u=p.u;if(!u.moving){u.runup=0;u.speed=Math.max(0,u.speed-dt*10);}}
  for(const u of units)if(u.hp<=0&&u.deathTime===null){u.pendingShot=null;u.pendingStrike=null;u.deathTime=0;events.push({type:'death',unit:u,x:u.x,z:u.z});}
  return events;

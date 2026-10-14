@@ -2,7 +2,8 @@ import { Vector3, Quaternion, Matrix4 } from 'three';
 
 // Optional, bounded slope overlay. The actor root and exported clips stay intact.
 export class TerrainContact {
- constructor(model, feet, heightAt) {
+ constructor(model, feet, heightAt,scale=1) {
+  this.scale=scale;
   this.model=model;this.feet=feet;this.heightAt=heightAt;this.saved=[];
   model.updateMatrixWorld(true);
   this.soles=feet.legs.map(leg=>{
@@ -17,7 +18,7 @@ export class TerrainContact {
    });
    const bottom=Math.min(...vertices.map(v=>v.y));
    const inverse=leg.foot.matrixWorld.clone().invert();
-   return {leg,points:vertices.filter(v=>v.y<=bottom+.025).map(v=>v.applyMatrix4(inverse))};
+   return {leg,points:vertices.filter(v=>v.y<=bottom+.025*scale).map(v=>v.applyMatrix4(inverse))};
   });
  }
  restore(){for(const [bone,q] of this.saved)bone.quaternion.copy(q);this.saved=[];this.flatGaps=null;}
@@ -53,9 +54,9 @@ export class TerrainContact {
    const rotated=new Matrix4().compose(a,rotation,foot.getWorldScale(new Vector3()));
    const flatGap=this.flatGaps?.get(leg.side)??Math.min(...points.map(p=>p.clone().applyMatrix4(foot.matrixWorld).y-centerHeight));
    const slopeGap=Math.min(...points.map(p=>{const v=p.clone().applyMatrix4(rotated);return v.y-this.heightAt(v.x,v.z);}));
-   const target=a.clone();target.y+=Math.max(-.18,Math.min(.18,flatGap-slopeGap));
+   const target=a.clone();target.y+=Math.max(-.18*this.scale,Math.min(.18*this.scale,flatGap-slopeGap));
    const l1=h.distanceTo(k),l2=k.distanceTo(a),direction=target.clone().sub(h);
-   const distance=Math.max(.001,Math.min(direction.length(),l1+l2-.002)),axis=direction.normalize();
+   const distance=Math.max(.001,Math.min(direction.length(),l1+l2-.002*this.scale)),axis=direction.normalize();
    const along=(l1*l1-l2*l2+distance*distance)/(2*distance),bend=Math.sqrt(Math.max(0,l1*l1-along*along));
    const pole=k.clone().sub(h);pole.addScaledVector(axis,-pole.dot(axis));
    if(pole.lengthSq()<1e-8)continue;

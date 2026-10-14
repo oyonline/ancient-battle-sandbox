@@ -1,0 +1,118 @@
+{
+  "date": "2026-10-14",
+  "scope": "User-confirmed 100% / remaining 30%, sword and cavalry real-battle sample",
+  "url": "http://localhost:5301/battle3d.html?sample=vitality&size=100",
+  "userArtAcceptance": "pending user playtest",
+  "review": {
+    "technical": "APPROVE",
+    "visual": "APPROVE_WITH_NOTES",
+    "requiredRemaining": [],
+    "visualReceipt": "visual-review.json"
+  },
+  "validation": {
+    "fullTests": {
+      "passed": 816,
+      "failed": 0,
+      "exit": 0
+    },
+    "focusedThree": {
+      "passed": 86,
+      "failed": 0
+    },
+    "buildExit": 0,
+    "diffCheckExit": 0,
+    "oldGLBCount": 20,
+    "allOldGLBUnchanged": true,
+    "legacy": {
+      "errors": [],
+      "results": [
+        {
+          "url": "",
+          "initial": "自由布阵 · 红方 16 · 蓝方 16",
+          "battle": "已暂停 · 红方 16 · 蓝方 14",
+          "reset": "自由布阵 · 红方 16 · 蓝方 16"
+        },
+        {
+          "url": "?motion=candidate&duel=candidate&model=r2&ride=standard&front=candidate&feedback=candidate&chargefx=candidate&crowdlate=candidate",
+          "initial": "自由布阵 · 红方 16 · 蓝方 16",
+          "battle": "已暂停 · 红方 16 · 蓝方 14",
+          "reset": "自由布阵 · 红方 16 · 蓝方 16"
+        },
+        {
+          "classic": "帝国亲子沙盒 · 统帅试炼"
+        }
+      ]
+    }
+  },
+  "battle": {
+    "errors": [],
+    "runs": [
+      {
+        "size": "100",
+        "seconds": 45.0315000000003,
+        "counts": {
+          "charge": 2,
+          "attack": 143,
+          "hit": 74,
+          "death": 8,
+          "cancel-attack": 3
+        },
+        "alive": 8,
+        "pausedTimeUnchanged": true,
+        "resetCount": 16,
+        "resetAllFullHP": true,
+        "glbAll200": true
+      },
+      {
+        "size": "30",
+        "seconds": 45.03140000000028,
+        "counts": {
+          "charge": 3,
+          "attack": 143,
+          "hit": 78,
+          "death": 9,
+          "cancel-attack": 1
+        },
+        "alive": 7,
+        "pausedTimeUnchanged": true,
+        "resetCount": 16,
+        "resetAllFullHP": true,
+        "glbAll200": true
+      }
+    ],
+    "raw": "/private/tmp/ancient-vitality-writer-20261014/final-battle",
+    "excluded": "root battle.json 100% was HMR-reset, not valid battle evidence"
+  },
+  "resetSampling": {
+    "note": "Immediate synchronous reset inspection can read stale world/skinning matrices. Rendered result sampled after two real requestAnimationFrames.",
+    "path": "/private/tmp/ancient-vitality-writer-20261014/reset-after-render.json",
+    "scale": 0.3,
+    "minimumSoleGap": -0.0019637901562929994
+  },
+  "invariants": {
+    "damageAndSecondsUnchanged": true,
+    "worldAndCameraUnscaled": true,
+    "initialFormationAndMovementLengthsScale": true,
+    "notSameRenderedOutcome": "native dt and different terrain positions; pure same-dt equivalence is limited to combat algorithm"
+  },
+  "assets": [
+    {
+      "path": "public/assets/3d-sample/vitality/infantry-rigged.glb",
+      "sha256": "93c0637bc6402140bcf529586a9b56a0c4d444a2fa48264a79b73b62017e7aca"
+    },
+    {
+      "path": "public/assets/3d-sample/vitality/cavalry-rigged.glb",
+      "sha256": "e5ceabb2ed54babd95657a91413214807e7edf9efa27974b342ce3593789d0e7"
+    }
+  ],
+  "git": {
+    "branch": "codex/sword-shield-round1",
+    "head": "17382c65c1f659ea62ccbfaa1b74439418d5bac0",
+    "commit": false,
+    "push": false,
+    "merge": false,
+    "deploy": false,
+    "writer": "Final live release/status receipts: /private/tmp/ancient-vitality-writer-20261014/writer-release.json and writer-status-final.json"
+  },
+  "logs": "/private/tmp/ancient-vitality-writer-20261014"
+}
