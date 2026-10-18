@@ -10,7 +10,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Snd } from '../snd.js';
 import { Terrain } from '../terrain.js';
-import { UNIT_TYPES, CavalryAI } from '../units.js';
+import { UNIT_TYPES, CavalryAI, unitRand } from '../units.js';
 import { board } from '../board.js';
 import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
 
@@ -167,6 +167,15 @@ arrowMesh.count = 0; arrowMesh.frustumCulled = false;
 scene3d.add(arrowMesh);
 
 const dummy = new THREE.Object3D();
+const _av = new THREE.Vector3(), _bv = new THREE.Vector3();
+// 弹道切线（p 处导数）：水平线性 + 高度端点插值 + 正弦弧的导数；箭几何沿 +Z，配 lookAt 出俯仰
+function arrowVel(a, p, out) {
+    out.set(a.tx - a.sx,
+        ((a.targetHeight || 0) - (a.sourceHeight || 0)) * H_WORLD + Math.cos(p * Math.PI) * Math.PI * 1.1,
+        a.ty - a.sy);
+    if (out.lengthSq() < 1e-8) out.set(0, 0, 1);
+    return out;
+}
 
 // ---------------- 2D 模拟场景（真模拟 + 桩渲染），钩子全部换成 3D 实现 ----------------
 let scene;
@@ -232,7 +241,7 @@ async function boot() {
     // 尸体记录：真 killUnit 继续跑（计数/阵亡音/血），3D 侧顺手盖印尸体
     const realKill = scene.killUnit;
     scene.killUnit = function (unit, from) {
-        recordCorpse(unit);
+        recordCorpse(unit, from);
         return realKill.call(this, unit, from);
     };
 
@@ -245,17 +254,55 @@ async function boot() {
 
 // ---------------- 尸体 ----------------
 const corpseCursor = { infantry: 0, pikeman: 0, archer: 0, cavalry: 0 };
-function recordCorpse(u) {
+// ---------------- 死亡倒下：先翻倒（物理滑移），落定后尸体留在原地 ----------------
+// 复用尸体实例槽做动画：死亡瞬间写入直立姿态，0.6s 内绕脚底水平轴翻到平躺，
+// 与 2D 死亡序列（命中→定向倒下→落地尘土→盖印）对齐。倒向确定性取自攻击者方位/生前速度。
+const falling = [];
+const _up = new THREE.Vector3(0, 1, 0), _faxis = new THREE.Vector3();
+const _qf = new THREE.Quaternion(), _qy = new THREE.Quaternion();
+function writeFall(f, p) {
+    // 前 15% 是命中僵直，之后加速翻倒；滑移三次缓出（同 2D drift）
+    const tp = p < .15 ? 0 : (p - .15) / .85;
+    const theta = tp * tp * Math.PI / 2;
+    const drift = 1 - Math.pow(1 - p, 3);
+    dummy.position.set(f.x + f.slideX * drift, f.y + f.lift * Math.sin(theta), f.z + f.slideZ * drift);
+    _qf.setFromAxisAngle(_faxis.set(f.fz, 0, -f.fx), theta);
+    _qy.setFromAxisAngle(_up, f.yaw);
+    dummy.quaternion.copy(_qf.multiply(_qy));
+    dummy.scale.setScalar(1); dummy.updateMatrix();
+    corpseMeshes[f.kind].setMatrixAt(f.slot, dummy.matrix);
+    corpseMeshes[f.kind].instanceMatrix.needsUpdate = true;
+}
+function recordCorpse(u, from) {
     if (!UNIT_KINDS.includes(u.type)) return;
     const kind = u.type, i = corpseCursor[kind]++ % CAP[kind];
     corpseMeshes[kind].count = Math.min(corpseCursor[kind], CAP[kind]);
-    const h = headings.get(u.id) ?? 0;
-    dummy.position.set(u.gx - 35, groundH(u.gx, u.gy) + .16, u.gy - 35);
-    dummy.rotation.set(Math.random() < .5 ? Math.PI / 2 : -Math.PI / 2, h + (Math.random() - .5) * 1.2, 0);
-    dummy.scale.setScalar(1); dummy.updateMatrix();
-    corpseMeshes[kind].setMatrixAt(i, dummy.matrix);
-    corpseMeshes[kind].instanceMatrix.needsUpdate = true;
-    addBlood(u.gx, u.gy, u.type === 'cavalry' ? .8 : .5);
+    // 尸体槽也挂队伍色：死亡瞬间不掉色（活体槽随单位移除即复用）
+    _teamColor.setHex(TEAM_COLOR[u.team]);
+    if (kind === 'cavalry') _teamColor.multiplyScalar(.9);
+    corpseMeshes[kind].setColorAt(i, _teamColor);
+    if (corpseMeshes[kind].instanceColor) corpseMeshes[kind].instanceColor.needsUpdate = true;
+    const yaw = headings.get(u.id)?.a ?? (u.team === 'red' ? Math.PI / 2 : -Math.PI / 2);   // headings 存的是 {a, bob} 状态对象
+    let fx, fz, slideX = 0, slideZ = 0;
+    if (kind === 'cavalry') {
+        // 骑兵：沿生前速度滑移 + 侧倒（马向侧面翻）
+        const vx = u.velX || 0, vz = u.velY || 0, sp = Math.hypot(vx, vz);
+        if (sp > .3) { const s = Math.min(1.4, sp * .1); slideX = vx / sp * s; slideZ = vz / sp * s; }
+        fx = Math.cos(yaw); fz = -Math.sin(yaw);
+        if (unitRand(u) < .5) { fx = -fx; fz = -fz; }
+    } else if (from && from.gx !== undefined && !from.isBuilding) {
+        // 步兵：倒离攻击者
+        const dx = u.gx - from.gx, dz = u.gy - from.gy, d = Math.hypot(dx, dz);
+        if (d > 1e-3) { fx = dx / d; fz = dz / d; }
+    }
+    if (fx === undefined) { const a = unitRand(u) * Math.PI * 2; fx = Math.sin(a); fz = Math.cos(a); }
+    const f = { kind, slot: i, x: u.gx - 35, z: u.gy - 35, y: groundH(u.gx, u.gy),
+        yaw, fx, fz, slideX, slideZ,
+        start: scene.simulationTime, dur: kind === 'cavalry' ? 760 : 600,   // 模拟时钟：暂停冻结/倍速同步
+        lift: kind === 'cavalry' ? .3 : .16, puffed: false };
+    falling.push(f);
+    writeFall(f, 0);   // 立即写直立姿态，接棒活体槽，无缝换岗
+    addBlood(u.gx, u.gy, kind === 'cavalry' ? .8 : .5);
 }
 
 // ---------------- 每帧同步：模拟状态 → 实例矩阵 ----------------
@@ -293,19 +340,31 @@ function sync3D(dt, now) {
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
-    // 箭矢：直接读模拟层的飞行数据
+    // 箭矢：直接读模拟层的飞行数据。高度契约同 2D arrowPoint：端点插值已是绝对
+    // 地形高度，不再叠加中途 groundH（坡地上会双重抬高、随地形起伏穿帮）。
     const arrows = scene.arrows;
     for (let i = 0; i < Math.min(arrows.length, 300); i++) {
         const a = arrows[i], p = Math.min(1, a.t / a.dur);
         const gx = a.sx + (a.tx - a.sx) * p, gy = a.sy + (a.ty - a.sy) * p;
         const hgt = (a.sourceHeight || 0) * (1 - p) + (a.targetHeight || 0) * p;
-        dummy.position.set(gx - 35, groundH(gx, gy) + hgt * H_WORLD + Math.sin(p * Math.PI) * 1.1 + .5, gy - 35);
-        dummy.rotation.set(0, Math.atan2(a.tx - a.sx, a.ty - a.sy), 0);
+        dummy.position.set(gx - 35, hgt * H_WORLD + Math.sin(p * Math.PI) * 1.1 + .5, gy - 35);
+        // 姿态沿弹道切线：水平速度恒定 + 垂直分量为高度插值与正弦弧的导数 → 上仰/下俯
+        arrowVel(a, p, _bv);
+        _av.copy(dummy.position).add(_bv);
+        dummy.lookAt(_av);
         dummy.scale.setScalar(1); dummy.updateMatrix();
         arrowMesh.setMatrixAt(i, dummy.matrix);
     }
     arrowMesh.count = Math.min(arrows.length, 300);
     arrowMesh.instanceMatrix.needsUpdate = true;
+    // 死亡倒下推进：翻倒加速 + 滑移缓出，落定瞬间扬尘（走模拟时钟，暂停即冻结）
+    const simNow = scene.simulationTime;
+    for (let i = falling.length - 1; i >= 0; i--) {
+        const f = falling[i], p = Math.min(1, (simNow - f.start) / f.dur);
+        writeFall(f, p);
+        if (!f.puffed && p >= .88) { f.puffed = true; puff(f.x + 35 + f.slideX, f.z + 35 + f.slideZ, f.kind === 'cavalry'); }
+        if (p >= 1) falling.splice(i, 1);
+    }
     // 尘土衰减
     for (const d of dustPool) {
         if (d.life <= 0) { if (d.m.visible) d.m.visible = false; continue; }
@@ -361,7 +420,7 @@ renderer.setAnimationLoop(now => {
 });
 
 // ---------------- 控件 ----------------
-window.__spike = { camera, controls, getScene: () => scene, unitMeshes, corpseMeshes, bloodMesh, puff, renderer, scene3d };
+window.__spike = { camera, controls, getScene: () => scene, unitMeshes, corpseMeshes, bloodMesh, puff, renderer, scene3d, falling };
 let started = false;
 $('btn-start').onclick = () => { $('gate').hidden = true; Snd.play('go'); started = true; boot(); };
 $('btn-pause').onclick = e => { if (!scene) return; scene.paused = !scene.paused; e.target.textContent = scene.paused ? '继续' : '暂停'; };
