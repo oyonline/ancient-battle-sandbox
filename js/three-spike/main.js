@@ -12,6 +12,7 @@ import { Snd } from '../snd.js';
 import { Terrain } from '../terrain.js';
 import { UNIT_TYPES, CavalryAI, unitRand } from '../units.js';
 import { board } from '../board.js';
+import { TW, TH, OX, OY } from '../render/metrics.js';
 import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
 
 window.Snd = Snd;   // game.js / render 钩子里以全局 Snd 出声（die/win/arrow）
@@ -132,18 +133,27 @@ function setTeamColor(u, slot) {
 }
 
 // 血渍 / 尘土 / 箭矢
-const BLOOD_CAP = 6000;
+const BLOOD_CAP = 16000;   // 血粒子落地也盖渍，全场消耗 ~8K，上限留足不绕圈
 const bloodMesh = new THREE.InstancedMesh(
     new THREE.CircleGeometry(1, 10).rotateX(-Math.PI / 2),
     new THREE.MeshBasicMaterial({ color: 0x4a0f0c, transparent: true, opacity: .8, depthWrite: false }), BLOOD_CAP);
 bloodMesh.count = 0; bloodMesh.frustumCulled = false; bloodMesh.renderOrder = 1;
 scene3d.add(bloodMesh);
 let bloodCursor = 0;
+const _nUp = new THREE.Vector3(0, 1, 0), _n = new THREE.Vector3(), _nQ = new THREE.Quaternion(), _nQY = new THREE.Quaternion();
+function groundNormal(gx, gy) {
+    const e = .35;   // 差分采样求坡面法线：血渍贴坡不埋进山体
+    const hx = groundH(gx + e, gy) - groundH(gx - e, gy);
+    const hz = groundH(gx, gy + e) - groundH(gx, gy - e);
+    return _n.set(-hx, 2 * e, -hz).normalize();
+}
 function addBlood(gx, gy, r) {
     const i = bloodCursor++ % BLOOD_CAP;
     bloodMesh.count = Math.min(bloodCursor, BLOOD_CAP);
-    dummy.position.set(gx - 35, groundH(gx, gy) + .03 + i * 1e-5, gy - 35);
-    dummy.rotation.set(0, Math.random() * Math.PI, 0);
+    dummy.position.set(gx - 35, groundH(gx, gy) + .06 + i * 1e-5, gy - 35);
+    _nQ.setFromUnitVectors(_nUp, groundNormal(gx, gy));          // 圆片贴坡面
+    _nQY.setFromAxisAngle(_nUp, Math.random() * Math.PI * 2);    // 面内随机旋转
+    dummy.quaternion.copy(_nQ).multiply(_nQY);
     dummy.scale.setScalar(r); dummy.updateMatrix();
     bloodMesh.setMatrixAt(i, dummy.matrix);
     bloodMesh.instanceMatrix.needsUpdate = true;
@@ -165,6 +175,51 @@ const arrowMesh = new THREE.InstancedMesh(
     new THREE.MeshBasicMaterial({ color: 0xe8d7a1 }), 300);
 arrowMesh.count = 0; arrowMesh.frustumCulled = false;
 scene3d.add(arrowMesh);
+
+// ---------------- 血粒子：命中喷溅 → 抛物线 → 落地并入血渍层 ----------------
+// 模拟时钟驱动（暂停冻结/倍速同步），环形槽覆盖最老粒子。
+const BLOOD_P_CAP = 800;
+const bloodPMesh = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(.075, .075, .075),
+    new THREE.MeshBasicMaterial({ color: 0x9c2418 }), BLOOD_P_CAP);
+bloodPMesh.count = 0; bloodPMesh.frustumCulled = false;
+scene3d.add(bloodPMesh);
+const bloodP = [];       // 存活粒子 { slot, gen, x0,y0,z0, vx,vy,vz, birth, life, gx, gy }
+let bloodPCursor = 0;
+function sprayBlood(gx, gy, n, power, k = 1) {
+    const y0 = groundH(gx, gy) + .8 * Math.max(.7, k);        // 喷口≈胸口高
+    const v0 = (power / 95) * (1.7 + Math.random() * 1.1);
+    for (let i = 0; i < n; i++) {
+        const a = Math.random() * Math.PI * 2, r = .3 + Math.random() * .7;
+        const gen = bloodPCursor++;
+        bloodP.push({ slot: gen % BLOOD_P_CAP, gen,
+            x0: gx - 35, y0, z0: gy - 35,
+            vx: Math.sin(a) * r * v0 * .85, vy: (.55 + Math.random() * .8) * v0, vz: Math.cos(a) * r * v0 * .85,
+            birth: scene.simulationTime, life: .45 + Math.random() * .3, gx, gy });
+    }
+    bloodPMesh.count = Math.min(bloodPCursor, BLOOD_P_CAP);
+}
+function updateBloodP(simNow) {
+    const G = 9.5;
+    for (let i = bloodP.length - 1; i >= 0; i--) {
+        const p = bloodP[i], t = (simNow - p.birth) / 1000;
+        if (t >= p.life) {
+            // 落地：部分化成小血渍并入留痕层（全盖会耗尽血渍缓冲）
+            if (Math.random() < .35) addBlood(p.gx + p.vx * p.life, p.gy + p.vz * p.life, .1 + Math.random() * .12);
+            if (!bloodP.some(q => q !== p && q.slot === p.slot && q.gen > p.gen)) {
+                dummy.position.set(0, -50, 0); dummy.rotation.set(0, 0, 0); dummy.scale.setScalar(1e-4);
+                dummy.updateMatrix(); bloodPMesh.setMatrixAt(p.slot, dummy.matrix);
+            }
+            bloodP.splice(i, 1); continue;
+        }
+        const gx = p.x0 + 35 + p.vx * t, gy = p.z0 + 35 + p.vz * t;
+        dummy.position.set(gx - 35, Math.max(p.y0 + p.vy * t - .5 * G * t * t, groundH(gx, gy) + .04), gy - 35);
+        dummy.rotation.set(t * 9 + p.gen, t * 7, 0);
+        dummy.scale.setScalar(1); dummy.updateMatrix();
+        bloodPMesh.setMatrixAt(p.slot, dummy.matrix);
+    }
+    bloodPMesh.instanceMatrix.needsUpdate = true;
+}
 
 const dummy = new THREE.Object3D();
 const _av = new THREE.Vector3(), _bv = new THREE.Vector3();
@@ -227,12 +282,20 @@ async function boot() {
         if (throttled(kind || 'hit')) Snd.play(kind === 'thrust' ? 'stab' : kind === 'charge' ? 'charge' : 'hit');
         puff(target.gx, target.gy);
     };
-    scene.bloodBurst = (x, y, n = 6, power = 95, k = 1) => { if (Math.random() < .8) addBlood(x, y, (.22 + Math.random() * .3) * Math.max(.7, k)); };
-    scene.addGroundBlood = (x, y, s) => addBlood(x, y, .25 + s * .2);
-    scene.addBloodPool = (x, y, s) => addBlood(x, y, .5 + s * .4);
+    // 2D 钩子契约：血液/落尘钩子收的是等距屏幕坐标（gridToScreen 系），先反解回网格
+    const s2g = (sx, sy) => { const a = (sx - OX) / (TW / 2), b = (sy - OY) / (TH / 2); return [(a + b) / 2, (b - a) / 2]; };
+    const onField = (gx, gy) => gx > -2 && gx < 72 && gy > -2 && gy < 72;
+    scene.bloodBurst = (sx, sy, n = 6, power = 95, k = 1) => {
+        const [gx, gy] = s2g(sx, sy);
+        if (!onField(gx, gy)) return;
+        sprayBlood(gx, gy, Math.max(4, Math.round(n * .8)), power, k);           // 空中喷溅
+        if (Math.random() < .8) addBlood(gx, gy, (.22 + Math.random() * .3) * Math.max(.7, k));   // 地面底渍
+    };
+    scene.addGroundBlood = (sx, sy, s) => { const [gx, gy] = s2g(sx, sy); if (onField(gx, gy)) addBlood(gx, gy, .25 + s * .2); };
+    scene.addBloodPool = (sx, sy, s) => { const [gx, gy] = s2g(sx, sy); if (onField(gx, gy)) addBlood(gx, gy, .5 + s * .4); };
     scene.flushBloodQueue = () => {};
     scene.chargeDust = u => { if (Math.random() < .4) puff(u.gx, u.gy, true); };
-    scene.impactPuff = (x, y) => puff(x, y);
+    scene.impactPuff = (sx, sy) => { const [gx, gy] = s2g(sx, sy); if (onField(gx, gy)) puff(gx, gy); };
     scene.sparkBurst = () => {}; scene.slashArc = () => {};
     scene.spawnOrderText = () => {}; scene.orderFlash = () => {};
     scene.drawTactics = () => {}; scene.drawFlags = () => {}; scene.stampCorpse = () => {};
@@ -296,7 +359,11 @@ function recordCorpse(u, from) {
         if (d > 1e-3) { fx = dx / d; fz = dz / d; }
     }
     if (fx === undefined) { const a = unitRand(u) * Math.PI * 2; fx = Math.sin(a); fz = Math.cos(a); }
-    const f = { kind, slot: i, x: u.gx - 35, z: u.gy - 35, y: groundH(u.gx, u.gy),
+    // 尸体躺平后跨 ~1.5 格：高度取身体跨度内最高点，避免上坡侧被地形吞掉
+    const span = kind === 'cavalry' ? 1.5 : 1.1;
+    let cy = groundH(u.gx, u.gy);
+    for (const t of [.5, 1]) cy = Math.max(cy, groundH(u.gx + fx * span * t, u.gy + fz * span * t));
+    const f = { kind, slot: i, x: u.gx - 35, z: u.gy - 35, y: cy,
         yaw, fx, fz, slideX, slideZ,
         start: scene.simulationTime, dur: kind === 'cavalry' ? 760 : 600,   // 模拟时钟：暂停冻结/倍速同步
         lift: kind === 'cavalry' ? .3 : .16, puffed: false };
@@ -365,6 +432,7 @@ function sync3D(dt, now) {
         if (!f.puffed && p >= .88) { f.puffed = true; puff(f.x + 35 + f.slideX, f.z + 35 + f.slideZ, f.kind === 'cavalry'); }
         if (p >= 1) falling.splice(i, 1);
     }
+    updateBloodP(simNow);   // 血粒子抛物线推进（同一模拟时钟）
     // 尘土衰减
     for (const d of dustPool) {
         if (d.life <= 0) { if (d.m.visible) d.m.visible = false; continue; }
@@ -420,7 +488,8 @@ renderer.setAnimationLoop(now => {
 });
 
 // ---------------- 控件 ----------------
-window.__spike = { camera, controls, getScene: () => scene, unitMeshes, corpseMeshes, bloodMesh, puff, renderer, scene3d, falling };
+window.__spike = { camera, controls, getScene: () => scene, unitMeshes, corpseMeshes, bloodMesh, puff, renderer, scene3d, falling, bloodP,
+    get bloodCursor() { return bloodCursor; }, get corpseCursor() { return corpseCursor; } };
 let started = false;
 $('btn-start').onclick = () => { $('gate').hidden = true; Snd.play('go'); started = true; boot(); };
 $('btn-pause').onclick = e => { if (!scene) return; scene.paused = !scene.paused; e.target.textContent = scene.paused ? '继续' : '暂停'; };
