@@ -219,15 +219,19 @@ function ladderGroup() {
     return group;
 }
 
-// ---------------- 箭塔（四腿高台 + 三面垛口 + 塔梯 + 驻塔弓手，敞顶） ----------------
+// ---------------- 箭塔（四腿高台 + 四面垛口 + 塔梯 + 驻塔弓手，敞顶） ----------------
 function towerGroup() {
-    const deck = TOWER_DECK, parts = [
+    const deck = TOWER_DECK, railY = deck + .45;
+    const parts = [
         box(1.7, .16, 1.7, 0, deck + .08, 0, 0xbf9d66),                // 平台
-        box(.09, .42, 1.7, 0, deck + .45, -.8, WOOD),                  // 后垛口
-        box(1.7, .42, .09, 0, deck + .45, .8, WOOD),                    // 侧垛口
-        box(.09, .42, 1.7, -0.8, deck + .45, 0, WOOD),
-        box(.06, 2.3, .06, .8, deck + 1.0, .8, TIMBER),                 // 旗杆
-        box(.7, .42, .04, 1.1, deck + 1.7, .8, TEAM_COLOR)             // 队旗
+        // 四面垛口闭合：四条边栏均沿各自边线走向（此前 z=-0.8 那条把宽/深写反，
+        // 变成一根沿 Z 捅出平台的长条，且 x=+0.8 这条整个漏做）
+        box(1.7, .42, .09, 0, railY, -.8, WOOD),                       // 后垛口（沿 X）
+        box(1.7, .42, .09, 0, railY, .8, WOOD),                        // 前垛口（沿 X）
+        box(.09, .42, 1.7, -.8, railY, 0, WOOD),                       // 左垛口（沿 Z）
+        box(.09, .42, 1.7,  .8, railY, 0, WOOD),                       // 右垛口（沿 Z）
+        box(.06, 1.9, .06, .6, deck + .16 + .95, .6, TIMBER),           // 旗杆：立在平台角上
+        box(.7, .42, .04, .95, deck + .16 + 1.7, .6, TEAM_COLOR)        // 队旗
     ];
     for (const [x, z] of [[-.65, -.65], [.65, -.65], [-.65, .65], [.65, .65]])
         parts.push(box(.16, deck, .16, x, deck / 2, z, TIMBER));       // 四腿
