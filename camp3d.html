@@ -51,11 +51,12 @@
     <span style="color:rgba(232,223,200,.6)">仅栅栏高度 + 守军落点切换</span>
   </div>
 </div>
-<div id="controls"><button id="btn-gate">开门</button><button id="btn-ram">冲车撞门</button><button id="btn-toggle">口径：齐胸栅栏（新）· 点击对照旧口径</button><button id="btn-assault">开始攻寨</button><button id="btn-assault-reset">重置</button><select id="sel-force"><option value="squad">小队</option><option value="company" selected>中队</option><option value="brigade">大队</option></select></div>
+<div id="controls"><button id="btn-gate">开门</button><button id="btn-ram">冲车撞门</button><button id="btn-toggle">口径：齐胸栅栏（新）· 点击对照旧口径</button><button id="btn-assault">开始攻寨</button><button id="btn-assault-reset">重置</button><select id="sel-force"><option value="squad">小队</option><option value="company" selected>中队</option><option value="brigade">大队</option></select><select id="sel-def"><option value="6" selected>守军 6</option><option value="12">守军 12</option><option value="24">守军 24</option></select></div>
 <div id="battle" hidden>
   <div class="b-title">攻寨推演</div>
   <div>攻方：存活 <b id="atk-alive">0</b> / 阵亡 <b id="atk-lost">0</b></div>
   <div>守方：存活 <b id="def-alive">0</b> / 阵亡 <b id="def-lost">0</b></div>
+  <div>守军编制 <b id="def-comp">-</b></div>
   <div>战损比 <b id="ratio">-</b> · 用时 <b id="elapsed">0.0</b>s</div>
   <div>结果 <b id="verdict">进行中</b></div>
 </div>

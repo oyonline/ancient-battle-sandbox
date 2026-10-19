@@ -360,8 +360,17 @@ function towerGroup() {
     // 移到寨内 -z 后墙中线：x=0 保持镜像对称，且远离 +gy 寨门与四角帐篷
     const px = 0, pz = -(WALL_R - 1.7);
     // 弓手站在平台上：位置用「组内局部坐标」，组再整体搬到塔位
-    for (const [ox, oz] of [[-.35 * s, 0], [.35 * s, 0]])
-        group.add(soldierMesh('archer', guardMat, ox, deck + th, oz, Math.atan2(WALL_R, 0)));
+    // 世界坐标与网格一并挂到 userData，供攻寨推演把塔上弓手当守方复用（fixed，不跑位）
+    // 6 名弓手在平台上排 3×2（箭塔本就容得下多名弓手；单塔 2 人时守方远程火力太弱）
+    const archers = [];
+    for (const oz of [-.22 * s, .22 * s])
+        for (const ox of [-.42 * s, 0, .42 * s]) {
+            const m = soldierMesh('archer', guardMat, ox, deck + th, oz, Math.atan2(WALL_R, 0));
+            m.userData.homeYaw = m.rotation.y;
+            archers.push({ mesh: m, x: px + ox, z: pz + oz });
+            group.add(m);
+        }
+    group.userData.archers = archers;
     group.position.set(px, 0, pz);
     return group;
 }
@@ -431,8 +440,9 @@ const ram = ramGroup();
 ram.position.set(0, 0, RAM_REST);
 const gateState = { phase: 'idle', t: 0, open: 0, angle: 0, inward: false, rammed: false, k: 0, hits: 0, jolt: 0 };
 
+const tower = towerGroup();
 const fixed = new THREE.Group();
-fixed.add(tentsGroup(), towerGroup(), gate, ladderGroup(), ram);
+fixed.add(tentsGroup(), tower, gate, ladderGroup(), ram);
 scene.add(fixed);
 const chestHigh = fenceGroup(FENCE_TOP, WALKWAY_H);              // 新口径：齐胸栅栏 + 内侧踩台
 const wallTop = fenceGroup(FENCE_TOP_OLD, GUARD_FEET_OLD);       // 旧口径：高栅栏 + 守军站墙顶窄台
@@ -562,6 +572,20 @@ for (const kind of ATTACK_KINDS) {
 }
 const dummy = new THREE.Object3D();
 
+// 守方网格池：寨墙守军按「守军数量」档启用前 N 个（6/12/24），一律站寨墙环的踩台上；
+// 兵种按同一周期规则分配（每 3 个垛口 1 名弓手 → N/3 名弓手），网格与逻辑兵种天然一致。
+// 箭塔 6 名弓手见 tower.userData.archers，也当守方复用（fixed=true，不跑位）。
+const MAX_WALL_GUARDS = 24;
+const DEF_COUNTS = [6, 12, 24];
+const slotKind = i => (i % 3 === 2 ? 'archer' : 'infantry');   // 每 3 个垛口 1 名弓手
+const defMeshes = [];
+for (let i = 0; i < MAX_WALL_GUARDS; i++) {
+    const m = soldierMesh(slotKind(i), guardMat, 0, WALKWAY_H, 0, 0);
+    m.visible = false;
+    scene.add(m);
+    defMeshes.push(m);
+}
+
 const assault = {
     active: false, attackers: [], defenders: [], acc: 0, elapsedMs: 0, result: null, preset: 'company'
 };
@@ -588,7 +612,7 @@ function assaultSequence(preset) {
     return seq;
 }
 
-function startAssault(preset) {
+function startAssault(preset, defCount) {
     resetAssault();                                  // 演示进行中「开始攻寨」→ 先重置再开始
     assault.preset = preset;
     const seq = assaultSequence(preset), spawnR = 11;
@@ -600,14 +624,25 @@ function startAssault(preset) {
         u.slot = slotOf[seq[i]]++;                   // 在该兵种 InstancedMesh 里的实例槽位
         assault.attackers.push(u);
     }
-    // 红方守方 = 复用寨墙上 6 名垛口守军：逻辑位置在寨墙环（半边长 5.0），网格仍站踩台（内缩）
-    assault.defenders = chestHigh.userData.guards.map(mesh => {
-        const t = mesh.userData.slotT;
+    // 红方守方①：N 名寨墙守军沿寨墙环均匀布岗（逻辑位置在环上，网格站踩台）；
+    // 近战/弓手按「每 3 个垛口 1 名弓手」混编，弓手站在寨墙上往外射（守方不再全是 0.95 近战）
+    const N = DEF_COUNTS.includes(defCount) ? defCount : 6, per = 8 * WALL_R;
+    const defenders = [];
+    for (let i = 0; i < N; i++) {
+        const t = i * per / N;
         const [px, pz] = wallPoint(t, WALL_R);
-        const u = makeDemoUnit('red', 'defend', 'infantry', px, pz, Math.atan2(px, pz));
-        u.mesh = mesh; u.homeT = t;
-        return u;
-    });
+        const u = makeDemoUnit('red', 'defend', slotKind(i), px, pz, Math.atan2(px, pz));
+        u.mesh = defMeshes[i]; u.homeT = t; u.fixed = false;
+        defenders.push(u);
+    }
+    // 红方守方②：寨内箭塔的 6 名弓手参战（复用塔上装饰弓手；位置固定、不跑位）
+    for (const a of tower.userData.archers) {
+        const u = makeDemoUnit('red', 'defend', 'archer', a.x, a.z, a.mesh.rotation.y);
+        u.mesh = a.mesh; u.fixed = true;
+        defenders.push(u);
+    }
+    assault.defenders = defenders;
+    for (const m of chestHigh.userData.guards) m.visible = false;   // 装饰守军让位给守方池
     assault.active = true; assault.acc = 0; assault.elapsedMs = 0; assault.result = null;
     $('battle').hidden = false;
     syncAssaultMeshes(); syncGuardMeshes(); renderAssaultHud();
@@ -621,11 +656,16 @@ function resetAssault() {
         const im = assaultMeshes[kind];
         im.count = 0; im.instanceMatrix.needsUpdate = true;
     }
-    for (const mesh of chestHigh.userData.guards) {      // 守军回岗位、复现
+    for (const m of defMeshes) m.visible = false;                // 守方池收起
+    for (const mesh of chestHigh.userData.guards) {              // 装饰守军回岗位、复现
         const h = mesh.userData.home;
         mesh.position.set(h.x, h.y, h.z);
         mesh.rotation.set(0, h.yaw, 0);
         mesh.visible = true;
+    }
+    for (const a of tower.userData.archers) {          // 塔上弓手复位（阵亡后需重新显形，否则装饰兵消失）
+        a.mesh.rotation.set(0, a.mesh.userData.homeYaw, 0);
+        a.mesh.visible = true;
     }
     $('battle').hidden = true;
 }
@@ -708,24 +748,27 @@ function stepAssault(ms) {
         a.cd = a.typeData.atkSpeed;
     }
 
-    // 守方跑位：沿寨墙环（半边长 5.0）朝最近活着的攻方挪动，不许穿寨
+    // 守方跑位：沿寨墙环（半边长 5.0）朝最近活着的攻方挪动，不许穿寨；箭塔弓手位置固定、只转向
     const per = 8 * WALL_R;
     for (const d of def) {
         if (d.dead) continue;
         const nf = nearestOf(atk, d);
-        const have = wallParamToward(d.x, d.z);
-        const want = nf ? wallParamToward(nf.x, nf.z) : d.homeT;
-        let diff = want - have;
-        if (diff > per / 2) diff -= per; else if (diff < -per / 2) diff += per;
-        if (Math.abs(diff) > 1e-3) {
-            const step = Math.min(Math.abs(diff), d.typeData.speed * ms / 1000) * Math.sign(diff);
-            const p = wallPoint(have + step, WALL_R);
-            d.x = p[0]; d.z = p[1];
+        if (!d.fixed) {
+            const have = wallParamToward(d.x, d.z);
+            const want = nf ? wallParamToward(nf.x, nf.z) : d.homeT;
+            let diff = want - have;
+            if (diff > per / 2) diff -= per; else if (diff < -per / 2) diff += per;
+            if (Math.abs(diff) > 1e-3) {
+                const step = Math.min(Math.abs(diff), d.typeData.speed * ms / 1000) * Math.sign(diff);
+                const p = wallPoint(have + step, WALL_R);
+                d.x = p[0]; d.z = p[1];
+            }
         }
-        d.yaw = nf ? Math.atan2(nf.x - d.x, nf.z - d.z) : Math.atan2(d.x, d.z);
+        d.yaw = nf ? Math.atan2(nf.x - d.x, nf.z - d.z) : (d.fixed ? d.yaw : Math.atan2(d.x, d.z));
     }
 
     // 守方出手：只打射程内最近的一名攻方；居高临下 × WALL_GUARD_ATTACK
+    // （寨墙守军近战 range 0.95；箭塔弓手远程 range 9.5，同样吃居高临下倍率）
     for (const d of def) {
         if (d.dead || d.cd > 0) continue;
         const tgt = nearestInRange(atk, d, d.typeData.range);
@@ -762,6 +805,7 @@ function syncGuardMeshes() {
     for (const d of assault.defenders) {
         if (d.dead) { d.mesh.visible = false; continue; }
         d.mesh.visible = true;
+        if (d.fixed) { d.mesh.rotation.y = d.yaw; continue; }   // 塔上弓手位置固定，只转向
         const [ix, iz] = inward(d.x, d.z);
         d.mesh.position.set(ix, WALKWAY_H, iz);
         d.mesh.rotation.y = d.yaw;
@@ -776,6 +820,9 @@ function renderAssaultHud() {
     const atkLost = assault.attackers.length - atkAlive, defLost = assault.defenders.length - defAlive;
     $('atk-alive').textContent = atkAlive; $('atk-lost').textContent = atkLost;
     $('def-alive').textContent = defAlive; $('def-lost').textContent = defLost;
+    const nInf = assault.defenders.reduce((n, u) => n + (u.type === 'infantry' ? 1 : 0), 0);
+    const nArc = assault.defenders.reduce((n, u) => n + (u.type === 'archer' ? 1 : 0), 0);
+    $('def-comp').textContent = `剑士 ${nInf} · 弓手 ${nArc}（含箭塔 ${tower.userData.archers.length}）`;
     // 战损比 = 攻方阵亡 : 守方阵亡（守方为 0 时显示「∞ / -」）
     $('ratio').textContent = defLost === 0 ? '∞ / -' : `${atkLost} : ${defLost}`;
     $('elapsed').textContent = (assault.elapsedMs / 1000).toFixed(1);
@@ -798,7 +845,7 @@ function updateAssault(dtSec) {
     syncAssaultMeshes(); syncGuardMeshes(); renderAssaultHud();
 }
 
-$('btn-assault').onclick = () => { startAssault($('sel-force').value); };
+$('btn-assault').onclick = () => { startAssault($('sel-force').value, +$('sel-def').value); };
 $('btn-assault-reset').onclick = () => { resetAssault(); };
 
 renderer.setAnimationLoop(() => {
