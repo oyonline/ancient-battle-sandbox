@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CombatRules, knockback, makeScene, addUnit, calculateAttackDamage } from './battle-harness.js';
+import { meleeAttackDamage, resolveAttack, UNIT_TYPES } from '../js/units.js';
 
 const STEP = 1000 / 60;
 
@@ -208,7 +209,8 @@ test('ordinary and guard pikes can thrust past exactly one willing aligned pike 
                 CombatRules.attack(scene, source, target, 1);
                 assert.equal(scene.battleQueue.length, permitted ? 1 : 0, label);
                 landSwing({ scene });
-                assert.equal(target.hp, target.maxHp - (permitted ? calculateAttackDamage(source, target) : 0), label);
+                const expected = permitted ? meleeAttackDamage(source, calculateAttackDamage(source, target)) : 0;
+                assert.equal(target.hp, target.maxHp - expected, label);
             }
         }
     }
@@ -277,4 +279,31 @@ test('body separation cannot preserve brace after support is lost or the pike ro
         assert.equal(spear.braceTime, 0, condition);
         assert.ok(spear.braceSupport < 2, condition);
     }
+});
+
+test('近战伤害种子浮动：同刀手值稳定、不同刀手各异、不动 randSeed、弓箭不受影响', () => {
+    const mk = id => ({ id, type: 'infantry', typeData: UNIT_TYPES.infantry });
+    // 同一攻击者：多次调用同值，且不产生/不消耗 randSeed（不扰动既有随机流）
+    const u = mk(7);
+    const v1 = meleeAttackDamage(u, 50), v2 = meleeAttackDamage(u, 50);
+    assert.equal(v1, v2);
+    assert.equal(u.randSeed, undefined);
+    assert.ok(v1 >= 45 && v1 <= 54, `基准 50 ±10% 浮动带内，实得 ${v1}`);
+    // 不同攻击者：200 个 id 至少 3 种值，全部落在 ±10% 带内
+    const seen = new Set();
+    for (let id = 1; id <= 200; id++) {
+        const v = meleeAttackDamage(mk(id), 50);
+        assert.ok(v >= 45 && v <= 54, `id=${id} 实得 ${v} 超出浮动带`);
+        seen.add(v);
+    }
+    assert.ok(seen.size >= 3, `浮动应产生多种伤害值，实际仅 ${seen.size} 种`);
+    // 结算链：剑士砍剑士（def 10）→ 基准 16−10=6，浮动后 5..6
+    const { source, target } = duel('advance');
+    const dmg = resolveAttack(target, source);
+    assert.ok(dmg >= 5 && dmg <= 6, `剑士对剑士实伤 ${dmg} 超出带`);
+    // 弓箭路径：显式 rawAttack 原值结算（26-10=16），不受浮动影响
+    const scene2 = makeScene();
+    const archer = addUnit(scene2, 'red', 'archer', 30, 30);
+    const victim = addUnit(scene2, 'blue', 'infantry', 35, 30);
+    assert.equal(resolveAttack(victim, archer, { rawAttack: UNIT_TYPES.archer.atk }), 16);
 });

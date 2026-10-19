@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
     Terrain, UNIT_TYPES, moveToward, calculateAttackDamage, resolveAttack, makeScene, addUnit
 } from './battle-harness.js';
+import { meleeAttackDamage } from '../js/units.js';
 
 const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-10,
     message || `${actual} should equal ${expected}`);
@@ -141,7 +142,7 @@ test('a complete charge preserves slope-adjusted momentum and collision force in
         scene.rebuildSpatial();
         scene.cavalryAI.charge(unit, 5000, 1 / 60);
         assert.equal(unit.chargeImpactId, target.id);
-        assert.equal(target.hp, target.maxHp - damage);
+        assert.equal(target.hp, target.maxHp - meleeAttackDamage(unit, damage));   // 近战护甲后种子浮动，坡序比较仍用名义基准
         close(unit.chargeMomentum, slope - 0.26);
         close(Math.abs(unit.pierceX - impactX), 4 * slope);
         outcomes[name] = { damage, momentum: unit.chargeMomentum };

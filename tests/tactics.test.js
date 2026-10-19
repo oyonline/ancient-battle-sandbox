@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeScene, snapshot, addUnit, resolveAttack, calculateAttackDamage } from './battle-harness.js';
+import { meleeAttackDamage } from '../js/units.js';
 
 const STEP = 1000 / 60;
 
@@ -337,12 +338,12 @@ test('a supported prepared front guard deflects swords before armor is deducted 
     assert.ok(deflection > 0 && deflection < 1, 'the formation reduces a frontal strike without making the guard invulnerable');
     const hp = guard.hp;
     const ordinary = calculateAttackDamage(sword, guard, { multiplier: deflection });
-    assert.equal(resolveAttack(guard, sword), ordinary);
-    assert.equal(guard.hp, hp - ordinary);
+    assert.equal(resolveAttack(guard, sword), meleeAttackDamage(sword, ordinary), '近战在护甲后基准上再做种子浮动');
+    assert.equal(guard.hp, hp - meleeAttackDamage(sword, ordinary));
     const boosted = calculateAttackDamage(sword, guard, { rawAttack: 20, multiplier: 2 * deflection });
     assert.equal(resolveAttack(guard, sword, { rawAttack: 20, multiplier: 2 }), boosted,
         'combine attack and formation multipliers before the one armor deduction');
-    assert.equal(guard.hp, hp - ordinary - boosted);
+    assert.equal(guard.hp, hp - meleeAttackDamage(sword, ordinary) - boosted);
 });
 
 test('side rear close routing moving and replacement attacks receive no frontal deflection', () => {
@@ -365,7 +366,7 @@ test('side rear close routing moving and replacement attacks receive no frontal 
             condition === 'side' ? 0 : 0.95, condition === 'side' ? 0.95 : 0);
         const deflections = scene.tactics.metrics.deflections;
         assert.equal(scene.tactics.incomingMultiplier(sword, guard), 1, condition);
-        assert.equal(resolveAttack(guard, sword), 8, `${condition}: 16 attack - 8 armor`);
+        assert.equal(resolveAttack(guard, sword), meleeAttackDamage(sword, 8), `${condition}: 基准 16−8=8 经种子浮动`);
         assert.equal(scene.tactics.metrics.deflections, deflections, `${condition} must not count as a deflection`);
     }
 });
@@ -377,7 +378,8 @@ test('arrows and cavalry keep their ordinary damage against a prepared frontal g
         placeRelative(attacker, guard, 0.95);
         const deflections = scene.tactics.metrics.deflections;
         assert.equal(scene.tactics.incomingMultiplier(attacker, guard), 1, type);
-        assert.equal(resolveAttack(guard, attacker, { multiplier }), damage, `${type} × ${multiplier}`);
+        const expected = type === 'archer' ? damage : meleeAttackDamage(attacker, damage);   // 近战护甲后再做种子浮动
+        assert.equal(resolveAttack(guard, attacker, { multiplier }), expected, `${type} × ${multiplier}`);
         assert.equal(scene.tactics.metrics.deflections, deflections);
     }
 });

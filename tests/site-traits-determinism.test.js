@@ -156,9 +156,9 @@ test('双端锁步：据点特色与民夫自卫下仍逐位一致，且两端�
 });
 
 test('模拟版本随本轮行为变化更新，旧页面无法混用', () => {
-    // 自由塔命令/稳定ID、斧兵与塔平衡改变行为，旧合作模式页面不能混用。
-    assert.equal(SIM_VERSION, '2026-10-07-coop-supply-medics');
-    assert.notEqual(SIM_VERSION, '2026-10-04-coop-black', '相对合作模式批次必须更新');
+    // 近战伤害种子浮动改变伤害序列，旧合作模式页面不能混用。
+    assert.equal(SIM_VERSION, '2026-10-19-melee-damage-seeded-variance');
+    assert.notEqual(SIM_VERSION, '2026-10-07-coop-supply-medics', '相对伤害浮动批次必须更新');
     assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2c', '相对上一批次必须递增');
     assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2b', '相对 F8 批次必须递增');
     assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2', '相对返修轮主体必须递增');

@@ -866,6 +866,25 @@ export function knockback(target, from, amount) {
     } else { target.gx = gx; target.gy = gy; }
 }
 
+// 近战伤害浮动种子：镜像不变（与 unitRand 同源的量化配方）——换边重演时红蓝配对单位
+// 拿到同一 roll。出生即快照存 unit.meleeRoll，之后移动不改值，保证同一攻击者出刀稳定。
+export function meleeRollSeed(unit) {
+    const mxq = Math.round(Math.min(unit.gx, board.W - unit.gx) * 256);
+    const myq = Math.round(unit.gy * 256);
+    let tc = 0; for (let i = 0; i < unit.type.length; i++) tc = (tc * 31 + unit.type.charCodeAt(i)) | 0;
+    return (((mxq * 73856093) ^ (myq * 19349663) ^ tc) >>> 0) / 4294967296;
+}
+
+// 近战出手伤害浮动：基准伤害（攻−防结算后）×(90%~110%)，按 meleeRoll 取稳定值——
+// 同一单位整刀同值，不同攻击者命中各异。作用于护甲之后：小刀浮动颗粒 ±1，
+// 重击（冲锋/迎击）有实感波动，且有效 TTK 浮动压在 ±10% 量级，不放大阵型平衡噪声。
+// 弓箭不走这里（rawAttack 原值）。
+export function meleeAttackDamage(unit, baseDamage) {
+    // 手搓测试件（无 meleeRoll）兜底 id 哈希；真实单位一律由 spawnUnit 播种
+    const roll = unit.meleeRoll ?? (((unit.id * 2654435761) >>> 0) / 4294967296);
+    return Math.max(1, Math.floor(baseDamage * (0.9 + roll * 0.2)));
+}
+
 // 所有攻击都先由原始攻击力结算一次倍率、一次护甲；applyDamage 只接收最终伤害。
 export function calculateAttackDamage(from, target, { multiplier = 1, rawAttack = from.typeData.atk } = {}) {
     const counter = from.type === 'pikeman' && target.type === 'cavalry' ? UNIT_TYPES.pikeman.antiCav : 1;
@@ -882,12 +901,15 @@ export function resolveAttack(target, from, options = {}) {
     const damage = calculateAttackDamage(from, target, {
         ...options, multiplier: (options.multiplier ?? 1) * formationMultiplier * terrainMultiplier
     });
+    // 近战（未显式传 rawAttack）在攻−防结算后做 ±10% 种子浮动；弓箭/塔等显式 rawAttack 原值不动
+    const finalDamage = options.rawAttack === undefined && !from.typeData.ranged
+        ? meleeAttackDamage(from, damage) : damage;
     const attackStartedAt = options.attackStartedAt ?? scene?.simulationTime;
     if (scene && scene.collectingImpacts) {
-        scene.battleImpacts.push({ target, damage, from, attackStartedAt });
-        return damage;
+        scene.battleImpacts.push({ target, damage: finalDamage, from, attackStartedAt });
+        return finalDamage;
     }
-    return applyDamage(target, damage, from, attackStartedAt);
+    return applyDamage(target, finalDamage, from, attackStartedAt);
 }
 
 export function applyDamage(target, dmg, from, attackStartedAt) {

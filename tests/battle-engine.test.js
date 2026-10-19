@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { IsoBattleScene, applyDamage, calculateAttackDamage, resolveAttack, snapshot, makeScene, addUnit } from './battle-harness.js';
+import { meleeAttackDamage } from '../js/units.js';
 
 test('war report counts effective damage and attributes each death exactly once', () => {
     const scene = makeScene();
@@ -60,8 +61,9 @@ test('pause freezes the battle clock and queued melee damage', () => {
     assert.equal(blue.hp, 100);
     scene.togglePause();
     for (let i = 0; i < 6; i++) scene.advanceBattle(1000 / 60);
-    assert.equal(red.hp, 94);
-    assert.equal(blue.hp, 94);
+    // 近战伤害种子浮动：护甲后基准 16−10=6，按各自出手者的种子浮动断言
+    assert.equal(red.hp, 100 - meleeAttackDamage(blue, 6));
+    assert.equal(blue.hp, 100 - meleeAttackDamage(red, 6));
 });
 
 function runMixedBattle(speed) {
@@ -153,13 +155,14 @@ test('counter and brace multipliers precede one armor deduction; final damage is
     const scene = makeScene();
     const pike = addUnit(scene, 'red', 'pikeman');
     const cavalry = addUnit(scene, 'blue', 'cavalry');
-    assert.equal(calculateAttackDamage(pike, cavalry), 35); // 18 * 2.5 - 10
+    assert.equal(calculateAttackDamage(pike, cavalry), 35); // 18 * 2.5 - 10（默认 rawAttack 路径不变）
     assert.equal(calculateAttackDamage(pike, cavalry, { multiplier: 1.5 }), 57);
-    assert.equal(resolveAttack(cavalry, pike), 35);
-    assert.equal(cavalry.hp, 125);
+    const braceHit = meleeAttackDamage(pike, 35);   // 基准 18×2.5−10=35 经种子浮动
+    assert.equal(resolveAttack(cavalry, pike), braceHit);
+    assert.equal(cavalry.hp, 160 - braceHit);
     assert.equal(applyDamage(cavalry, 6, pike), 6, 'applyDamage accepts already-final damage');
-    assert.equal(cavalry.hp, 119);
-    assert.equal(scene.getBattleReport().teams.red.damage, 41);
+    assert.equal(cavalry.hp, 160 - braceHit - 6);
+    assert.equal(scene.getBattleReport().teams.red.damage, braceHit + 6);
 });
 
 test('cavalry needs three actual traveled cells before its double-damage charge', () => {
@@ -168,7 +171,7 @@ test('cavalry needs three actual traveled cells before its double-damage charge'
     const closeTarget = addUnit(close, 'blue', 'archer', 31, 30);
     closeTarget.typeData = { ...closeTarget.typeData, speed: 0 };
     for (let i = 0; i < 60 && closeTarget.hp === closeTarget.maxHp; i++) close.advanceBattle(1000 / 60);
-    assert.equal(closeTarget.hp, 23, 'point-blank cavalry deals a normal 30 - 3 attack');
+    assert.equal(closeTarget.hp, 50 - meleeAttackDamage(closeCavalry, 27), 'point-blank cavalry deals a normal attack');   // 基准 30−3=27
     assert.equal(closeCavalry.state, 'melee');
 
     const run = makeScene();
@@ -176,7 +179,7 @@ test('cavalry needs three actual traveled cells before its double-damage charge'
     const target = addUnit(run, 'blue', 'infantry', 26, 30);
     target.typeData = { ...target.typeData, speed: 0 };
     for (let i = 0; i < 180 && target.hp === target.maxHp; i++) run.advanceBattle(1000 / 60);
-    assert.equal(target.hp, 50, 'a real run-up enables 30 * 2 - 10 damage');
+    assert.equal(target.hp, 100 - meleeAttackDamage(cavalry, 50), 'a real run-up enables double-damage charge');   // 基准 30×2−10=50
     assert.equal(cavalry.state, 'pierce');
 });
 
@@ -206,7 +209,7 @@ test('contact with a front soldier interrupts unready cavalry instead of pushing
             assert.equal(cavalry.chargeDistance, 0, 'body contact must end the run-up');
             assert.equal(cavalry.chargeImpactId, null, 'pushing the front line must never enable a double hit');
         }
-        assert.ok(infantry.hp >= 80, 'only a normal melee hit may land in this first second');
+        assert.ok(infantry.hp >= 78, 'only a normal melee hit may land in this first second');   // 基准 30−10=20，浮动上限 ×1.1 = 22
     }
 });
 
@@ -242,8 +245,10 @@ test('a prepared frontal pike formation resists the charge while both impact and
     scene.advanceBattle(1000 / 60);
     assert.equal(cavalry.state, 'melee');
     assert.equal(cavalry.chargeDistance, 0);
-    assert.equal(cavalry.hp, 103);   // 迎击 18*1.5*2.5-10=57：160-57
-    assert.equal(spear.hp, 28, 'resistance must not swallow the cavalry first-impact damage');
+    assert.equal(cavalry.hp, 160 - meleeAttackDamage(spear, 57));   // 迎击：基准 18×1.5×2.5−10=57 经种子浮动
+    const fullCharge = meleeAttackDamage(cavalry, 50);   // 名义首撞 基准 30×2−10=50（动量≈1，允许动量微调带）
+    assert.ok(spear.hp <= 80 - fullCharge + 6 && spear.hp >= 80 - fullCharge - 8,
+        `resistance must not swallow the cavalry first-impact damage (hp=${spear.hp}, 名义 ${80 - fullCharge})`);
     assert.equal(archer.hp, 50);
     assert.ok(cavalry.gx < spear.gx);
     assert.ok(scene.getBattleReport().events.some(event => event.text.includes('正面枪阵迎击')));
@@ -257,7 +262,9 @@ test('a lone spear is knocked aside without unconditionally stopping a running c
     cavalry.chargeDistance = 3.5;
     for (let i = 0; i < 120 && cavalry.chargeImpactId == null; i++) scene.advanceBattle(1000 / 60);
     assert.equal(cavalry.chargeImpactId, spear.id);
-    assert.equal(spear.hp, 28);
+    const chargeHit = meleeAttackDamage(cavalry, 50);   // 名义首撞 基准 30×2−10=50（动量≈1）
+    assert.ok(spear.hp <= 80 - chargeHit + 6 && spear.hp >= 80 - chargeHit - 8,
+        `首撞全额冲锋伤害（hp=${spear.hp}, 名义 ${80 - chargeHit}）`);
     assert.equal(spear.braceReady, false);
     assert.equal(cavalry.state, 'pierce');
     assert.ok(cavalry.chargeMomentum > 0.5);
@@ -375,8 +382,8 @@ test('a spear lethally hit in a step still delivers a valid brace from that same
     scene.scheduleBattleAction(0, () => resolveAttack(spear, cavalry, { rawAttack: 1000 }));
     scene.advanceBattle(1000 / 60);
     assert.equal(spear.dead, true);
-    assert.equal(cavalry.hp, 103);   // 迎击 18*1.5*2.5-10=57：160-57
-    assert.equal(scene.getBattleReport().teams.blue.byType.pikeman.damage, 57);
+    assert.equal(cavalry.hp, 160 - meleeAttackDamage(spear, 57));   // 迎击基准 18*1.5*2.5-10=57 经种子浮动
+    assert.equal(scene.getBattleReport().teams.blue.byType.pikeman.damage, meleeAttackDamage(spear, 57));
 });
 
 test('intercepted cavalry must disengage before it can build a new charge', () => {

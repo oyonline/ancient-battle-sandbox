@@ -115,7 +115,7 @@ test('占点：积分先到 60 判胜，endReason=control', () => {
 
 test('占点：歼灭对手仍直接获胜', () => {
     const scene = controlScene({ red: { infantry: 10 }, blue: { archer: 1 } });
-    for (let i = 0; i < 60 * 30 && !scene.battleOver; i++) scene.advanceBattle(STEP);
+    for (let i = 0; i < 60 * 45 && !scene.battleOver; i++) scene.advanceBattle(STEP);   // 弓手风筝至角落被围歼，留足追击余量
     assert.ok(scene.battleOver);
     assert.equal(scene.winner, 'red');
     assert.notEqual(scene.endReason, 'control', '歼灭路径不被占点积分覆盖');

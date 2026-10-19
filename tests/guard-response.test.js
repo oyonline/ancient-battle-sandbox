@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { knockback, makeScene, addUnit, snapshot } from './battle-harness.js';
+import { knockback, makeScene, addUnit, snapshot, calculateAttackDamage } from './battle-harness.js';
+import { meleeAttackDamage } from '../js/units.js';
 const STEP = 1000 / 60;
 
 function advance(scene, seconds, inspect) {
@@ -46,7 +47,8 @@ test('an inner-rank pike can hit at its ordinary 1.35 range through an unobstruc
     const { scene, guard, enemy } = isolated(2, false, true);
     place(enemy, guard.gx - 1.2, guard.gy);
     advance(scene, 0.3);
-    assert.equal(enemy.hp, 92, 'an inner rank uses its real basic weapon range, not an extra 1.05 restriction');
+    const base = calculateAttackDamage(guard, enemy);   // 18−10=8 基准，近战经种子浮动
+    assert.equal(enemy.hp, enemy.maxHp - meleeAttackDamage(guard, base), 'an inner rank uses its real basic weapon range, not an extra 1.05 restriction');
     assert.equal(guard.formationSlot.rank, 2);
     assert.equal(guard.typeData.range, 1.35);
 });

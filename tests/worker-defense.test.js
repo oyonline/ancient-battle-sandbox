@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeScene, addUnit } from './battle-harness.js';
 import { resetBoardSize, board } from '../js/board.js';
-import { UNIT_TYPES } from '../js/units.js';
+import { UNIT_TYPES, meleeAttackDamage } from '../js/units.js';
 import { CAMP_RULES } from '../js/battle/camps.js';
 import { WORKER_RULES, workerMeleeTarget, workerConstructionPaused } from '../js/battle/worker.js';
 
@@ -50,12 +50,13 @@ test('民夫出手：贴身敌军按 12 攻击力、1.4 秒冷却真实掉血', 
     const worker = addUnit(scene, 'red', 'worker', 40, 40);
     const target = addUnit(scene, 'blue', 'archer', 40.6, 40);   // 弓手 def 3 → 每击 12-3=9
     const before = target.hp;
+    const perHit = meleeAttackDamage(worker, 9);   // 基准 12−3=9 经种子浮动
     drive(scene, worker, 300);
-    assert.equal(before - target.hp, 9, '首次出手造成 12-3=9 伤害');
+    assert.equal(before - target.hp, perHit, '首次出手造成 出手值−3 伤害');
     drive(scene, worker, 1000);
-    assert.equal(before - target.hp, 9, '冷却未到不再出手');
+    assert.equal(before - target.hp, perHit, '冷却未到不再出手');
     drive(scene, worker, 500);
-    assert.equal(before - target.hp, 18, '1.4 秒冷却后第二击');
+    assert.equal(before - target.hp, perHit * 2, '1.4 秒冷却后第二击');
     resetBoardSize();
 });
 
@@ -271,18 +272,21 @@ test('镜像边界一致：同为 0.9 格，东西两侧出手/伤害/冷却/停
     const westBefore = westEnemy.hp, eastBefore = eastEnemy.hp;
 
     drivePair(scene, westWorker, eastWorker, 300);
-    assert.equal(westBefore - westEnemy.hp, 9, '西侧民夫真实出手（12 攻击 − 3 护甲）');
-    assert.equal(eastBefore - eastEnemy.hp, 9, '镜像侧同样真实出手：出手距离口径两侧一致');
+    // 镜像两侧出生位镜像对称 → meleeRoll 相同 → 出手值必相等
+    const westHit = meleeAttackDamage(westWorker, 9), eastHit = meleeAttackDamage(eastWorker, 9);   // 基准 12−3=9
+    assert.equal(westHit, eastHit, '镜像配对民夫出手值一致');
+    assert.equal(westBefore - westEnemy.hp, westHit, '西侧民夫真实出手（基准 9 经种子浮动）');
+    assert.equal(eastBefore - eastEnemy.hp, eastHit, '镜像侧同样真实出手：出手距离口径两侧一致');
     assert.equal(workerConstructionPaused(westWorker, scene.simulationTime), true, '西侧交战停工');
     assert.equal(workerConstructionPaused(eastWorker, scene.simulationTime), true, '镜像侧同样停工');
 
     // 冷却节奏两侧一致：1.4 秒冷却未到不出手，到点同时打出第二击。
     drivePair(scene, westWorker, eastWorker, 1000);
-    assert.equal(westBefore - westEnemy.hp, 9, '西侧冷却未到不再出手');
-    assert.equal(eastBefore - eastEnemy.hp, 9, '东侧冷却未到不再出手');
+    assert.equal(westBefore - westEnemy.hp, westHit, '西侧冷却未到不再出手');
+    assert.equal(eastBefore - eastEnemy.hp, eastHit, '东侧冷却未到不再出手');
     drivePair(scene, westWorker, eastWorker, 500);
-    assert.equal(westBefore - westEnemy.hp, 18, '西侧 1.4 秒后第二击');
-    assert.equal(eastBefore - eastEnemy.hp, 18, '东侧 1.4 秒后第二击');
+    assert.equal(westBefore - westEnemy.hp, westHit * 2, '西侧 1.4 秒后第二击');
+    assert.equal(eastBefore - eastEnemy.hp, eastHit * 2, '东侧 1.4 秒后第二击');
     resetBoardSize();
 });
 
@@ -327,7 +331,7 @@ test('复现A 空间桶漏查：0.915 的目标在桶边界两侧都能被查到
     const before = enemies.map(e => e.hp);
     driveMany(scene, workers, 300);
     enemies.forEach((enemy, i) => {
-        assert.equal(before[i] - enemy.hp, 9, `第 ${i + 1} 对（0.915 格）真实出手造成 9 伤害`);
+        assert.equal(before[i] - enemy.hp, meleeAttackDamage(workers[i], 9), `第 ${i + 1} 对（0.915 格）真实出手（基准 12−3=9 经种子浮动）`);
         assert.equal(workerConstructionPaused(workers[i], scene.simulationTime), true, `第 ${i + 1} 对交战停工`);
     });
     resetBoardSize();
@@ -373,7 +377,7 @@ test('边界阶梯：0.85/0.9/0.915/0.924999 真实出手，0.925/0.925001/0.95 
         const dealt = before[i] - enemies[i].hp;
         const where = `${pair.label} 格·${pair.mirror ? '镜像侧' : '原生侧'}`;
         if (pair.shouldAttack) {
-            assert.equal(dealt, 18, `${where}：两击共 18 伤害（12−3 护甲 × 2，冷却 1.4s）`);
+            assert.equal(dealt, meleeAttackDamage(pair.worker, 9) * 2, `${where}：两击（基准 12−3=9 经种子浮动 × 2，冷却 1.4s）`);
             assert.equal(workerConstructionPaused(pair.worker, scene.simulationTime), true, `${where}：交战停工`);
         } else {
             assert.equal(dealt, 0, `${where}：不出手`);

@@ -8,7 +8,7 @@ import { Terrain } from './terrain.js';
 import { TerrainNavigation } from './navigation.js';
 import {
     UNIT_TYPES, generateArmyPositions, updatePikeBrace, CavalryAI,
-    dist, clamp, moveToward, unitRand,
+    dist, clamp, moveToward, unitRand, meleeRollSeed,
     applyDamage, resolveAttack, calculateAttackDamage
 } from './units.js';
 import { CombatRules } from './combat.js';
@@ -554,6 +554,9 @@ export class IsoBattleScene extends Phaser.Scene {
             // 镜像不变种子（惰性播种，见 units.js unitRand）：换边对照的红蓝配对单位拿到同一随机序列，
             // 配合走位角度按阵营取反，微走位在换边镜像局里行为严格对称，且重放确定。
             randSeed: null,
+            // 近战伤害浮动种子：出生位置快照（镜像不变配方，见 units.js meleeRollSeed），
+            // 之后移动不改值——同一攻击者出刀值稳定，换边镜像配对单位同 roll。
+            meleeRoll: meleeRollSeed({ gx, gy, type }),
             nextShift: null,                            // 下次走位时刻（首次命中后按种子错峰惰性初始化）
             bobPhase: Math.random() * Math.PI * 2,
             lastSX: x, lastSY: gridToScreen(gx, gy).y, scene: this,
