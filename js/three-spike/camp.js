@@ -144,74 +144,82 @@ function hallGroup() {
     return group;
 }
 
-// ---------------- 寨门（+gy 侧缺口：两扇木门 + 横梁 + 门栓） ----------------
+// ---------------- 寨门（+gy 侧：门柱 + 门楣 + 木门扇横木加固 + 斜撑） ----------------
+// 门柱比齐胸栅栏高出一截并深入地面，门楣横跨两柱，门扇带横木加固与中缝立木，
+// 两扇朝内微开露缝——这是"寨门"应有的木构架，而不是两块光板。
 function gateGroup() {
-    const GATE_H = 1.9, GATE_D = .08, BEAM_W = 2.6;
-    // 两扇门（朝内斜开 ±18°，露出门缝）
-    const doorL = new THREE.Mesh(mergeGeometries([
-        box(GATE_HALF - .02, GATE_H, GATE_D, -(GATE_HALF - .02) / 2, GATE_H / 2, 0, WOOD)
-    ]), campMat);
-    doorL.position.set(-(GATE_HALF - .02) / 2 - .02, 0, WALL_R + GATE_D / 2);
-    doorL.rotation.y = -Math.PI / 10;
-    doorL.castShadow = true; doorL.receiveShadow = true;
-    const doorR = new THREE.Mesh(mergeGeometries([
-        box(GATE_HALF - .02, GATE_H, GATE_D, (GATE_HALF - .02) / 2, GATE_H / 2, 0, WOOD)
-    ]), campMat);
-    doorR.position.set((GATE_HALF - .02) / 2 + .02, 0, WALL_R + GATE_D / 2);
-    doorR.rotation.y = Math.PI / 10;
-    doorR.castShadow = true; doorR.receiveShadow = true;
-    // 上方横梁 + 门栓
-    const parts = [
-        box(BEAM_W, .14, .14, 0, GATE_H + .07, WALL_R + .07, TIMBER),
-        box(GATE_HALF * 2 - .2, .08, .05, 0, GATE_H * .55, WALL_R + GATE_D / 2 + .04, 0x4a3a28)
-    ];
-    const beamBolt = new THREE.Mesh(mergeGeometries(parts), campMat);
-    beamBolt.castShadow = true; beamBolt.receiveShadow = true;
+    const z0 = WALL_R;                         // +gy 侧墙线（世界 z）
+    const POST_T = .26, POST_H = 2.5;          // 门柱断面 / 高（高于栅顶 1.75）
+    const POST_X = GATE_HALF + POST_T / 2;     // 门柱中心 x = ±1.33
+    const LEAF_W = GATE_HALF - .03, LEAF_H = 2.0;
+    const parts = [];
+    for (const s of [-1, 1]) {
+        parts.push(box(POST_T, POST_H, POST_T, s * POST_X, POST_H / 2, z0, TIMBER));       // 门柱
+        parts.push(box(POST_T + .14, .18, POST_T + .14, s * POST_X, .09, z0, 0x6b6b60));   // 柱础
+        parts.push(box(POST_T + .12, .12, POST_T + .12, s * POST_X, POST_H + .06, z0, 0x5a4429)); // 柱帽
+    }
+    // 门楣：横跨两柱 + 上方小额枋
+    parts.push(box(POST_X * 2 + POST_T + .3, .22, POST_T + .04, 0, POST_H - .13, z0, TIMBER));
+    parts.push(box(POST_X * 2, .13, .13, 0, POST_H + .26, z0, 0x8b633e));
+    // 柱→楣 斜撑 ×2
+    for (const s of [-1, 1]) {
+        const brLen = Math.hypot(.52, .72);
+        parts.push(box(.1, brLen, .1, s * (POST_X - .36), POST_H * .74, z0, 0x8b633e, 0, s * .63));
+    }
+    // 门扇：铰链在门柱内侧（局部 x=0），门板朝寨中心（dir=+1 左扇 / dir=-1 右扇）延伸
+    const leafGeo = dir => {
+        const g = [];
+        g.push(box(LEAF_W, LEAF_H, .07, dir * LEAF_W / 2, LEAF_H / 2, 0, WOOD));         // 门板
+        for (let i = 0; i < 4; i++) {                                                     // 4 道横木加固
+            const y = .28 + i * (LEAF_H - .56) / 3;
+            g.push(box(LEAF_W - .08, .12, .12, dir * LEAF_W / 2, y, .045, 0x6b4a2a));
+        }
+        g.push(box(.11, LEAF_H - .5, .11, dir * LEAF_W / 2, LEAF_H / 2, .05, 0x5f4226));  // 中缝立木
+        return mergeGeometries(g);
+    };
+    const doorL = new THREE.Mesh(leafGeo(1), campMat);
+    doorL.position.set(-GATE_HALF, 0, z0 - .08); doorL.rotation.y = Math.PI / 9;          // 左扇朝寨内开
+    const doorR = new THREE.Mesh(leafGeo(-1), campMat);
+    doorR.position.set(GATE_HALF, 0, z0 - .08); doorR.rotation.y = -Math.PI / 9;
+    for (const m of [doorL, doorR]) { m.castShadow = true; m.receiveShadow = true; }
+    const frame = new THREE.Mesh(mergeGeometries(parts), campMat);
+    frame.castShadow = true; frame.receiveShadow = true;
     const group = new THREE.Group();
-    group.add(doorL, doorR, beamBolt);
+    group.add(frame, doorL, doorR);
     return group;
 }
 
-// ---------------- 梯子（箭塔竖梯 + 寨墙靠墙梯） ----------------
-// 用于视觉占位：箭塔侧面竖梯、寨墙缺口旁靠墙梯子，暗示进攻方登塔/翻墙路径。
-// 本次展示页只做纯视觉，sim 攻城机制暂缓。
+// ---------------- 寨墙靠墙梯 ×2（架在 ±gx 墙段外侧，从地面斜靠到踩台） ----------------
+// 纯视觉占位：暗示进攻方翻墙路径。支点落在墙脚地面，顶部搭在踩台沿口。
+// 注意：x=±r 墙段走向沿 Z，故梯子的倾角是绕 Z 轴（rz），且必须从地面起算（中点=两端之中点）。
 function ladderGroup() {
     const parts = [], group = new THREE.Group();
-    // --- 1. 箭塔竖梯：贴 (TOWER_DECK 里 x=+.65, z=+.65) 那条 leg ---
-    const legX = .65, legZ = .65;
-    const LAD_H = TOWER_DECK + .3;
-    const railGap = .26;
-    parts.push(box(.05, LAD_H, .05, legX - railGap / 2, LAD_H / 2, legZ - .08, TIMBER));
-    parts.push(box(.05, LAD_H, .05, legX + railGap / 2, LAD_H / 2, legZ - .08, TIMBER));
-    for (let y = .3; y < TOWER_DECK; y += .35)
-        parts.push(box(railGap + .04, .05, .05, legX, y, legZ - .08, 0x6b4a2a));
-    // --- 2. 寨墙靠墙梯 ×2：分别架在 +gx 侧（x=r 墙段）和 -gx 侧（x=-r 墙段）各一架 ---
-    // 墙段上用 wallPoint 取两个 z 位置，梯子斜靠（底部距墙 .45，顶部靠踩台 1.3 高）
-    const wallLadder = (wx, wz) => {
-        const topY = WALKWAY_H + .2, baseOffset = .45;
-        // 竖撑两根（沿斜向）
-        const angle = Math.atan2(topY, baseOffset);
-        const lx = wx < 0 ? wx - .3 : wx + .3;   // 梯子在墙外
-        const lz = wz;
-        const len = Math.hypot(baseOffset, topY);
-        parts.push(box(.04, len, .04, lx - .1, topY / 2, lz, TIMBER, 0, -angle));
-        parts.push(box(.04, len, .04, lx + .1, topY / 2, lz, TIMBER, 0, -angle));
-        // 横档
-        for (let t = .3; t < len; t += .3) {
-            const ty = (t / len) * topY;
-            const tx = lx + (t / len) * (baseOffset * Math.sign(wx));
-            parts.push(box(.26, .04, .04, tx, ty, lz, 0x6b4a2a));
+    // side:-1 → 靠 x=-r 墙外侧；side:+1 → 靠 x=+r 墙外侧
+    const wallLadder = (side, wz) => {
+        const wallX = side * WALL_R;
+        const baseX = wallX + side * .62;                 // 梯脚离墙 .62（外倾）
+        const topX  = wallX + side * .04;                 // 梯顶抵住踩台沿口
+        const topY  = WALKWAY_H + .38;                    // 顶端略高出踩台面
+        const len   = Math.hypot(baseX - topX, topY);
+        const tilt  = Math.atan2(baseX - topX, topY);     // 相对竖直的倾角（含方向符号）
+        const midX  = (baseX + topX) / 2, midY = topY / 2;
+        for (const dz of [-.15, .15])                     // 两根竖撑：rz=tilt 使顶端落在墙侧、底端落地外倾
+            parts.push(box(.05, len, .05, midX, midY, wz + dz, TIMBER, 0, tilt));
+        const steps = Math.max(3, Math.round(len / .3));
+        for (let i = 1; i < steps; i++) {                 // 横档落在斜线上
+            const t = i / steps;
+            parts.push(box(.05, .05, .34, baseX + (topX - baseX) * t, topY * t, wz, 0x6b4a2a));
         }
     };
-    wallLadder(-WALL_R, -1.2);   // -gx 侧（x=-r 墙段）外侧
-    wallLadder( WALL_R,  1.2);   // +gx 侧（x=+r 墙段）外侧
+    wallLadder(-1, -1.2);
+    wallLadder( 1,  1.2);
     const mesh = new THREE.Mesh(mergeGeometries(parts), campMat);
     mesh.castShadow = true; mesh.receiveShadow = true;
     group.add(mesh);
     return group;
 }
 
-// ---------------- 箭塔（四腿高台 + 垛口 + 锥顶 + 驻塔弓手） ----------------
+// ---------------- 箭塔（四腿高台 + 垛口 + 锥顶 + 塔梯 + 驻塔弓手） ----------------
 function towerGroup() {
     const deck = TOWER_DECK, parts = [
         box(1.7, .16, 1.7, 0, deck + .08, 0, 0xbf9d66),                // 平台
@@ -226,13 +234,20 @@ function towerGroup() {
         parts.push(box(.16, deck, .16, x, deck / 2, z, TIMBER));
     for (const [x, z, rz, rx] of [[-.65, 0, .5, 0], [.65, 0, -.5, 0]])
         parts.push(box(.09, deck * 1.02, .09, x, deck / 2, z, 0x8b633e, 0, rz));   // 斜撑
+    // 塔梯：贴 -x 面（朝向寨内），从地面直上平台顶，登塔路径
+    const ladTop = deck + .16, ladX = -.72;
+    for (const dz of [-.14, .14])
+        parts.push(box(.05, ladTop, .05, ladX, ladTop / 2, dz, TIMBER));
+    for (let y = .34; y < ladTop - .08; y += .34)
+        parts.push(box(.06, .05, .34, ladX, y, 0, 0x6b4a2a));
     const mesh = new THREE.Mesh(mergeGeometries(parts), campMat);
     mesh.castShadow = true; mesh.receiveShadow = true;
     const group = new THREE.Group();
     group.add(mesh);
     const px = WALL_R + 1.2, pz = WALL_R + .2;
+    // 弓手站在平台上：位置用「组内局部坐标」，组再整体搬到塔位（此前多加了一次 px/pz 导致飘空）
     for (const [ox, oz] of [[-.35, 0], [.35, 0]])
-        group.add(soldierMesh('archer', guardMat, px + ox, deck + .16, pz + oz, Math.atan2(WALL_R, 0)));
+        group.add(soldierMesh('archer', guardMat, ox, deck + .16, oz, Math.atan2(WALL_R, 0)));
     group.position.set(px, 0, pz);
     return group;
 }
@@ -260,8 +275,10 @@ controls.maxPolarAngle = 1.5; controls.minDistance = 3; controls.maxDistance = 4
 
 function resize() {
     let w = viewport.clientWidth, h = viewport.clientHeight;
-    // browser_use 等无头环境里 viewport 可能是 0×0，退而用 window 尺寸
-    if (!w || !h) { w = window.innerWidth; h = window.innerHeight; viewport.style.width = w + 'px'; viewport.style.height = h + 'px'; }
+    // 兜底：无头/节流环境里视口可能报 0×0，退到 window，再退到固定尺寸，保证画面可渲染
+    if (!w || !h) w = window.innerWidth, h = window.innerHeight;
+    if (!w || !h) w = 1280, h = 720;
+    viewport.style.width = w + 'px'; viewport.style.height = h + 'px';
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
 }
 new ResizeObserver(resize).observe(viewport);
