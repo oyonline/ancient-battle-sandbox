@@ -116,9 +116,9 @@ function fenceGroup(fenceTop, platformH) {
     }
     // 一道横撑（尖头省略）
     parts.push(box(side, .09, .09, 0, railY, -r, TIMBER));
-    parts.push(box(side, .09, .09, 0, railY, r, TIMBER));               // 前缘被门剖开，下面重铺门两侧
-    parts.push(box(r - GATE_HALF, .09, .09, -(GATE_HALF + (r - GATE_HALF) / 2), railY, r, TIMBER));
-    parts.push(box(r - GATE_HALF, .09, .09, (GATE_HALF + (r - GATE_HALF) / 2), railY, r, TIMBER));
+    // +gy 侧横撑被寨门剖开，只在门柱两侧各铺一段；否则整根横杆会横在门洞中间，门一开就挡住通道
+    for (const s of [-1, 1])
+        parts.push(box(r - GATE_CLEAR, .09, .09, s * (GATE_CLEAR + (r - GATE_CLEAR) / 2), railY, r, TIMBER));
     parts.push(box(.09, .09, side, r, railY, 0, TIMBER));
     parts.push(box(.09, .09, side, -r, railY, 0, TIMBER));
     const group = new THREE.Group();
@@ -242,7 +242,7 @@ function gateGroup() {
     const doorL = makeLeaf(1, -GATE_HALF);
     const doorR = makeLeaf(-1, GATE_HALF);
 
-    // 门闩横木：关门时横跨两扇中缝（独立网格，几何重心化；日常开门隐藏 / 被撞断后落地并保留）
+    // 门闩横木：关门时横跨两扇中缝（独立网格，几何重心化；日常开门隐藏 / 被撞断即消失不留残骸）
     const BAR_Y = 1.15, BAR_Z = z0 - .22;                 // 落在门扇内侧、且不与关门位门板相切
     const bar = new THREE.Mesh(mergeGeometries([
         box(GATE_HALF * 2 - .05, .16, .16, 0, 0, 0, 0x5f4226),                                // 闩木
@@ -261,13 +261,14 @@ function gateGroup() {
         guards.push({ mesh: m, side: s });
         group.add(m);
     }
-    group.userData = { doorL, doorR, bar, plat, guards, platTop: WALKWAY_H + PLANK_T, platY, platZ, barY: BAR_Y, barZ: BAR_Z };
+    group.userData = { doorL, doorR, bar, plat, guards, platTop: WALKWAY_H + PLANK_T, platY, platZ };
     return group;
 }
 
 // ---------------- 冲车（撞木 + 铁箍撞头 + 车架 + 四轮；撞门纯视觉） ----------------
-// 停在寨门外 1.8 处，推进到撞头抵住门扇；撞上瞬间两扇门朝寨内（-z）翻倒、门闩断裂落地、
-// 门内站台被撞塌、两名守门兵被撞翻抛落，随后冲车被反冲顶回停放位。
+// 停在寨门外 1.8 处，推进到撞头抵住门扇；连续撞满 6 次门才破——前 5 次只是把门撞得晃一下、
+// 冲车弹回，第 3 次起门板开始显裂纹；第 6 次两扇门朝寨内（-z）彻底敞开 90°、门闩被撞断消失、
+// 门内桥板被撞落、两名守门兵被撞翻抛落，随后冲车被反冲顶回停放位。
 function ramGroup() {
     const parts = [
         cyl(.2, 2.5, 0, .72, 0, WOOD, Math.PI / 2),                                       // 撞木（沿 z）
@@ -408,12 +409,14 @@ scene.add(soldierMesh('infantry', refMat, 2.8, 0, WALL_R + 1.8, Math.PI));
 const GATE_OPEN_OUT = 1.3;      // 手动开门：双扇朝寨外（+z）推开 ≈74°（日常出入，不碰门内桥板）
 const GATE_OPEN_IN  = Math.PI / 2;  // 冲车撞门：双扇朝寨内（-z）彻底敞开 90°——门扇贴着门柱立起，门洞完全畅通
 const RAM_REST = 8.2, RAM_HIT = 6.45;              // 冲车停放位 / 撞门位（撞头铁箍正好抵住门扇）
-const BURST_DUR = .62;          // 撞开阶段时长：前 CRUSH_DUR 内门闩/桥板/守门兵报废，之后门扇向内翻到 90°
-const CRUSH_DUR = .12;          // 门闩断裂 + 桥板撞落 + 守门兵抛落的时长（必须早于门扇扫到桥板）
+const HITS_TO_BREAK = 6;        // 撞满 6 次门才破；前 5 次只把门撞得晃一下、冲车弹回
+const JOLT_DUR = .3;            // 单次撞击后门扇回弹的时长
+const BURST_DUR = .62;          // 破门阶段时长：前 CRUSH_DUR 内门闩/桥板/守门兵报废，之后门扇向内翻到 90°
+const CRUSH_DUR = .12;          // 门闩被撞断 + 桥板撞落 + 守门兵抛落的时长（必须早于门扇扫到桥板）
 const gate = gateGroup();
 const ram = ramGroup();
 ram.position.set(0, 0, RAM_REST);
-const gateState = { phase: 'idle', t: 0, open: 0, angle: 0, inward: false, rammed: false, k: 0 };
+const gateState = { phase: 'idle', t: 0, open: 0, angle: 0, inward: false, rammed: false, k: 0, hits: 0, jolt: 0 };
 
 const fixed = new THREE.Group();
 fixed.add(tentsGroup(), towerGroup(), gate, ladderGroup(), ram);
@@ -429,21 +432,23 @@ $('btn-toggle').onclick = e => {
     e.target.textContent = toOld ? '口径：站墙顶（旧）· 点击切回齐胸' : '口径：齐胸栅栏（新）· 点击对照旧口径';
     $('hud').classList.toggle('old', toOld);
 };
-// 开门/关门：一次动作双扇联动，日常一律朝寨外（+z）；若寨门已被冲车撞坏，本次操作顺带复位破坏
+// 开门/关门：一次动作双扇联动，日常一律朝寨外（+z）；若寨门已被冲车撞坏，本次操作顺带"修复"复位
 $('btn-gate').onclick = () => {
     if (gateState.phase !== 'idle') return;
     gateState.open = gateState.open ? 0 : 1;
-    gateState.rammed = false;                  // 复位：门闩/站台/守门兵随 k 回落归位
+    gateState.rammed = false;                  // 复位：门闩/桥板/守门兵随 k 回落归位
+    gateState.hits = 0;                        // 撞击次数一并清零
 };
-// 冲车撞门：门若开着先自动关到位，再推进 → 撞上瞬间两扇门朝寨内撞翻、门闩断裂落地、
-// 站台被撞塌、守门兵被撞翻抛落 → 冲车被反冲顶回（不设"必须关门态"守卫，避免静默无反应）
+// 冲车撞门：门若开着先自动关到位，再推进撞击。撞满 6 次才破门；前 5 次门只被撞得晃一下、冲车弹回。
+// （不设"必须关门态"守卫，避免静默无反应；已破门时本次当作重新来过）
 $('btn-ram').onclick = () => {
     if (gateState.phase !== 'idle') return;
+    if (gateState.rammed) gateState.hits = 0;  // 已破门：本次重头再撞
     gateState.t = 0; gateState.rammed = false; gateState.open = 0;
     gateState.phase = gateState.angle > .05 ? 'shut' : 'advance';
 };
 
-const clock = new THREE.Clock(), gateBtn = $('btn-gate');
+const clock = new THREE.Clock(), gateBtn = $('btn-gate'), ramBtn = $('btn-ram');
 function updateGateAnim(dt) {
     const st = gateState, u = gate.userData;
     // 开向：冲车撞开 → 朝寨内；复位时先等门收回到关门位，再把符号切回"朝外"，避免翻角跳变
@@ -451,16 +456,18 @@ function updateGateAnim(dt) {
     else if (st.inward && !st.open && st.angle < .04) st.inward = false;
     const target = st.phase === 'shut' ? 0 : (st.open ? (st.inward ? GATE_OPEN_IN : GATE_OPEN_OUT) : 0);
     st.angle += (target - st.angle) * Math.min(1, dt * 7);
+    // 撞击回弹：每次冲车撞上门，双扇朝寨内抖一下再衰减。振幅上限 ~0.1rad，
+    // 保证门板内缘（z ≈ 4.92 − 1.17·sin a）不会扎进门内桥板（板外沿 z = 4.75）
+    st.jolt = Math.max(0, st.jolt - dt / JOLT_DUR);
+    const jolt = st.jolt * (.045 + .009 * Math.min(st.hits, HITS_TO_BREAK));
     const sgn = st.inward ? 1 : -1;                  // 左扇铰链在 -x：朝寨内为正角、朝寨外为负角（右扇镜像取反）
-    u.doorL.rotation.y = sgn * st.angle;
-    u.doorR.rotation.y = -sgn * st.angle;
+    u.doorL.rotation.y = sgn * st.angle + jolt;
+    u.doorR.rotation.y = -sgn * st.angle - jolt;
 
     // 破坏进度 k：撞开时递增、复位时递减；门闩/桥板/守门兵的变换统一由 k 驱动。
     // p = √k 让破坏动作集中在撞上瞬间（前段加速），且必须早于门扇扫到桥板之前把板挪开。
     st.k = st.rammed ? Math.min(1, st.k + dt / CRUSH_DUR) : Math.max(0, st.k - dt / (CRUSH_DUR * 2));
     const p = Math.sqrt(st.k);
-    u.bar.position.set(0, u.barY - 1.03 * p, u.barZ - 1.2 * p);   // 门闩断裂：被撞飞进门内地面
-    u.bar.rotation.z = .12 * p;
     u.plat.position.set(0, u.platY - (u.platY - .07) * p, u.platZ - 1.35 * p); // 桥板整块被撞落，平躺进寨内
     u.plat.rotation.x = -.06 * p;
     for (const g of u.guards) {                             // 守门兵：被撞翻，抛物线抛落到寨内地面
@@ -469,8 +476,9 @@ function updateGateAnim(dt) {
             u.platZ - 1.45 * p);
         g.mesh.rotation.set(-1.4 * p, 1.1 * p * g.side, .35 * p);
     }
-    u.doorL.userData.crack.visible = u.doorR.userData.crack.visible = p > .3;
-    u.bar.visible = st.k > .5 || st.angle < .18;            // 关门位挂着 / 撞断后一直躺在地上；日常开门才收起
+    // 裂纹逐击显现：撞到第 3 次起门板开始裂；门闩只挂在关门位，一被撞断就整体消失（不留残骸）
+    u.doorL.userData.crack.visible = u.doorR.userData.crack.visible = st.hits >= 3;
+    u.bar.visible = !st.rammed && st.angle < .18;
 
     if (st.phase === 'shut') {                               // 门开着：先关合到位再撞
         st.t += dt / .35;
@@ -478,14 +486,24 @@ function updateGateAnim(dt) {
     } else if (st.phase === 'advance') {                     // 冲车推进（加速逼近）
         st.t = Math.min(1, st.t + dt / .55);
         ram.position.z = RAM_REST + (RAM_HIT - RAM_REST) * st.t * st.t;
-        if (st.t >= 1) { st.phase = 'burst'; st.t = 0; st.open = 1; st.rammed = true; }   // 撞上
-    } else if (st.phase === 'burst') {                       // 撞开：门向内翻、破坏推进，冲车被反冲顶回（前快后缓）
+        if (st.t >= 1) {                                     // 撞上：计一次数、门抖一下
+            st.t = 0; st.jolt = 1; st.hits++;
+            if (st.hits >= HITS_TO_BREAK) { st.phase = 'burst'; st.open = 1; st.rammed = true; }
+            else st.phase = 'impact';
+        }
+    } else if (st.phase === 'impact') {                      // 未破：门只被撞得晃一下，冲车弹回停放位
+        st.t = Math.min(1, st.t + dt / .34);
+        ram.position.z = RAM_HIT + (RAM_REST - RAM_HIT) * Math.sqrt(st.t);
+        if (st.t >= 1) { st.phase = 'idle'; st.t = 0; }
+    } else if (st.phase === 'burst') {                       // 破门：门向内翻、破坏推进，冲车被反冲顶回（前快后缓）
         st.t = Math.min(1, st.t + dt / BURST_DUR);
         ram.position.z = RAM_HIT + (RAM_REST - RAM_HIT) * Math.sqrt(st.t);
         if (st.t >= 1) { st.phase = 'idle'; st.t = 0; }
     }
     const want = st.open ? '关门' : '开门';
     if (gateBtn.textContent !== want) gateBtn.textContent = want;
+    const ramWant = st.hits > 0 && st.hits < HITS_TO_BREAK ? `冲车撞门 (${st.hits}/${HITS_TO_BREAK})` : '冲车撞门';
+    if (ramBtn.textContent !== ramWant) ramBtn.textContent = ramWant;
 }
 
 renderer.setAnimationLoop(() => {
