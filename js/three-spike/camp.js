@@ -56,6 +56,13 @@ function cone(r, h, x, y, z, color, ry = 0) {
     g.translate(x, y, z);
     return tint(g, color);
 }
+function cyl(r, h, x, y, z, color, rx = 0, rz = 0, seg = 10) {
+    const g = new THREE.CylinderGeometry(r, r, h, seg);
+    if (rx) g.rotateX(rx);
+    if (rz) g.rotateZ(rz);
+    g.translate(x, y, z);
+    return tint(g, color);
+}
 const campMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 
 // ---------------- 低模兵坯（步卒/弓手，朝向 +Z） ----------------
@@ -161,9 +168,11 @@ function tentsGroup() {
     return group;
 }
 
-// ---------------- 寨门（+gy 侧：门柱 + 门楣 + 木门扇横木加固 + 斜撑） ----------------
-// 门柱比齐胸栅栏高出一截并深入地面，门楣横跨两柱，门扇带横木加固与中缝立木，
-// 两扇朝内微开露缝——这是"寨门"应有的木构架，而不是两块光板。
+// ---------------- 寨门（+gy 侧：门柱 + 门楣 + 双扇联动门 + 门闩横木 + 门内站台） ----------------
+// 门柱比齐胸栅栏高出一截并深入地面，门楣横跨两柱；两扇门各自绕门柱内侧的铰链旋转，
+// 同一次动作一起开合（双扇联动），关门位有一根门闩横木横跨中缝。
+// 开向说明：门洞内侧就是守门兵站台（台面 1.0 高），门扇若朝寨内开必然扫过台面穿模，
+// 故门扇一律朝寨外（+z）推开——正好也是被门外冲车撞击的方向。
 function gateGroup() {
     const z0 = WALL_R;                         // +gy 侧墙线（世界 z）
     const POST_T = .26, POST_H = 2.5;          // 门柱断面 / 高（高于栅顶 1.75）
@@ -183,7 +192,15 @@ function gateGroup() {
         const brLen = Math.hypot(.52, .72);
         parts.push(box(.1, brLen, .1, s * (POST_X - .36), POST_H * .74, z0, 0x8b633e, 0, s * .63));
     }
-    // 门扇：铰链在门柱内侧（局部 x=0），门板朝寨中心（dir=+1 左扇 / dir=-1 右扇）延伸
+    // 门内站台：门洞内侧一块木板台（守门兵站位），台面齐踩台高；台下两根支柱落地
+    const PLAT_D = .6, PLAT_W = GATE_HALF * 2, PLAT_H = WALKWAY_H, platZ = z0 - .55;
+    parts.push(box(PLAT_W, .12, PLAT_D, 0, PLAT_H - .06, platZ, WOOD));                    // 台面
+    for (const s of [-1, 1])
+        parts.push(box(.14, PLAT_H - .12, .14, s * .85, (PLAT_H - .12) / 2, platZ, TIMBER)); // 支柱
+    const frame = new THREE.Mesh(mergeGeometries(parts), campMat);
+    frame.castShadow = true; frame.receiveShadow = true;
+
+    // 门扇：铰链在门柱内侧（局部 x=0），门板朝门洞中缝延伸（dir=+1 左扇 / dir=-1 右扇）
     const leafGeo = dir => {
         const g = [];
         g.push(box(LEAF_W, LEAF_H, .07, dir * LEAF_W / 2, LEAF_H / 2, 0, WOOD));         // 门板
@@ -194,15 +211,61 @@ function gateGroup() {
         g.push(box(.11, LEAF_H - .5, .11, dir * LEAF_W / 2, LEAF_H / 2, .05, 0x5f4226));  // 中缝立木
         return mergeGeometries(g);
     };
-    const doorL = new THREE.Mesh(leafGeo(1), campMat);
-    doorL.position.set(-GATE_HALF, 0, z0 - .08); doorL.rotation.y = Math.PI / 9;          // 左扇朝寨内开
-    const doorR = new THREE.Mesh(leafGeo(-1), campMat);
-    doorR.position.set(GATE_HALF, 0, z0 - .08); doorR.rotation.y = -Math.PI / 9;
-    for (const m of [doorL, doorR]) { m.castShadow = true; m.receiveShadow = true; }
-    const frame = new THREE.Mesh(mergeGeometries(parts), campMat);
-    frame.castShadow = true; frame.receiveShadow = true;
+    // 受力裂纹：冲车撞门后才显形（挂在门扇 Group 内，随门一起转）
+    const crackGeo = dir => mergeGeometries([
+        box(.05, .85, .02, dir * .3, 1.12, .05, 0x2e2116),
+        box(.05, .6, .02, dir * .55, .9, .05, 0x2e2116),
+        box(.05, 1.05, .02, dir * .8, 1.2, .05, 0x2e2116),
+        box(.34, .05, .02, dir * .5, 1.45, .05, 0x2e2116)
+    ]);
+    const makeLeaf = (dir, hingeX) => {
+        const g = new THREE.Group();
+        const leaf = new THREE.Mesh(leafGeo(dir), campMat);
+        leaf.castShadow = true; leaf.receiveShadow = true;
+        const crack = new THREE.Mesh(crackGeo(dir), campMat);
+        crack.visible = false;
+        g.add(leaf, crack);
+        g.position.set(hingeX, 0, z0 - .08);       // 铰链点；rotation.y = 0 即关门态
+        g.userData = { crack };
+        return g;
+    };
+    const doorL = makeLeaf(1, -GATE_HALF);
+    const doorR = makeLeaf(-1, GATE_HALF);
+
+    // 门闩横木：关门时横跨两扇中缝（独立网格，开门/被撞开后脱落隐藏）
+    const bar = new THREE.Mesh(mergeGeometries([
+        box(GATE_HALF * 2 - .05, .16, .16, 0, 1.15, z0 - .12, 0x5f4226),                     // 闩木
+        box(.14, .3, .14, -POST_X + .12, 1.15, z0 - .12, DARK),                              // 端部卡座
+        box(.14, .3, .14, POST_X - .12, 1.15, z0 - .12, DARK)
+    ]), campMat);
+    bar.castShadow = true; bar.receiveShadow = true;
+
     const group = new THREE.Group();
-    group.add(frame, doorL, doorR);
+    group.add(frame, doorL, doorR, bar);
+    // 守门兵 ×2：站在门内站台上，面朝寨外（+z，yaw=0）
+    for (const s of [-1, 1])
+        group.add(soldierMesh('infantry', guardMat, s * .55, PLAT_H, platZ, 0));
+    group.userData = { doorL, doorR, bar };
+    return group;
+}
+
+// ---------------- 冲车（撞木 + 铁箍撞头 + 车架 + 四轮；撞门纯视觉） ----------------
+// 停在寨门外 1.8 处，推进到撞头抵住门扇的位置，随后门扇被撞开、冲车被顶回。
+function ramGroup() {
+    const parts = [
+        cyl(.2, 2.5, 0, .72, 0, WOOD, Math.PI / 2),                                       // 撞木（沿 z）
+        cyl(.24, .34, 0, .72, -1.32, METAL, Math.PI / 2)                                  // 撞头铁箍
+    ];
+    for (const s of [-1, 1]) parts.push(box(.14, .14, 2.3, s * .46, .72, 0, TIMBER));      // 侧梁
+    parts.push(box(1.06, .14, .14, 0, .72, -1.0, TIMBER));                                 // 横档 ×2
+    parts.push(box(1.06, .14, .14, 0, .72, 1.0, TIMBER));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        parts.push(box(.09, .5, .09, sx * .46, .55, sz * .95, TIMBER));                    // 车腿
+        parts.push(cyl(.3, .12, sx * .56, .3, sz * .95, 0x6b4a2a, 0, Math.PI / 2));        // 车轮
+    }
+    const mesh = new THREE.Mesh(mergeGeometries(parts), campMat);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    const group = new THREE.Group(); group.add(mesh);
     return group;
 }
 
@@ -321,11 +384,19 @@ const grid = new THREE.GridHelper(40, 40, 0x5b6a43, 0x66754e);
 grid.material.transparent = true; grid.material.opacity = .18; grid.position.y = .012;
 scene.add(grid);
 
-// 参照兵：站在门前，标定 1.145 兵高
-scene.add(soldierMesh('infantry', refMat, 0, 0, WALL_R + 2.2, Math.PI));
+// 参照兵：站在寨门旁，标定 1.145 兵高（避开冲车推进通道）
+scene.add(soldierMesh('infantry', refMat, 2.8, 0, WALL_R + 1.8, Math.PI));
+
+// ---------------- 寨门开合 + 冲车撞门（仅展示页视觉：无耐久数值、无 sim 判定） ----------------
+const GATE_OPEN_ANGLE = 1.3;                       // 双扇联动全开 ≈74.5°（朝寨外推开）
+const RAM_REST = 8.2, RAM_HIT = 6.45;              // 冲车停放位 / 撞门位（撞头铁箍正好抵住门扇）
+const gate = gateGroup();
+const ram = ramGroup();
+ram.position.set(0, 0, RAM_REST);
+const gateState = { phase: 'idle', t: 0, open: 0, angle: 0, rammed: false };
 
 const fixed = new THREE.Group();
-fixed.add(tentsGroup(), towerGroup(), gateGroup(), ladderGroup());
+fixed.add(tentsGroup(), towerGroup(), gate, ladderGroup(), ram);
 scene.add(fixed);
 const chestHigh = fenceGroup(FENCE_TOP, WALKWAY_H);              // 新口径：齐胸栅栏 + 内侧踩台
 const wallTop = fenceGroup(FENCE_TOP_OLD, GUARD_FEET_OLD);       // 旧口径：高栅栏 + 守军站墙顶窄台
@@ -338,7 +409,36 @@ $('btn-toggle').onclick = e => {
     e.target.textContent = toOld ? '口径：站墙顶（旧）· 点击切回齐胸' : '口径：齐胸栅栏（新）· 点击对照旧口径';
     $('hud').classList.toggle('old', toOld);
 };
+// 开门/关门：一次动作双扇联动；关门位重新挂上门闩横木
+$('btn-gate').onclick = () => { gateState.open = gateState.open ? 0 : 1; };
+// 冲车撞门：推进 → 撞上瞬间门扇向外弹开、门闩脱落、门板显裂纹 → 冲车被顶回
+$('btn-ram').onclick = () => { if (gateState.phase === 'idle' && !gateState.open) gateState.phase = 'advance'; };
 
-renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+const clock = new THREE.Clock(), gateBtn = $('btn-gate');
+function updateGateAnim(dt) {
+    const st = gateState, u = gate.userData;
+    // 双扇联动：同一次动作一起开合（左扇负角、右扇正角，绕各自铰链朝寨外转）
+    st.angle += ((st.open ? GATE_OPEN_ANGLE : 0) - st.angle) * Math.min(1, dt * 7);
+    u.doorL.rotation.y = -st.angle;
+    u.doorR.rotation.y = st.angle;
+    u.bar.visible = st.angle < .18;                     // 门闩只存在于关门位
+    u.doorL.userData.crack.visible = u.doorR.userData.crack.visible = st.rammed;
+    if (st.phase === 'advance') {                       // 冲车推进（加速逼近）
+        st.t = Math.min(1, st.t + dt / .55);
+        ram.position.z = RAM_REST + (RAM_HIT - RAM_REST) * st.t * st.t;
+        if (st.t >= 1) { st.phase = 'burst'; st.t = 0; st.open = 1; st.rammed = true; }
+    } else if (st.phase === 'burst') {                  // 撞上：门扇向外弹开，冲车被反冲顶回（前段快、后段缓）
+        st.t = Math.min(1, st.t + dt / .35);
+        ram.position.z = RAM_HIT + (RAM_REST - RAM_HIT) * Math.sqrt(st.t);
+        if (st.t >= 1) { st.phase = 'idle'; st.t = 0; }
+    }
+    const want = st.open ? '关门' : '开门';
+    if (gateBtn.textContent !== want) gateBtn.textContent = want;
+}
 
-window.__camp = { scene, camera, controls, chestHigh, wallTop, renderer };
+renderer.setAnimationLoop(() => {
+    updateGateAnim(Math.min(clock.getDelta(), .05));
+    controls.update(); renderer.render(scene, camera);
+});
+
+window.__camp = { scene, camera, controls, chestHigh, wallTop, renderer, gate, ram, gateState };
