@@ -12,6 +12,9 @@ const H_WORLD = 2.0;
 const WALL_R = 5.0;                       // 前线营寨墙环半径（继续放大；大本营 3.5）
 const WALL_SLOTS = 6;                     // 垛口数 = 周长等分
 const GATE_HALF = 1.2;                    // +gy 侧寨门半宽（2D 已有此约定：中间留 2 段缺口）
+const GATE_POST_T = .26;                  // 寨门门柱断面（gateGroup 与栅栏让位共用）
+const GATE_CLEAR = GATE_HALF + GATE_POST_T;    // 栅栏桩让开门柱的半宽（1.46）：否则桩会捅进门扇
+const GATE_SPAN = GATE_HALF + .05;        // 门洞净宽半值（1.25）：踩台剖口 + 门内桥板半宽
 const POST_STEP = 0.2;                    // 桩间距：一圈 8r=40 → ≈200 根
 const FENCE_TOP = 1.75;                   // 齐胸栅栏顶面（≈1.53 兵高）＝ 21px
 const WALKWAY_H = 1.0;                    // 内侧踩台面（守军脚底）＝ 12px
@@ -108,7 +111,7 @@ function fenceGroup(fenceTop, platformH) {
     const railY = fenceTop * .55;
     for (let t = 0; t < per - 1e-9; t += POST_STEP) {
         const [gx, gy] = wallPoint(t, r);
-        if (gy >= r - 1e-6 && Math.abs(gx) < GATE_HALF) continue;      // +gy 侧留寨门
+        if (gy >= r - 1e-6 && Math.abs(gx) < GATE_CLEAR) continue;     // +gy 侧留寨门（让开门柱）
         parts.push(box(.13, fenceTop, .16, gx, fenceTop / 2, gy, WOOD));
     }
     // 一道横撑（尖头省略）
@@ -120,9 +123,12 @@ function fenceGroup(fenceTop, platformH) {
     parts.push(box(.09, .09, side, -r, railY, 0, TIMBER));
     const group = new THREE.Group();
     if (platformH) {   // 踏板：新口径是内侧踩台，旧口径是墙顶窄台
-        const w = WALKWAY_W, inset = WALK_INSET;
+        const w = WALKWAY_W, inset = WALK_INSET, g = GATE_SPAN;
+        const segL = side / 2 - g;                       // 单侧段长（寨门两侧）
         parts.push(box(side, platformH, w, 0, platformH / 2, -r + inset, WOOD));
-        parts.push(box(side, platformH, w, 0, platformH / 2, r - inset, WOOD));
+        // +gy 侧踩台在寨门洞处剖开留口，门洞用一块桥板搭接（否则开门/撞门都会刮到踩台）
+        for (const s of [-1, 1])
+            parts.push(box(segL, platformH, w, s * (g + segL / 2), platformH / 2, r - inset, WOOD));
         parts.push(box(w, platformH, side, r - inset, platformH / 2, 0, WOOD));
         parts.push(box(w, platformH, side, -r + inset, platformH / 2, 0, WOOD));
     }
@@ -176,7 +182,7 @@ function tentsGroup() {
 //       台上两名守门兵被撞翻抛落到寨内地面。
 function gateGroup() {
     const z0 = WALL_R;                         // +gy 侧墙线（世界 z）
-    const POST_T = .26, POST_H = 2.5;          // 门柱断面 / 高（高于栅顶 1.75）
+    const POST_T = GATE_POST_T, POST_H = 2.5;  // 门柱断面 / 高（高于栅顶 1.75）
     const POST_X = GATE_HALF + POST_T / 2;     // 门柱中心 x = ±1.33
     const LEAF_W = GATE_HALF - .03, LEAF_H = 2.0;
     const parts = [];
@@ -196,15 +202,12 @@ function gateGroup() {
     const frame = new THREE.Mesh(mergeGeometries(parts), campMat);
     frame.castShadow = true; frame.receiveShadow = true;
 
-    // 门内站台：门洞内侧一块木板台（守门兵站位），台面齐踩台高；台下两根支柱落地。
-    // 独立网格（几何以台面中心为原点）：被冲车撞塌时绕自身原点向内滑出 + 翻倒，不会被甩到半空。
-    const PLAT_D = .6, PLAT_W = GATE_HALF * 2, PLAT_H = WALKWAY_H, platZ = z0 - .55;
-    const plat = new THREE.Mesh(mergeGeometries([
-        box(PLAT_W, .12, PLAT_D, 0, 0, 0, WOOD),                                              // 台面
-        box(.14, PLAT_H - .12, .14, -.85, -(PLAT_H - .12) / 2 - .06, 0, TIMBER),              // 支柱 ×2
-        box(.14, PLAT_H - .12, .14,  .85, -(PLAT_H - .12) / 2 - .06, 0, TIMBER)
-    ]), campMat);
-    plat.position.set(0, PLAT_H - .06, platZ);
+    // 门内桥板：一块薄板横跨寨门洞、两端搭在左右两侧踩台面上（+gy 侧踩台已在门洞处剖开），
+    // 守门兵站在板上。独立网格（几何以板中心为原点）：被冲车撞落时整块平躺着滑进寨内地面。
+    const PLANK_T = .1, PLANK_W = GATE_SPAN * 2, PLANK_D = WALKWAY_W;
+    const platZ = z0 - WALK_INSET, platY = WALKWAY_H + PLANK_T / 2;
+    const plat = new THREE.Mesh(box(PLANK_W, PLANK_T, PLANK_D, 0, 0, 0, WOOD), campMat);
+    plat.position.set(0, platY, platZ);                       // 板底＝踩台面（1.0），板面＝1.1
     plat.castShadow = true; plat.receiveShadow = true;
 
     // 门扇：铰链在门柱内侧（局部 x=0），门板朝门洞中缝延伸（dir=+1 左扇 / dir=-1 右扇）
@@ -251,14 +254,14 @@ function gateGroup() {
 
     const group = new THREE.Group();
     group.add(frame, plat, doorL, doorR, bar);
-    // 守门兵 ×2：站在门内站台上，面朝寨外（+z，yaw=0）；冲车撞门时被撞翻抛落到寨内地面
+    // 守门兵 ×2：站在门内桥板上，面朝寨外（+z，yaw=0）；冲车撞门时被撞翻抛落到寨内地面
     const guards = [];
     for (const s of [-1, 1]) {
-        const m = soldierMesh('infantry', guardMat, s * .55, PLAT_H, platZ, 0);
+        const m = soldierMesh('infantry', guardMat, s * .55, WALKWAY_H + PLANK_T, platZ, 0);
         guards.push({ mesh: m, side: s });
         group.add(m);
     }
-    group.userData = { doorL, doorR, bar, plat, guards, platTop: PLAT_H, platY: PLAT_H - .06, platZ, barY: BAR_Y };
+    group.userData = { doorL, doorR, bar, plat, guards, platTop: WALKWAY_H + PLANK_T, platY, platZ, barY: BAR_Y, barZ: BAR_Z };
     return group;
 }
 
@@ -402,11 +405,11 @@ scene.add(grid);
 scene.add(soldierMesh('infantry', refMat, 2.8, 0, WALL_R + 1.8, Math.PI));
 
 // ---------------- 寨门开合 + 冲车撞门（仅展示页视觉：无耐久数值、无 sim 判定） ----------------
-const GATE_OPEN_OUT = 1.3;      // 手动开门：双扇朝寨外（+z）推开 ≈74°（日常出入，不碰门内站台）
-const GATE_OPEN_IN  = 1.15;     // 冲车撞门：双扇朝寨内（-z）撞翻 ≈66°
+const GATE_OPEN_OUT = 1.3;      // 手动开门：双扇朝寨外（+z）推开 ≈74°（日常出入，不碰门内桥板）
+const GATE_OPEN_IN  = Math.PI / 2;  // 冲车撞门：双扇朝寨内（-z）彻底敞开 90°——门扇贴着门柱立起，门洞完全畅通
 const RAM_REST = 8.2, RAM_HIT = 6.45;              // 冲车停放位 / 撞门位（撞头铁箍正好抵住门扇）
-const BURST_DUR = .62;          // 撞开阶段时长：前 CRUSH_DUR 内门闩/站台/守门兵报废，之后门扇向内翻
-const CRUSH_DUR = .12;          // 门闩断裂落地 + 站台塌落 + 守门兵抛落的时长（必须早于门扇扫到站台）
+const BURST_DUR = .62;          // 撞开阶段时长：前 CRUSH_DUR 内门闩/桥板/守门兵报废，之后门扇向内翻到 90°
+const CRUSH_DUR = .12;          // 门闩断裂 + 桥板撞落 + 守门兵抛落的时长（必须早于门扇扫到桥板）
 const gate = gateGroup();
 const ram = ramGroup();
 ram.position.set(0, 0, RAM_REST);
@@ -452,23 +455,21 @@ function updateGateAnim(dt) {
     u.doorL.rotation.y = sgn * st.angle;
     u.doorR.rotation.y = -sgn * st.angle;
 
-    // 破坏进度 k：撞开时递增、复位时递减；门闩/站台/守门兵的变换统一由 k 驱动。
-    // k 抢在门扇扫到站台之前走满（CRUSH_DUR=0.12 内塌完），所以门板只从已经空出的区域转过去。
+    // 破坏进度 k：撞开时递增、复位时递减；门闩/桥板/守门兵的变换统一由 k 驱动。
+    // p = √k 让破坏动作集中在撞上瞬间（前段加速），且必须早于门扇扫到桥板之前把板挪开。
     st.k = st.rammed ? Math.min(1, st.k + dt / CRUSH_DUR) : Math.max(0, st.k - dt / (CRUSH_DUR * 2));
-    const pk = st.k;
-    u.bar.position.y = u.barY - 1.03 * pk;                  // 门闩断裂：垂直落地，压在门内地面
-    u.bar.rotation.z = .12 * pk;
-    u.plat.position.z = u.platZ - 1.25 * pk;                // 站台：向内滑出 + 翻倒（台面斜插在地上，不完全入土）
-    u.plat.position.y = u.platY - .26 * pk;
-    u.plat.rotation.z = .55 * pk;
+    const p = Math.sqrt(st.k);
+    u.bar.position.set(0, u.barY - 1.03 * p, u.barZ - 1.2 * p);   // 门闩断裂：被撞飞进门内地面
+    u.bar.rotation.z = .12 * p;
+    u.plat.position.set(0, u.platY - (u.platY - .07) * p, u.platZ - 1.35 * p); // 桥板整块被撞落，平躺进寨内
+    u.plat.rotation.x = -.06 * p;
     for (const g of u.guards) {                             // 守门兵：被撞翻，抛物线抛落到寨内地面
-        const p = Math.sqrt(pk);                            // 前段加速：撞上的冲击立刻把人掀起来
-        g.mesh.position.set(g.side * (.55 + .85 * p),
+        g.mesh.position.set(g.side * (.55 + 1.0 * p),
             u.platTop * (1 - p) + .85 * Math.sin(Math.PI * p),
             u.platZ - 1.45 * p);
         g.mesh.rotation.set(-1.4 * p, 1.1 * p * g.side, .35 * p);
     }
-    u.doorL.userData.crack.visible = u.doorR.userData.crack.visible = pk > .1;
+    u.doorL.userData.crack.visible = u.doorR.userData.crack.visible = p > .3;
     u.bar.visible = st.k > .5 || st.angle < .18;            // 关门位挂着 / 撞断后一直躺在地上；日常开门才收起
 
     if (st.phase === 'shut') {                               // 门开着：先关合到位再撞
