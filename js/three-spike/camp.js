@@ -9,15 +9,19 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 // ---- 换算链：世界高度 = px / 24 × 2（Terrain.HEIGHT_SCALE = 24，spike 的 H_WORLD = 2）----
 // 兵高 ≈ 1.145 世界单位（腿 0→0.42、躯干 0.43→0.93、头到 1.145）。
 const H_WORLD = 2.0;
-const WALL_R = 3.2;                       // 前线营寨墙环半径（外扩后；大本营为 3.5）
+const WALL_R = 4.0;                       // 前线营寨墙环半径（放大以容纳 5 顶帐篷；大本营 3.5）
 const WALL_SLOTS = 6;                     // 垛口数 = 周长等分
 const GATE_HALF = 1.2;                    // +gy 侧寨门半宽（2D 已有此约定：中间留 2 段缺口）
-const POST_STEP = 0.2;                    // 桩间距：一圈 8r=25.6 → ≈128 根
+const POST_STEP = 0.2;                    // 桩间距：一圈 8r=32 → ≈160 根
 const FENCE_TOP = 1.75;                   // 齐胸栅栏顶面（≈1.53 兵高）＝ 21px
 const WALKWAY_H = 1.0;                    // 内侧踩台面（守军脚底）＝ 12px
+const WALKWAY_W = 0.6;                    // 踩台宽度
+const WALK_INSET = WALL_R * .11;          // 踩台中心相对墙线的内缩（≈0.44）
 const FENCE_TOP_OLD = 3.5;                // 对照：旧口径 42px 桩
 const GUARD_FEET_OLD = 28 / 24 * H_WORLD; // 对照：旧口径守军抬 28px 站墙顶
-const HALL_R = 1.6, TOWER_R = 0.9;
+// 内部 5 顶帐篷：中军大帐 2.0 居中 + 四角兵帐 1.6，角帐中心 ±2.3
+// （角帐外沿 2.3+0.8＝3.1 < 踩台内沿 3.26，不顶墙）
+const TENT_CMD = 2.0, TENT_SQ = 1.6, TENT_PITCH = 2.3;
 // 箭塔平台：2D 贴图里 82px 是 sprite 视觉偏移，3D 不能当真 6.83 世界单位。
 // 取 ~3.2（≈2.8 兵高），仍能俯射栅栏外但腿不夸张。
 const TOWER_DECK = 3.2;
@@ -88,7 +92,7 @@ function wallPoint(t, r) {
     const [x0, y0] = corners[i], [x1, y1] = corners[(i + 1) % 4];
     return [x0 + (x1 - x0) * k, y0 + (y1 - y0) * k];
 }
-const inward = (gx, gy) => { const l = Math.hypot(gx, gy) || 1; return [gx - gx / l * .35, gy - gy / l * .35]; };
+const inward = (gx, gy) => { const l = Math.hypot(gx, gy) || 1; return [gx - gx / l * WALK_INSET, gy - gy / l * WALK_INSET]; };
 
 // ---------------- 木栅墙（栅栏 + 一道横撑 + 踏板 + 垛口守军） ----------------
 // platformH：守军踏板面高（新口径 = 内侧踩台 1.0；旧口径 = 墙顶 2.33），null 表示不设踏板。
@@ -109,7 +113,7 @@ function fenceGroup(fenceTop, platformH) {
     parts.push(box(.09, .09, side, -r, railY, 0, TIMBER));
     const group = new THREE.Group();
     if (platformH) {   // 踏板：新口径是内侧踩台，旧口径是墙顶窄台
-        const w = .5, inset = .35;
+        const w = WALKWAY_W, inset = WALK_INSET;
         parts.push(box(side, platformH, w, 0, platformH / 2, -r + inset, WOOD));
         parts.push(box(side, platformH, w, 0, platformH / 2, r - inset, WOOD));
         parts.push(box(w, platformH, side, r - inset, platformH / 2, 0, WOOD));
@@ -128,19 +132,32 @@ function fenceGroup(fenceTop, platformH) {
     return group;
 }
 
-// ---------------- 大帐（锥顶帐 + 门帘 + 旗，尺度收窄到 footprint 2.0×2.0） ----------------
-function hallGroup() {
+// ---------------- 帐篷（四棱锥顶 + 门帘；size 为帐体边长，可带旗杆队旗） ----------------
+// 缩放基准：size 2.0 即原大帐（帐体 2.0 高 1.0、锥顶 r1.5 h1.2、门帘朝 +z）。
+function tentGroup(x, z, size, withFlag) {
+    const half = size / 2, wallH = size * .5;
     const parts = [
-        box(2.0, 1.0, 2.0, 0, .5, 0, CANVAS),                             // 帐体
-        cone(1.5, 1.2, 0, 1.0 + .6, 0, CANVAS_DK, Math.PI / 4),           // 四棱锥帐顶
-        box(.65, .7, .12, 0, .35, 1.0, 0x4a3a28),                        // 门帘
-        box(.06, 2.6, .06, 0, 1.3, 0, TIMBER),                           // 旗杆
-        box(.7, .4, .04, .4, 2.35, 0, TEAM_COLOR)                        // 队旗
+        box(size, wallH, size, 0, wallH / 2, 0, CANVAS),                                    // 帐体
+        cone(size * .75, size * .6, 0, wallH + size * .3, 0, CANVAS_DK, Math.PI / 4),        // 四棱锥帐顶
+        box(size * .32, size * .35, .1, 0, size * .175, half, 0x4a3a28)                     // 门帘（朝 +z）
     ];
+    if (withFlag) {
+        parts.push(box(.06, 2.6, .06, 0, 1.3, 0, TIMBER));                                  // 旗杆
+        parts.push(box(.7, .4, .04, .4, 2.35, 0, TEAM_COLOR));                              // 队旗
+    }
     const mesh = new THREE.Mesh(mergeGeometries(parts), campMat);
     mesh.castShadow = true; mesh.receiveShadow = true;
-    const group = new THREE.Group(); group.add(mesh);
-    group.position.set(0, 0, 0);
+    const group = new THREE.Group(); group.add(mesh); group.position.set(x, 0, z);
+    return group;
+}
+
+// ---------------- 寨内 5 顶帐篷：中军大帐居中（带旗）+ 四角兵帐 ----------------
+function tentsGroup() {
+    const group = new THREE.Group();
+    group.add(tentGroup(0, 0, TENT_CMD, true));
+    for (const sx of [-1, 1])
+        for (const sz of [-1, 1])
+            group.add(tentGroup(sx * TENT_PITCH, sz * TENT_PITCH, TENT_SQ, false));
     return group;
 }
 
@@ -267,12 +284,12 @@ scene.background = new THREE.Color('#b9c5ab');
 scene.fog = new THREE.Fog('#b9c5ab', 34, 78);
 
 const camera = new THREE.PerspectiveCamera(45, 1, .1, 200);
-camera.position.set(9, 9.5, 14.5);
+camera.position.set(12, 12, 18);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 1.4, 0);
 controls.enableDamping = true; controls.dampingFactor = .08;
-controls.maxPolarAngle = 1.5; controls.minDistance = 3; controls.maxDistance = 46;
+controls.maxPolarAngle = 1.5; controls.minDistance = 3; controls.maxDistance = 56;
 
 function resize() {
     let w = viewport.clientWidth, h = viewport.clientHeight;
@@ -298,7 +315,7 @@ const ground = new THREE.Mesh(new THREE.PlaneGeometry(44, 44, 1, 1).rotateX(-Mat
     new THREE.MeshStandardMaterial({ color: GROUND, roughness: 1 }));
 ground.receiveShadow = true;
 scene.add(ground);
-const grid = new THREE.GridHelper(24, 24, 0x5b6a43, 0x66754e);
+const grid = new THREE.GridHelper(30, 30, 0x5b6a43, 0x66754e);
 grid.material.transparent = true; grid.material.opacity = .18; grid.position.y = .012;
 scene.add(grid);
 
@@ -306,7 +323,7 @@ scene.add(grid);
 scene.add(soldierMesh('infantry', refMat, 0, 0, WALL_R + 2.2, Math.PI));
 
 const fixed = new THREE.Group();
-fixed.add(hallGroup(), towerGroup(), gateGroup(), ladderGroup());
+fixed.add(tentsGroup(), towerGroup(), gateGroup(), ladderGroup());
 scene.add(fixed);
 const chestHigh = fenceGroup(FENCE_TOP, WALKWAY_H);              // 新口径：齐胸栅栏 + 内侧踩台
 const wallTop = fenceGroup(FENCE_TOP_OLD, GUARD_FEET_OLD);       // 旧口径：高栅栏 + 守军站墙顶窄台
