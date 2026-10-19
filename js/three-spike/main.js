@@ -92,14 +92,32 @@ const STEEL = 0xd8d4cc, DARK = 0x5a5448, SKIN = 0xd9b08c, WOOD = 0x8a6b42, METAL
 function soldierGeo(kind) {
     const parts = [];
     if (kind === 'cavalry') {
-        parts.push(part(1.5, .5, .55, 0, .78, 0, 0x9c7a52));                       // 马身
-        parts.push(part(.28, .55, .5, 0, 1.15, .62, 0x9c7a52, .5));                // 马颈
-        parts.push(part(.24, .26, .5, 0, 1.5, .88, 0x836544));                     // 马头
-        for (const [x, z] of [[-.5, .45], [.5, .45], [-.5, -.45], [.5, -.45]])
-            parts.push(part(.14, .6, .14, x, .3, z, 0x7a5f3e));                    // 马腿
-        parts.push(part(.4, .5, .3, 0, 1.25, -.05, STEEL));                        // 骑手躯干
-        parts.push(part(.2, .2, .2, 0, 1.62, -.05, SKIN));                         // 骑手头
-        parts.push(part(.05, .8, .05, .3, 1.45, .25, METAL, 0, -.6));              // 骑枪
+        // 关键：本模型朝向为 +Z（步卒的矛沿 +Z 前伸可证）。马躯干长轴必须沿 Z，
+        // 旧版把长轴放在 X，马是横在朝向侧面上的——这就是"骑兵看着别扭"的根因。
+        // part() 无 X 轴俯仰（只有 ry/rz），故前倾的脖子、枪头的下压都用错位短块堆叠实现。
+        // 马体用浅暖灰：旧版中棕 0x9c7a52 经队伍色相乘后发闷（蓝方尤其暗）。
+        const HORSE = 0xcbbfa6, HORSE_LEG = 0xa1957f, MANE = 0x7a6a52, ARMOR = 0xd6d1c6;
+        parts.push(part(.5, .54, 1.26, 0, .82, 0, HORSE));                          // 躯干（长轴沿 Z）
+        parts.push(part(.54, .5, .48, 0, .84, .56, HORSE));                         // 前胸
+        parts.push(part(.46, .46, .4, 0, .8, -.5, HORSE));                          // 后臀
+        parts.push(part(.28, .44, .34, 0, 1.1, .72, HORSE));                        // 颈（下段）
+        parts.push(part(.24, .4, .3, 0, 1.36, .94, HORSE));                         // 颈（上段，前移作出前倾）
+        parts.push(part(.22, .26, .4, 0, 1.54, 1.1, HORSE));                        // 头
+        parts.push(part(.17, .17, .2, 0, 1.47, 1.3, HORSE_LEG));                    // 口鼻
+        for (const [y, z, h] of [[1.16, .6, .34], [1.4, .82, .3], [1.6, 1.02, .22]])
+            parts.push(part(.09, h, .24, 0, y, z, MANE));                           // 鬃毛沿颈脊
+        parts.push(part(.13, .46, .13, 0, .95, -.78, MANE));                        // 尾
+        for (const [x, z] of [[-.19, .46], [.19, .46], [-.19, -.48], [.19, -.48]]) {
+            parts.push(part(.17, .5, .17, x, .44, z, HORSE));                       // 腿（上段）
+            parts.push(part(.13, .42, .13, x, .13, z + .03, HORSE_LEG));            // 腿（下段，略前错）
+        }
+        parts.push(part(.44, .54, .34, 0, 1.32, -.06, ARMOR));                      // 骑手胸甲
+        for (const x of [-.24, .24]) parts.push(part(.12, .34, .16, x, 1.12, .04, ARMOR));  // 骑手腿贴马腹
+        parts.push(part(.2, .22, .2, 0, 1.67, -.06, SKIN));                         // 头
+        parts.push(part(.26, .19, .26, 0, 1.77, -.06, ARMOR));                      // 盔
+        parts.push(part(.05, .05, 1.5, .25, 1.33, .48, WOOD));                      // 骑枪（长轴沿 Z 前伸）
+        parts.push(part(.04, .04, .28, .25, 1.28, 1.26, METAL));                    // 枪尖（略低）
+        parts.push(part(.1, .12, .13, .25, 1.3, .16, SKIN));                        // 持枪手
     } else {
         parts.push(part(.13, .42, .15, -.11, .21, 0, DARK), part(.13, .42, .15, .11, .21, 0, DARK));   // 腿
         parts.push(part(.36, .5, .24, 0, .68, 0, STEEL));                          // 躯干
@@ -127,8 +145,8 @@ for (const kind of UNIT_KINDS) {
 }
 const _teamColor = new THREE.Color();
 function setTeamColor(u, slot) {
+    // 骑兵不再整体压暗：马体基色已改浅暖灰，旧版 ×0.9 会把蓝方马压成发闷的灰蓝（旧问题）。
     _teamColor.setHex(TEAM_COLOR[u.team]);
-    if (u.type === 'cavalry') _teamColor.multiplyScalar(.9);
     unitMeshes[u.type].setColorAt(slot, _teamColor);
 }
 
@@ -342,7 +360,6 @@ function recordCorpse(u, from) {
     corpseMeshes[kind].count = Math.min(corpseCursor[kind], CAP[kind]);
     // 尸体槽也挂队伍色：死亡瞬间不掉色（活体槽随单位移除即复用）
     _teamColor.setHex(TEAM_COLOR[u.team]);
-    if (kind === 'cavalry') _teamColor.multiplyScalar(.9);
     corpseMeshes[kind].setColorAt(i, _teamColor);
     if (corpseMeshes[kind].instanceColor) corpseMeshes[kind].instanceColor.needsUpdate = true;
     const yaw = headings.get(u.id)?.a ?? (u.team === 'red' ? Math.PI / 2 : -Math.PI / 2);   // headings 存的是 {a, bob} 状态对象
