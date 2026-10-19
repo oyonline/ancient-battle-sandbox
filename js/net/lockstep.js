@@ -39,7 +39,7 @@ export const LOCKSTEP = {
 // 改走关系表、旗帜拉锯按同盟组合并、投影新增 K 阵营编码与经济/票数/征兵/池黑方分量。
 // 即使既有两方对局行为逐位不变，模拟语义与投影结构已扩展，混版本必须拒绝。
 // Free tower coordinates/IDs, axe combat and tower balance change simulation state.
-export const SIM_VERSION = '2026-10-19-melee-damage-seeded-variance';
+export const SIM_VERSION = '2026-10-19-cavalry-charge-cd-brace-bail';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {
@@ -113,7 +113,9 @@ export function battleProjection(scene) {
         // chargeDistance 按 0.05 量子取整（与 units.js 镜像量化同纪律，防浮点尘）。
         if (unit.type === 'cavalry' && scene.battalions) {
             parts.push('cav', unit.corpsManaged ? 1 : 0, unit.leashReturning ? 1 : 0,
-                Math.round((unit.chargeDistance || 0) * 20));
+                Math.round((unit.chargeDistance || 0) * 20),
+                // 冲锋独立冷却时刻：决定下一次首撞放行与否，与 chargeDistance 同纪律直接入哈希
+                Number.isFinite(unit.lastChargeImpact) ? Math.round(unit.lastChargeImpact * 1e3) : '');
         }
         if (scene.territory?.camps) {
             parts.push('camp-unit', unit.garrisonTowerId || '', unit.garrisonOrderId || '',

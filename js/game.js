@@ -542,7 +542,7 @@ export class IsoBattleScene extends Phaser.Scene {
             spr, shadow,
             lastAttack: -typeData.atkSpeed, lastContact: 0,
             state: 'charge', stateTime: 0, reformX: null, target: null,
-            chargeDistance: 0, chargeLastX: null, lastRetarget: -Infinity, lastBrace: -Infinity,
+            chargeDistance: 0, chargeLastX: null, lastRetarget: -Infinity, lastBrace: -Infinity, lastChargeImpact: -Infinity,
             chargeMomentum: 0, chargeImpactId: null, corpsManaged: false, leashReturning: false,
             braceTime: 0, braceReady: false, braceHold: false, braceSupport: 0, braceDepth: 0,
             braceFacingX: team === 'black' ? 0 : team === 'red' ? 1 : -1, braceFacingY: team === 'black' ? -1 : 0,

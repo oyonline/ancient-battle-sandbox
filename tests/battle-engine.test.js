@@ -202,7 +202,7 @@ test('contact with a front soldier interrupts unready cavalry instead of pushing
         const cavalry = addUnit(scene, cavalryTeam, 'cavalry', x(30), 30);
         const infantry = addUnit(scene, enemyTeam, 'infantry', x(30.6), 30);
         addUnit(scene, enemyTeam, 'archer', x(35), 30);
-        if (coolingDown) { cavalry.chargeDistance = 3.5; cavalry.lastAttack = 0; }
+        if (coolingDown) { cavalry.chargeDistance = 3.5; cavalry.lastChargeImpact = 0; }
         for (let step = 0; step < 57; step++) {
             scene.advanceBattle(1000 / 60);
             assert.equal(cavalry.state, 'melee');
@@ -243,7 +243,7 @@ test('a prepared frontal pike formation resists the charge while both impact and
     cavalry.chargeDistance = 3;
     cavalry.target = archer;
     scene.advanceBattle(1000 / 60);
-    assert.equal(cavalry.state, 'melee');
+    assert.equal(cavalry.state, 'reform', '吃到架枪迎击立刻突围，不再原地缠斗');
     assert.equal(cavalry.chargeDistance, 0);
     assert.equal(cavalry.hp, 160 - meleeAttackDamage(spear, 57));   // 迎击：基准 18×1.5×2.5−10=57 经种子浮动
     const fullCharge = meleeAttackDamage(cavalry, 50);   // 名义首撞 基准 30×2−10=50（动量≈1，允许动量微调带）
@@ -491,4 +491,35 @@ test('360-gold sword/archer armies preserve every mirrored position through half
     assert.equal(forward.redAlive, reversed.blueAlive);
     assert.equal(forward.blueAlive, reversed.redAlive);
     assert.equal(forward.getBattleReport().durationMs, reversed.getBattleReport().durationMs);
+});
+
+test('a recent melee swing no longer cancels a fully run-up charge impact', () => {
+    const scene = makeScene();
+    const cavalry = addUnit(scene, 'red', 'cavalry', 20, 30);
+    const target = addUnit(scene, 'blue', 'infantry', 27, 30);
+    target.typeData = { ...target.typeData, speed: 0 };
+    cavalry.lastAttack = 1e9;   // 缠斗收尾刀刚出手：旧逻辑会把整趟助跑作废
+    for (let i = 0; i < 180 && cavalry.chargeImpactId == null; i++) scene.advanceBattle(1000 / 60);
+    assert.equal(cavalry.chargeImpactId, target.id, '冲锋首撞只看冲锋独立冷却，不吃近战攻速');
+    assert.ok(target.hp <= 55, `双倍冲锋真实命中（hp=${target.hp}，基准 30×2−10=50 浮动带 45..54）`);
+    assert.ok(cavalry.lastChargeImpact > 0, '首撞刷新冲锋独立冷却');
+});
+
+test('a braced pike wall bounces the cavalry into reform instead of a melee grind', () => {
+    const scene = makeScene();
+    const cavalry = addUnit(scene, 'red', 'cavalry', 30, 30);
+    const spear = addUnit(scene, 'blue', 'pikeman', 31.4, 30);
+    supportPike(scene, spear);
+    const archer = addUnit(scene, 'blue', 'archer', 34, 30);
+    cavalry.chargeDistance = 3;
+    cavalry.target = archer;
+    scene.advanceBattle(1000 / 60);
+    assert.equal(cavalry.state, 'reform', '吃到迎击的同一拍就突围，不再原地缠斗');
+    assert.ok(spear.hp >= 22 && spear.hp <= 36, `首撞仍全额结算（hp=${spear.hp}，基准约 52 经种子浮动；擦撞只会到 58+）`);
+    let pulled = false;
+    for (let i = 0; i < 48 && !pulled; i++) {
+        scene.advanceBattle(1000 / 60);
+        if (cavalry.state === 'reform' && cavalry.gx < 29.5) pulled = true;
+    }
+    assert.ok(pulled, '突围阶段真实远离枪墙，而非等血线才撤');
 });

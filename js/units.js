@@ -508,6 +508,7 @@ export class CavalryAI {
         if (first) {
             unit.scene.morale?.queueCharge(unit, target, braced);
             unit.lastAttack = now;
+            unit.lastChargeImpact = now;   // 冲锋首撞独立冷却：与近战攻速分开计时
             unit.chargeImpactId = target.id;
             unit.pierceHits = new Set();
             unit.pierceX = clamp(target.gx + unit.chargeDX * 4 * unit.chargeMomentum, 1.5, board.W - 1.5);
@@ -532,7 +533,9 @@ export class CavalryAI {
         const resistance = braced ? Math.min(1, 0.72 + 0.14 * Math.min(2, target.braceDepth))
             : target.type === 'archer' ? 0.16 : target.type === 'cavalry' ? 0.4 : 0.26;
         unit.chargeMomentum = Math.max(0, unit.chargeMomentum - resistance);
-        if (unit.chargeMomentum <= 1e-9 || unit.pierceHits.size >= 4) this.enterMelee(unit);
+        // 吃到架枪迎击立刻突围重整：不再硬穿枪墙、原地缠斗等第二枪挑落。
+        if (braced) { unit.state = 'reform'; unit.stateTime = 0; unit.reformX = null; }
+        else if (unit.chargeMomentum <= 1e-9 || unit.pierceHits.size >= 4) this.enterMelee(unit);
     }
 
     charge(unit, now, dt) {
@@ -573,7 +576,8 @@ export class CavalryAI {
         const contact = this.pathContact(unit, aim.gx, aim.gy, data.chargeSpeed, dt, plan);
         if (contact) {
             // 接触挡路身体就结束助跑，不能顶着前排继续追弓并攒出双倍冲锋。
-            if (unit.chargeDistance < 3 || now - unit.lastAttack < data.atkSpeed) {
+            // 首撞只看冲锋独立冷却：缠斗收尾刀（lastAttack）不再把整趟助跑作废。
+            if (unit.chargeDistance < 3 || now - (unit.lastChargeImpact ?? -Infinity) < data.atkSpeed) {
                 this.enterMelee(unit);
                 return false;
             }
@@ -581,7 +585,8 @@ export class CavalryAI {
             return true;
         }
         if (distance <= data.range + 0.25 && Terrain.segmentClear(terrain, unit.gx, unit.gy, target.gx, target.gy)) {
-            if (unit.chargeDistance < 3 || now - unit.lastAttack < data.atkSpeed) {
+            // 首撞只看冲锋独立冷却：缠斗收尾刀（lastAttack）不再把整趟助跑作废。
+            if (unit.chargeDistance < 3 || now - (unit.lastChargeImpact ?? -Infinity) < data.atkSpeed) {
                 this.enterMelee(unit);
                 return false;
             }
