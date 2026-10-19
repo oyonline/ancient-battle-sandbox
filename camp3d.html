@@ -2,7 +2,7 @@
   html,body{margin:0;height:100%;overflow:hidden;background:#111;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
   #viewport{position:fixed;top:0;right:0;bottom:0;left:0}
   /* 覆盖层必须显式高于 3D 画布：canvas 在 #viewport 里，若不设 z-index 会把标题/HUD/按钮全盖住 */
-  #title,#hud,#controls,#hint{z-index:2}
+  #title,#hud,#controls,#hint,#battle{z-index:2}
   #title{position:fixed;top:12px;left:14px;color:#e8dfc8;font-size:15px;font-weight:600;text-shadow:0 1px 2px #000;pointer-events:none}
   #title span{display:block;font-weight:400;font-size:12px;color:rgba(232,223,200,.55);margin-top:3px}
   #hud{position:fixed;top:64px;left:14px;color:#e8dfc8;font-size:12.5px;line-height:1.85;text-shadow:0 1px 2px #000;
@@ -11,9 +11,16 @@
   #hud .old-only{display:none}
   #hud.old .new-only{display:none}
   #hud.old .old-only{display:block}
+  /* 攻寨推演面板：左下角，与其他覆盖层同族样式；必须显式 z-index:2，否则被 3D 画布盖住 */
+  #battle{position:fixed;left:14px;bottom:34px;min-width:196px;color:#e8dfc8;font-size:12.5px;line-height:1.85;
+       text-shadow:0 1px 2px #000;background:rgba(18,22,16,.68);border:1px solid rgba(120,120,90,.35);border-radius:8px;padding:10px 13px}
+  #battle b{color:#ffd24a;font-weight:600}
+  #battle .b-title{font-weight:600;margin-bottom:2px}
+  #battle[hidden]{display:none}
   #controls{position:fixed;top:12px;right:14px;display:flex;gap:6px}
   #controls button{background:rgba(20,24,18,.82);color:#e8dfc8;border:1px solid #5a5a44;border-radius:6px;padding:7px 13px;font-size:12.5px;cursor:pointer}
   #controls button:hover{background:rgba(50,56,40,.9)}
+  #controls select{background:rgba(20,24,18,.82);color:#e8dfc8;border:1px solid #5a5a44;border-radius:6px;padding:7px 9px;font-size:12.5px;cursor:pointer}
   #hint{position:fixed;bottom:10px;left:0;right:0;text-align:center;color:rgba(255,255,255,.5);font-size:12px;text-shadow:0 1px 2px #000;pointer-events:none}
 </style></head><body>
 <div id="viewport"></div>
@@ -44,7 +51,14 @@
     <span style="color:rgba(232,223,200,.6)">仅栅栏高度 + 守军落点切换</span>
   </div>
 </div>
-<div id="controls"><button id="btn-gate">开门</button><button id="btn-ram">冲车撞门</button><button id="btn-toggle">口径：齐胸栅栏（新）· 点击对照旧口径</button></div>
+<div id="controls"><button id="btn-gate">开门</button><button id="btn-ram">冲车撞门</button><button id="btn-toggle">口径：齐胸栅栏（新）· 点击对照旧口径</button><button id="btn-assault">开始攻寨</button><button id="btn-assault-reset">重置</button><select id="sel-force"><option value="squad">小队</option><option value="company" selected>中队</option><option value="brigade">大队</option></select></div>
+<div id="battle" hidden>
+  <div class="b-title">攻寨推演</div>
+  <div>攻方：存活 <b id="atk-alive">0</b> / 阵亡 <b id="atk-lost">0</b></div>
+  <div>守方：存活 <b id="def-alive">0</b> / 阵亡 <b id="def-lost">0</b></div>
+  <div>战损比 <b id="ratio">-</b> · 用时 <b id="elapsed">0.0</b>s</div>
+  <div>结果 <b id="verdict">进行中</b></div>
+</div>
 <div id="hint">左键拖动旋转 · 右键拖动平移 · 滚轮缩放</div>
 <script type="module" src="js/three-spike/camp.js"></script>
 </body></html>
