@@ -1,0 +1,44 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>木栅营寨 · 3D 口径样张</title><style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#111;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+  #viewport{position:fixed;top:0;right:0;bottom:0;left:0;z-index:1}
+  #title{position:fixed;top:12px;left:14px;color:#e8dfc8;font-size:15px;font-weight:600;text-shadow:0 1px 2px #000;pointer-events:none}
+  #title span{display:block;font-weight:400;font-size:12px;color:rgba(232,223,200,.55);margin-top:3px}
+  #hud{position:fixed;top:64px;left:14px;color:#e8dfc8;font-size:12.5px;line-height:1.85;text-shadow:0 1px 2px #000;
+       background:rgba(18,22,16,.62);border:1px solid rgba(120,120,90,.35);border-radius:8px;padding:10px 13px;pointer-events:none;max-width:300px}
+  #hud b{color:#ffd24a;font-weight:600}
+  #hud .old-only{display:none}
+  #hud.old .new-only{display:none}
+  #hud.old .old-only{display:block}
+  #controls{position:fixed;top:12px;right:14px;display:flex;gap:6px}
+  #controls button{background:rgba(20,24,18,.82);color:#e8dfc8;border:1px solid #5a5a44;border-radius:6px;padding:7px 13px;font-size:12.5px;cursor:pointer}
+  #controls button:hover{background:rgba(50,56,40,.9)}
+  #hint{position:fixed;bottom:10px;left:0;right:0;text-align:center;color:rgba(255,255,255,.5);font-size:12px;text-shadow:0 1px 2px #000;pointer-events:none}
+</style></head><body>
+<div id="viewport"></div>
+<div id="title">木栅营寨 · 3D 口径样张<span>静态小样 · 不接模拟 · 用于体量与比例对齐</span></div>
+<div id="hud">
+  <div class="new-only">
+    <b>齐胸栅栏（新口径）</b><br>
+    墙环半径 r = <b>3.2</b>（前线营寨；大本营 3.5）<br>
+    栅栏顶面 = <b>1.75</b>（≈1.53 兵高，＝21px）<br>
+    内侧踩台面 = <b>1.0</b>（守军脚底，＝12px）<br>
+    守军头顶 2.145 → 栅顶压在胸口，<b>只露头肩</b><br>
+    垛口 6 个 · 桩间距 0.2（一圈 ≈128 根）· 一道横撑<br>
+    寨门：+gy 侧两扇木门（朝内 18° 斜开）· 上方横梁 + 门栓<br>
+    大帐 2.0×2.0 锥顶（收口） · 箭塔平台 <b>3.2</b>（≈2.8 兵高，俯射栅外）<br>
+    梯子 ×3：箭塔侧面竖梯 + ±gx 侧墙各一架靠墙梯<br>
+    <span style="color:rgba(232,223,200,.6)">门前单兵 = 体量参照（兵高 1.145）</span>
+  </div>
+  <div class="old-only">
+    <b>站墙顶（旧口径 · 对照）</b><br>
+    栅栏顶面 = <b>3.5</b>（＝42px，2.06 兵高）<br>
+    守军抬升 = <b>2.33</b>（＝28px，脚站墙顶）<br>
+    守军头顶 3.478 → 头顶齐栅栏顶，<b>大半身形被墙挡住</b><br>
+    大帐 / 箭塔 / 寨门 / 梯子 共用新口径尺度<br>
+    <span style="color:rgba(232,223,200,.6)">仅栅栏高度 + 守军落点切换</span>
+  </div>
+</div>
+<div id="controls"><button id="btn-toggle">口径：齐胸栅栏（新）· 点击对照旧口径</button></div>
+<div id="hint">左键拖动旋转 · 右键拖动平移 · 滚轮缩放</div>
+<script type="module" src="js/three-spike/camp.js"></script>
+</body></html>
