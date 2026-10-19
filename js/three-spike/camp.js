@@ -539,12 +539,19 @@ const ARCHER_STOP_R = 7.5;                  // 弓手停步半径（欧氏 = 7.5
 const GUARD_MELEE_CAP = 3;                  // 一个垛口同时最多被 3 名近战攻方贴身围攻
 const ASSAULT_STEP_MS = 1000 / 60;          // 固定步长 1/60 秒
 const INSTANCE_CAP = 200;                   // 每种攻方 InstancedMesh 容量（≥200；不能逐兵建 Mesh）
-const FORCE_PRESETS = {                     // 兵力预设：守方固定 6 名剑士
+const FORCE_PRESETS = {                     // 攻方兵力预设；守军数量走 DEF_COUNTS，编制见 slotKind
     squad:   { infantry: 24, pikeman: 6,  archer: 8  },
     company: { infantry: 48, pikeman: 12, archer: 16 },
     brigade: { infantry: 96, pikeman: 24, archer: 32 }
 };
 const ATTACK_KINDS = ['infantry', 'pikeman', 'archer'];
+// 战斗表现（纯视觉，不影响结算）：出手前扑 / 受击后仰 / 倒地沉没 / 箭矢飞行 / 头顶血条
+const ATK_ANIM_MS = 220, HIT_ANIM_MS = 180;
+const DIE_FALL_MS = 380, DIE_SINK_MS = 800;
+const ARROW_SPEED = 22;                    // 箭矢飞行速度（世界单位/秒，纯视觉）
+// 推演中冲车自动撞门（纯视觉）：开打 1.6s 后第一撞，此后每 2.4s 一轮，
+// 6 撞 ≈ 13.6s 破门——保证中等时长的战斗（≥14s）能看到完整破门
+const RAM_FIRST_MS = 1600, RAM_EVERY_MS = 2400;
 
 // 墙环上离给定点最近的参数（方形环，与 camps.js wallParamToward 同口径；营寨中心在原点）
 function wallParamToward(x, z) {
@@ -586,13 +593,99 @@ for (let i = 0; i < MAX_WALL_GUARDS; i++) {
     defMeshes.push(m);
 }
 
+// 箭矢（纯视觉）：弓手出手时生成一根飞行箭矢；伤害在出手拍已结算完毕，箭只为「看得见怎么打到的」
+const ARROW_CAP = 160;
+const arrowMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(.05, .05, .62),
+    new THREE.MeshLambertMaterial({ vertexColors: true }), ARROW_CAP);
+arrowMesh.count = 0; arrowMesh.frustumCulled = false;
+scene.add(arrowMesh);
+const arrows = [];                                       // {fx,fy,fz,tx,ty,tz,t,T,arc,team}
+const _arrowC = { blue: new THREE.Color(0x9fb8d8), red: new THREE.Color(0xd89f9f) };
+const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
+const _AXIS_X = new THREE.Vector3(1, 0, 0), _AXIS_Y = new THREE.Vector3(0, 1, 0), _AXIS_Z = new THREE.Vector3(0, 0, 1);
+const _ap = { x: 0, y: 0, z: 0 };
+const chestY = u => (u.fixed ? 3.55 : u.team === 'red' ? 1.9 : 1.0);   // 射手/目标胸口高（塔上/踩台/地面）
+function spawnArrow(from, to) {
+    if (arrows.length >= ARROW_CAP) arrows.shift();      // 演示到不了这个量，兜底丢最旧
+    const d = Math.hypot(to.x - from.x, to.z - from.z) || 1;
+    arrows.push({ fx: from.x, fy: chestY(from), fz: from.z, tx: to.x, ty: chestY(to), tz: to.z,
+        t: 0, T: Math.max(.12, d / ARROW_SPEED), arc: .1 + d * .05, team: from.team });
+}
+function arrowPos(a, k, out) {
+    out.x = a.fx + (a.tx - a.fx) * k;
+    out.y = a.fy + (a.ty - a.fy) * k + Math.sin(Math.PI * k) * a.arc;
+    out.z = a.fz + (a.tz - a.fz) * k;
+}
+function updateArrows(dt) {
+    for (let i = arrows.length - 1; i >= 0; i--)
+        if ((arrows[i].t += dt) >= arrows[i].T) arrows.splice(i, 1);
+    arrowMesh.count = arrows.length;
+    for (let i = 0; i < arrows.length; i++) {
+        const a = arrows[i], k = a.t / a.T;
+        arrowPos(a, k, _v1);
+        arrowPos(a, Math.min(1, k + .03), _ap);
+        _v2.set(_ap.x - _v1.x, _ap.y - _v1.y, _ap.z - _v1.z).normalize();
+        dummy.position.set(_v1.x, _v1.y, _v1.z);
+        dummy.quaternion.setFromUnitVectors(_AXIS_Z, _v2);   // 箭体沿 +Z，指向飞行方向
+        dummy.scale.setScalar(1); dummy.updateMatrix();
+        arrowMesh.setMatrixAt(i, dummy.matrix);
+        arrowMesh.setColorAt(i, a.team === 'red' ? _arrowC.red : _arrowC.blue);
+    }
+    arrowMesh.instanceMatrix.needsUpdate = true;
+    if (arrowMesh.instanceColor) arrowMesh.instanceColor.needsUpdate = true;
+}
+
+// 血条（纯视觉）：始终朝向相机的实例化面片，右端固定、随血量从右往左缩短，绿→黄→红
+const BAR_CAP = 200, BAR_W = .7, BAR_H = .085;
+const barBg = new THREE.InstancedMesh(new THREE.PlaneGeometry(BAR_W, BAR_H),
+    new THREE.MeshBasicMaterial({ color: 0x201a12, transparent: true, opacity: .75, depthWrite: false }), BAR_CAP);
+const barFg = new THREE.InstancedMesh(new THREE.PlaneGeometry(BAR_W, BAR_H),
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: .95, depthWrite: false }), BAR_CAP);
+barBg.count = 0; barFg.count = 0;
+barBg.frustumCulled = barFg.frustumCulled = false;
+barBg.renderOrder = 3; barFg.renderOrder = 4;
+for (let i = 0; i < BAR_CAP; i++) barFg.setColorAt(i, new THREE.Color(0xffffff));   // 预分配 instanceColor
+scene.add(barBg, barFg);
+const BAR_HP_COLOR = [[.55, 0x67c23a], [.28, 0xe6a23c], [-1, 0xf56c6c]];
+const _barColor = new THREE.Color();
+function updateBars() {
+    let n = 0;
+    if (assault.active) {
+        _v2.set(1, 0, 0).applyQuaternion(camera.quaternion);          // 相机右向：血条锚左端
+        const push = u => {
+            if (u.dead || n >= BAR_CAP) return;
+            const frac = u.hp / u.maxHp;
+            const baseY = u.fixed ? 3.6 : u.team === 'red' ? WALKWAY_H : 0;
+            dummy.position.set(u.x, baseY + 1.62, u.z);
+            dummy.quaternion.copy(camera.quaternion);
+            dummy.scale.setScalar(1); dummy.updateMatrix();
+            barBg.setMatrixAt(n, dummy.matrix);
+            dummy.position.set(u.x - _v2.x * (BAR_W - BAR_W * frac) * .5, baseY + 1.62,
+                u.z - _v2.z * (BAR_W - BAR_W * frac) * .5);
+            dummy.scale.set(frac, 1, 1); dummy.updateMatrix();
+            barFg.setMatrixAt(n, dummy.matrix);
+            for (const [th, c] of BAR_HP_COLOR) if (frac > th) { _barColor.setHex(c); break; }
+            barFg.setColorAt(n, _barColor);
+            n++;
+        };
+        for (const u of assault.attackers) push(u);
+        for (const u of assault.defenders) push(u);
+    }
+    barBg.count = n; barFg.count = n;
+    barBg.instanceMatrix.needsUpdate = true; barFg.instanceMatrix.needsUpdate = true;
+    if (barFg.instanceColor) barFg.instanceColor.needsUpdate = true;
+}
+
 const assault = {
-    active: false, attackers: [], defenders: [], acc: 0, elapsedMs: 0, result: null, preset: 'company'
+    active: false, attackers: [], defenders: [], acc: 0, elapsedMs: 0, result: null, preset: 'company',
+    fxMs: 0, nextRamAt: 0
 };
 
 function makeDemoUnit(team, role, type, x, z, yaw) {
     const typeData = UNIT_TYPES[type];
-    return { team, role, type, typeData, x, z, yaw, hp: typeData.hp, maxHp: typeData.hp, cd: 0, dead: false, target: null };
+    return { team, role, type, typeData, x, z, yaw, hp: typeData.hp, maxHp: typeData.hp, cd: 0, dead: false, target: null,
+        atkAnim: 0, hitAnim: 0, hitDX: 0, hitDZ: 0, dieAt: 0 };
 }
 
 // 按兵种均匀分布：三种兵按占比交错排在圆周上（确定性决策，不用随机数）
@@ -636,14 +729,21 @@ function startAssault(preset, defCount) {
         defenders.push(u);
     }
     // 红方守方②：寨内箭塔的 6 名弓手参战（复用塔上装饰弓手；位置固定、不跑位）
+    // meshBase = 塔组局部坐标基准：前扑/后仰/倒地都在基准上做偏移
     for (const a of tower.userData.archers) {
         const u = makeDemoUnit('red', 'defend', 'archer', a.x, a.z, a.mesh.rotation.y);
         u.mesh = a.mesh; u.fixed = true;
+        u.meshBase = { x: a.mesh.position.x, y: a.mesh.position.y, z: a.mesh.position.z };
         defenders.push(u);
     }
     assault.defenders = defenders;
     for (const m of chestHigh.userData.guards) m.visible = false;   // 装饰守军让位给守方池
     assault.active = true; assault.acc = 0; assault.elapsedMs = 0; assault.result = null;
+    assault.fxMs = 0; assault.nextRamAt = RAM_FIRST_MS;
+    // 推演从「寨门完好 + 冲车就位」开始：手动玩过的门/冲车状态一并归位（updateGateAnim 会平滑复位）
+    Object.assign(gateState, { phase: 'idle', t: 0, open: 0, angle: 0, inward: false, rammed: false, k: 0, hits: 0, jolt: 0 });
+    ram.position.z = RAM_REST;
+    arrows.length = 0; arrowMesh.count = 0;
     $('battle').hidden = false;
     syncAssaultMeshes(); syncGuardMeshes(); renderAssaultHud();
 }
@@ -652,6 +752,7 @@ function resetAssault() {
     assault.active = false;
     assault.attackers = []; assault.defenders = [];
     assault.acc = 0; assault.elapsedMs = 0; assault.result = null;
+    arrows.length = 0; arrowMesh.count = 0;              // 飞行中的箭一并清掉
     for (const kind of ATTACK_KINDS) {
         const im = assaultMeshes[kind];
         im.count = 0; im.instanceMatrix.needsUpdate = true;
@@ -703,10 +804,15 @@ function nearestOf(list, from) {
     return best;
 }
 
-function strike(target, dmg) {
+function strike(target, dmg, from) {
     if (target.dead) return;
     target.hp -= dmg;
-    if (target.hp <= 0) { target.hp = 0; target.dead = true; }
+    target.hitAnim = HIT_ANIM_MS;                        // 受击后仰（纯视觉）
+    if (from) {                                          // 记下受击方向：被顶得往后仰
+        const l = Math.hypot(target.x - from.x, target.z - from.z) || 1;
+        target.hitDX = (target.x - from.x) / l; target.hitDZ = (target.z - from.z) / l;
+    }
+    if (target.hp <= 0) { target.hp = 0; target.dead = true; target.dieAt = assault.fxMs; }
 }
 
 // 单个固定步长：1/60 秒
@@ -744,7 +850,9 @@ function stepAssault(ms) {
         const tgt = a.type === 'archer' ? nearestInRange(def, a, a.typeData.range) : a.target;
         if (!tgt || tgt.dead) continue;
         const base = calculateAttackDamage(a, tgt, { multiplier: 1 });
-        strike(tgt, Math.max(1, Math.floor(base * CAMP_RULES.WALL_GUARD_COVER)));
+        strike(tgt, Math.max(1, Math.floor(base * CAMP_RULES.WALL_GUARD_COVER)), a);
+        a.atkAnim = ATK_ANIM_MS;                         // 出手前扑（纯视觉）
+        if (a.type === 'archer') spawnArrow(a, tgt);
         a.cd = a.typeData.atkSpeed;
     }
 
@@ -773,7 +881,9 @@ function stepAssault(ms) {
         if (d.dead || d.cd > 0) continue;
         const tgt = nearestInRange(atk, d, d.typeData.range);
         if (!tgt) continue;
-        strike(tgt, calculateAttackDamage(d, tgt, { multiplier: CAMP_RULES.WALL_GUARD_ATTACK }));
+        strike(tgt, calculateAttackDamage(d, tgt, { multiplier: CAMP_RULES.WALL_GUARD_ATTACK }), d);
+        d.atkAnim = ATK_ANIM_MS;
+        if (d.type === 'archer') spawnArrow(d, tgt);
         d.cd = d.typeData.atkSpeed;
     }
 
@@ -783,32 +893,76 @@ function stepAssault(ms) {
     }
 }
 
-// 攻方实例矩阵：位置用 (x, 0, z)，yaw = atan2(方向x, 方向z)；阵亡者缩到 0 隐藏
-// （队伍色在创建时已由 setColorAt 一次性涂蓝，之后不变，故每帧只更新矩阵）
+// 攻方实例矩阵：位置用 (x, 0, z)，yaw = atan2(方向x, 方向z)
+// 活着：出手前扑 + 受击后仰的位移；阵亡：朝面向前扑倒 → 沉没 → 缩为 0 隐藏（纯视觉）
 function syncAssaultMeshes() {
     const n = { infantry: 0, pikeman: 0, archer: 0 };
     for (const a of assault.attackers) n[a.type]++;
     for (const kind of ATTACK_KINDS) assaultMeshes[kind].count = n[kind];
     for (const a of assault.attackers) {
         const im = assaultMeshes[a.type];
-        dummy.position.set(a.x, 0, a.z);
-        dummy.rotation.set(0, a.dead ? 0 : a.yaw, 0);
-        dummy.scale.set(a.dead ? 0 : 1, a.dead ? 0 : 1, a.dead ? 0 : 1);
+        if (a.dead) {
+            const f = assault.fxMs - a.dieAt;
+            if (f >= DIE_FALL_MS + DIE_SINK_MS) {
+                dummy.position.set(a.x, 0, a.z);
+                dummy.scale.setScalar(0);
+                dummy.rotation.set(0, 0, 0);
+            } else {
+                const fall = Math.min(1, f / DIE_FALL_MS);
+                const sink = f <= DIE_FALL_MS ? 0 : (f - DIE_FALL_MS) / DIE_SINK_MS;
+                dummy.position.set(a.x, -.85 * sink, a.z);
+                dummy.scale.setScalar(1);
+                _q1.setFromAxisAngle(_AXIS_Y, a.yaw);
+                _q2.setFromAxisAngle(_AXIS_X, 1.5 * fall);   // 绕本地 X 前倒（面朝下扑）
+                dummy.quaternion.copy(_q1.multiply(_q2));
+            }
+        } else {
+            const atkN = a.atkAnim / ATK_ANIM_MS, hitN = a.hitAnim / HIT_ANIM_MS;
+            dummy.position.set(
+                a.x + Math.sin(Math.PI * atkN) * .18 - a.hitDX * .09 * hitN, 0,
+                a.z + Math.cos(Math.PI * atkN) * .18 - a.hitDZ * .09 * hitN);
+            dummy.rotation.set(0, a.yaw, 0);
+            dummy.scale.setScalar(1);
+        }
         dummy.updateMatrix();
         im.setMatrixAt(a.slot, dummy.matrix);
     }
     for (const kind of ATTACK_KINDS) assaultMeshes[kind].instanceMatrix.needsUpdate = true;
 }
 
-// 守军网格：逻辑位置在寨墙环，网格仍落在踩台（内缩 WALK_INSET，与静态样张一致）
+// 守军网格：逻辑位置在寨墙环，网格仍落在踩台（内缩 WALK_INSET，与静态样张一致）；
+// 出手前扑/受击后仰/倒地沉没与攻方同套；箭塔弓手（fixed）网格坐标是塔组局部坐标，只加偏移
 function syncGuardMeshes() {
     for (const d of assault.defenders) {
-        if (d.dead) { d.mesh.visible = false; continue; }
+        if (d.dead) {
+            const f = assault.fxMs - d.dieAt;
+            if (f >= DIE_FALL_MS + DIE_SINK_MS) { d.mesh.visible = false; continue; }
+            const fall = Math.min(1, f / DIE_FALL_MS);
+            const sink = f <= DIE_FALL_MS ? 0 : (f - DIE_FALL_MS) / DIE_SINK_MS;
+            d.mesh.visible = true;
+            if (d.fixed) {
+                d.mesh.position.set(d.meshBase.x, d.meshBase.y - .85 * sink, d.meshBase.z);
+            } else {
+                const [ix, iz] = inward(d.x, d.z);
+                d.mesh.position.set(ix, WALKWAY_H - .85 * sink, iz);
+            }
+            _q1.setFromAxisAngle(_AXIS_Y, d.yaw);
+            _q2.setFromAxisAngle(_AXIS_X, 1.5 * fall);
+            d.mesh.quaternion.copy(_q1.multiply(_q2));
+            continue;
+        }
         d.mesh.visible = true;
-        if (d.fixed) { d.mesh.rotation.y = d.yaw; continue; }   // 塔上弓手位置固定，只转向
-        const [ix, iz] = inward(d.x, d.z);
-        d.mesh.position.set(ix, WALKWAY_H, iz);
-        d.mesh.rotation.y = d.yaw;
+        const atkN = d.atkAnim / ATK_ANIM_MS, hitN = d.hitAnim / HIT_ANIM_MS;
+        const lx = Math.sin(Math.PI * atkN) * .18 - d.hitDX * .09 * hitN;
+        const lz = Math.cos(Math.PI * atkN) * .18 - d.hitDZ * .09 * hitN;
+        if (d.fixed) {
+            d.mesh.position.set(d.meshBase.x + lx, d.meshBase.y, d.meshBase.z + lz);
+            d.mesh.rotation.set(0, d.yaw, 0);
+        } else {
+            const [ix, iz] = inward(d.x, d.z);
+            d.mesh.position.set(ix + lx, WALKWAY_H, iz + lz);
+            d.mesh.rotation.set(0, d.yaw, 0);
+        }
     }
 }
 
@@ -830,19 +984,35 @@ function renderAssaultHud() {
 }
 
 // 固定步长累加器（参考 main.js 的 accumulator 写法）：与帧率无关，纯确定性
-// 分出胜负后停止步进（用时定格），只继续刷新画面与读数
+// 分出胜负后停止步进（用时定格），但表现层继续跑（箭矢飞完、尸体倒完、血条跟随）
 function updateAssault(dtSec) {
-    if (!assault.active) return;
-    if (assault.result === null) {
-        assault.acc += dtSec * 1000;
-        let guard = 0;
-        while (assault.acc >= ASSAULT_STEP_MS && guard++ < 8) {
-            stepAssault(ASSAULT_STEP_MS);
-            assault.acc -= ASSAULT_STEP_MS;
+    const dtMs = dtSec * 1000;
+    if (assault.active) {
+        assault.fxMs += dtMs;                            // 表现层时钟：动画只认它，不回写模拟
+        for (const u of assault.attackers) {
+            u.atkAnim = Math.max(0, u.atkAnim - dtMs); u.hitAnim = Math.max(0, u.hitAnim - dtMs);
         }
-        if (guard >= 8) assault.acc = 0;
+        for (const u of assault.defenders) {
+            u.atkAnim = Math.max(0, u.atkAnim - dtMs); u.hitAnim = Math.max(0, u.hitAnim - dtMs);
+        }
+        if (assault.result === null) {
+            // 冲车自动撞门（纯视觉）：停好就推进一轮；已破门或正在撞则等下一拍
+            if (!gateState.rammed && gateState.phase === 'idle' && assault.fxMs >= assault.nextRamAt) {
+                gateState.t = 0; gateState.rammed = false; gateState.open = 0;
+                gateState.phase = gateState.angle > .05 ? 'shut' : 'advance';
+                assault.nextRamAt = assault.fxMs + RAM_EVERY_MS;
+            }
+            assault.acc += dtMs;
+            let guard = 0;
+            while (assault.acc >= ASSAULT_STEP_MS && guard++ < 8) {
+                stepAssault(ASSAULT_STEP_MS);
+                assault.acc -= ASSAULT_STEP_MS;
+            }
+            if (guard >= 8) assault.acc = 0;
+        }
+        syncAssaultMeshes(); syncGuardMeshes(); renderAssaultHud();
     }
-    syncAssaultMeshes(); syncGuardMeshes(); renderAssaultHud();
+    updateArrows(dtSec); updateBars();
 }
 
 $('btn-assault').onclick = () => { startAssault($('sel-force').value, +$('sel-def').value); };
