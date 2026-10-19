@@ -219,21 +219,18 @@ function ladderGroup() {
     return group;
 }
 
-// ---------------- 箭塔（四腿高台 + 垛口 + 锥顶 + 塔梯 + 驻塔弓手） ----------------
+// ---------------- 箭塔（四腿高台 + 三面垛口 + 塔梯 + 驻塔弓手，敞顶） ----------------
 function towerGroup() {
     const deck = TOWER_DECK, parts = [
         box(1.7, .16, 1.7, 0, deck + .08, 0, 0xbf9d66),                // 平台
         box(.09, .42, 1.7, 0, deck + .45, -.8, WOOD),                  // 后垛口
         box(1.7, .42, .09, 0, deck + .45, .8, WOOD),                    // 侧垛口
         box(.09, .42, 1.7, -0.8, deck + .45, 0, WOOD),
-        cone(1.55, .95, 0, deck + 1.25, 0, 0xab976b, Math.PI / 4),       // 顶棚
-        box(.06, 2.3, .06, .8, deck + 1.0, .8, TIMBER),
+        box(.06, 2.3, .06, .8, deck + 1.0, .8, TIMBER),                 // 旗杆
         box(.7, .42, .04, 1.1, deck + 1.7, .8, TEAM_COLOR)             // 队旗
     ];
     for (const [x, z] of [[-.65, -.65], [.65, -.65], [-.65, .65], [.65, .65]])
-        parts.push(box(.16, deck, .16, x, deck / 2, z, TIMBER));
-    for (const [x, z, rz, rx] of [[-.65, 0, .5, 0], [.65, 0, -.5, 0]])
-        parts.push(box(.09, deck * 1.02, .09, x, deck / 2, z, 0x8b633e, 0, rz));   // 斜撑
+        parts.push(box(.16, deck, .16, x, deck / 2, z, TIMBER));       // 四腿
     // 塔梯：贴 -x 面（朝向寨内），从地面直上平台顶，登塔路径
     const ladTop = deck + .16, ladX = -.72;
     for (const dz of [-.14, .14])
