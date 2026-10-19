@@ -116,12 +116,13 @@ test('terrain damage multiplies raw attack once before armor and honors arrow la
     scene.battleOptions.terrain = 'red_hill';
     const from = addUnit(scene, 'red', 'archer', 45, 35);
     const target = addUnit(scene, 'blue', 'infantry', 46, 35);
-    const expected = calculateAttackDamage(from, target, { multiplier: 1.5 * 1.18 });
+    const base = calculateAttackDamage(from, target, { multiplier: 1.5 * 1.18 });
+    const expected = meleeAttackDamage(from, base);   // 远程（弓箭）命中同走种子浮动
     assert.equal(resolveAttack(target, from, { multiplier: 1.5, sourceHeight: 3 }), expected,
         'a shooter leaving the crown must not erase its in-flight arrow advantage');
     assert.equal(target.hp, target.maxHp - expected);
     const sameLevel = addUnit(scene, 'blue', 'infantry', 44, 35);
-    assert.equal(resolveAttack(sameLevel, from), calculateAttackDamage(from, sameLevel));
+    assert.equal(resolveAttack(sameLevel, from), meleeAttackDamage(from, calculateAttackDamage(from, sameLevel)));
 });
 
 test('a complete charge preserves slope-adjusted momentum and collision force instead of resetting to one', () => {

@@ -880,10 +880,9 @@ export function meleeRollSeed(unit) {
     return (((mxq * 73856093) ^ (myq * 19349663) ^ tc) >>> 0) / 4294967296;
 }
 
-// 近战出手伤害浮动：基准伤害（攻−防结算后）×(90%~110%)，按 meleeRoll 取稳定值——
-// 同一单位整刀同值，不同攻击者命中各异。作用于护甲之后：小刀浮动颗粒 ±1，
-// 重击（冲锋/迎击）有实感波动，且有效 TTK 浮动压在 ±10% 量级，不放大阵型平衡噪声。
-// 弓箭不走这里（rawAttack 原值）。
+// 出手伤害浮动（近战/远程通用）：基准伤害（攻−防结算后）×(90%~110%)，按 meleeRoll 取稳定值——
+// 同一单位整场同值，不同出手者命中各异。作用于护甲之后：小刀浮动颗粒 ±1，
+// 重击（冲锋/迎击/远程齐射）有实感波动，且有效 TTK 浮动压在 ±10% 量级，不放大阵型平衡噪声。
 export function meleeAttackDamage(unit, baseDamage) {
     // 手搓测试件（无 meleeRoll）兜底 id 哈希；真实单位一律由 spawnUnit 播种
     const roll = unit.meleeRoll ?? (((unit.id * 2654435761) >>> 0) / 4294967296);
@@ -906,8 +905,11 @@ export function resolveAttack(target, from, options = {}) {
     const damage = calculateAttackDamage(from, target, {
         ...options, multiplier: (options.multiplier ?? 1) * formationMultiplier * terrainMultiplier
     });
-    // 近战（未显式传 rawAttack）在攻−防结算后做 ±10% 种子浮动；弓箭/塔等显式 rawAttack 原值不动
-    const finalDamage = options.rawAttack === undefined && !from.typeData.ranged
+    // 所有出手（近战 + 远程）在攻−防结算后做 ±10% 种子浮动：用出手者出生种子，
+    // 同一出手者整场同值、换边镜像配对单位同值。弓箭/塔命中时 from 仍是射手本体
+    // （箭矢只存发射时的原始攻击力），因此远程也在这一拍浮动，不新增任何随机状态。
+    // 仅"近战单位显式传 rawAttack"的特例（如致死一击测试）保持原值。
+    const finalDamage = from.typeData.ranged || options.rawAttack === undefined
         ? meleeAttackDamage(from, damage) : damage;
     const attackStartedAt = options.attackStartedAt ?? scene?.simulationTime;
     if (scene && scene.collectingImpacts) {

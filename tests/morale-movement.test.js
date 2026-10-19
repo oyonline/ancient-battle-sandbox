@@ -98,7 +98,7 @@ test('an airborne arrow fired before routing is not misreported as a post-rally 
     assert.equal(scene.battleStats.red.reengaged, 0);
     scene.fireArrow(archer, enemy);
     scene.updateArrows(1, 2000);
-    assert.equal(scene.battleStats.red.postRallyDamage, 16);
+    assert.equal(scene.battleStats.red.postRallyDamage, meleeAttackDamage(archer, 16));   // 弓箭 26−10=16 基准经射手种子浮动
     assert.equal(scene.battleStats.red.reengaged, 1);
 });
 

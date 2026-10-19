@@ -281,7 +281,7 @@ test('body separation cannot preserve brace after support is lost or the pike ro
     }
 });
 
-test('近战伤害种子浮动：同刀手值稳定、不同刀手各异、不动 randSeed、弓箭不受影响', () => {
+test('出手伤害种子浮动（近战/远程同规则）：同出手者值稳定、不同出手者各异、不动 randSeed', () => {
     const mk = id => ({ id, type: 'infantry', typeData: UNIT_TYPES.infantry });
     // 同一攻击者：多次调用同值，且不产生/不消耗 randSeed（不扰动既有随机流）
     const u = mk(7);
@@ -301,9 +301,13 @@ test('近战伤害种子浮动：同刀手值稳定、不同刀手各异、不�
     const { source, target } = duel('advance');
     const dmg = resolveAttack(target, source);
     assert.ok(dmg >= 5 && dmg <= 6, `剑士对剑士实伤 ${dmg} 超出带`);
-    // 弓箭路径：显式 rawAttack 原值结算（26-10=16），不受浮动影响
+    // 远程同规则：箭矢命中时 from 仍是射手本体，按同一 meleeRoll 取稳定值（26−10=16 基准）
     const scene2 = makeScene();
     const archer = addUnit(scene2, 'red', 'archer', 30, 30);
     const victim = addUnit(scene2, 'blue', 'infantry', 35, 30);
-    assert.equal(resolveAttack(victim, archer, { rawAttack: UNIT_TYPES.archer.atk }), 16);
+    const arrowHit = meleeAttackDamage(archer, 16);
+    assert.equal(resolveAttack(victim, archer, { rawAttack: UNIT_TYPES.archer.atk }), arrowHit,
+        '远程也在 ±10% 带内浮动（箭矢只存发射时的原始攻击力，浮动发生在命中一拍）');
+    assert.equal(victim.hp, victim.maxHp - arrowHit);
+    assert.ok(arrowHit >= 14 && arrowHit <= 17, `弓箭实伤 ${arrowHit} 超出 ±10% 带`);
 });

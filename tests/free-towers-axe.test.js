@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeScene, addUnit, UNIT_TYPES, calculateAttackDamage, resolveAttack, CombatRules } from './battle-harness.js';
 import { CAMP_RULES } from '../js/battle/camps.js';
+import { meleeAttackDamage } from '../js/units.js';
 import { TERRITORY, BATTALION_POWER } from '../js/battle/economy.js';
 import { setBoardSize, resetBoardSize, board } from '../js/board.js';
 import { battleProjection, SIM_VERSION } from '../js/net/lockstep.js';
@@ -120,7 +121,7 @@ test('驻塔弓手增伤在发射时存入箭矢，出塔后伤害不丢失也�
     assert.equal(s.arrows[0].dmg, 31.2);
     c.ungarrison('red', tower.id);
     s.render.fx.updateArrows(1, 3200);
-    assert.equal(foe.hp, 79, 'floor(26×1.2-10)=21');
+    assert.equal(foe.hp, 100 - meleeAttackDamage(archer, 21), 'floor(26×1.2-10)=21 基准经射手种子浮动');
     s.fireArrow(archer, foe);
     assert.equal(s.arrows[0].dmg, 26, '出塔后的普通新箭无驻塔增伤');
 });
@@ -173,7 +174,7 @@ test('坐标建塔锁步命令重放一致，未来建筑seq纳入投影，版�
     assert.equal(battleProjection(a), battleProjection(b));
     b.territory.camps.nextBuildingSeq++;
     assert.notEqual(battleProjection(a), battleProjection(b));
-    assert.match(SIM_VERSION, /cavalry-charge-cd-brace-bail/);
+    assert.match(SIM_VERSION, /ranged-damage-seeded-variance/);
 });
 
 test('回归：斧兵动摇后走真实后退入口，而非只设置后退时钟', () => {

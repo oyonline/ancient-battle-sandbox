@@ -378,7 +378,7 @@ test('arrows and cavalry keep their ordinary damage against a prepared frontal g
         placeRelative(attacker, guard, 0.95);
         const deflections = scene.tactics.metrics.deflections;
         assert.equal(scene.tactics.incomingMultiplier(attacker, guard), 1, type);
-        const expected = type === 'archer' ? damage : meleeAttackDamage(attacker, damage);   // 近战护甲后再做种子浮动
+        const expected = meleeAttackDamage(attacker, damage);   // 近战/远程都在护甲后做种子浮动
         assert.equal(resolveAttack(guard, attacker, { multiplier }), expected, `${type} × ${multiplier}`);
         assert.equal(scene.tactics.metrics.deflections, deflections);
     }

@@ -157,8 +157,8 @@ test('双端锁步：据点特色与民夫自卫下仍逐位一致，且两端�
 
 test('模拟版本随本轮行为变化更新，旧页面无法混用', () => {
     // 近战伤害种子浮动改变伤害序列，旧合作模式页面不能混用。
-    assert.equal(SIM_VERSION, '2026-10-19-cavalry-charge-cd-brace-bail');
-    assert.notEqual(SIM_VERSION, '2026-10-19-melee-damage-seeded-variance', '相对骑兵冲锋批次必须更新');
+    assert.equal(SIM_VERSION, '2026-10-19-ranged-damage-seeded-variance');
+    assert.notEqual(SIM_VERSION, '2026-10-19-cavalry-charge-cd-brace-bail', '相对骑兵冲锋批次必须更新');
     assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2c', '相对上一批次必须递增');
     assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2b', '相对 F8 批次必须递增');
     assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2', '相对返修轮主体必须递增');

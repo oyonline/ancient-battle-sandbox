@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Terrain, makeScene, addUnit, resolveAttack, snapshot } from './battle-harness.js';
+import { meleeAttackDamage } from '../js/units.js';
 
 test('deployment sets terrain before spawning and default deployment restores flat', () => {
     const scene = makeScene();
@@ -59,7 +60,7 @@ test('arrows use launch height after shooter moves, and actual victim height at 
     const expected = Math.floor(shooter.typeData.atk * Terrain.attackMultiplier('red_hill', shooter, target, launchHeight) - target.typeData.def);
     scene.rebuildSpatial();
     scene.updateArrows(1, 1000);
-    assert.equal(target.hp, target.maxHp - expected);
+    assert.equal(target.hp, target.maxHp - meleeAttackDamage(shooter, expected));   // 远程命中按射手种子浮动
     assert.equal(scene.arrows.length, 0);
 });
 
