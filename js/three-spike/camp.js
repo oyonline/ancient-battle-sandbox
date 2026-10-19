@@ -9,22 +9,22 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 // ---- 换算链：世界高度 = px / 24 × 2（Terrain.HEIGHT_SCALE = 24，spike 的 H_WORLD = 2）----
 // 兵高 ≈ 1.145 世界单位（腿 0→0.42、躯干 0.43→0.93、头到 1.145）。
 const H_WORLD = 2.0;
-const WALL_R = 4.0;                       // 前线营寨墙环半径（放大以容纳 5 顶帐篷；大本营 3.5）
+const WALL_R = 5.0;                       // 前线营寨墙环半径（继续放大；大本营 3.5）
 const WALL_SLOTS = 6;                     // 垛口数 = 周长等分
 const GATE_HALF = 1.2;                    // +gy 侧寨门半宽（2D 已有此约定：中间留 2 段缺口）
-const POST_STEP = 0.2;                    // 桩间距：一圈 8r=32 → ≈160 根
+const POST_STEP = 0.2;                    // 桩间距：一圈 8r=40 → ≈200 根
 const FENCE_TOP = 1.75;                   // 齐胸栅栏顶面（≈1.53 兵高）＝ 21px
 const WALKWAY_H = 1.0;                    // 内侧踩台面（守军脚底）＝ 12px
 const WALKWAY_W = 0.6;                    // 踩台宽度
-const WALK_INSET = WALL_R * .11;          // 踩台中心相对墙线的内缩（≈0.44）
+const WALK_INSET = WALL_R * .11;          // 踩台中心相对墙线的内缩（≈0.55）
 const FENCE_TOP_OLD = 3.5;                // 对照：旧口径 42px 桩
 const GUARD_FEET_OLD = 28 / 24 * H_WORLD; // 对照：旧口径守军抬 28px 站墙顶
-// 内部 5 顶帐篷：中军大帐 2.0 居中 + 四角兵帐 1.6，角帐中心 ±2.3
-// （角帐外沿 2.3+0.8＝3.1 < 踩台内沿 3.26，不顶墙）
-const TENT_CMD = 2.0, TENT_SQ = 1.6, TENT_PITCH = 2.3;
-// 箭塔平台：2D 贴图里 82px 是 sprite 视觉偏移，3D 不能当真 6.83 世界单位。
-// 取 ~3.2（≈2.8 兵高），仍能俯射栅栏外但腿不夸张。
-const TOWER_DECK = 3.2;
+// 内部 5 顶帐篷：中军大帐 2.2 居中 + 四角兵帐 1.8，角帐中心 ±2.8
+// （角帐锥顶外沿 2.8+0.95＝3.75 < 踩台内沿 4.15，不顶墙）
+const TENT_CMD = 2.2, TENT_SQ = 1.8, TENT_PITCH = 2.8;
+// 箭塔：移入寨内后整体缩到 0.8（原按墙外高台口径，3D 里过高）。
+const TOWER_S = .8;
+const TOWER_DECK = 3.2 * TOWER_S;         // ≈2.56
 const TEAM = 'red', TEAM_COLOR = 0xc4553f;
 
 // ---- 调色板（与 2D 营寨美术同族） ----
@@ -236,36 +236,38 @@ function ladderGroup() {
     return group;
 }
 
-// ---------------- 箭塔（四腿高台 + 四面垛口 + 塔梯 + 驻塔弓手，敞顶） ----------------
+// ---------------- 箭塔（寨内望楼：四腿高台 + 四面垛口 + 塔梯 + 驻塔弓手，敞顶） ----------------
 function towerGroup() {
-    const deck = TOWER_DECK, railY = deck + .45;
+    const s = TOWER_S, deck = TOWER_DECK, railY = deck + .45 * s;    // 整体按 s 缩放
+    const pt = 1.7 * s, ry = .8 * s, th = .16 * s, leg = .65 * s;
     const parts = [
-        box(1.7, .16, 1.7, 0, deck + .08, 0, 0xbf9d66),                // 平台
+        box(pt, th, pt, 0, deck + th / 2, 0, 0xbf9d66),                 // 平台
         // 四面垛口闭合：四条边栏均沿各自边线走向（此前 z=-0.8 那条把宽/深写反，
         // 变成一根沿 Z 捅出平台的长条，且 x=+0.8 这条整个漏做）
-        box(1.7, .42, .09, 0, railY, -.8, WOOD),                       // 后垛口（沿 X）
-        box(1.7, .42, .09, 0, railY, .8, WOOD),                        // 前垛口（沿 X）
-        box(.09, .42, 1.7, -.8, railY, 0, WOOD),                       // 左垛口（沿 Z）
-        box(.09, .42, 1.7,  .8, railY, 0, WOOD),                       // 右垛口（沿 Z）
-        box(.06, 1.9, .06, .6, deck + .16 + .95, .6, TIMBER),           // 旗杆：立在平台角上
-        box(.7, .42, .04, .95, deck + .16 + 1.7, .6, TEAM_COLOR)        // 队旗
+        box(pt, .42 * s, .09, 0, railY, -ry, WOOD),                     // 后垛口（沿 X）
+        box(pt, .42 * s, .09, 0, railY,  ry, WOOD),                     // 前垛口（沿 X）
+        box(.09, .42 * s, pt, -ry, railY, 0, WOOD),                     // 左垛口（沿 Z）
+        box(.09, .42 * s, pt,  ry, railY, 0, WOOD),                     // 右垛口（沿 Z）
+        box(.06, 1.9 * s, .06, .6 * s, deck + th + .95 * s, .6 * s, TIMBER),        // 旗杆：立在平台角上
+        box(.7 * s, .42 * s, .04, .95 * s, deck + th + 1.7 * s, .6 * s, TEAM_COLOR) // 队旗
     ];
-    for (const [x, z] of [[-.65, -.65], [.65, -.65], [-.65, .65], [.65, .65]])
-        parts.push(box(.16, deck, .16, x, deck / 2, z, TIMBER));       // 四腿
-    // 塔梯：贴 -x 面（朝向寨内），从地面直上平台顶，登塔路径
-    const ladTop = deck + .16, ladX = -.72;
-    for (const dz of [-.14, .14])
+    for (const [x, z] of [[-leg, -leg], [leg, -leg], [-leg, leg], [leg, leg]])
+        parts.push(box(th, deck, th, x, deck / 2, z, TIMBER));          // 四腿
+    // 塔梯：贴 -x 面，从地面直上平台顶，登塔路径
+    const ladTop = deck + th, ladX = -.72 * s;
+    for (const dz of [-.14 * s, .14 * s])
         parts.push(box(.05, ladTop, .05, ladX, ladTop / 2, dz, TIMBER));
-    for (let y = .34; y < ladTop - .08; y += .34)
-        parts.push(box(.06, .05, .34, ladX, y, 0, 0x6b4a2a));
+    for (let y = .34 * s; y < ladTop - .08 * s; y += .34 * s)
+        parts.push(box(.06, .05, .34 * s, ladX, y, 0, 0x6b4a2a));
     const mesh = new THREE.Mesh(mergeGeometries(parts), campMat);
     mesh.castShadow = true; mesh.receiveShadow = true;
     const group = new THREE.Group();
     group.add(mesh);
-    const px = WALL_R + 1.2, pz = WALL_R + .2;
-    // 弓手站在平台上：位置用「组内局部坐标」，组再整体搬到塔位（此前多加了一次 px/pz 导致飘空）
-    for (const [ox, oz] of [[-.35, 0], [.35, 0]])
-        group.add(soldierMesh('archer', guardMat, ox, deck + .16, oz, Math.atan2(WALL_R, 0)));
+    // 移到寨内 -z 后墙中线：x=0 保持镜像对称，且远离 +gy 寨门与四角帐篷
+    const px = 0, pz = -(WALL_R - 1.7);
+    // 弓手站在平台上：位置用「组内局部坐标」，组再整体搬到塔位
+    for (const [ox, oz] of [[-.35 * s, 0], [.35 * s, 0]])
+        group.add(soldierMesh('archer', guardMat, ox, deck + th, oz, Math.atan2(WALL_R, 0)));
     group.position.set(px, 0, pz);
     return group;
 }
@@ -284,12 +286,12 @@ scene.background = new THREE.Color('#b9c5ab');
 scene.fog = new THREE.Fog('#b9c5ab', 34, 78);
 
 const camera = new THREE.PerspectiveCamera(45, 1, .1, 200);
-camera.position.set(12, 12, 18);
+camera.position.set(14, 14, 22);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 1.4, 0);
 controls.enableDamping = true; controls.dampingFactor = .08;
-controls.maxPolarAngle = 1.5; controls.minDistance = 3; controls.maxDistance = 56;
+controls.maxPolarAngle = 1.5; controls.minDistance = 3; controls.maxDistance = 64;
 
 function resize() {
     let w = viewport.clientWidth, h = viewport.clientHeight;
@@ -315,7 +317,7 @@ const ground = new THREE.Mesh(new THREE.PlaneGeometry(44, 44, 1, 1).rotateX(-Mat
     new THREE.MeshStandardMaterial({ color: GROUND, roughness: 1 }));
 ground.receiveShadow = true;
 scene.add(ground);
-const grid = new THREE.GridHelper(30, 30, 0x5b6a43, 0x66754e);
+const grid = new THREE.GridHelper(40, 40, 0x5b6a43, 0x66754e);
 grid.material.transparent = true; grid.material.opacity = .18; grid.position.y = .012;
 scene.add(grid);
 
