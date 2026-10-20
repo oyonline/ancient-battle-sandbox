@@ -6,13 +6,11 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 // 攻寨推演复用真实模拟口径：兵种数值与伤害结算、营寨守军倍率/掩体
-import { UNIT_TYPES, calculateAttackDamage } from '../units.js';
-import { CAMP_RULES } from '../battle/camps.js';
+import { createAssaultSim, WALL_R, wallPoint, ATTACK_KINDS, slotKind, ASSAULT_STEP_MS } from './camp-assault-sim.js';
 
 // ---- 换算链：世界高度 = px / 24 × 2（Terrain.HEIGHT_SCALE = 24，spike 的 H_WORLD = 2）----
 // 兵高 ≈ 1.145 世界单位（腿 0→0.42、躯干 0.43→0.93、头到 1.145）。
 const H_WORLD = 2.0;
-const WALL_R = 5.0;                       // 前线营寨墙环半径（继续放大；大本营 3.5）
 const WALL_SLOTS = 6;                     // 垛口数 = 周长等分
 const GATE_HALF = 1.2;                    // +gy 侧寨门半宽（2D 已有此约定：中间留 2 段缺口）
 const GATE_POST_T = .26;                  // 寨门门柱断面（gateGroup 与栅栏让位共用）
@@ -97,15 +95,6 @@ function soldierMesh(kind, mat, x, y, z, yaw = 0) {
 }
 
 // ---------------- 墙环几何：与 js/battle/camps.js 的 wallPointAt 同口径 ----------------
-function wallPoint(t, r) {
-    const side = 2 * r, per = 8 * r;
-    const s = ((t % per) + per) % per;
-    const corners = [[-r, -r], [r, -r], [r, r], [-r, r]];
-    const i = Math.min(3, Math.floor(s / side));
-    const k = (s - i * side) / side;
-    const [x0, y0] = corners[i], [x1, y1] = corners[(i + 1) % 4];
-    return [x0 + (x1 - x0) * k, y0 + (y1 - y0) * k];
-}
 const inward = (gx, gy) => { const l = Math.hypot(gx, gy) || 1; return [gx - gx / l * WALK_INSET, gy - gy / l * WALK_INSET]; };
 
 // ---------------- 木栅墙（栅栏 + 一道横撑 + 踏板 + 垛口守军） ----------------
@@ -529,26 +518,14 @@ function updateGateAnim(dt) {
     if (ramBtn.textContent !== ramWant) ramBtn.textContent = ramWant;
 }
 
-// ==================== 攻寨推演（可开关的演示；固定步长确定性推进，全程不用随机数） ====================
+// ==================== 攻寨推演（可开关的演示；固定步长、种子确定性方阵推进） ====================
 // 数值口径复用真实模拟：伤害走 calculateAttackDamage，守军「居高临下」输出倍率取 CAMP_RULES。
 // 塔上/寨墙上守军的受伤/射程做演示级加强（见 ASSAULT_COVER / TOWER_RANGE），因为真规则的
 // WALL_GUARD_COVER=0.7 对「齐胸栅栏 + 踩台 + 箭塔」的实战遮蔽体现太弱，寨子形同虚设。
 // 世界坐标系：x 向东、z 向南、营寨中心在原点；1 世界单位 ≈ 1 格，故 UNIT_TYPES 的
 // range / speed / atkSpeed 可直接使用（atkSpeed 为毫秒）。
 const ATK_COLOR = 0x7fb0e0;                 // 蓝方攻方队伍色（与红方营寨对比）
-const MELEE_STOP_R = WALL_R + 0.4;          // 近战迫近停步圈（切比雪夫 = 5.4）：不得穿墙
-const ARCHER_STOP_R = 7.5;                  // 弓手停步半径（欧氏 = 7.5），用 range 9.5 远程射
-const GUARD_MELEE_CAP = 2;                  // 一个垛口同时最多被 2 名近战攻方贴身（窄墙头挤不下第三人）
-const ASSAULT_COVER = 0.4;                  // 演示口径：守军受伤系数（真规则 0.7；栅栏+踩台实战遮蔽更强）
-const TOWER_RANGE = 12;                     // 箭塔弓手射程加成：居高远射覆盖全场（基础 9.5 只够半场）
-const ASSAULT_STEP_MS = 1000 / 60;          // 固定步长 1/60 秒
-const INSTANCE_CAP = 200;                   // 每种攻方 InstancedMesh 容量（≥200；不能逐兵建 Mesh）
-const FORCE_PRESETS = {                     // 攻方兵力预设；守军数量走 DEF_COUNTS，编制见 slotKind
-    squad:   { infantry: 24, pikeman: 6,  archer: 8  },
-    company: { infantry: 48, pikeman: 12, archer: 16 },
-    brigade: { infantry: 96, pikeman: 24, archer: 32 }
-};
-const ATTACK_KINDS = ['infantry', 'pikeman', 'archer'];
+const INSTANCE_CAP = 200;
 // 战斗表现（纯视觉，不影响结算）：出手前扑 / 受击后仰 / 倒地沉没 / 箭矢飞行 / 头顶血条
 const ATK_ANIM_MS = 220, HIT_ANIM_MS = 180;
 const DIE_FALL_MS = 380, DIE_SINK_MS = 800;
@@ -556,16 +533,6 @@ const ARROW_SPEED = 22;                    // 箭矢飞行速度（世界单位/
 // 推演中冲车自动撞门（纯视觉）：开打 1.6s 后第一撞，此后每 2.4s 一轮，
 // 6 撞 ≈ 13.6s 破门——保证中等时长的战斗（≥14s）能看到完整破门
 const RAM_FIRST_MS = 1600, RAM_EVERY_MS = 2400;
-
-// 墙环上离给定点最近的参数（方形环，与 camps.js wallParamToward 同口径；营寨中心在原点）
-function wallParamToward(x, z) {
-    const r = WALL_R, side = 2 * r;
-    const m = Math.max(Math.abs(x), Math.abs(z));
-    if (m < 1e-6) return 0;
-    const ex = x / m * r, ey = z / m * r;
-    if (Math.abs(ex) >= Math.abs(ey)) return ex > 0 ? side + (ey + r) : 3 * side + (r - ey);
-    return ey < 0 ? ex + r : 2 * side + (r - ex);
-}
 
 // ---- 攻方实例化渲染：每种兵种一个 InstancedMesh，实例颜色涂蓝（200 个逐兵 Mesh 会掉帧） ----
 const assaultMat = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -587,8 +554,6 @@ const dummy = new THREE.Object3D();
 // 兵种按同一周期规则分配（每 3 个垛口 1 名弓手 → N/3 名弓手），网格与逻辑兵种天然一致。
 // 箭塔 6 名弓手见 tower.userData.archers，也当守方复用（fixed=true，不跑位）。
 const MAX_WALL_GUARDS = 24;
-const DEF_COUNTS = [6, 12, 24];
-const slotKind = i => (i % 3 === 2 ? 'archer' : 'infantry');   // 每 3 个垛口 1 名弓手
 const defMeshes = [];
 for (let i = 0; i < MAX_WALL_GUARDS; i++) {
     const m = soldierMesh(slotKind(i), guardMat, 0, WALKWAY_H, 0, 0);
@@ -681,66 +646,17 @@ function updateBars() {
     if (barFg.instanceColor) barFg.instanceColor.needsUpdate = true;
 }
 
-const assault = {
-    active: false, attackers: [], defenders: [], acc: 0, elapsedMs: 0, result: null, preset: 'company',
-    fxMs: 0, nextRamAt: 0
-};
+const simulation = createAssaultSim({ towerPositions: tower.userData.archers.map(a => ({ x: a.x, z: a.z, yaw: a.mesh.rotation.y })) });
+const { assault } = simulation;
 
-function makeDemoUnit(team, role, type, x, z, yaw) {
-    const typeData = UNIT_TYPES[type];
-    return { team, role, type, typeData, x, z, yaw, hp: typeData.hp, maxHp: typeData.hp, cd: 0, dead: false, target: null,
-        atkAnim: 0, hitAnim: 0, hitDX: 0, hitDZ: 0, dieAt: 0 };
-}
-
-// 按兵种均匀分布：三种兵按占比交错排在圆周上（确定性决策，不用随机数）
-function assaultSequence(preset) {
-    const counts = FORCE_PRESETS[preset] ?? FORCE_PRESETS.company;
-    const total = counts.infantry + counts.pikeman + counts.archer;
-    const taken = { infantry: 0, pikeman: 0, archer: 0 }, seq = [];
-    for (let i = 0; i < total; i++) {
-        let best = null, bestKey = Infinity;
-        for (const kind of ATTACK_KINDS) {
-            if (taken[kind] >= counts[kind]) continue;
-            const key = (taken[kind] + 0.5) / counts[kind];   // 取「已排/应有」最小者 → 均匀交错
-            if (key < bestKey) { bestKey = key; best = kind; }
-        }
-        taken[best]++; seq.push(best);
+function startAssault(preset, defCount, seed = 1) {
+    resetAssault();
+    simulation.startAssault(preset, defCount, seed);
+    let wallIndex = 0, towerIndex = 0;
+    for (const u of assault.defenders) {
+        u.mesh = u.fixed ? tower.userData.archers[towerIndex++].mesh : defMeshes[wallIndex++];
+        if (u.fixed) u.meshBase = { x: u.mesh.position.x, y: u.mesh.position.y, z: u.mesh.position.z };
     }
-    return seq;
-}
-
-function startAssault(preset, defCount) {
-    resetAssault();                                  // 演示进行中「开始攻寨」→ 先重置再开始
-    assault.preset = preset;
-    const seq = assaultSequence(preset), spawnR = 11;
-    const slotOf = { infantry: 0, pikeman: 0, archer: 0 };
-    for (let i = 0; i < seq.length; i++) {
-        const ang = i / seq.length * Math.PI * 2;    // 布在寨外半径约 11 的圆周上
-        const x = Math.cos(ang) * spawnR, z = Math.sin(ang) * spawnR;
-        const u = makeDemoUnit('blue', 'attack', seq[i], x, z, Math.atan2(-x, -z));
-        u.slot = slotOf[seq[i]]++;                   // 在该兵种 InstancedMesh 里的实例槽位
-        assault.attackers.push(u);
-    }
-    // 红方守方①：N 名寨墙守军沿寨墙环均匀布岗（逻辑位置在环上，网格站踩台）；
-    // 近战/弓手按「每 3 个垛口 1 名弓手」混编，弓手站在寨墙上往外射（守方不再全是 0.95 近战）
-    const N = DEF_COUNTS.includes(defCount) ? defCount : 6, per = 8 * WALL_R;
-    const defenders = [];
-    for (let i = 0; i < N; i++) {
-        const t = i * per / N;
-        const [px, pz] = wallPoint(t, WALL_R);
-        const u = makeDemoUnit('red', 'defend', slotKind(i), px, pz, Math.atan2(px, pz));
-        u.mesh = defMeshes[i]; u.homeT = t; u.fixed = false;
-        defenders.push(u);
-    }
-    // 红方守方②：寨内箭塔的 6 名弓手参战（复用塔上装饰弓手；位置固定、不跑位）
-    // meshBase = 塔组局部坐标基准：前扑/后仰/倒地都在基准上做偏移
-    for (const a of tower.userData.archers) {
-        const u = makeDemoUnit('red', 'defend', 'archer', a.x, a.z, a.mesh.rotation.y);
-        u.mesh = a.mesh; u.fixed = true;
-        u.meshBase = { x: a.mesh.position.x, y: a.mesh.position.y, z: a.mesh.position.z };
-        defenders.push(u);
-    }
-    assault.defenders = defenders;
     for (const m of chestHigh.userData.guards) m.visible = false;   // 装饰守军让位给守方池
     assault.active = true; assault.acc = 0; assault.elapsedMs = 0; assault.result = null;
     assault.fxMs = 0; assault.nextRamAt = RAM_FIRST_MS;
@@ -753,9 +669,7 @@ function startAssault(preset, defCount) {
 }
 
 function resetAssault() {
-    assault.active = false;
-    assault.attackers = []; assault.defenders = [];
-    assault.acc = 0; assault.elapsedMs = 0; assault.result = null;
+    simulation.resetAssault();
     arrows.length = 0; arrowMesh.count = 0;              // 飞行中的箭一并清掉
     for (const kind of ATTACK_KINDS) {
         const im = assaultMeshes[kind];
@@ -775,126 +689,11 @@ function resetAssault() {
     $('battle').hidden = true;
 }
 
-// 攻方推进：近战到切比雪夫 5.4 停下（不穿墙），弓手到欧氏 7.5 停下
-function advanceAttacker(a, ms) {
-    const r = Math.hypot(a.x, a.z);
-    if (r < 1e-6) return;
-    const stopR = a.type === 'archer' ? ARCHER_STOP_R
-        : MELEE_STOP_R * r / Math.max(Math.abs(a.x), Math.abs(a.z));   // 该方位上切比雪夫 5.4 对应的欧氏半径
-    const nr = Math.max(r - a.typeData.speed * ms / 1000, stopR);
-    if (nr >= r - 1e-9) return;
-    const k = nr / r;
-    a.x *= k; a.z *= k;
-}
-
-// 射程内最近的一名目标（水平距离判定，忽略高度差；同距取数组序 → 确定性）
-function nearestInRange(list, from, range) {
-    let best = null, bestD = Infinity;
-    for (const u of list) {
-        if (u.dead) continue;
-        const d = Math.hypot(u.x - from.x, u.z - from.z);
-        if (d > range) continue;
-        if (d < bestD - 1e-9) { bestD = d; best = u; }
-    }
-    return best;
-}
-function nearestOf(list, from) {
-    let best = null, bestD = Infinity;
-    for (const u of list) {
-        if (u.dead) continue;
-        const d = Math.hypot(u.x - from.x, u.z - from.z);
-        if (d < bestD - 1e-9) { bestD = d; best = u; }
-    }
-    return best;
-}
-
-function strike(target, dmg, from) {
-    if (target.dead) return;
-    target.hp -= dmg;
-    target.hitAnim = HIT_ANIM_MS;                        // 受击后仰（纯视觉）
-    if (from) {                                          // 记下受击方向：被顶得往后仰
-        const l = Math.hypot(target.x - from.x, target.z - from.z) || 1;
-        target.hitDX = (target.x - from.x) / l; target.hitDZ = (target.z - from.z) / l;
-    }
-    if (target.hp <= 0) { target.hp = 0; target.dead = true; target.dieAt = assault.fxMs; }
-}
-
-// 单个固定步长：1/60 秒
+// Logic emits successful attacks; projectile rendering stays here.
 function stepAssault(ms) {
-    assault.elapsedMs += ms;
-    const atk = assault.attackers.filter(u => !u.dead);
-    const def = assault.defenders.filter(u => !u.dead);
-    for (const a of atk) a.cd -= ms;
-    for (const d of def) d.cd -= ms;
-
-    // 垛口名额分配：每个守军同一时刻最多被 3 名近战攻方贴身围攻；多余的改打其他守军或外围待命
-    const load = new Map();
-    for (const d of def) load.set(d, 0);
-    for (const a of atk) {
-        a.target = null;
-        if (a.type === 'archer') continue;                 // 远程不计入贴身名额
-        let best = null, bestD = Infinity;
-        for (const d of def) {
-            const dd = Math.hypot(a.x - d.x, a.z - d.z);
-            if (dd > a.typeData.range) continue;           // 射程外不占名额
-            if (load.get(d) >= GUARD_MELEE_CAP) continue;  // 垛口已满 3 人
-            if (dd < bestD - 1e-9) { bestD = dd; best = d; }
-        }
-        if (best) { a.target = best; load.set(best, load.get(best) + 1); }
-    }
-
-    for (const a of atk) {
-        advanceAttacker(a, ms);
-        a.yaw = a.target && !a.target.dead ? Math.atan2(a.target.x - a.x, a.target.z - a.z) : Math.atan2(-a.x, -a.z);
-    }
-
-    // 攻方出手：对守军有效伤害 = max(1, floor(base × WALL_GUARD_COVER))（居高临下更耐打）
-    for (const a of atk) {
-        if (a.cd > 0) continue;
-        const tgt = a.type === 'archer' ? nearestInRange(def, a, a.typeData.range) : a.target;
-        if (!tgt || tgt.dead) continue;
-        const base = calculateAttackDamage(a, tgt, { multiplier: 1 });
-        strike(tgt, Math.max(1, Math.floor(base * ASSAULT_COVER)), a);
-        a.atkAnim = ATK_ANIM_MS;                         // 出手前扑（纯视觉）
-        if (a.type === 'archer') spawnArrow(a, tgt);
-        a.cd = a.typeData.atkSpeed;
-    }
-
-    // 守方跑位：沿寨墙环（半边长 5.0）朝最近活着的攻方挪动，不许穿寨；箭塔弓手位置固定、只转向
-    const per = 8 * WALL_R;
-    for (const d of def) {
-        if (d.dead) continue;
-        const nf = nearestOf(atk, d);
-        if (!d.fixed) {
-            const have = wallParamToward(d.x, d.z);
-            const want = nf ? wallParamToward(nf.x, nf.z) : d.homeT;
-            let diff = want - have;
-            if (diff > per / 2) diff -= per; else if (diff < -per / 2) diff += per;
-            if (Math.abs(diff) > 1e-3) {
-                const step = Math.min(Math.abs(diff), d.typeData.speed * ms / 1000) * Math.sign(diff);
-                const p = wallPoint(have + step, WALL_R);
-                d.x = p[0]; d.z = p[1];
-            }
-        }
-        d.yaw = nf ? Math.atan2(nf.x - d.x, nf.z - d.z) : (d.fixed ? d.yaw : Math.atan2(d.x, d.z));
-    }
-
-    // 守方出手：只打射程内最近的一名攻方；居高临下 × WALL_GUARD_ATTACK
-    // （寨墙守军近战 range 0.95；寨墙弓手 range 9.5；箭塔弓手吃 TOWER_RANGE 加成、覆盖全场）
-    for (const d of def) {
-        if (d.dead || d.cd > 0) continue;
-        const tgt = nearestInRange(atk, d, d.fixed ? TOWER_RANGE : d.typeData.range);
-        if (!tgt) continue;
-        strike(tgt, calculateAttackDamage(d, tgt, { multiplier: CAMP_RULES.WALL_GUARD_ATTACK }), d);
-        d.atkAnim = ATK_ANIM_MS;
-        if (d.type === 'archer') spawnArrow(d, tgt);
-        d.cd = d.typeData.atkSpeed;
-    }
-
-    if (assault.result === null) {
-        if (!assault.defenders.some(u => !u.dead)) assault.result = 'break';   // 守军全灭 = 攻方破寨
-        else if (!assault.attackers.some(u => !u.dead)) assault.result = 'hold'; // 攻方全灭 = 守方守住
-    }
+    const events = simulation.stepAssault(ms);
+    for (const { from, to } of events) if (from.type === 'archer') spawnArrow(from, to);
+    return events;
 }
 
 // 攻方实例矩阵：位置用 (x, 0, z)，yaw = atan2(方向x, 方向z)
