@@ -530,13 +530,17 @@ function updateGateAnim(dt) {
 }
 
 // ==================== 攻寨推演（可开关的演示；固定步长确定性推进，全程不用随机数） ====================
-// 数值口径全部复用真实模拟：伤害走 calculateAttackDamage，守军「居高临下」攻/防倍率取 CAMP_RULES。
+// 数值口径复用真实模拟：伤害走 calculateAttackDamage，守军「居高临下」输出倍率取 CAMP_RULES。
+// 塔上/寨墙上守军的受伤/射程做演示级加强（见 ASSAULT_COVER / TOWER_RANGE），因为真规则的
+// WALL_GUARD_COVER=0.7 对「齐胸栅栏 + 踩台 + 箭塔」的实战遮蔽体现太弱，寨子形同虚设。
 // 世界坐标系：x 向东、z 向南、营寨中心在原点；1 世界单位 ≈ 1 格，故 UNIT_TYPES 的
 // range / speed / atkSpeed 可直接使用（atkSpeed 为毫秒）。
 const ATK_COLOR = 0x7fb0e0;                 // 蓝方攻方队伍色（与红方营寨对比）
 const MELEE_STOP_R = WALL_R + 0.4;          // 近战迫近停步圈（切比雪夫 = 5.4）：不得穿墙
 const ARCHER_STOP_R = 7.5;                  // 弓手停步半径（欧氏 = 7.5），用 range 9.5 远程射
-const GUARD_MELEE_CAP = 3;                  // 一个垛口同时最多被 3 名近战攻方贴身围攻
+const GUARD_MELEE_CAP = 2;                  // 一个垛口同时最多被 2 名近战攻方贴身（窄墙头挤不下第三人）
+const ASSAULT_COVER = 0.4;                  // 演示口径：守军受伤系数（真规则 0.7；栅栏+踩台实战遮蔽更强）
+const TOWER_RANGE = 12;                     // 箭塔弓手射程加成：居高远射覆盖全场（基础 9.5 只够半场）
 const ASSAULT_STEP_MS = 1000 / 60;          // 固定步长 1/60 秒
 const INSTANCE_CAP = 200;                   // 每种攻方 InstancedMesh 容量（≥200；不能逐兵建 Mesh）
 const FORCE_PRESETS = {                     // 攻方兵力预设；守军数量走 DEF_COUNTS，编制见 slotKind
@@ -850,7 +854,7 @@ function stepAssault(ms) {
         const tgt = a.type === 'archer' ? nearestInRange(def, a, a.typeData.range) : a.target;
         if (!tgt || tgt.dead) continue;
         const base = calculateAttackDamage(a, tgt, { multiplier: 1 });
-        strike(tgt, Math.max(1, Math.floor(base * CAMP_RULES.WALL_GUARD_COVER)), a);
+        strike(tgt, Math.max(1, Math.floor(base * ASSAULT_COVER)), a);
         a.atkAnim = ATK_ANIM_MS;                         // 出手前扑（纯视觉）
         if (a.type === 'archer') spawnArrow(a, tgt);
         a.cd = a.typeData.atkSpeed;
@@ -876,10 +880,10 @@ function stepAssault(ms) {
     }
 
     // 守方出手：只打射程内最近的一名攻方；居高临下 × WALL_GUARD_ATTACK
-    // （寨墙守军近战 range 0.95；箭塔弓手远程 range 9.5，同样吃居高临下倍率）
+    // （寨墙守军近战 range 0.95；寨墙弓手 range 9.5；箭塔弓手吃 TOWER_RANGE 加成、覆盖全场）
     for (const d of def) {
         if (d.dead || d.cd > 0) continue;
-        const tgt = nearestInRange(atk, d, d.typeData.range);
+        const tgt = nearestInRange(atk, d, d.fixed ? TOWER_RANGE : d.typeData.range);
         if (!tgt) continue;
         strike(tgt, calculateAttackDamage(d, tgt, { multiplier: CAMP_RULES.WALL_GUARD_ATTACK }), d);
         d.atkAnim = ATK_ANIM_MS;
