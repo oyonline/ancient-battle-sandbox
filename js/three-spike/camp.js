@@ -6,7 +6,8 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 // 攻寨推演复用真实模拟口径：兵种数值与伤害结算、营寨守军倍率/掩体
-import { createAssaultSim, WALL_R, wallPoint, ATTACK_KINDS, slotKind, ASSAULT_STEP_MS } from './camp-assault-sim.js';
+import { createAssaultSim, WALL_R, wallPoint, ATTACK_KINDS, slotKind, ASSAULT_STEP_MS,
+    ATK_ANIM_MS, HIT_ANIM_MS, TOWER_ARCHER_SLOTS, TOWER_ORIGIN } from './camp-assault-sim.js';
 
 // ---- 换算链：世界高度 = px / 24 × 2（Terrain.HEIGHT_SCALE = 24，spike 的 H_WORLD = 2）----
 // 兵高 ≈ 1.145 世界单位（腿 0→0.42、躯干 0.43→0.93、头到 1.145）。
@@ -347,18 +348,17 @@ function towerGroup() {
     const group = new THREE.Group();
     group.add(mesh);
     // 移到寨内 -z 后墙中线：x=0 保持镜像对称，且远离 +gy 寨门与四角帐篷
-    const px = 0, pz = -(WALL_R - 1.7);
+    const { x: px, z: pz } = TOWER_ORIGIN;
     // 弓手站在平台上：位置用「组内局部坐标」，组再整体搬到塔位
     // 世界坐标与网格一并挂到 userData，供攻寨推演把塔上弓手当守方复用（fixed，不跑位）
     // 6 名弓手在平台上排 3×2（箭塔本就容得下多名弓手；单塔 2 人时守方远程火力太弱）
     const archers = [];
-    for (const oz of [-.22 * s, .22 * s])
-        for (const ox of [-.42 * s, 0, .42 * s]) {
-            const m = soldierMesh('archer', guardMat, ox, deck + th, oz, Math.atan2(WALL_R, 0));
-            m.userData.homeYaw = m.rotation.y;
-            archers.push({ mesh: m, x: px + ox, z: pz + oz });
-            group.add(m);
-        }
+    for (const { x: ox, z: oz, yaw } of TOWER_ARCHER_SLOTS) {
+        const m = soldierMesh('archer', guardMat, ox, deck + th, oz, yaw);
+        m.userData.homeYaw = m.rotation.y;
+        archers.push({ mesh: m, x: px + ox, z: pz + oz });
+        group.add(m);
+    }
     group.userData.archers = archers;
     group.position.set(px, 0, pz);
     return group;
@@ -446,7 +446,7 @@ $('btn-toggle').onclick = e => {
 };
 // 开门/关门：一次动作双扇联动，日常一律朝寨外（+z）；若寨门已被冲车撞坏，本次操作顺带"修复"复位
 $('btn-gate').onclick = () => {
-    if (gateState.phase !== 'idle') return;
+    if (assault.active || gateState.phase !== 'idle') return;
     gateState.open = gateState.open ? 0 : 1;
     gateState.rammed = false;                  // 复位：门闩/桥板/守门兵随 k 回落归位
     gateState.hits = 0;                        // 撞击次数一并清零
@@ -454,7 +454,7 @@ $('btn-gate').onclick = () => {
 // 冲车撞门：门若开着先自动关到位，再推进撞击。撞满 6 次才破门；前 5 次门只被撞得晃一下、冲车弹回。
 // （不设"必须关门态"守卫，避免静默无反应；已破门时本次当作重新来过）
 $('btn-ram').onclick = () => {
-    if (gateState.phase !== 'idle') return;
+    if (assault.active || gateState.phase !== 'idle') return;
     if (gateState.rammed) gateState.hits = 0;  // 已破门：本次重头再撞
     gateState.t = 0; gateState.rammed = false; gateState.open = 0;
     gateState.phase = gateState.angle > .05 ? 'shut' : 'advance';
@@ -492,10 +492,10 @@ function updateGateAnim(dt) {
     u.doorL.userData.crack.visible = u.doorR.userData.crack.visible = st.hits >= 3;
     u.bar.visible = !st.rammed && st.angle < .18;
 
-    if (st.phase === 'shut') {                               // 门开着：先关合到位再撞
+    if (!assault.active && st.phase === 'shut') {                               // 门开着：先关合到位再撞
         st.t += dt / .35;
         if (st.t >= 1 || st.angle < .03) { st.phase = 'advance'; st.t = 0; }
-    } else if (st.phase === 'advance') {                     // 冲车推进（加速逼近）
+    } else if (!assault.active && st.phase === 'advance') {                     // 冲车推进（加速逼近）
         st.t = Math.min(1, st.t + dt / .55);
         ram.position.z = RAM_REST + (RAM_HIT - RAM_REST) * st.t * st.t;
         if (st.t >= 1) {                                     // 撞上：计一次数、门抖一下
@@ -503,15 +503,16 @@ function updateGateAnim(dt) {
             if (st.hits >= HITS_TO_BREAK) { st.phase = 'burst'; st.open = 1; st.rammed = true; }
             else st.phase = 'impact';
         }
-    } else if (st.phase === 'impact') {                      // 未破：门只被撞得晃一下，冲车弹回停放位
+    } else if (!assault.active && st.phase === 'impact') {                      // 未破：门只被撞得晃一下，冲车弹回停放位
         st.t = Math.min(1, st.t + dt / .34);
         ram.position.z = RAM_HIT + (RAM_REST - RAM_HIT) * Math.sqrt(st.t);
         if (st.t >= 1) { st.phase = 'idle'; st.t = 0; }
-    } else if (st.phase === 'burst') {                       // 破门：门向内翻、破坏推进，冲车被反冲顶回（前快后缓）
+    } else if (!assault.active && st.phase === 'burst') {                       // 破门：门向内翻、破坏推进，冲车被反冲顶回（前快后缓）
         st.t = Math.min(1, st.t + dt / BURST_DUR);
         ram.position.z = RAM_HIT + (RAM_REST - RAM_HIT) * Math.sqrt(st.t);
         if (st.t >= 1) { st.phase = 'idle'; st.t = 0; }
     }
+    if (assault.active) ram.position.z = assault.ram.z + .12 * Math.sin(st.jolt * Math.PI);
     const want = st.open ? '关门' : '开门';
     if (gateBtn.textContent !== want) gateBtn.textContent = want;
     const ramWant = st.hits > 0 && st.hits < HITS_TO_BREAK ? `冲车撞门 (${st.hits}/${HITS_TO_BREAK})` : '冲车撞门';
@@ -527,13 +528,8 @@ function updateGateAnim(dt) {
 const ATK_COLOR = 0x7fb0e0;                 // 蓝方攻方队伍色（与红方营寨对比）
 const INSTANCE_CAP = 200;
 // 战斗表现（纯视觉，不影响结算）：出手前扑 / 受击后仰 / 倒地沉没 / 箭矢飞行 / 头顶血条
-const ATK_ANIM_MS = 220, HIT_ANIM_MS = 180;
 const DIE_FALL_MS = 380, DIE_SINK_MS = 800;
 const ARROW_SPEED = 22;                    // 箭矢飞行速度（世界单位/秒，纯视觉）
-// 推演中冲车自动撞门（纯视觉）：开打 1.6s 后第一撞，此后每 2.4s 一轮，
-// 6 撞 ≈ 13.6s 破门——保证中等时长的战斗（≥14s）能看到完整破门
-const RAM_FIRST_MS = 1600, RAM_EVERY_MS = 2400;
-
 // ---- 攻方实例化渲染：每种兵种一个 InstancedMesh，实例颜色涂蓝（200 个逐兵 Mesh 会掉帧） ----
 const assaultMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 const assaultMeshes = {};
@@ -574,7 +570,7 @@ const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
 const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
 const _AXIS_X = new THREE.Vector3(1, 0, 0), _AXIS_Y = new THREE.Vector3(0, 1, 0), _AXIS_Z = new THREE.Vector3(0, 0, 1);
 const _ap = { x: 0, y: 0, z: 0 };
-const chestY = u => (u.fixed ? 3.55 : u.team === 'red' ? 1.9 : 1.0);   // 射手/目标胸口高（塔上/踩台/地面）
+const chestY = u => u.y + 1.0;   // 射手/目标胸口高（塔上/踩台/地面）
 function spawnArrow(from, to) {
     if (arrows.length >= ARROW_CAP) arrows.shift();      // 演示到不了这个量，兜底丢最旧
     const d = Math.hypot(to.x - from.x, to.z - from.z) || 1;
@@ -625,7 +621,7 @@ function updateBars() {
         const push = u => {
             if (u.dead || n >= BAR_CAP) return;
             const frac = u.hp / u.maxHp;
-            const baseY = u.fixed ? 3.6 : u.team === 'red' ? WALKWAY_H : 0;
+            const baseY = u.y;
             dummy.position.set(u.x, baseY + 1.62, u.z);
             dummy.quaternion.copy(camera.quaternion);
             dummy.scale.setScalar(1); dummy.updateMatrix();
@@ -646,23 +642,28 @@ function updateBars() {
     if (barFg.instanceColor) barFg.instanceColor.needsUpdate = true;
 }
 
-const simulation = createAssaultSim({ towerPositions: tower.userData.archers.map(a => ({ x: a.x, z: a.z, yaw: a.mesh.rotation.y })) });
+const simulation = createAssaultSim();
 const { assault } = simulation;
+// Render ownership stays here; the simulation never reads a frame clock or a THREE object.
+let fxMs = 0, accumulator = 0;
+let effects = new WeakMap(), guardViews = new Map();
+const effectOf = u => effects.get(u) ?? { atkAt: -Infinity, hitAt: -Infinity, dieAt: -Infinity };
+const animOf = u => ({
+    atkN: Math.max(0, 1 - (fxMs - effectOf(u).atkAt) / ATK_ANIM_MS),
+    hitN: Math.max(0, 1 - (fxMs - effectOf(u).hitAt) / HIT_ANIM_MS)
+});
 
 function startAssault(preset, defCount, seed = 1) {
     resetAssault();
     simulation.startAssault(preset, defCount, seed);
     let wallIndex = 0, towerIndex = 0;
     for (const u of assault.defenders) {
-        u.mesh = u.fixed ? tower.userData.archers[towerIndex++].mesh : defMeshes[wallIndex++];
-        if (u.fixed) u.meshBase = { x: u.mesh.position.x, y: u.mesh.position.y, z: u.mesh.position.z };
+        const mesh = u.fixed ? tower.userData.archers[towerIndex++].mesh : defMeshes[wallIndex++];
+        guardViews.set(u, { mesh, meshBase: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z } });
     }
     for (const m of chestHigh.userData.guards) m.visible = false;   // 装饰守军让位给守方池
-    assault.active = true; assault.acc = 0; assault.elapsedMs = 0; assault.result = null;
-    assault.fxMs = 0; assault.nextRamAt = RAM_FIRST_MS;
-    // 推演从「寨门完好 + 冲车就位」开始：手动玩过的门/冲车状态一并归位（updateGateAnim 会平滑复位）
-    Object.assign(gateState, { phase: 'idle', t: 0, open: 0, angle: 0, inward: false, rammed: false, k: 0, hits: 0, jolt: 0 });
-    ram.position.z = RAM_REST;
+    fxMs = 0; accumulator = 0;
+    gateBtn.disabled = ramBtn.disabled = true;
     arrows.length = 0; arrowMesh.count = 0;
     $('battle').hidden = false;
     syncAssaultMeshes(); syncGuardMeshes(); renderAssaultHud();
@@ -670,6 +671,10 @@ function startAssault(preset, defCount, seed = 1) {
 
 function resetAssault() {
     simulation.resetAssault();
+    effects = new WeakMap(); guardViews = new Map();
+    gateBtn.disabled = ramBtn.disabled = false;
+    Object.assign(gateState, { phase: 'idle', t: 0, open: 0, angle: 0, inward: false, rammed: false, k: 0, hits: 0, jolt: 0 });
+    ram.position.z = RAM_REST;
     arrows.length = 0; arrowMesh.count = 0;              // 飞行中的箭一并清掉
     for (const kind of ATTACK_KINDS) {
         const im = assaultMeshes[kind];
@@ -692,7 +697,19 @@ function resetAssault() {
 // Logic emits successful attacks; projectile rendering stays here.
 function stepAssault(ms) {
     const events = simulation.stepAssault(ms);
-    for (const { from, to } of events) if (from.type === 'archer') spawnArrow(from, to);
+    for (const event of events) {
+        if (event.type === 'ram_hit') {
+            gateState.hits = assault.gate.maxHp - event.hp; gateState.jolt = 1;
+        } else if (event.type === 'gate_broken') {
+            Object.assign(gateState, { rammed: true, inward: true, open: 1 });
+        } else if (event.type === 'attack') {
+            const { from, to } = event;
+            const a = { ...effectOf(from), atkAt: fxMs }, d = { ...effectOf(to), hitAt: fxMs };
+            if (to.dead) d.dieAt = fxMs;
+            effects.set(from, a); effects.set(to, d);
+            if (from.type === 'archer') spawnArrow(from, to);
+        }
+    }
     return events;
 }
 
@@ -704,26 +721,27 @@ function syncAssaultMeshes() {
     for (const kind of ATTACK_KINDS) assaultMeshes[kind].count = n[kind];
     for (const a of assault.attackers) {
         const im = assaultMeshes[a.type];
+        const [mx, mz] = a.zone === 'wall' ? inward(a.x, a.z) : [a.x, a.z];
         if (a.dead) {
-            const f = assault.fxMs - a.dieAt;
+            const f = fxMs - effectOf(a).dieAt;
             if (f >= DIE_FALL_MS + DIE_SINK_MS) {
-                dummy.position.set(a.x, 0, a.z);
+                dummy.position.set(mx, 0, mz);
                 dummy.scale.setScalar(0);
                 dummy.rotation.set(0, 0, 0);
             } else {
                 const fall = Math.min(1, f / DIE_FALL_MS);
                 const sink = f <= DIE_FALL_MS ? 0 : (f - DIE_FALL_MS) / DIE_SINK_MS;
-                dummy.position.set(a.x, -.85 * sink, a.z);
+                dummy.position.set(mx, a.y - .85 * sink, mz);
                 dummy.scale.setScalar(1);
                 _q1.setFromAxisAngle(_AXIS_Y, a.yaw);
                 _q2.setFromAxisAngle(_AXIS_X, 1.5 * fall);   // 绕本地 X 前倒（面朝下扑）
                 dummy.quaternion.copy(_q1.multiply(_q2));
             }
         } else {
-            const atkN = a.atkAnim / ATK_ANIM_MS, hitN = a.hitAnim / HIT_ANIM_MS;
+            const { atkN, hitN } = animOf(a);
             dummy.position.set(
-                a.x + Math.sin(Math.PI * atkN) * .18 - a.hitDX * .09 * hitN, 0,
-                a.z + Math.cos(Math.PI * atkN) * .18 - a.hitDZ * .09 * hitN);
+                mx + Math.sin(a.yaw) * Math.sin(Math.PI * atkN) * .18 - a.hitDX * .09 * hitN, a.y,
+                mz + Math.cos(a.yaw) * Math.sin(Math.PI * atkN) * .18 - a.hitDZ * .09 * hitN);
             dummy.rotation.set(0, a.yaw, 0);
             dummy.scale.setScalar(1);
         }
@@ -737,34 +755,35 @@ function syncAssaultMeshes() {
 // 出手前扑/受击后仰/倒地沉没与攻方同套；箭塔弓手（fixed）网格坐标是塔组局部坐标，只加偏移
 function syncGuardMeshes() {
     for (const d of assault.defenders) {
+        const { mesh, meshBase } = guardViews.get(d);
         if (d.dead) {
-            const f = assault.fxMs - d.dieAt;
-            if (f >= DIE_FALL_MS + DIE_SINK_MS) { d.mesh.visible = false; continue; }
+            const f = fxMs - effectOf(d).dieAt;
+            if (f >= DIE_FALL_MS + DIE_SINK_MS) { mesh.visible = false; continue; }
             const fall = Math.min(1, f / DIE_FALL_MS);
             const sink = f <= DIE_FALL_MS ? 0 : (f - DIE_FALL_MS) / DIE_SINK_MS;
-            d.mesh.visible = true;
+            mesh.visible = true;
             if (d.fixed) {
-                d.mesh.position.set(d.meshBase.x, d.meshBase.y - .85 * sink, d.meshBase.z);
+                mesh.position.set(meshBase.x, meshBase.y - .85 * sink, meshBase.z);
             } else {
-                const [ix, iz] = inward(d.x, d.z);
-                d.mesh.position.set(ix, WALKWAY_H - .85 * sink, iz);
+                const [ix, iz] = d.zone === 'wall' ? inward(d.x, d.z) : [d.x, d.z];
+                mesh.position.set(ix, d.y - .85 * sink, iz);
             }
             _q1.setFromAxisAngle(_AXIS_Y, d.yaw);
             _q2.setFromAxisAngle(_AXIS_X, 1.5 * fall);
-            d.mesh.quaternion.copy(_q1.multiply(_q2));
+            mesh.quaternion.copy(_q1.multiply(_q2));
             continue;
         }
-        d.mesh.visible = true;
-        const atkN = d.atkAnim / ATK_ANIM_MS, hitN = d.hitAnim / HIT_ANIM_MS;
-        const lx = Math.sin(Math.PI * atkN) * .18 - d.hitDX * .09 * hitN;
-        const lz = Math.cos(Math.PI * atkN) * .18 - d.hitDZ * .09 * hitN;
+        mesh.visible = true;
+        const { atkN, hitN } = animOf(d);
+        const lx = Math.sin(d.yaw) * Math.sin(Math.PI * atkN) * .18 - d.hitDX * .09 * hitN;
+        const lz = Math.cos(d.yaw) * Math.sin(Math.PI * atkN) * .18 - d.hitDZ * .09 * hitN;
         if (d.fixed) {
-            d.mesh.position.set(d.meshBase.x + lx, d.meshBase.y, d.meshBase.z + lz);
-            d.mesh.rotation.set(0, d.yaw, 0);
+            mesh.position.set(meshBase.x + lx, meshBase.y, meshBase.z + lz);
+            mesh.rotation.set(0, d.yaw, 0);
         } else {
-            const [ix, iz] = inward(d.x, d.z);
-            d.mesh.position.set(ix + lx, WALKWAY_H, iz + lz);
-            d.mesh.rotation.set(0, d.yaw, 0);
+            const [ix, iz] = d.zone === 'wall' ? inward(d.x, d.z) : [d.x, d.z];
+            mesh.position.set(ix + lx, d.y, iz + lz);
+            mesh.rotation.set(0, d.yaw, 0);
         }
     }
 }
@@ -783,7 +802,11 @@ function renderAssaultHud() {
     // 战损比 = 攻方阵亡 : 守方阵亡（守方为 0 时显示「∞ / -」）
     $('ratio').textContent = defLost === 0 ? '∞ / -' : `${atkLost} : ${defLost}`;
     $('elapsed').textContent = (assault.elapsedMs / 1000).toFixed(1);
-    $('verdict').textContent = assault.result === 'break' ? '攻方破寨' : assault.result === 'hold' ? '守方守住' : '进行中';
+    $('battle-phase').textContent = assault.phase;
+    $('gate-hp').textContent = `${assault.gate.hp}/${assault.gate.maxHp}`;
+    $('flag-progress').textContent = `${Math.floor(assault.flagMs / 30)}%`;
+    $('verdict').textContent = assault.result === 'break' ? '攻方拔旗破寨' : assault.result === 'hold' ?
+        (assault.retreated ? '攻方溃退' : '守方守住') : '进行中';
 }
 
 // 固定步长累加器（参考 main.js 的 accumulator 写法）：与帧率无关，纯确定性
@@ -791,27 +814,15 @@ function renderAssaultHud() {
 function updateAssault(dtSec) {
     const dtMs = dtSec * 1000;
     if (assault.active) {
-        assault.fxMs += dtMs;                            // 表现层时钟：动画只认它，不回写模拟
-        for (const u of assault.attackers) {
-            u.atkAnim = Math.max(0, u.atkAnim - dtMs); u.hitAnim = Math.max(0, u.hitAnim - dtMs);
-        }
-        for (const u of assault.defenders) {
-            u.atkAnim = Math.max(0, u.atkAnim - dtMs); u.hitAnim = Math.max(0, u.hitAnim - dtMs);
-        }
+        fxMs += dtMs;
         if (assault.result === null) {
-            // 冲车自动撞门（纯视觉）：停好就推进一轮；已破门或正在撞则等下一拍
-            if (!gateState.rammed && gateState.phase === 'idle' && assault.fxMs >= assault.nextRamAt) {
-                gateState.t = 0; gateState.rammed = false; gateState.open = 0;
-                gateState.phase = gateState.angle > .05 ? 'shut' : 'advance';
-                assault.nextRamAt = assault.fxMs + RAM_EVERY_MS;
-            }
-            assault.acc += dtMs;
+            accumulator += dtMs;
             let guard = 0;
-            while (assault.acc >= ASSAULT_STEP_MS && guard++ < 8) {
+            while (accumulator >= ASSAULT_STEP_MS && guard++ < 8) {
                 stepAssault(ASSAULT_STEP_MS);
-                assault.acc -= ASSAULT_STEP_MS;
+                accumulator -= ASSAULT_STEP_MS;
             }
-            if (guard >= 8) assault.acc = 0;
+            if (guard >= 8) accumulator = 0;
         }
         syncAssaultMeshes(); syncGuardMeshes(); renderAssaultHud();
     }
