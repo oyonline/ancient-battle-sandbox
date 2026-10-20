@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { createAssaultSim, WALL_R, MELEE_STOP_R, ASSAULT_STEP_MS as STEP, FORCE_PRESETS,
-    RAM_IMPACT_MS, FLAG_CAPTURE_MS, LADDER_QUEUE_CAPACITY, LADDER_QUEUE_SPACING, ASSAULT_COVER, TOWER_RANGE, GUARD_MELEE_CAP, wallPoint, wallParamToward,
+    RAM_IMPACT_MS, FLAG_RADIUS, FLAG_RATE, FLAG_WEIGHT, LADDER_QUEUE_CAPACITY, LADDER_QUEUE_SPACING, ASSAULT_COVER, TOWER_RANGE, GUARD_MELEE_CAP, wallPoint, wallParamToward,
     DEFAULT_TOWERS, TOWER_ARCHER_SLOTS, TOWER_ORIGIN, ATK_ANIM_MS, HIT_ANIM_MS, TENTS } from '../js/three-spike/camp-assault-sim.js';
 
 const kill = u => { u.dead = true; u.hp = 0; };
 const tick = (sim, count = 1) => { for (let i = 0; i < count; i++) sim.stepAssault(STEP); };
 const snapshot = s => ({ result: s.result, gate: { ...s.gate }, elapsedMs: s.elapsedMs,
-    flagMs: s.flagMs, retreated: s.retreated,
+    flagProgress: s.flagProgress, flagNet: s.flagNet, flagAtk: s.flagAtk, retreated: s.retreated,
     units: [...s.attackers, ...s.defenders].map(u => ({
         ...u, typeData: undefined, target: u.target?.id ?? null
     })) });
@@ -230,7 +230,7 @@ test('27 full battles plus seven balance seeds: per-frame wall/entry provenance 
             ladderRows.push({ preset, defenders: defCount, seed, wallCounts, longestStillSeconds: routeStillMs / 1000,
                 longestUnjustifiedWaitSeconds: unjustifiedWaitMs / 1000, stillPeak, waitPeak });
             if (preset === 'squad' && defCount >= 12) check(s.result === 'hold', `squad/${defCount}/${seed} holds`);
-            if (s.result === 'break') check(s.flagMs === FLAG_CAPTURE_MS, 'flag dwell');
+            if (s.result === 'break') check(s.flagProgress === 1, 'flag progress full');
             outcomes.push(`${s.result}@${(s.elapsedMs / 1000).toFixed(2)}s gate=${gateAt == null ? '—' : (gateAt / 1000).toFixed(2)} hits=${hits}`);
             if (preset === 'brigade' && defCount === 24) costs.push(cost / frames);
         }
@@ -458,15 +458,25 @@ test('wall guards respond to ladder/ram threats, return home, and nearest half o
     assert.ok(swords.filter(u => u.zone === 'inside').every(u => u.y === 0 && Math.abs(u.z - 3.8) < .1));
 });
 
-test('defender wipe does not win; uncontested 5s flag dwell wins and an interruption resets progress', () => {
+test('defender wipe alone does not win; the flag is a net-weight tug of war that freezes on parity', () => {
     const { sim, s } = isolated();
     const a = revive(s.attackers[0], 0, 1.3, 'inside'); a.enteredVia = 'gate'; s.gate.broken = true;
     s.attackers = [a];
-    tick(sim, 60); assert.equal(s.result, null); assert.ok(s.flagMs > 990);
+    assert.equal(a.type, 'infantry'); assert.equal(FLAG_WEIGHT.infantry, 10);
+    // 一名剑士(10) 独自占据旗圈：净 +10 → 每帧 +10 × FLAG_RATE / 60，从 -1 起步
+    tick(sim, 60); assert.equal(s.result, null);
+    assert.ok(Math.abs(s.flagProgress - (-1 + 10 * FLAG_RATE)) < 1e-6, `progress=${s.flagProgress}`);
+    assert.equal(s.flagAtk, 10); assert.equal(s.flagNet, 10);
+    // 对等守方剑士进圈：净 0 → 进度冻结，谁也无法推进
     const d = revive(s.defenders[0], .7, 1.3, 'inside'); d.blockX = .7; d.cd = 100000;
-    tick(sim); assert.equal(s.flagMs, 0);
-    kill(d); tick(sim, 299); assert.equal(s.result, null);
-    tick(sim, 2); assert.equal(s.result, 'break'); assert.equal(s.flagMs, FLAG_CAPTURE_MS);
+    const held = s.flagProgress;
+    tick(sim, 30); assert.equal(s.flagProgress, held); assert.equal(s.flagNet, 0); assert.equal(s.result, null);
+    // 守方阵亡 → 恢复净 +10，继续推向 +1 拔旗（有效推进 2 / (10 × FLAG_RATE) = 20 秒）
+    kill(d);
+    let guard = 0;
+    while (s.result === null && guard++ < 1300) sim.stepAssault(STEP);
+    assert.equal(s.result, 'break'); assert.equal(s.flagProgress, 1);
+    assert.ok(s.elapsedMs > 20000 && s.elapsedMs < 22000, `captured in ${(s.elapsedMs / 1000).toFixed(1)}s`);
 });
 
 test('60% casualties before breach trigger a non-attacking 3s retreat; a breached gate suppresses morale retreat', () => {
@@ -499,7 +509,11 @@ test('tower slots and animation durations have one source shared with camp.js; p
     const sim = createAssaultSim(), s = sim.startAssault();
     assert.deepEqual(s.defenders.filter(u => u.fixed).map(u => ({ x: u.x, z: u.z, yaw: u.yaw })), DEFAULT_TOWERS);
     assert.match(source, /ATK_ANIM_MS, HIT_ANIM_MS/); assert.doesNotMatch(source, /const ATK_ANIM_MS/);
-    assert.match(source, /assault\.flagMs \/ FLAG_CAPTURE_MS \* 100/);
+    assert.match(source, /Math\.floor\(\(flagP \+ 1\) \/ 2 \* 100\)/);
+    assert.match(source, /flag-fill/);
+    assert.doesNotMatch(logic, /FLAG_CAPTURE_MS|assault\.flagMs/);
+    assert.equal(FLAG_RADIUS, 3.5); assert.equal(FLAG_RATE, .01);
+    assert.deepEqual(FLAG_WEIGHT, { infantry: 10, pikeman: 7, archer: 4, cavalry: 12 });
     assert.equal(ATK_ANIM_MS, 220); assert.equal(HIT_ANIM_MS, 180);
     assert.doesNotMatch(logic, /Math\.random|Date\.|fxMs/);
     assert.doesNotMatch(source, /RAM_FIRST_MS|RAM_EVERY_MS|nextRamAt|assault\.fxMs/);

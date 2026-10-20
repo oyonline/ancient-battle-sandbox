@@ -15,6 +15,11 @@
   #battle{position:fixed;left:14px;bottom:34px;min-width:196px;color:#e8dfc8;font-size:12.5px;line-height:1.85;
        text-shadow:0 1px 2px #000;background:rgba(18,22,16,.68);border:1px solid rgba(120,120,90,.35);border-radius:8px;padding:10px 13px}
   #battle b{color:#ffd24a;font-weight:600}
+  /* 夺旗拉锯条：左半守方(红) / 右半攻方(蓝)，中线 = 0；填充从中线向当前占优方向推进 */
+  #flag-bar{position:relative;display:inline-block;width:118px;height:9px;vertical-align:middle;
+       border:1px solid rgba(120,120,90,.5);border-radius:2px;overflow:hidden;
+       background:linear-gradient(90deg,rgba(192,80,63,.55) 0%,rgba(192,80,63,.55) 49.5%,rgba(120,120,90,.6) 49.5%,rgba(120,120,90,.6) 50.5%,rgba(91,143,214,.55) 50.5%,rgba(91,143,214,.55) 100%)}
+  #flag-bar>i{position:absolute;top:0;bottom:0;left:50%;width:0;background:#ffd24a}
   #battle .b-title{font-weight:600;margin-bottom:2px}
   #battle[hidden]{display:none}
   #controls{position:fixed;top:12px;right:14px;display:flex;gap:6px}
@@ -59,7 +64,8 @@
   <div>守军编制 <b id="def-comp">-</b></div>
   <div>战损比 <b id="ratio">-</b> · 用时 <b id="elapsed">0.0</b>s</div>
   <div>阶段 <b id="battle-phase">列阵推进</b></div>
-  <div>寨门耐久 <b id="gate-hp">6/6</b> · 夺旗进度 <b id="flag-progress">0%</b></div>
+  <div>寨门耐久 <b id="gate-hp">6/6</b></div>
+  <div>夺旗进度 <span id="flag-bar"><i id="flag-fill"></i></span> <b id="flag-progress">0%</b></div>
   <div>结果 <b id="verdict">进行中</b></div>
 </div>
 <div id="hint">左键拖动旋转 · 右键拖动平移 · 滚轮缩放</div>

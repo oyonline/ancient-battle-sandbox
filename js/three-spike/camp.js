@@ -7,7 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 // 攻寨推演复用真实模拟口径：兵种数值与伤害结算、营寨守军倍率/掩体
 import { createAssaultSim, WALL_R, wallPoint, ATTACK_KINDS, slotKind, ASSAULT_STEP_MS,
-    ATK_ANIM_MS, HIT_ANIM_MS, FLAG_CAPTURE_MS, TOWER_ARCHER_SLOTS, TOWER_ORIGIN } from './camp-assault-sim.js';
+    ATK_ANIM_MS, HIT_ANIM_MS, TOWER_ARCHER_SLOTS, TOWER_ORIGIN } from './camp-assault-sim.js';
 
 // ---- 换算链：世界高度 = px / 24 × 2（Terrain.HEIGHT_SCALE = 24，spike 的 H_WORLD = 2）----
 // 兵高 ≈ 1.145 世界单位（腿 0→0.42、躯干 0.43→0.93、头到 1.145）。
@@ -804,7 +804,13 @@ function renderAssaultHud() {
     $('elapsed').textContent = (assault.elapsedMs / 1000).toFixed(1);
     $('battle-phase').textContent = assault.phase;
     $('gate-hp').textContent = `${assault.gate.hp}/${assault.gate.maxHp}`;
-    $('flag-progress').textContent = `${Math.floor(assault.flagMs / FLAG_CAPTURE_MS * 100)}%`;
+    // 夺旗进度：净权重对冲的拉锯条，-1（守方完全掌控）→ 0（中线）→ +1（拔旗）。
+    // 数字显示攻方接管百分比 0% → 100%；条内填充从中线朝当前占优方向推进。
+    const flagP = assault.flagProgress;
+    $('flag-progress').textContent = `${Math.floor((flagP + 1) / 2 * 100)}%`;
+    const fill = $('flag-fill'), reach = Math.abs(flagP) * 50;
+    fill.style.width = `${reach}%`;
+    fill.style.left = `${flagP >= 0 ? 50 : 50 - reach}%`;
     $('verdict').textContent = assault.result === 'break' ? '攻方拔旗破寨' : assault.result === 'hold' ?
         (assault.retreated ? '攻方溃退' : '守方守住') : '进行中';
 }

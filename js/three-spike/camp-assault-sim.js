@@ -6,9 +6,18 @@ export const ATK_ANIM_MS = 220, HIT_ANIM_MS = 180;
 export const ATTACK_KINDS = ['infantry', 'pikeman', 'archer'];
 export const DEF_COUNTS = [6, 12, 24];
 export const slotKind = i => i % 3 === 2 ? 'archer' : 'infantry';
+// 箭塔弓手槽位：四面垛口各面分配，6 名弓手（塔在 -z 后墙，前垛口朝寨内不放）
+// 平台半宽 pt=1.36/2=0.68，垛口在 ry=0.64，弓手站在垛口内侧 ~0.42 处
+// yaw 朝向各自垛口外侧：-z=0, +z=π, -x=-π/2, +x=π/2
 export const TOWER_ORIGIN = { x: 0, z: -3.3 };
-export const TOWER_ARCHER_SLOTS = [-.176, .176].flatMap(z =>
-    [-.336, 0, .336].map(x => ({ x, z, yaw: Math.PI / 2 })));
+export const TOWER_ARCHER_SLOTS = [
+    { x: -.35, z: -.42, yaw: 0 },       // 后垛口（朝 -z 寨外）
+    { x:  .35, z: -.42, yaw: 0 },
+    { x: -.42, z: -.25, yaw: -Math.PI / 2 }, // 左垛口（朝 -x）
+    { x: -.42, z:  .25, yaw: -Math.PI / 2 },
+    { x:  .42, z: -.25, yaw:  Math.PI / 2 }, // 右垛口（朝 +x）
+    { x:  .42, z:  .25, yaw:  Math.PI / 2 },
+];
 export const DEFAULT_TOWERS = TOWER_ARCHER_SLOTS.map(p =>
     ({ ...p, x: TOWER_ORIGIN.x + p.x, z: TOWER_ORIGIN.z + p.z }));
 export const LADDERS = [{ x: -5.62, z: -1.2, topX: -5 }, { x: 5.62, z: 1.2, topX: 5 }];
@@ -34,7 +43,9 @@ export const RETREAT_SURVIVOR_FRACTION = .335;
 export const RETREAT_RESERVE = 18;
 export const RETREAT_MAX_RESERVE_FRACTION = .5;
 export const RAM_IMPACT_MS = 2200;
-export const FLAG_CAPTURE_MS = 5000;
+export const FLAG_RADIUS = 3.5;                    // 旗心判定半径：净权重对冲的参与圈（寨内 10 格宽，取中军大帐外半圈）
+export const FLAG_RATE = 0.01;                     // 拉锯速度：净占领力 10 → 每秒 0.1 进度（沿用 2D updateFlags 的 RATE）
+export const FLAG_WEIGHT = { infantry: 10, pikeman: 7, archer: 4, cavalry: 12 }; // 兵种占领力，对齐 2D POWER 表
 export const LADDER_QUEUE_CAPACITY = 8;
 export const LADDER_QUEUE_SPACING = .48;
 export const ASSAULT_STEP_MS = 1000 / 60;          // 固定步长 1/60 秒
@@ -71,7 +82,7 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
     const emit = (type, details = {}) => assault.events.push({ type, at: assault.elapsedMs, ...details });
     function resetAssault() {
         Object.assign(assault, { active: false, attackers: [], defenders: [], formations: [], events: [],
-            acc: 0, elapsedMs: 0, result: null, phase: '列阵推进', flagMs: 0, retreatMs: 0,
+            acc: 0, elapsedMs: 0, result: null, phase: '列阵推进', flagProgress: -1, flagNet: 0, flagAtk: 0, retreatMs: 0,
             retreated: false, holdReason: null, gate: { hp: 6, maxHp: 6, broken: false },
             ram: { x: 0, z: 8.2, hp: Infinity, crew: [], state: 'waiting', waitingMs: 0, cooldown: RAM_IMPACT_MS },
             ladders: LADDERS.map(p => ({ ...p, climber: null, queue: [], waiters: [],
@@ -499,20 +510,33 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
             if (u.cd <= 0) strike(u, target);
         }
     }
+    // 净权重对冲夺旗（对齐 2D updateFlags）：旗心半径内按兵种占领力累加，
+    // 净力决定进度方向与速度；不计阵亡、箭塔守军（u.fixed）、冲车推车兵。
+    function flagPower(u) {
+        if (u.dead || u.crew || u.fixed) return 0;
+        return Math.hypot(u.x, u.z) > FLAG_RADIUS ? 0 : (FLAG_WEIGHT[u.type] ?? 5);
+    }
+    function updateFlag(ms) {
+        let atk = 0, def = 0;
+        for (const u of assault.attackers) atk += flagPower(u);
+        for (const u of assault.defenders) def += flagPower(u);
+        assault.flagAtk = atk; assault.flagNet = atk - def;
+        if (assault.flagNet !== 0)
+            assault.flagProgress = Math.max(-1, Math.min(1,
+                assault.flagProgress + assault.flagNet * FLAG_RATE * (ms / 1000)));
+    }
     function updateVictory(ms) {
         const living = assault.attackers.filter(u => !u.dead);
         if (!living.length) { assault.result = 'hold'; return; }
-        const flag = living.some(u => u.zone === 'inside' && Math.hypot(u.x, u.z) <= 1.6);
-        const contested = assault.defenders.some(u => !u.dead && Math.hypot(u.x, u.z) <= 1.6);
-        assault.flagMs = flag && !contested ? assault.flagMs + ms : 0;
-        if (assault.flagMs >= FLAG_CAPTURE_MS) { assault.flagMs = FLAG_CAPTURE_MS; assault.result = 'break'; emit('flag_captured'); return; }
+        updateFlag(ms);
+        if (assault.flagProgress >= 1) { assault.flagProgress = 1; assault.result = 'break'; emit('flag_captured'); return; }
         // A small assault preserves a withdrawal reserve; larger formations can absorb
         // proportionally more losses before giving up a still-closed gate.
         const retreatAt = Math.max(Math.min(RETREAT_RESERVE, assault.attackers.length * RETREAT_MAX_RESERVE_FRACTION),
             assault.attackers.length * RETREAT_SURVIVOR_FRACTION);
         if (living.length <= retreatAt && !assault.gate.broken &&
             !living.some(u => u.zone === 'wall' || u.zone === 'inside')) {
-            assault.retreated = true; assault.retreatMs = 0; assault.flagMs = 0;
+            assault.retreated = true; assault.retreatMs = 0; assault.flagProgress = -1; assault.flagNet = 0; assault.flagAtk = 0;
             updateLadderQueues(); emit('retreat');
         }
     }
@@ -547,7 +571,8 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         fight(assault.attackers, assault.defenders, ms); fight(assault.defenders, assault.attackers, ms);
         updateVictory(ms);
         limitDuration();
-        assault.phase = assault.retreated ? '溃退' : assault.flagMs > 0 ? '夺旗中' : assault.gate.broken ? '破门涌入' :
+        assault.phase = assault.retreated ? '溃退' : assault.flagAtk > 0 || assault.flagProgress > -1 ? '夺旗中' :
+            assault.gate.broken ? '破门涌入' :
             assault.ladders.some(l => l.climber && !l.climber.dead) ? '登城' :
                 assault.ram.state === 'hitting' ? '撞门' : '列阵推进';
         return assault.events;
