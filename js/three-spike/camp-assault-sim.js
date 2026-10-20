@@ -27,8 +27,16 @@ export function mulberry32(seed) {
 export const MELEE_STOP_R = WALL_R + 0.4;          // 近战迫近停步圈（切比雪夫 = 5.4）：不得穿墙
 export const ARCHER_STOP_R = 7.5;                  // 弓手停步半径（欧氏 = 7.5），用 range 9.5 远程射
 export const GUARD_MELEE_CAP = 2;                  // 一个垛口同时最多被 2 名近战攻方贴身（窄墙头挤不下第三人）
+export const GATE_BLOCKER_ATTACK = 1.20;           // 破门后堵门守军在原驻军攻击加成上的近战加成
 export const ASSAULT_COVER = 0.4;                  // 演示口径：守军受伤系数（真规则 0.7；栅栏+踩台实战遮蔽更强）
 export const TOWER_RANGE = 12;                     // 箭塔弓手射程加成：居高远射覆盖全场（基础 9.5 只够半场）
+export const RETREAT_SURVIVOR_FRACTION = .335;
+export const RETREAT_RESERVE = 18;
+export const RETREAT_MAX_RESERVE_FRACTION = .5;
+export const RAM_IMPACT_MS = 2200;
+export const FLAG_CAPTURE_MS = 5000;
+export const LADDER_QUEUE_CAPACITY = 8;
+export const LADDER_QUEUE_SPACING = .48;
 export const ASSAULT_STEP_MS = 1000 / 60;          // 固定步长 1/60 秒
 export const FORCE_PRESETS = {                     // 攻方兵力预设；守军数量走 DEF_COUNTS，编制见 slotKind
     squad:   { infantry: 24, pikeman: 6,  archer: 8  },
@@ -65,8 +73,9 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         Object.assign(assault, { active: false, attackers: [], defenders: [], formations: [], events: [],
             acc: 0, elapsedMs: 0, result: null, phase: '列阵推进', flagMs: 0, retreatMs: 0,
             retreated: false, holdReason: null, gate: { hp: 6, maxHp: 6, broken: false },
-            ram: { x: 0, z: 8.2, hp: Infinity, crew: [], state: 'waiting', waitingMs: 0, cooldown: 2200 },
-            ladders: LADDERS.map(p => ({ ...p, climber: null })) });
+            ram: { x: 0, z: 8.2, hp: Infinity, crew: [], state: 'waiting', waitingMs: 0, cooldown: RAM_IMPACT_MS },
+            ladders: LADDERS.map(p => ({ ...p, climber: null, queue: [], waiters: [],
+                slots: Array.from({ length: LADDER_QUEUE_CAPACITY }, (_, i) => ({ x: p.x, z: p.z + i * LADDER_QUEUE_SPACING })) })) });
         nextId = 0;
     }
     function makeUnit(team, type, x, z, yaw) {
@@ -132,6 +141,7 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
             u.waitSide = u.x < 0 ? -1 : 1; u.gateSlot = gateSlots[u.waitSide]++;
         });
         const n = DEF_COUNTS.includes(defCount) ? defCount : 6;
+        assault.gate.hp = assault.gate.maxHp = { 6: 6, 12: 9, 24: 12 }[n];
         for (let i = 0; i < n; i++) {
             const t = i * 8 * WALL_R / n, [x, z] = wallPoint(t);
             assault.defenders.push({ ...makeUnit('red', slotKind(i), x, z, Math.atan2(x, z)),
@@ -270,7 +280,7 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         r.state = 'hitting'; r.cooldown -= dt * 1000;
         if (r.cooldown <= 0) {
             assault.gate.hp--; emit('ram_hit', { hp: assault.gate.hp });
-            r.cooldown = 2200 * randomBetween(.9, 1.1);
+            r.cooldown = RAM_IMPACT_MS * randomBetween(.9, 1.1);
             if (assault.gate.hp === 0) breakGate();
         }
     }
@@ -315,10 +325,41 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
             return;
         }
         if (typeof u.route === 'number' && !assault.gate.broken) {
-            const l = assault.ladders[u.route];
-            const side = Math.sign(l.x);
-            // Leave the gate's waiting ranks before crossing the front face. Keep the
-            // waypoint stage so separation cannot repeatedly send us back to the front.
+            const l = assault.ladders[u.route], side = Math.sign(l.x);
+            let members = [...l.queue, ...l.waiters];
+            let index = members.indexOf(u);
+            if (index < 0 && u.x * side >= MELEE_STOP_R && u.x * side <= 8 && u.z <= 7.7) {
+                (l.queue.length < LADDER_QUEUE_CAPACITY ? l.queue : l.waiters).push(u);
+                members = [...l.queue, ...l.waiters]; index = members.length - 1;
+            }
+            if (index >= 0) {
+                const target = ladderSlot(l, index);
+                if (distance(u, target) < .04) u.queueAligned = true;
+                const waypoint = !u.queueAligned && Math.abs(u.z - target.z) > .04 ?
+                    { x: l.x + side * .85, z: target.z } : target;
+                const obstacles = [...members.filter(v => v !== u), l.climber].filter(v => v && !v.dead);
+                const climbPathDistance = p => Math.hypot(p.x - Math.max(Math.min(l.x, l.topX),
+                    Math.min(Math.max(l.x, l.topX), p.x)), p.z - l.z);
+                const angle = Math.atan2(waypoint.z - u.z, waypoint.x - u.x);
+                // Reserved members steer themselves to their slots; separation treats them
+                // as fixed points. Deterministic headings prevent approach lanes crossing.
+                const candidates = [0, .5, -.5, 1, -1, 1.5, -1.5, 2, -2, Math.PI]
+                    .map(turn => ({ x: u.x + Math.cos(angle + turn) * Math.min(step, distance(u, waypoint)),
+                        z: u.z + Math.sin(angle + turn) * Math.min(step, distance(u, waypoint)) }))
+                    .filter(p => p.x * side >= MELEE_STOP_R && obstacles.every(v => distance(p, v) >= .32 - 1e-9) &&
+                        (index === 0 && !l.climber || climbPathDistance(p) >= .32));
+                candidates.sort((a, b) => distance(a, waypoint) - distance(b, waypoint));
+                if (candidates.length) {
+                    const p = candidates[0]; u.yaw = Math.atan2(p.x - u.x, p.z - u.z); u.x = p.x; u.z = p.z;
+                }
+                if (index === 0 && !l.climber && distance(u, l) < .04 && obstacles.every(v => climbPathDistance(v) >= .32)) {
+                    l.queue.shift();
+                    if (l.waiters.length) l.queue.push(l.waiters.shift());
+                    l.climber = u; changeZone(u, 'ladder'); u.climbMs = 0;
+                    u.x = l.x; u.z = l.z;
+                }
+                return;
+            }
             if (!u.ladderApproach && u.z >= MELEE_STOP_R && u.x * side < MELEE_STOP_R)
                 u.ladderApproach = 'outward';
             if (u.ladderApproach === 'outward' && u.z >= 7.6) u.ladderApproach = 'corner';
@@ -329,10 +370,8 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
             if (u.ladderApproach === 'corner') {
                 outsideMove(u, side * 7.2, 7.65, step); return;
             }
-            if (l.climber?.dead) l.climber = null;
-            if (!l.climber && distance(u, l) < .32) {
-                l.climber = u; changeZone(u, 'ladder'); u.climbMs = 0; u.x = l.x; u.z = l.z;
-            } else outsideMove(u, l.x + (l.climber ? Math.sign(l.x) * .5 : 0), l.z, step);
+            const target = ladderSlot(l, members.length);
+            outsideMove(u, l.x + side * .85, target.z, step);
             return;
         }
         // A broken gate is the only ground-level transition. Enter at the mouth, never through a wall.
@@ -344,6 +383,23 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         const waitX = (u.waitSide ?? (u.x < 0 ? -1 : 1)) * (1.2 + slot % 4 * .56);
         const waitZ = 5.75 + Math.floor(slot / 4) * .56;
         outsideMove(u, assault.gate.broken ? lane : waitX, assault.gate.broken ? 5.4 : waitZ, step);
+    }
+    function ladderSlot(l, index) {
+        return l.slots[index] ?? { x: l.x, z: l.z + index * LADDER_QUEUE_SPACING };
+    }
+    function inLadderQueue(u) {
+        const l = assault.ladders[u.route];
+        return l && (l.queue.includes(u) || l.waiters.includes(u));
+    }
+    function updateLadderQueues() {
+        for (const [route, l] of assault.ladders.entries()) {
+            if (l.climber?.dead || assault.retreated) l.climber = null;
+            const valid = u => !u.dead && !u.crew && u.zone === 'outside' && u.route === route &&
+                !assault.gate.broken && !assault.retreated;
+            const members = [...l.queue, ...l.waiters].filter(valid);
+            l.queue = members.slice(0, LADDER_QUEUE_CAPACITY);
+            l.waiters = members.slice(LADDER_QUEUE_CAPACITY);
+        }
     }
     function separateAttackers(units) {
         const traveling = u => !assault.gate.broken && u.zone === 'outside' && !u.crew &&
@@ -359,8 +415,8 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
                 const sq = dx * dx + dz * dz;
                 if (sq >= .48 * .48) continue;
                 overlaps = true;
-                const fixedA = a.zone === 'ladder' || a.zone === 'wall' || (a.crew && !b.crew);
-                const fixedB = b.zone === 'ladder' || b.zone === 'wall' || (b.crew && !a.crew);
+                const fixedA = a.zone === 'ladder' || a.zone === 'wall' || inLadderQueue(a) || (a.crew && !b.crew);
+                const fixedB = b.zone === 'ladder' || b.zone === 'wall' || inLadderQueue(b) || (b.crew && !a.crew);
                 if (fixedA && fixedB) continue;
                 let d = Math.sqrt(sq);
                 if (d < 1e-9) { dx = 1; dz = 0; d = 1; }
@@ -378,11 +434,11 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         // Projection against two perpendicular obstacles can trap a residual overlap. Resolve only
         // those cases against the already placed units; immutable ladder occupants go first.
         const ordered = [...units].sort((a, b) =>
-            Number(b.zone === 'ladder' || b.zone === 'wall') - Number(a.zone === 'ladder' || a.zone === 'wall'));
+            Number(b.zone === 'ladder' || b.zone === 'wall' || inLadderQueue(b)) - Number(a.zone === 'ladder' || a.zone === 'wall' || inLadderQueue(a)));
         const placed = [];
         for (const u of ordered) {
             const clear = () => placed.every(v => (u.x - v.x) ** 2 + (u.z - v.z) ** 2 >= .32 ** 2);
-            if (!clear() && u.zone !== 'ladder' && u.zone !== 'wall') {
+            if (!clear() && u.zone !== 'ladder' && u.zone !== 'wall' && !inLadderQueue(u)) {
                 const x = u.x, z = u.z;
                 let found = false;
                 for (let ring = 1; ring <= 32 && !found; ring++) for (let i = 0; i < 16; i++) {
@@ -418,7 +474,8 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         }
     }
     function strike(from, to) {
-        const multiplier = from.team === 'red' && from.zone !== 'inside' ? CAMP_RULES.WALL_GUARD_ATTACK : 1;
+        const multiplier = from.team === 'red' ? CAMP_RULES.WALL_GUARD_ATTACK *
+            (from.zone === 'inside' ? GATE_BLOCKER_ATTACK : 1) : 1;
         const cover = to.zone === 'wall' || to.fixed ? ASSAULT_COVER : 1;
         const damage = Math.max(1, Math.floor(calculateAttackDamage(from, to, { multiplier }) * cover));
         to.hp = Math.max(0, to.hp - damage); to.hitAt = assault.elapsedMs;
@@ -448,10 +505,15 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         const flag = living.some(u => u.zone === 'inside' && Math.hypot(u.x, u.z) <= 1.6);
         const contested = assault.defenders.some(u => !u.dead && Math.hypot(u.x, u.z) <= 1.6);
         assault.flagMs = flag && !contested ? assault.flagMs + ms : 0;
-        if (assault.flagMs >= 3000) { assault.flagMs = 3000; assault.result = 'break'; emit('flag_captured'); return; }
-        if (living.length <= assault.attackers.length * .4 && !assault.gate.broken &&
+        if (assault.flagMs >= FLAG_CAPTURE_MS) { assault.flagMs = FLAG_CAPTURE_MS; assault.result = 'break'; emit('flag_captured'); return; }
+        // A small assault preserves a withdrawal reserve; larger formations can absorb
+        // proportionally more losses before giving up a still-closed gate.
+        const retreatAt = Math.max(Math.min(RETREAT_RESERVE, assault.attackers.length * RETREAT_MAX_RESERVE_FRACTION),
+            assault.attackers.length * RETREAT_SURVIVOR_FRACTION);
+        if (living.length <= retreatAt && !assault.gate.broken &&
             !living.some(u => u.zone === 'wall' || u.zone === 'inside')) {
-            assault.retreated = true; assault.retreatMs = 0; assault.flagMs = 0; emit('retreat');
+            assault.retreated = true; assault.retreatMs = 0; assault.flagMs = 0;
+            updateLadderQueues(); emit('retreat');
         }
     }
     // One call is exactly one logical tick. Frame accumulation belongs to the presentation layer.
@@ -460,6 +522,7 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         if (!assault.active || assault.result !== null) return [];
         assault.events = []; assault.elapsedMs += ms;
         const dt = ms / 1000;
+        updateLadderQueues();
         if (assault.retreated) {
             for (const u of assault.attackers) if (!u.dead) {
                 if (u.zone === 'ladder') {
@@ -477,7 +540,7 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
             limitDuration();
             assault.phase = '溃退'; return assault.events;
         }
-        advanceFormations(dt); updateRam(dt);
+        advanceFormations(dt); updateRam(dt); updateLadderQueues();
         for (const u of assault.attackers) if (!u.dead) advanceAttacker(u, dt);
         separateAttackers(assault.attackers.filter(u => !u.dead));
         updateDefenders(dt);

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { createAssaultSim, WALL_R, MELEE_STOP_R, ASSAULT_STEP_MS as STEP, FORCE_PRESETS,
-    ASSAULT_COVER, TOWER_RANGE, GUARD_MELEE_CAP, wallPoint, wallParamToward,
+    RAM_IMPACT_MS, FLAG_CAPTURE_MS, LADDER_QUEUE_CAPACITY, LADDER_QUEUE_SPACING, ASSAULT_COVER, TOWER_RANGE, GUARD_MELEE_CAP, wallPoint, wallParamToward,
     DEFAULT_TOWERS, TOWER_ARCHER_SLOTS, TOWER_ORIGIN, ATK_ANIM_MS, HIT_ANIM_MS, TENTS } from '../js/three-spike/camp-assault-sim.js';
 
 const kill = u => { u.dead = true; u.hp = 0; };
@@ -31,33 +31,75 @@ function revive(u, x, z, zone = 'outside') {
 }
 
 function ladderQueues(s) {
-    return s.ladders.map((ladder, route) => s.attackers
-        .filter(u => !u.dead && !u.crew && u.zone === 'outside' && u.route === route)
-        .map(u => ({ u, distance: Math.hypot(u.x - ladder.x, u.z - ladder.z) }))
-        .sort((a, b) => a.distance - b.distance || a.u.id - b.u.id));
+    return s.ladders.map(l => [...l.queue, ...l.waiters]);
 }
 function isQueued(s, u, queues) {
-    const queue = queues[u.route], entry = queue.find(a => a.u === u);
-    const ahead = queue.filter(a => a.distance < entry.distance);
-    const previous = ahead.at(-1)?.u ?? s.ladders[u.route].climber;
-    return (ahead.length > 0 || s.ladders[u.route].climber != null) && previous != null &&
-        Math.hypot(u.x - previous.x, u.z - previous.z) <= 1.2;
+    const l = s.ladders[u.route], queue = queues[u.route];
+    const index = queue.indexOf(u);
+    if (index < 0) return false;
+    const previous = queue[index - 1] ?? l.climber;
+    if (!previous || previous.dead) return false;
+    const target = l.slots[index] ?? { x: l.x, z: l.z + index * LADDER_QUEUE_SPACING };
+    const atSlot = Math.hypot(u.x - target.x, u.z - target.z) <= .06;
+    const distance = Math.hypot(u.x - target.x, u.z - target.z);
+    const step = Math.min(.05, distance), k = distance > 0 ? step / distance : 0;
+    const next = { x: u.x + (target.x - u.x) * k, z: u.z + (target.z - u.z) * k };
+    const blocked = [...queue.filter(v => v !== u), l.climber].some(v => v && !v.dead &&
+        Math.hypot(next.x - v.x, next.z - v.z) < .32);
+    const pathX = Math.max(Math.min(l.x, l.topX), Math.min(Math.max(l.x, l.topX), u.x));
+    const occupiedClimbPath = index === 0 && l.climber &&
+        Math.hypot(u.x - pathX, u.z - l.z) <= .4;
+    return atSlot || blocked || Boolean(occupiedClimbPath);
 }
 
-test('ladder waiting follows the previous queue member, including tails beyond 1m; isolated foot waits count', () => {
-    const front = { id: 1, x: -6.12, z: -1.2, zone: 'outside', route: 0 };
-    const tail = { ...front, id: 2, x: -7.2 };
-    const detached = { ...front, id: 3, x: -9 };
-    const s = { ladders: [{ x: -5.62, z: -1.2, climber: null }], attackers: [front, tail, detached] };
-    assert.equal(isQueued(s, front, ladderQueues(s)), false, 'no reason to wait at an empty foot');
-    assert.equal(isQueued(s, tail, ladderQueues(s)), true, 'connected tail is over 1m from the foot');
-    assert.equal(isQueued(s, detached, ladderQueues(s)), false, 'ahead alone does not excuse a detached unit');
-    s.ladders[0].climber = { x: -5.2, z: -1.2 };
-    assert.equal(isQueued(s, front, ladderQueues(s)), true);
-    front.dead = true;
-    assert.equal(isQueued(s, tail, ladderQueues(s)), false, 'dead predecessor breaks the chain');
-    front.dead = false; front.crew = true;
-    assert.equal(isQueued(s, tail, ladderQueues(s)), false, 'crew cannot be a predecessor');
+test('explicit ladder slots follow the previous member and recognize overflow-tail waits', () => {
+    const { sim, s } = isolated();
+    const l = s.ladders[0];
+    const units = s.attackers.filter(u => u.type !== 'archer').slice(0, LADDER_QUEUE_CAPACITY + 2);
+    units.forEach((u, i) => { revive(u, l.x, l.z + i * LADDER_QUEUE_SPACING); u.route = 0; u.cd = 100000; });
+    s.attackers = units;
+    l.queue = units.slice(0, LADDER_QUEUE_CAPACITY); l.waiters = units.slice(LADDER_QUEUE_CAPACITY);
+    assert.equal(isQueued(s, units[0], ladderQueues(s)), false, 'empty foot must advance');
+    assert.equal(isQueued(s, units.at(-1), ladderQueues(s)), true, 'overflow waits behind its predecessor');
+    const frontPosition = { x: units[0].x, z: units[0].z };
+    Object.assign(units[0], { x: l.x + .2, z: l.z + .325 });
+    l.climber = { dead: false, x: l.topX, z: l.z };
+    assert.equal(isQueued(s, units[0], ladderQueues(s)), true, 'an occupied full climb path keeps its safety margin at the foot');
+    Object.assign(units[0], frontPosition); l.climber = null;
+    const tail = units.at(-1), saved = { x: tail.x, z: tail.z };
+    tail.x -= 3; tail.z += 3;
+    assert.equal(isQueued(s, tail, ladderQueues(s)), false, 'a detached reservation with a clear path cannot excuse waiting');
+    Object.assign(tail, saved);
+    for (const [i, slot] of l.slots.entries()) {
+        assert.ok(Math.max(Math.abs(slot.x), Math.abs(slot.z)) >= MELEE_STOP_R);
+        assert.ok(Math.abs(slot.x) >= .78);
+        if (i) assert.ok(Math.hypot(slot.x - l.slots[i - 1].x, slot.z - l.slots[i - 1].z) >= .3);
+    }
+    const oldZ = units[1].z;
+    tick(sim, 12);
+    assert.equal(units[0].zone, 'ladder');
+    assert.ok(units[1].z < oldZ, 'successor advances toward the freed slot');
+    assert.equal(l.queue[0], units[1]);
+    assert.equal(l.queue.length, LADDER_QUEUE_CAPACITY);
+    assert.equal(l.waiters.length, 1);
+    kill(units[1]); units[2].route = 'gate';
+    tick(sim);
+    assert.equal(l.queue[0], units[3], 'death and route changes release slots');
+    s.retreated = true; tick(sim);
+    assert.equal(l.climber, null); assert.deepEqual(l.queue, []); assert.deepEqual(l.waiters, []);
+});
+
+test('ladder claims preserve arrival order when a lower-id soldier arrives later', () => {
+    const { sim, s } = isolated(), l = s.ladders[0];
+    const [later, first] = s.attackers.filter(u => u.type === 'infantry');
+    revive(first, l.x - .85, l.z); first.route = 0;
+    revive(later, l.x - 4, l.z); later.route = 0;
+    s.attackers = [later, first];
+    l.climber = { dead: false, x: l.topX, z: l.z, zone: 'wall' };
+    tick(sim);
+    assert.equal(l.queue[0], first);
+    tick(sim, 120);
+    assert.deepEqual(l.queue, [first, later]);
 });
 
 test('seeded full battles reproduce every final unit field, result and gate hp; restart resets PRNG', () => {
@@ -74,8 +116,7 @@ test('seeded full battles reproduce every final unit field, result and gate hp; 
     a.resetAssault(); assert.equal(a.assault.active, false); assert.equal(a.assault.attackers.length, 0);
 });
 
-test('27 full battles: per-frame wall/entry provenance and no sword damage across walls; sampled separation and cost', t => {
-    // 已知问题放宽：梯子排队目前靠单兵分离推挤，brigade 档梯脚可能堵 3~5s，个别局单架梯子 0 登城；暂放宽等待阈值并改验合计登城，后续计划改为沿墙显式队列槽位。
+test('27 full battles plus seven balance seeds: per-frame wall/entry provenance and no sword damage across walls; sampled separation and cost', t => {
     let totalIllegalDamage = 0, minDistance = Infinity, timeouts = 0, ladderEntries = 0, gateEntries = 0, fallbackHolds = 0;
     let wallMeleeHits = 0, longestStillMs = 0, longestUnjustifiedWaitMs = 0;
     const ladderRows = [], violations = [], id15Trace = [];
@@ -83,12 +124,14 @@ test('27 full battles: per-frame wall/entry provenance and no sword damage acros
     // Finish the matrix and print its diagnostics even when an invariant fails.
     const check = (condition, message) => { if (!condition && violations.length < 20) violations.push(message); };
     const rows = [], costs = [];
+    let company24Wins = 0;
     for (const preset of Object.keys(FORCE_PRESETS)) for (const defCount of [6, 12, 24]) {
         const outcomes = [];
-        for (const seed of [1, 2, 3]) {
+        const seeds = preset === 'company' && defCount === 24 ? Array.from({ length: 10 }, (_, i) => i + 1) : [1, 2, 3];
+        for (const seed of seeds) {
             const sim = createAssaultSim(), s = sim.startAssault(preset, defCount, seed);
             const climbed = new Set(), reachedWall = new Set(), entered = new Map();
-            let frames = 0, cost = 0, hits = 0;
+            let frames = 0, cost = 0, hits = 0, gateAt = null;
             const wallCounts = [0, 0], stationary = new Map(), unjustifiedWait = new Map();
             let routeStillMs = 0, unjustifiedWaitMs = 0;
             let stillPeak = null, waitPeak = null;
@@ -106,9 +149,10 @@ test('27 full battles: per-frame wall/entry provenance and no sword damage acros
                 const events = sim.stepAssault(STEP);
                 cost += performance.now() - started;
                 for (const e of events) {
+                    if (e.type === 'gate_broken') gateAt = e.at;
                     if (e.type === 'ram_hit') {
-                        hits++; check(e.hp === 6 - hits, 'ram hp / impact count');
-                        check(s.gate.broken === (hits === 6), 'ram breach / impact count');
+                        hits++; check(e.hp === s.gate.maxHp - hits, 'ram hp / impact count');
+                        check(s.gate.broken === (hits === s.gate.maxHp), 'ram breach / impact count');
                     }
                     if (preset === 'company' && defCount === 12 && seed === 1 && e.type === 'attack' &&
                         e.from.team === 'red' && e.from.type === 'infantry' && e.fromZone === 'wall' && e.toZone === 'outside') wallMeleeHits++;
@@ -185,17 +229,20 @@ test('27 full battles: per-frame wall/entry provenance and no sword damage acros
             longestUnjustifiedWaitMs = Math.max(longestUnjustifiedWaitMs, unjustifiedWaitMs);
             ladderRows.push({ preset, defenders: defCount, seed, wallCounts, longestStillSeconds: routeStillMs / 1000,
                 longestUnjustifiedWaitSeconds: unjustifiedWaitMs / 1000, stillPeak, waitPeak });
-            if (preset === 'squad' && defCount === 24) check(s.result === 'hold', 'squad/24 holds');
-            if (s.result === 'break') check(s.flagMs === 3000, 'flag dwell');
-            outcomes.push(`${s.result}@${(s.elapsedMs / 1000).toFixed(2)}s`);
+            if (preset === 'squad' && defCount >= 12) check(s.result === 'hold', `squad/${defCount}/${seed} holds`);
+            if (s.result === 'break') check(s.flagMs === FLAG_CAPTURE_MS, 'flag dwell');
+            outcomes.push(`${s.result}@${(s.elapsedMs / 1000).toFixed(2)}s gate=${gateAt == null ? '—' : (gateAt / 1000).toFixed(2)} hits=${hits}`);
             if (preset === 'brigade' && defCount === 24) costs.push(cost / frames);
+        }
+        if (preset === 'company' && defCount === 24) {
+            company24Wins = outcomes.filter(o => o.startsWith('break')).length;
         }
         rows.push({ preset, defenders: defCount, outcomes });
     }
     for (const row of ladderRows) t.diagnostic(JSON.stringify(row));
     for (const row of rows) t.diagnostic(JSON.stringify(row));
     t.diagnostic(JSON.stringify({ id15FootAt, id15ClimbAt, id15Trace }));
-    t.diagnostic(JSON.stringify({ battles: 27, timeouts, totalIllegalDamage, minDistance, gateEntries, ladderEntries,
+    t.diagnostic(JSON.stringify({ battles: 34, company24Wins, timeouts, totalIllegalDamage, minDistance, gateEntries, ladderEntries,
         fallbackHolds, wallMeleeHits, longestStillSeconds: longestStillMs / 1000,
         longestUnjustifiedWaitSeconds: longestUnjustifiedWaitMs / 1000,
         brigade24MeanStepMs: costs, worstMeanStepMs: Math.max(...costs), violations }));
@@ -205,11 +252,27 @@ test('27 full battles: per-frame wall/entry provenance and no sword damage acros
     assert.ok(ladderEntries > 0); assert.ok(gateEntries > 0);
     assert.equal(fallbackHolds, 0);
     assert.ok(wallMeleeHits > 0);
-    assert.ok([0, 1].every(route => ladderRows.reduce((sum, row) => sum + row.wallCounts[route], 0) > 0), '27 battles: west and east ladder total entries each > 0');
-    assert.ok(longestStillMs < 6000, `outside ladder route stationary=${longestStillMs / 1000}s；已知问题：梯脚排队拥堵，阈值暂放宽到 6s`);
-    assert.ok(longestUnjustifiedWaitMs < 6000, `unjustified ladder foot wait=${longestUnjustifiedWaitMs / 1000}s；已知问题：梯脚排队拥堵，阈值暂放宽到 6s`);
-    // 已知问题：梯脚排队拥堵时 id 15 可能停在队尾进不了梯脚 1m；这里只守住"不再被门前人群困住、能绕到西侧墙面"
-    assert.ok(id15Trace.some(p => p.x <= -MELEE_STOP_R), 'brigade/12/3 id 15 escapes the gate crowd to the west face');
+    for (const row of ladderRows.filter(r => ['company', 'brigade'].includes(r.preset) && r.defenders === 12))
+        assert.ok(row.wallCounts.every(n => n > 0), `${row.preset}/12/${row.seed}: both ladders reach the wall`);
+    assert.ok(longestStillMs < 3000, `outside ladder route stationary=${longestStillMs / 1000}s`);
+    assert.ok(longestUnjustifiedWaitMs < 3000, `unjustified ladder foot wait=${longestUnjustifiedWaitMs / 1000}s`);
+    assert.ok(id15Trace.some(p => p.x <= -MELEE_STOP_R), 'brigade/12/3 id 15 reaches the west face');
+    assert.ok(company24Wins >= 4 && company24Wins <= 6, `company/24 seeds1..10 break=${company24Wins}`);
+});
+
+test('queued soldiers reserve the full moving climber path: every-frame separation in company/12/3', () => {
+    const sim = createAssaultSim(), s = sim.startAssault('company', 12, 3);
+    let minDistance = Infinity;
+    while (s.result === null) {
+        sim.stepAssault(STEP);
+        const alive = s.attackers.filter(u => !u.dead);
+        for (let i = 0; i < alive.length; i++) for (let j = i + 1; j < alive.length; j++) {
+            const d = Math.hypot(alive[i].x - alive[j].x, alive[i].z - alive[j].z);
+            minDistance = Math.min(minDistance, d);
+            assert.ok(d >= .3 - 1e-9, `at=${s.elapsedMs} ids=${alive[i].id}/${alive[j].id} distance=${d}`);
+        }
+    }
+    assert.ok(minDistance >= .3);
 });
 
 test('directional formations retain ordered ranks, staggered departures, initial spacing and randomized phase', () => {
@@ -285,13 +348,14 @@ test('reset clears gate, ram, ladder occupancy and all unit zones; restart recre
     const sim = createAssaultSim(), s = sim.startAssault('company', 12, 1);
     s.gate.hp = 0; s.gate.broken = true; s.ram.z = 6.45; s.ram.state = 'spent';
     s.attackers[0].zone = 'inside'; s.ladders[0].climber = s.attackers[0];
+    s.ladders[0].queue.push(s.attackers[1]); s.ladders[0].waiters.push(s.attackers[2]);
     sim.resetAssault();
     assert.deepEqual(s.gate, { hp: 6, maxHp: 6, broken: false });
     assert.equal(s.ram.z, 8.2); assert.equal(s.ram.state, 'waiting');
     assert.equal(s.ram.waitingMs, 0); assert.deepEqual(s.ram.crew, []);
     assert.equal(s.holdReason, null); assert.equal(s.active, false);
     assert.equal(s.attackers.length, 0); assert.equal(s.defenders.length, 0);
-    assert.ok(s.ladders.every(l => l.climber === null));
+    assert.ok(s.ladders.every(l => l.climber === null && l.queue.length === 0 && l.waiters.length === 0));
     sim.startAssault('company', 12, 1);
     assert.ok(s.attackers.every(u => u.zone === 'outside'));
     assert.ok(s.defenders.every(u => u.zone === (u.fixed ? 'tower' : 'wall')));
@@ -354,7 +418,7 @@ test('ram needs two living crew, recruits nearby melee, and exactly six jittered
         assert.equal(s.gate.broken, times.length === 6);
     }
     assert.equal(times.length, 6); assert.equal(s.gate.hp, 0); assert.equal(s.ram.hp, Infinity);
-    for (let i = 1; i < times.length; i++) assert.ok(times[i] - times[i - 1] >= 1980 && times[i] - times[i - 1] <= 2420 + STEP);
+    for (let i = 1; i < times.length; i++) assert.ok(times[i] - times[i - 1] >= RAM_IMPACT_MS * .9 && times[i] - times[i - 1] <= RAM_IMPACT_MS * 1.1 + STEP);
 });
 
 test('single ladder occupant climbs for 1.6s, fights on top, and cannot jump past a guard', () => {
@@ -394,15 +458,15 @@ test('wall guards respond to ladder/ram threats, return home, and nearest half o
     assert.ok(swords.filter(u => u.zone === 'inside').every(u => u.y === 0 && Math.abs(u.z - 3.8) < .1));
 });
 
-test('defender wipe does not win; uncontested 3s flag dwell wins and an interruption resets progress', () => {
+test('defender wipe does not win; uncontested 5s flag dwell wins and an interruption resets progress', () => {
     const { sim, s } = isolated();
     const a = revive(s.attackers[0], 0, 1.3, 'inside'); a.enteredVia = 'gate'; s.gate.broken = true;
     s.attackers = [a];
     tick(sim, 60); assert.equal(s.result, null); assert.ok(s.flagMs > 990);
     const d = revive(s.defenders[0], .7, 1.3, 'inside'); d.blockX = .7; d.cd = 100000;
     tick(sim); assert.equal(s.flagMs, 0);
-    kill(d); tick(sim, 179); assert.equal(s.result, null);
-    tick(sim, 2); assert.equal(s.result, 'break'); assert.equal(s.flagMs, 3000);
+    kill(d); tick(sim, 299); assert.equal(s.result, null);
+    tick(sim, 2); assert.equal(s.result, 'break'); assert.equal(s.flagMs, FLAG_CAPTURE_MS);
 });
 
 test('60% casualties before breach trigger a non-attacking 3s retreat; a breached gate suppresses morale retreat', () => {
@@ -435,6 +499,7 @@ test('tower slots and animation durations have one source shared with camp.js; p
     const sim = createAssaultSim(), s = sim.startAssault();
     assert.deepEqual(s.defenders.filter(u => u.fixed).map(u => ({ x: u.x, z: u.z, yaw: u.yaw })), DEFAULT_TOWERS);
     assert.match(source, /ATK_ANIM_MS, HIT_ANIM_MS/); assert.doesNotMatch(source, /const ATK_ANIM_MS/);
+    assert.match(source, /assault\.flagMs \/ FLAG_CAPTURE_MS \* 100/);
     assert.equal(ATK_ANIM_MS, 220); assert.equal(HIT_ANIM_MS, 180);
     assert.doesNotMatch(logic, /Math\.random|Date\.|fxMs/);
     assert.doesNotMatch(source, /RAM_FIRST_MS|RAM_EVERY_MS|nextRamAt|assault\.fxMs/);
@@ -446,18 +511,22 @@ test('tower slots and animation durations have one source shared with camp.js; p
 });
 
 // 卡 1 验收：运行期出手相位不退化成齐射（卡 2 返工中被误删，按卡 1 口径补回）
-test('randomized strike phase stays desynchronized during the first 20 seconds', () => {
+test('randomized strike phase stays desynchronized during the first 20 seconds', t => {
+    let maxPeak = 0;
     for (const preset of ['squad', 'company', 'brigade']) for (const defCount of [6, 12, 24]) for (let seed = 1; seed <= 3; seed++) {
         const sim = createAssaultSim(), s = sim.startAssault(preset, defCount, seed);
         let peak = 0, attackFrames = 0;
         for (let frame = 0; frame < 1200 && !s.result; frame++) {
             const units = [...s.attackers, ...s.defenders], cds = units.map(u => u.cd);
-            sim.stepAssault(STEP);
+            const events = sim.stepAssault(STEP);
+            const strikes = events.filter(e => e.type === 'attack').length;
             const resets = units.filter((u, i) => !u.dead && u.cd > cds[i]).length;
-            peak = Math.max(peak, resets);
+            peak = Math.max(peak, resets, strikes);
             if (resets) attackFrames++;
         }
+        maxPeak = Math.max(maxPeak, peak);
         assert.ok(peak <= 5, `${preset}/${defCount}/${seed} same-frame strike peak=${peak}`);
         if (preset === 'company' && defCount === 12) assert.ok(attackFrames > 50, `${preset}/${defCount}/${seed} attackFrames=${attackFrames}`);
     }
+    t.diagnostic(`max same-frame strike peak=${maxPeak}`);
 });
