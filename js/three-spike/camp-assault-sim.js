@@ -143,6 +143,11 @@ export function wallPoint(t, r = WALL_R) {
     const [x0, y0] = corners[i], [x1, y1] = corners[(i + 1) % 4];
     return [x0 + (x1 - x0) * k, y0 + (y1 - y0) * k];
 }
+// 墙面编号与 wallPoint 参数段一致：0 北(z=-r) 1 东(x=+r) 2 南(z=+r，寨门) 3 西(x=-r)；按切比雪夫距离归面
+export const WALL_FACE_MS = 2000;                  // 墙上守军按威胁分面的重算周期（模拟时间）
+export function wallFace(x, z) {
+    return Math.abs(z) >= Math.abs(x) ? (z < 0 ? 0 : 2) : (x > 0 ? 1 : 3);
+}
 export function wallParamToward(x, z) {
     const r = WALL_R, side = 2 * r;
     const m = Math.max(Math.abs(x), Math.abs(z));
@@ -163,7 +168,7 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
     function resetAssault() {
         Object.assign(assault, { active: false, attackers: [], defenders: [], formations: [], events: [],
             acc: 0, elapsedMs: 0, result: null, phase: '列阵推进', flagProgress: -1, flagNet: 0, flagAtk: 0, retreatMs: 0,
-            retreated: false, holdReason: null, gate: { hp: 6, maxHp: 6, broken: false },
+            retreated: false, holdReason: null, faceAt: 0, gate: { hp: 6, maxHp: 6, broken: false },
             ram: { x: 0, z: RAM_REST, hp: Infinity, crew: [], state: 'waiting', waitingMs: 0, cooldown: RAM_IMPACT_MS },
             ladders: LADDERS.map(p => ({ ...p, climber: null, queue: [], waiters: [],
                 slots: Array.from({ length: ladderQueueCapacity(p) }, (_, i) => ladderQueueSlot(p, i)) })) });
@@ -512,7 +517,7 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
             return;
         }
         // A broken gate is the only ground-level transition. Enter at the mouth, never through a wall.
-        if (assault.gate.broken && Math.abs(u.x) <= 1 && u.z >= MELEE_STOP_R && u.z <= MELEE_STOP_R + 1e-6) {
+        if (assault.gate.broken && Math.abs(u.x) <= 1 && u.z >= MELEE_STOP_R && u.z <= MELEE_STOP_R + .02) {
             changeZone(u, 'inside', 'gate'); u.z = (MELEE_STOP_R - .01); return;
         }
         const lane = (u.x < 0 ? -1 : 1) * .86;
@@ -597,6 +602,46 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
             if (d > cap) { u.x = x + (u.x - x) * cap / d; u.z = z + (u.z - z) * cap / d; constrain(u); }
         }
     }
+    // 墙上守军按面分配：每面威胁 = 归属该面的墙外/梯上活着攻方人数；有威胁的面按比例（最大余数法）分人，
+    // 无威胁的面各留 1 名哨兵（人数够时）。岗位沿各面均布，守军按环上顺序整体轮转对位（不交叉、
+    // 不互相穿越）。轮转按字典序取优：①哨兵由本面或相邻面的刀兵担任（硬优先，做不到才退而用弓手/远面的人）
+    // ②哨兵出自本面 ③总步行距离最短。
+    function assignFaces(guards, along) {
+        const threat = [0, 0, 0, 0];
+        for (const u of assault.attackers) if (!u.dead && (u.zone === 'outside' || u.zone === 'ladder')) threat[wallFace(u.x, u.z)]++;
+        const total = threat.reduce((a, b) => a + b, 0), n = guards.length;
+        if (!total || !n) { for (const d of guards) { d.postT = null; d.postFace = null; } return; }
+        const hot = [0, 1, 2, 3].filter(f => threat[f] > 0), cold = [0, 1, 2, 3].filter(f => !threat[f]);
+        const count = [0, 0, 0, 0];
+        const onFace = f => guards.filter(d => wallFace(d.x, d.z) === f).length;
+        cold.sort((a, b) => onFace(b) - onFace(a) || a - b).slice(0, Math.max(0, Math.min(cold.length, n - hot.length)))
+            .forEach(f => { count[f] = 1; });
+        const rest = n - count.reduce((a, b) => a + b, 0);
+        const quota = hot.map(f => ({ f, q: rest * threat[f] / total }));
+        for (const { f, q } of quota) count[f] = Math.floor(q);
+        let left = rest - quota.reduce((a, { f }) => a + count[f], 0);
+        for (const { f } of [...quota].sort((a, b) => (b.q - Math.floor(b.q)) - (a.q - Math.floor(a.q)) || a.f - b.f)) {
+            if (left <= 0) break; count[f]++; left--;
+        }
+        const side = 2 * WALL_R, slots = [];
+        for (let f = 0; f < 4; f++) for (let k = 0; k < count[f]; k++)
+            slots.push({ f, t: f * side + .5 + (k + .5) * (side - 1) / count[f], sentry: !threat[f] });
+        const order = [...guards].sort((a, b) => wallParamToward(a.x, a.z) - wallParamToward(b.x, b.z) || a.id - b.id);
+        let best = null, bestCost = null;
+        for (let r = 0; r < n; r++) {
+            const cost = [0, 0, 0];
+            for (let i = 0; i < n; i++) {
+                const d = order[i], slot = slots[(i + r) % n], f = wallFace(d.x, d.z);
+                cost[2] += Math.abs(along(wallParamToward(d.x, d.z), slot.t));
+                if (!slot.sentry) continue;
+                if (d.type === 'archer' || (f - slot.f + 4) % 4 === 2) cost[0]++;
+                if (f !== slot.f) cost[1]++;
+            }
+            if (!bestCost || cost[0] < bestCost[0] || cost[0] === bestCost[0] &&
+                (cost[1] < bestCost[1] || cost[1] === bestCost[1] && cost[2] < bestCost[2] - 1e-9)) { bestCost = cost; best = r; }
+        }
+        order.forEach((d, i) => { const slot = slots[(i + best) % n]; d.postT = slot.t; d.postFace = slot.f; });
+    }
     function updateDefenders(dt) {
         const tops = assault.ladders.filter(l => l.climber && !l.climber.dead).map(l => ({ x: l.topX, z: l.topZ, ladder: true }));
         const threats = [...tops];
@@ -604,9 +649,11 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         const guards = assault.defenders.filter(d => !d.dead && !d.fixed && d.zone === 'wall');
         const assignments = new Map(), per = 8 * WALL_R;
         const along = (from, to) => ((to - from + per * 1.5) % per) - per / 2;
+        if (assault.elapsedMs >= assault.faceAt) { assignFaces(guards, along); assault.faceAt += WALL_FACE_MS; }
         for (const t of threats) {
-            const center = wallParamToward(t.x, t.z);
-            const chosen = guards.filter(d => !assignments.has(d))
+            const center = wallParamToward(t.x, t.z), face = wallFace(t.x, t.z);
+            // 响应者从分到该面的守军里出（尚未分面时不限）
+            const chosen = guards.filter(d => !assignments.has(d) && (d.postFace == null || d.postFace === face))
                 .sort((a, b) => distance(a, t) - distance(b, t) || a.id - b.id).slice(0, 3);
             const side = d => along(center, wallParamToward(d.x, d.z));
             chosen.sort((a, b) => side(a) - side(b) || a.homeT - b.homeT);
@@ -621,7 +668,7 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         // step closer than .5 to another guard or an occupied ladder top (no hopping past anyone);
         // .5 on the logical wall leaves at least .45 between the inset walkway positions.
         for (const d of [...guards].sort((a, b) => Number(assignments.has(a)) - Number(assignments.has(b)) || a.id - b.id)) {
-            const have = wallParamToward(d.x, d.z), diff = along(have, assignments.get(d) ?? d.homeT);
+            const have = wallParamToward(d.x, d.z), diff = along(have, assignments.get(d) ?? d.postT ?? d.homeT);
             if (Math.abs(diff) < 1e-12) continue;
             const others = [...guards.filter(v => v !== d && !v.dead && v.zone === 'wall'), ...tops];
             // 翻墙段的攀爬者、刚下台阶的人与墙上守军同层，按渲染位置让出一个身位
@@ -674,11 +721,25 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         emit('attack', { from, to, damage, fromZone: from.zone, toZone: to.zone });
         from.cd = from.typeData.atkSpeed * randomBetween(.85, 1.15);
     }
+    // 守方弓手（墙上与箭塔）选目标：攻方弓手 > 梯上/墙头攻方 > 冲车手 > 其余，同层取最近；
+    // 当前目标仍可打且射程内没有更高层目标时锁定不换
+    const archerTier = t => t.type === 'archer' ? 0 : t.zone === 'ladder' || t.zone === 'wall' ? 1 : t.crew ? 2 : 3;
+    function guardArcherTarget(u, targets) {
+        const ok = t => !t.dead && canHit(u, t) && (t.x - u.x) ** 2 + (t.z - u.z) ** 2 <= rangeOf(u) ** 2;
+        let best = null, bestTier = Infinity;
+        for (let tier = 0; tier < 4 && !best; tier++) {
+            best = nearest(targets, u, rangeOf(u), t => archerTier(t) === tier && canHit(u, t));
+            if (best) bestTier = tier;
+        }
+        const cur = u.target;
+        return cur && cur.team !== u.team && ok(cur) && archerTier(cur) <= bestTier ? cur : best;
+    }
     function fight(units, targets, ms) {
         const load = new Map();
         for (const u of units) {
             if (u.dead || u.crew || u.zone === 'ladder') continue;
-            const target = nearest(targets, u, rangeOf(u), t => canHit(u, t) &&
+            const target = u.team === 'red' && u.type === 'archer' ? guardArcherTarget(u, targets) :
+                nearest(targets, u, rangeOf(u), t => canHit(u, t) &&
                 (u.team !== 'blue' || u.type === 'archer' || (load.get(t) ?? 0) < GUARD_MELEE_CAP));
             u.target = target;
             if (!target) continue;

@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { createAssaultSim, WALL_R, MELEE_STOP_R, ASSAULT_STEP_MS as STEP, FORCE_PRESETS,
     RAM_IMPACT_MS, FLAG_RADIUS, FLAG_RATE, FLAG_WEIGHT, LADDER_QUEUE_CAPACITY, ASSAULT_COVER, TOWER_RANGE, GUARD_MELEE_CAP, wallPoint, wallParamToward,
-    TOWER_HALF, WALK_INSET, viewPoint, meshPoint, bodyGap, bodyPartners, STEP_DOWN_RATE, ramButtonText, formationSizes, DEFAULT_TOWERS, TOWER_ARCHER_SLOTS, TOWER_ORIGINS, LADDERS, ladderQueueSlot, ladderQueueCapacity, gateWaitSlot, RAM_CORRIDOR, RAM_REST, RAM_HIT, BLOCK_Z, ATK_ANIM_MS, HIT_ANIM_MS, TENTS } from '../js/three-spike/camp-assault-sim.js';
+    TOWER_HALF, WALK_INSET, wallFace, viewPoint, meshPoint, bodyGap, bodyPartners, STEP_DOWN_RATE, ramButtonText, formationSizes, DEFAULT_TOWERS, TOWER_ARCHER_SLOTS, TOWER_ORIGINS, LADDERS, ladderQueueSlot, ladderQueueCapacity, gateWaitSlot, RAM_CORRIDOR, RAM_REST, RAM_HIT, BLOCK_Z, ATK_ANIM_MS, HIT_ANIM_MS, TENTS } from '../js/three-spike/camp-assault-sim.js';
 
 const kill = u => { u.dead = true; u.hp = 0; };
 const tick = (sim, count = 1) => { for (let i = 0; i < count; i++) sim.stepAssault(STEP); };
@@ -517,9 +517,164 @@ test('climber entering from the wall top and breach blocker both step down monot
     }
 });
 
+function archerRange(tower = null) {
+    const sim = createAssaultSim({ towerPositions: tower ? [tower] : [] }), s = sim.startAssault('squad', 6, 1);
+    s.attackers.forEach(kill); s.defenders.forEach(kill);
+    s.formations.forEach(f => { f.released = false; f.departMs = 1e9; });
+    s.faceAt = Infinity;
+    const d = tower ? revive(s.defenders.find(u => u.fixed), tower.x, tower.z, 'tower')
+        : revive(s.defenders.find(u => u.type === 'archer' && !u.fixed), -2, WALL_R, 'wall');
+    if (tower) d.y = 2.56; else d.homeT = wallParamToward(d.x, d.z);
+    d.cd = 1e9;
+    const all = [...s.attackers], crew = s.ram.crew[0];
+    const take = (pred, x, z, zone = 'outside') => {
+        const u = all.find(v => v.dead && v !== crew && pred(v));
+        revive(u, x, z, zone); u.cd = 1e9; s.attackers.push(u); return u;
+    };
+    s.attackers = [];
+    // 一名射程外的寨内攻方：防止人数过少触发溃退
+    take(u => u.type === 'infantry', 6, -6, 'inside');
+    const climb = (route, k = .5) => {
+        const l = s.ladders[route], u = take(u => u.originalRoute === route, l.x + (l.topX - l.x) * k, l.z + (l.topZ - l.z) * k, 'ladder');
+        Object.assign(u, { y: k, climbMs: 1600 * k, route }); l.climber = u; return u;
+    };
+    const ram = () => {
+        revive(crew, -.88, RAM_REST - .5); Object.assign(crew, { crew: true, crewSlot: 0, cd: 1e9 });
+        s.ram.crew = [crew]; s.attackers.push(crew); return crew;
+    };
+    return { sim, s, d, take, climb, ram };
+}
+
+for (const tower of [null, { x: -2, z: 5.3, yaw: 0 }]) {
+    test(`${tower ? 'tower' : 'wall'} archers pick bows, then ladder/wall-top climbers, then ram crew, then the rest`, () => {
+        const { sim, d, take, climb, ram } = archerRange(tower);
+        const other = take(u => u.type === 'infantry', 4, 11), crew = ram(), climber = climb(0);
+        const bow = take(u => u.type === 'archer', -2, 11);
+        const picks = [];
+        for (const u of [bow, climber, crew, other]) { tick(sim); picks.push(d.target?.id); kill(u); }
+        assert.deepEqual(picks, [bow, climber, crew, other].map(u => u.id));
+    });
+}
+
+test('a wall-top attacker is tier 2: it outranks ram crew and closer plain attackers', () => {
+    const { sim, s, d, take, ram } = archerRange();
+    const l = s.ladders[1];
+    const top = take(u => u.originalRoute === 1, l.topX, l.topZ, 'wall');
+    Object.assign(top, { y: 1, route: 1, wallMs: 0 }); l.climber = top;
+    ram(); take(u => u.type === 'infantry', -2.5, 8.5);
+    assert.ok(distance(d, top) > distance(d, s.ram.crew[0]));
+    tick(sim); assert.equal(d.target, top);
+});
+
+test('same tier picks the nearer candidate; the lock holds against a closer peer and releases out of range', () => {
+    const { sim, s, d, take, climb } = archerRange();
+    // 两人离冲车都 >3（不会被征为冲车手），同属第 4 层
+    const near = take(u => u.type === 'pikeman', -4, 12), far = take(u => u.type === 'infantry', 4, 13);
+    assert.ok(distance(d, near) < distance(d, far));
+    tick(sim); assert.equal(d.target, near, 'nearest within the same tier');
+    assert.ok(!near.crew && !far.crew);
+    // 同层另一名挪到比当前目标更近处（离冲车 >3，不会被征为冲车手）：锁定不换
+    Object.assign(far, { x: -3.5, z: 9 });
+    assert.ok(distance(far, d) < distance(near, d));
+    for (let i = 0; i < 30; i++) { tick(sim); assert.equal(d.target, near, 'same tier never steals the lock'); }
+    // 当前目标出射程：解除锁定，改打射程内的
+    Object.assign(near, { x: -2, z: WALL_R + 20 });
+    tick(sim); assert.equal(d.target, far, 'out-of-range target releases the lock');
+    const climber = climb(0);
+    tick(sim); assert.equal(d.target, climber, 'a ladder climber outranks the locked target immediately');
+});
+
+// 面编号：0 北 1 东 2 南 3 西
+function faceScene(spots, seed = 1) {
+    const sim = createAssaultSim({ towerPositions: [] }), s = sim.startAssault('squad', 12, seed);
+    const all = [...s.attackers];
+    all.forEach(kill); s.ram.crew = [];
+    s.formations.forEach(f => { f.released = false; f.departMs = 1e9; });
+    const melee = all.filter(u => u.type !== 'archer');
+    s.attackers = spots.map(([x, z], i) => { const u = revive(melee[i], x, z); u.cd = 1e9; return u; });
+    s.defenders.forEach(u => { u.cd = 1e9; });
+    const guards = s.defenders.filter(u => !u.fixed);
+    const posts = () => [0, 1, 2, 3].map(f => guards.filter(u => u.postFace === f).length);
+    const standing = () => [0, 1, 2, 3].map(f => guards.filter(u => wallFace(u.x, u.z) === f).length);
+    return { sim, s, guards, posts, standing, spare: melee[spots.length] };
+}
+
+test('face reassignment: one sentry per quiet face, largest-remainder split of the rest, guards walk there', t => {
+    // 南 8、东 4：哨兵北 1 西 1；余 10 → 南 6.67 东 3.33 → 取整 6/3，余 1 给余数大的南 → [1, 3, 7, 1]
+    const south = Array.from({ length: 8 }, (_, i) => [-2.8 + i * .8, 12]);
+    const east = Array.from({ length: 4 }, (_, i) => [12, -1.2 + i * .8]);
+    const { sim, posts, standing } = faceScene([...south, ...east]);
+    tick(sim);
+    assert.deepEqual(posts(), [1, 3, 7, 1]);
+    tick(sim, 600);
+    t.diagnostic(JSON.stringify({ posts: posts(), standing: standing() }));
+    assert.deepEqual(standing(), [1, 3, 7, 1], 'guards walk to their assigned faces');
+});
+
+test('a quiet-face sentry is a sword when a sword is on that face (archer #40 vs sword #39 case)', () => {
+    const { sim, guards } = faceScene([[20, 0], [0, 20], [-20, 0], [-20, .5]]);
+    const northSwords = guards.filter(u => wallFace(u.x, u.z) === 0 && u.type !== 'archer');
+    assert.ok(northSwords.length > 0 && guards.some(u => wallFace(u.x, u.z) === 0 && u.type === 'archer'));
+    tick(sim);
+    const sentries = guards.filter(u => u.postFace === 0);
+    assert.equal(sentries.length, 1);
+    assert.notEqual(sentries[0].type, 'archer', `north sentry #${sentries[0].id} must be a sword`);
+});
+
+test('posts change only at the 2s boundary of simulated time, not when the threat moves mid-period', () => {
+    const { sim, s, guards } = faceScene(Array.from({ length: 6 }, (_, i) => [-2 + i * .8, 12]));
+    const snap = () => guards.map(u => `${u.postFace}:${u.postT}`).join();
+    tick(sim); const first = snap();
+    // 1 秒时把全部攻方挪到北面
+    while (s.elapsedMs < 1000) tick(sim);
+    s.attackers.forEach((u, i) => Object.assign(u, { x: -2 + i * .8, z: -12 }));
+    while (s.elapsedMs < 1950) { tick(sim); assert.equal(snap(), first, `unchanged at ${s.elapsedMs.toFixed(0)}ms`); }
+    while (s.elapsedMs < 2050) tick(sim);
+    assert.notEqual(snap(), first, 'reassigned after the 2s boundary');
+    assert.ok(guards.filter(u => u.postFace === 0).length > guards.filter(u => u.postFace === 2).length);
+});
+
+test('with face posts on, ladder-top responders come from the threatened face and return to their posts', () => {
+    const { sim, s, guards, spare } = faceScene([[-16, 2], [-16, 2.8], [-16, 1.2], [16, 2], [0, 16], [.8, 16]]);
+    while (s.elapsedMs < 20100) tick(sim); // 先走到各自岗位，并刚过一个 2s 边界
+    // 另加一名墙头攻方（不改变墙外/梯上的威胁计数）
+    const l = s.ladders[3], a = revive(spare, l.topX, l.topZ, 'wall');
+    Object.assign(a, { wallMs: 0, route: 3, cd: 1e9 }); s.attackers.push(a); l.climber = a;
+    const before = new Map(guards.map(u => [u, { x: u.x, z: u.z, postT: u.postT, face: u.postFace }]));
+    tick(sim, 20);
+    const moved = guards.filter(u => Math.hypot(u.x - before.get(u).x, u.z - before.get(u).z) > .05 &&
+        Math.abs(wallParamToward(u.x, u.z) - before.get(u).postT) > .05);
+    assert.ok(moved.length > 0, 'someone responds');
+    assert.ok(moved.every(u => u.postFace === 1), 'responders are posted on the threatened (east) face');
+    kill(a); l.climber = null;
+    tick(sim, 100);
+    for (const u of guards) {
+        const [x, z] = wallPoint(u.postT);
+        assert.ok(Math.hypot(u.x - x, u.z - z) < .05, `#${u.id} back at its post`);
+    }
+});
+
+test('in a full battle a guard changes its post face only at a 2s reassignment tick', () => {
+    const sim = createAssaultSim(), s = sim.startAssault('company', 24, 1);
+    const last = new Map();
+    let off = 0;
+    for (let i = 0; i < 18000 && !s.result; i++) {
+        const period = Math.floor(s.elapsedMs / 2000);
+        tick(sim);
+        const crossed = Math.floor(s.elapsedMs / 2000) !== period;
+        for (const u of s.defenders) {
+            if (u.fixed || u.dead) continue;
+            if (last.has(u) && last.get(u) !== u.postFace && !crossed) off++;
+            last.set(u, u.postFace);
+        }
+    }
+    assert.equal(off, 0);
+});
+
 test('wall guards respond to ladder/ram threats, return home, and nearest half of swords descend after breach', t => {
     const sim = createAssaultSim(), s = sim.startAssault('company', 12, 1);
     s.formations.forEach(f => { f.departMs = 100000; });
+    s.faceAt = Infinity; // 隔离按面分配（另有定向测试），这里只验梯顶响应、回原位与破门下台
     const l = s.ladders[2], a = s.attackers.find(u => !u.crew);
     Object.assign(a, { x: l.topX, z: l.z, zone: 'wall', y: 1, wallMs: 0, route: 2, cd: 100000 }); l.climber = a;
     const ordered = s.defenders.filter(u => !u.fixed).sort((a, b) =>
