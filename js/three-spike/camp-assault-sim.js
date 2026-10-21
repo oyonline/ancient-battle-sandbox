@@ -1,28 +1,108 @@
 // Deterministic camp assault simulation: no THREE, DOM, or wall geometry mutations.
 import { UNIT_TYPES, calculateAttackDamage } from '../units.js';
 import { CAMP_RULES } from '../battle/camps.js';
-export const WALL_R = 5;
+export const WALL_R = 7;
 export const ATK_ANIM_MS = 220, HIT_ANIM_MS = 180;
 export const ATTACK_KINDS = ['infantry', 'pikeman', 'archer'];
 export const DEF_COUNTS = [6, 12, 24];
 export const slotKind = i => i % 3 === 2 ? 'archer' : 'infantry';
-// 箭塔弓手槽位：四面垛口各面分配，6 名弓手（塔在 -z 后墙，前垛口朝寨内不放）
-// 平台半宽 pt=1.36/2=0.68，垛口在 ry=0.64，弓手站在垛口内侧 ~0.42 处
-// yaw 朝向各自垛口外侧：-z=0, +z=π, -x=-π/2, +x=π/2
-export const TOWER_ORIGIN = { x: 0, z: -3.3 };
+// All camp placement lives here; presentation consumes these coordinates.
+export const GATE_HALF = 1.2;
+export const WALK_INSET = .55;
+export const LADDER_LIP = .8;                      // 梯顶最后 20% 才翻过栅栏、内缩到踩台；墙头有守军时攀爬停在此处
+export const STEP_DOWN_RATE = 1.25, STEP_DOWN_RUN = .4; // 下踩台：竖直 1.25/秒（1→0 约 .8 秒），同时朝寨内水平走 .4
+// 渲染坐标（camp.js 与测试共用）：k=1 为踩台位置（墙线径向内缩 WALK_INSET）
+export function inwardPoint(x, z, k = 1) {
+    const l = Math.hypot(x, z) || 1;
+    return [x - x / l * WALK_INSET * k, z - z / l * WALK_INSET * k];
+}
+export function viewPoint(u) {
+    const k = u.zone === 'wall' ? 1 : u.zone === 'ladder' ? Math.max(0, (u.y - LADDER_LIP) / (1 - LADDER_LIP)) : 0;
+    return inwardPoint(u.x, u.z, k);
+}
+// 身位口径（R3）：敌我之间、红方之间，同一高度层才互相占位；梯上只算翻墙段（y>=LADDER_LIP，按墙头高度比较）
+export const BODY_GAP = .45;
+const bodyHeight = u => u.zone === 'ladder' ? 1 : u.y;
+export function bodyPartners(a, b) {
+    if (a === b || a.dead || b.dead || a.fixed || b.fixed || a.team === 'blue' && b.team === 'blue') return false;
+    if (a.zone === 'ladder' && a.y < LADDER_LIP || b.zone === 'ladder' && b.y < LADDER_LIP) return false;
+    return Math.abs(bodyHeight(a) - bodyHeight(b)) <= .3;
+}
+// 与最近身位伙伴的基础渲染距离
+export function bodyGap(u, units) {
+    const [x, z] = viewPoint(u);
+    let gap = Infinity;
+    for (const v of units) if (bodyPartners(u, v)) {
+        const [vx, vz] = viewPoint(v); gap = Math.min(gap, Math.hypot(x - vx, z - vz));
+    }
+    return gap;
+}
+// 出手前扑 .18 / 受击后仰 .09 的姿态偏移；按身位余量截断（双方各让一半），最终网格不压破 BODY_GAP
+export function poseOffset(u, atkN, hitN, gap = Infinity) {
+    const lunge = Math.sin(Math.PI * atkN) * .18, recoil = .09 * hitN;
+    let lx = Math.sin(u.yaw) * lunge - u.hitDX * recoil, lz = Math.cos(u.yaw) * lunge - u.hitDZ * recoil;
+    const n = Math.hypot(lx, lz), cap = Math.max(0, (gap - BODY_GAP) / 2);
+    if (n > cap) { lx *= cap / n; lz *= cap / n; }
+    return [lx, lz];
+}
+// 最终网格平面位置 = 基础渲染位置 + 截断后的姿态偏移（camp.js 与测试共用）
+export function meshPoint(u, atkN, hitN, gap = Infinity) {
+    const [x, z] = viewPoint(u), [lx, lz] = poseOffset(u, atkN, hitN, gap);
+    return [x + lx, z + lz];
+}
+export const RAM_REST = WALL_R + 3.2, RAM_HIT = WALL_R + 1.45;
+export const BLOCK_Z = WALL_R - 1.2;
+export const TOWER_HALF = .68;
+export const TOWER_ORIGINS = [{ x: -5.3, z: 5.3 }, { x: 0, z: -5.3 }];
 export const TOWER_ARCHER_SLOTS = [
-    { x: -.35, z: -.42, yaw: 0 },       // 后垛口（朝 -z 寨外）
-    { x:  .35, z: -.42, yaw: 0 },
-    { x: -.42, z: -.25, yaw: -Math.PI / 2 }, // 左垛口（朝 -x）
-    { x: -.42, z:  .25, yaw: -Math.PI / 2 },
-    { x:  .42, z: -.25, yaw:  Math.PI / 2 }, // 右垛口（朝 +x）
-    { x:  .42, z:  .25, yaw:  Math.PI / 2 },
+    { x: -.35, z: -.42, yaw: 0 }, { x: .35, z: -.42, yaw: 0 },
+    { x: -.35, z: .42, yaw: Math.PI }, { x: .35, z: .42, yaw: Math.PI }
 ];
-export const DEFAULT_TOWERS = TOWER_ARCHER_SLOTS.map(p =>
-    ({ ...p, x: TOWER_ORIGIN.x + p.x, z: TOWER_ORIGIN.z + p.z }));
-export const LADDERS = [{ x: -5.62, z: -1.2, topX: -5 }, { x: 5.62, z: 1.2, topX: 5 }];
-export const TENTS = [{ x: 0, z: 0, half: 1.1 }, ...[-2.8, 2.8].flatMap(x =>
-    [-2.8, 2.8].map(z => ({ x, z, half: .9 })))];
+export const DEFAULT_TOWERS = TOWER_ORIGINS.flatMap(o => TOWER_ARCHER_SLOTS.map(p =>
+    ({ ...p, x: o.x + p.x, z: o.z + p.z })));
+export const LADDERS = [
+    { x: -4.5, z: WALL_R + .62, topX: -4.5, topZ: WALL_R, nx: 0, nz: 1 },
+    { x: 4.5, z: WALL_R + .62, topX: 4.5, topZ: WALL_R, nx: 0, nz: 1 },
+    { x: -WALL_R - .62, z: 2, topX: -WALL_R, topZ: 2, nx: -1, nz: 0 },
+    { x: WALL_R + .62, z: 2, topX: WALL_R, topZ: 2, nx: 1, nz: 0 }
+];
+// Reserved lanes are shared by movement, rendering and geometry tests.
+export const GATE_WAIT_INNER = 1.4, GATE_WAIT_COLUMNS = 4, GATE_WAIT_SPACING = .48;
+export const RAM_CORRIDOR = { minX: -.78, maxX: .78, minZ: RAM_HIT - 1.35, maxZ: RAM_REST + 1.35 };
+export const ladderQueueCapacity = () => LADDER_QUEUE_CAPACITY;
+export function ladderQueueSlot(l, i) {
+    return { x: l.x + l.nx * i * LADDER_QUEUE_SPACING, z: l.z + l.nz * i * LADDER_QUEUE_SPACING };
+}
+export function gateWaitSlot(side, i) {
+    return { x: side * (GATE_WAIT_INNER + i % GATE_WAIT_COLUMNS * GATE_WAIT_SPACING),
+        z: MELEE_STOP_R + Math.floor(i / GATE_WAIT_COLUMNS) * GATE_WAIT_SPACING };
+}
+export function archerFireSlot(group, i) {
+    if (group === 'G') return { x: (i % 2 ? 1 : -1) * (1.2 + Math.floor(i / 2) % 5 * .6),
+        z: 10.8 + Math.floor(i / 10) * .48 };
+    return { x: (group === 'L2' ? -1 : 1) * (10.4 + Math.floor(i / 3) * .8), z: .8 - i % 3 * .6 };
+}
+export const TENTS = [{ x: 0, z: 0, half: 1.1 }, ...[-3.5, 3.5].flatMap(x =>
+    [-3.5, 3.5].map(z => ({ x, z, half: .9 })))];
+
+// Presentation text uses simulation durability while active, manual hits otherwise.
+export function ramButtonText(active, gate, manualHits = 0, manualMaxHp = 6) {
+    if (active) return `冲车撞门 (${gate.maxHp - gate.hp}/${gate.maxHp})`;
+    return manualHits > 0 && manualHits < manualMaxHp ? `冲车撞门 (${manualHits}/${manualMaxHp})` : '冲车撞门';
+}
+
+export function formationSizes(meleeTotal) {
+    if (!Number.isInteger(meleeTotal) || meleeTotal < 8) throw new RangeError('Four crew and four ladder teams require >=8 melee');
+    const gate = Math.round(meleeTotal * .46), front = Math.round(meleeTotal * .15);
+    const side = meleeTotal - gate - 2 * front;
+    const sizes = [gate, front, front, Math.floor(side / 2), Math.ceil(side / 2)];
+    for (let i = 1; i < sizes.length; i++) if (sizes[i] < 1) { sizes[0] -= 1 - sizes[i]; sizes[i] = 1; }
+    while (sizes[0] < 4) {
+        const donor = sizes.findIndex((n, i) => i > 0 && n > 1);
+        sizes[donor]--; sizes[0]++;
+    }
+    return sizes;
+}
 
 export function mulberry32(seed) {
     let state = seed >>> 0;
@@ -33,8 +113,8 @@ export function mulberry32(seed) {
         return ((t ^ t >>> 14) >>> 0) / 4294967296;
     };
 }
-export const MELEE_STOP_R = WALL_R + 0.4;          // 近战迫近停步圈（切比雪夫 = 5.4）：不得穿墙
-export const ARCHER_STOP_R = 7.5;                  // 弓手停步半径（欧氏 = 7.5），用 range 9.5 远程射
+export const MELEE_STOP_R = WALL_R + 0.4;          // 外墙之外 .4 的切比雪夫停步圈
+export const ARCHER_STOP_R = WALL_R + 2.5;                  // 弓手停步欧氏半径，随墙线外移
 export const GUARD_MELEE_CAP = 2;                  // 一个垛口同时最多被 2 名近战攻方贴身（窄墙头挤不下第三人）
 export const GATE_BLOCKER_ATTACK = 1.20;           // 破门后堵门守军在原驻军攻击加成上的近战加成
 export const ASSAULT_COVER = 0.4;                  // 演示口径：守军受伤系数（真规则 0.7；栅栏+踩台实战遮蔽更强）
@@ -75,7 +155,7 @@ export function wallParamToward(x, z) {
 
 export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
     const assault = {};
-    let random = mulberry32(1), nextId = 0;
+    let random = mulberry32(1), nextId = 0, frameOrigin = null;
     const randomBetween = (lo, hi) => lo + random() * (hi - lo);
     const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
     const radius = u => Math.max(Math.abs(u.x), Math.abs(u.z));
@@ -84,9 +164,9 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         Object.assign(assault, { active: false, attackers: [], defenders: [], formations: [], events: [],
             acc: 0, elapsedMs: 0, result: null, phase: '列阵推进', flagProgress: -1, flagNet: 0, flagAtk: 0, retreatMs: 0,
             retreated: false, holdReason: null, gate: { hp: 6, maxHp: 6, broken: false },
-            ram: { x: 0, z: 8.2, hp: Infinity, crew: [], state: 'waiting', waitingMs: 0, cooldown: RAM_IMPACT_MS },
+            ram: { x: 0, z: RAM_REST, hp: Infinity, crew: [], state: 'waiting', waitingMs: 0, cooldown: RAM_IMPACT_MS },
             ladders: LADDERS.map(p => ({ ...p, climber: null, queue: [], waiters: [],
-                slots: Array.from({ length: LADDER_QUEUE_CAPACITY }, (_, i) => ({ x: p.x, z: p.z + i * LADDER_QUEUE_SPACING })) })) });
+                slots: Array.from({ length: ladderQueueCapacity(p) }, (_, i) => ladderQueueSlot(p, i)) })) });
         nextId = 0;
     }
     function makeUnit(team, type, x, z, yaw) {
@@ -95,62 +175,86 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
             spawnX: x, spawnZ: z, y: 0, zone: team === 'blue' ? 'outside' : 'wall',
             hp: typeData.hp, maxHp: typeData.hp, cd: typeData.atkSpeed * randomBetween(.2, 1),
             speed: typeData.speed * randomBetween(.9, 1.1), dead: false, target: null,
-            enteredVia: null, climbMs: 0, wallMs: 0, crew: false, crewSlot: -1,
+            waitState: 'travel', moveTarget: null, enteredVia: null, climbMs: 0, wallMs: 0, crew: false, crewSlot: -1,
             atkAt: -Infinity, hitAt: -Infinity, hitDX: 0, hitDZ: 0, dieAt: 0 };
     }
     function changeZone(u, zone, via = null) {
         const previous = u.zone;
         u.zone = zone;
         if (via) u.enteredVia = via;
+        if (previous === 'ladder' || previous === 'wall') {
+            const l = assault.ladders[u.route];
+            if (zone !== 'ladder' && zone !== 'wall' && l?.climber === u) l.climber = null;
+        }
         emit('zone', { unit: u, previous, zone, via, gateBroken: assault.gate.broken });
     }
     function startAssault(preset = 'company', defCount = 6, seed = 1) {
         resetAssault(); random = mulberry32(seed); assault.preset = preset;
         const counts = FORCE_PRESETS[preset] ?? FORCE_PRESETS.company;
-        const side = random() < .5 ? -1 : 1;
-        const groups = [[], [], []], slots = { infantry: 0, pikeman: 0, archer: 0 };
-        for (const kind of ATTACK_KINDS) {
-            const main = Math.round(counts[kind] * .7);
-            for (let i = 0; i < counts[kind]; i++) groups[i < main ? i % 2 : 2].push(kind);
+        const meleeTotal = counts.infantry + counts.pikeman;
+        const sizes = formationSizes(meleeTotal);
+        if (counts.infantry < 4) throw new RangeError('Gate crew requires >=4 swords');
+        const pikes = sizes.map(n => Math.round(n * counts.pikeman / meleeTotal));
+        pikes[0] += counts.pikeman - pikes.reduce((a, b) => a + b, 0);
+        // Reserve the four gate swords before distributing the remaining pikes.
+        for (let i = 1; pikes[0] > sizes[0] - 4 && i < sizes.length; i++) {
+            const transfer = Math.min(pikes[0] - (sizes[0] - 4), sizes[i] - pikes[i]);
+            pikes[0] -= transfer; pikes[i] += transfer;
         }
-        groups.forEach((types, id) => {
-            const columns = Math.ceil(Math.sqrt(types.length));
-            const rows = Math.ceil(types.length / columns), spacing = .8;
-            const f = { id, x: id === 2 ? side * 16 : (id === 0 ? -3.6 : 3.6),
-                z: id === 2 ? 0 : 15.5 + id * .6, dx: id === 2 ? -side : 0,
-                dz: id === 2 ? 0 : -1, departMs: randomBetween(0, 1500), released: false, units: [] };
-            types.forEach((type, i) => {
-                const across = (i % columns - (columns - 1) / 2) * spacing;
-                const depth = (Math.floor(i / columns) - (rows - 1) / 2) * spacing;
-                const u = makeUnit('blue', type, f.x - f.dz * across - f.dx * depth,
-                    f.z + f.dx * across - f.dz * depth, Math.atan2(f.dx, f.dz));
-                u.slot = slots[type]++; u.formation = id; u.route = 'gate';
+        const slots = { infantry: 0, pikeman: 0, archer: 0 };
+        sizes.forEach((n, id) => {
+            const route = id ? id - 1 : 'gate', l = id ? LADDERS[route] : null;
+            const f = { id, name: id ? `L${route}` : 'G', route,
+                x: id >= 3 ? l.nx * 16 : id ? l.x : 0, z: id >= 3 ? 2 : 16,
+                dx: id >= 3 ? -l.nx : 0, dz: id >= 3 ? 0 : -1,
+                departMs: randomBetween(0, 1500), released: false, units: [] };
+            const swords = n - pikes[id];
+            for (let i = 0; i < n; i++) {
+                const type = i < swords ? 'infantry' : 'pikeman';
+                let x, z;
+                if (!id) {
+                    // Crew lead in the reserved centre; waiting ranks use their own columns.
+                    if (i < 4) { x = i % 2 ? .88 : -.88; z = 14.8 + Math.floor(i / 2) * .8; }
+                    else {
+                        const slot = gateWaitSlot(i % 2 ? 1 : -1, Math.floor((i - 4) / 2));
+                        x = slot.x; z = 16 + slot.z - MELEE_STOP_R;
+                    }
+                } else {
+                    // Stagger the two files by half a rank. Every soldier has a distinct
+                    // longitudinal position before the files merge into one straight queue.
+                    const across = (i % 2 ? 1 : -1) * .4, depth = i * LADDER_QUEUE_SPACING;
+                    x = f.x - f.dz * across - f.dx * depth;
+                    z = f.z + f.dx * across - f.dz * depth;
+                }
+                const u = makeUnit('blue', type, x, z, Math.atan2(f.dx, f.dz));
+                Object.assign(u, { slot: slots[type]++, formation: id, squad: f.name, route, originalRoute: route });
+                if (!id && i < 4) { u.crew = true; u.crewSlot = i; assault.ram.crew.push(u); }
+                else if (!id) { u.waitSide = i % 2 ? 1 : -1; u.gateSlot = Math.floor((i - 4) / 2); }
                 f.units.push(u); assault.attackers.push(u);
-            });
-            f.speed = Math.min(...f.units.map(u => u.speed)); assault.formations.push(f);
+            }
+            assault.formations.push(f);
         });
-        const melee = assault.attackers.filter(u => u.type !== 'archer');
-        // Prefer the diversion's nearest ladder, then fill the other ladder from the main ranks.
-        const allotted = new Set();
-        for (const index of [side < 0 ? 0 : 1, side < 0 ? 1 : 0]) {
-            const ladder = LADDERS[index];
-            const diversion = index === (side < 0 ? 0 : 1);
-            const candidates = melee.filter(u => (u.formation === 2) === diversion)
-                .sort((a, b) => distance(a, ladder) - distance(b, ladder));
-            for (const u of candidates.filter(u => !allotted.has(u)).slice(0, Math.round(melee.length * .15))) {
-                u.route = index; allotted.add(u);
+        const gateBows = Math.round(counts.archer * .6), sideBows = counts.archer - gateBows;
+        for (const [group, count, formation] of [['G', gateBows, 0],
+            ['L2', Math.floor(sideBows / 2), 3], ['L3', Math.ceil(sideBows / 2), 4]]) {
+            const f = assault.formations[formation];
+            for (let i = 0; i < count; i++) {
+                const fireSlot = archerFireSlot(group, i);
+                const x = group === 'G' ? fireSlot.x : f.x - f.dx * (3 + Math.floor(i / 3) * .8);
+                const z = group === 'G' ? 24 + Math.floor(i / 10) * .48 : fireSlot.z;
+                const u = makeUnit('blue', 'archer', x, z, Math.atan2(f.dx, f.dz));
+                Object.assign(u, { slot: slots.archer++, formation, squad: group, route: 'gate', fireSlot });
+                f.units.push(u); assault.attackers.push(u);
             }
         }
-        // Four rear-rank swordsmen join the ram from behind, rather than spawning at its handles.
-        const crewCandidates = melee.filter(u => u.type === 'infantry' && u.route === 'gate' && u.formation !== 2)
-            .sort((a, b) => b.z - a.z);
-        const crew = [0, 1, 2, 3].map(i => crewCandidates.filter(u => (u.x < 0) === (i % 2 === 0))[Math.floor(i / 2)]);
-        crew.forEach((u, i) => { u.crew = true; u.crewSlot = i; });
-        assault.ram.crew = crew;
-        const gateSlots = { '-1': 0, '1': 0 };
-        assault.attackers.filter(u => u.route === 'gate' && !u.crew).forEach(u => {
-            u.waitSide = u.x < 0 ? -1 : 1; u.gateSlot = gateSlots[u.waitSide]++;
-        });
+        for (const f of assault.formations) {
+            f.speed = Math.min(...f.units.map(u => u.speed));
+            if (typeof f.route === 'number') {
+                const members = f.units.filter(u => u.type !== 'archer');
+                assault.ladders[f.route].queue = members.slice(0, LADDER_QUEUE_CAPACITY);
+                assault.ladders[f.route].waiters = members.slice(LADDER_QUEUE_CAPACITY);
+            }
+        }
         const n = DEF_COUNTS.includes(defCount) ? defCount : 6;
         assault.gate.hp = assault.gate.maxHp = { 6: 6, 12: 9, 24: 12 }[n];
         for (let i = 0; i < n; i++) {
@@ -168,6 +272,18 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         const k = Math.min(1, step / d);
         u.x += dx * k; u.z += dz * k; u.yaw = Math.atan2(dx, dz);
     }
+    // 从踩台下到寨内：渲染位置不变地换区，之后 y 逐帧下降、沿墙面法向朝寨内走下台阶
+    function startStepDown(u) {
+        [u.x, u.z] = inwardPoint(u.x, u.z); frameOrigin?.set(u, [u.x, u.z]); // 换区后位移预算从踩台渲染位置算起
+        const onZ = Math.abs(u.z) >= Math.abs(u.x);
+        u.foot = { x: onZ ? u.x : u.x - Math.sign(u.x) * STEP_DOWN_RUN, z: onZ ? u.z - Math.sign(u.z) * STEP_DOWN_RUN : u.z };
+    }
+    function stepDown(u, dt) {
+        if (u.zone !== 'inside' || !(u.y > 0)) return false;
+        const dy = Math.min(u.y, STEP_DOWN_RATE * dt);
+        u.y -= dy; move(u, u.foot.x, u.foot.z, STEP_DOWN_RUN * dy); constrain(u);
+        return true;
+    }
     function avoidTents(u) {
         for (const t of TENTS) {
             const h = t.half + .16, dx = u.x - t.x, dz = u.z - t.z;
@@ -184,40 +300,37 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
                 else u.z = (u.z < 0 ? -1 : 1) * MELEE_STOP_R;
             }
             // The complete ram body is a reserved corridor, not just its centre point.
-            if (u.z > assault.ram.z - 1.35 && u.z < assault.ram.z + 1.35 && Math.abs(u.x) < .78)
-                u.x = (u.x < 0 ? -1 : 1) * .78;
+            // 按最浅穿透方向推出，冲车前移压到人时顺着车头推开而不是横向瞬移
+            const front = u.z - (assault.ram.z - 1.35), rear = assault.ram.z + 1.35 - u.z, side = .78 - Math.abs(u.x);
+            if (front > 0 && rear > 0 && side > 0) {
+                if (front <= side && front <= rear && assault.ram.z - 1.35 - 1e-6 >= MELEE_STOP_R) u.z = assault.ram.z - 1.35 - 1e-6;
+                else if (rear < side) u.z = assault.ram.z + 1.35 + 1e-6;
+                else u.x = (u.x < 0 ? -1 : 1) * .78;
+            }
         } else if (u.zone === 'inside') {
-            u.x = Math.max(-4.78, Math.min(4.78, u.x));
-            u.z = Math.max(-4.78, Math.min(u.z > 4.78 && Math.abs(u.x) <= 1 ? 5.39 : 4.78, u.z));
+            const mouth = WALL_R - .22;
+            u.x = Math.max(-mouth, Math.min(mouth, u.x));
+            u.z = Math.max(-mouth, Math.min(MELEE_STOP_R - .01, u.z));
+            // 门洞只有 |x|<=1 宽：按较浅的穿透方向推回，避免门洞内外切换时瞬移
+            if (u.z > mouth && Math.abs(u.x) > 1) {
+                if (Math.abs(u.x) - 1 < u.z - mouth) u.x = Math.sign(u.x); else u.z = mouth;
+            }
             avoidTents(u);
         }
     }
     function outsideMove(u, x, z, step) {
-        // A shared exterior half-plane makes a direct segment safe. Otherwise follow the
-        // shorter perimeter direction through exterior corners, including the 5.4 gate mouth.
-        const r = 6.05, side = 2 * r, perimeter = 8 * r;
-        const sameFace = (u.x <= -MELEE_STOP_R && x <= -MELEE_STOP_R) ||
-            (u.x >= MELEE_STOP_R && x >= MELEE_STOP_R) ||
-            (u.z <= -MELEE_STOP_R && z <= -MELEE_STOP_R) ||
-            (u.z >= MELEE_STOP_R && z >= MELEE_STOP_R);
-        if (!sameFace) {
-            const param = (px, pz) => {
-                const cx = Math.max(-r, Math.min(r, px)), cz = Math.max(-r, Math.min(r, pz));
-                if (Math.abs(px) >= Math.abs(pz)) return px > 0 ? side + cz + r : 3 * side + r - cz;
-                return pz < 0 ? cx + r : 2 * side + r - cx;
-            };
-            const have = param(u.x, u.z), want = param(x, z);
-            const diff = ((want - have + perimeter * 1.5) % perimeter) - perimeter / 2;
-            const corner = diff >= 0 ? (Math.floor((have + 1e-8) / side) + 1) * side :
-                (Math.ceil((have - 1e-8) / side) - 1) * side;
-            const [cx, cz] = wallPoint(corner, r);
-            move(u, cx, cz, step);
-        } else if (u.x * x < 0 && Math.min(u.z, z) < assault.ram.z + 1.4 &&
+        // All regular objectives are on the spawn face. Only gate traffic may need
+        // to pass behind the ram; no ladder route follows exterior corners anymore.
+        if (u.x * x < 0 && Math.min(u.z, z) < assault.ram.z + 1.4 &&
             Math.max(u.z, z) > assault.ram.z - 1.4) {
             if (u.z < assault.ram.z + 1.5) move(u, Math.sign(u.x) * Math.max(.9, Math.abs(u.x)), assault.ram.z + 1.6, step);
             else move(u, x, u.z, step);
         } else move(u, x, z, step);
         constrain(u);
+    }
+    function travel(u, target, step) {
+        u.moveTarget = { ...target }; u.waitState = 'travel';
+        outsideMove(u, target.x, target.z, step);
     }
     function nearest(list, from, range = Infinity, predicate = () => true) {
         let best = null, bestD = range * range;
@@ -232,28 +345,32 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         if (from.type === 'archer') return true;
         if (from.zone === 'ladder') return false;
         if (to.fixed) return false; // Ground melee cannot hit the elevated tower platform.
-        if (from.zone === 'outside') return from.type === 'pikeman' && to.zone === 'wall';
-        if (from.zone === 'wall') return to.zone === 'wall' || (from.team === 'red' && to.zone === 'outside');
-        if (from.zone === 'inside') return to.zone === 'inside';
+        if (from.zone === 'outside') return false; // 墙外近战（含长枪）够不到墙上
+        if (from.zone === 'wall') return to.zone === 'wall'; // 墙头只与爬上墙头的人对砍
+        if (from.zone === 'inside') return to.zone === 'inside' && !(from.y > 0) && !(to.y > 0); // 下台阶途中不近战
         return false;
     }
     function rangeOf(u) { return u.fixed ? TOWER_RANGE : u.type === 'pikeman' ? 1.6 : u.typeData.range; }
     function breakGate() {
         assault.gate.broken = true; emit('gate_broken');
         const swords = assault.defenders.filter(u => !u.dead && !u.fixed && u.type === 'infantry')
-            .sort((a, b) => distance(a, { x: 0, z: 5 }) - distance(b, { x: 0, z: 5 }));
-        const chosen = swords.slice(0, Math.ceil(swords.length / 2));
+            .sort((a, b) => distance(a, { x: 0, z: WALL_R }) - distance(b, { x: 0, z: WALL_R }));
+        const chosen = swords.slice(0, Math.ceil(swords.length / 2)).sort((a, b) => a.x - b.x || a.id - b.id);
+        const c = WALL_R - WALK_INSET;
         chosen.forEach((u, i) => {
-            changeZone(u, 'inside'); u.y = 0;
-            u.x = (i - (chosen.length - 1) / 2) * .55; u.z = 3.8;
-            u.blockX = u.x;
+            // 就地下踩台（渲染位置不变），再沿踩台内侧环道绕开帐篷/箭塔走到堵门线
+            const sx = u.x < 0 ? -1 : 1, back = u.z < -Math.abs(u.x), front = u.z >= Math.abs(u.x);
+            changeZone(u, 'inside'); startStepDown(u);
+            u.blockX = (i - (chosen.length - 1) / 2) * .55;
+            u.blockPath = [...back ? [{ x: sx * c, z: -c }] : [], ...front ? [] : [{ x: sx * c, z: c }],
+                { x: u.blockX, z: c }, { x: u.blockX, z: BLOCK_Z }];
         });
         for (const u of assault.ram.crew) { u.crew = false; u.crewSlot = -1; }
         assault.ram.crew = []; assault.ram.state = 'spent';
     }
     function updateRam(dt) {
         const r = assault.ram;
-        if (assault.gate.broken) { r.z = Math.min(8.2, r.z + .9 * dt); return; }
+        if (assault.gate.broken) { r.z = Math.min(RAM_REST, r.z + .9 * dt); return; }
         if (r.state === 'abandoned') return;
         r.crew = r.crew.filter(u => !u.dead);
         const freeSlots = [0, 1, 2, 3].filter(i => !r.crew.some(u => u.crewSlot === i));
@@ -267,23 +384,37 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         for (const u of r.crew) {
             if (assault.elapsedMs < assault.formations[u.formation].departMs) continue;
             const x = u.crewSlot % 2 ? .88 : -.88, z = r.z + (u.crewSlot < 2 ? -.5 : .5);
+            u.moveTarget = { x, z }; u.waitState = 'crew';
             outsideMove(u, x, z, u.speed * dt);
             if (Math.hypot(u.x - x, u.z - z) < .18) ready++;
         }
         if (r.crew.length < 2 || ready < 2) {
             r.state = 'waiting'; r.waitingMs += dt * 1000;
             if (r.waitingMs >= 8000) {
-                for (const u of assault.attackers) if (!u.dead && u.zone === 'outside' && u.type !== 'archer' && u.route === 'gate') {
+                // Outer soldiers turn first; inner soldiers retreat further before turning,
+                // so their transverse leg cannot cut through the outer retreat leg.
+                const fallback = assault.attackers.filter(u => !u.dead && u.zone === 'outside' &&
+                    u.type !== 'archer' && u.route === 'gate').sort((a, b) => Math.abs(b.x) - Math.abs(a.x) || a.id - b.id);
+                const ranks = [0, 0];
+                for (const u of fallback) {
                     u.crew = false; u.crewSlot = -1;
-                    u.route = distance(u, assault.ladders[0]) <= distance(u, assault.ladders[1]) ? 0 : 1;
+                    u.route = u.x < 0 ? 0 : 1;
+                    const l = assault.ladders[u.route], tail = [...l.queue, ...l.waiters];
+                    const rank = ranks[u.route]++;
+                    const outer = Math.max(16, ladderQueueSlot(l, tail.length + 2).z) + rank * LADDER_QUEUE_SPACING;
+                    // 同排多人各取一个转身点（按 rank 外移一个身位），避免争抢同一点互相顶开
+                    const exitX = Math.sign(l.x) * (Math.max(3.9, Math.abs(u.x)) + rank * LADDER_QUEUE_SPACING);
+                    u.fallback = [{ x: exitX, z: u.z }, { x: exitX, z: outer },
+                        { x: l.x + Math.sign(l.x) * .8, z: outer }];
+                    l.waiters.push(u);
                 }
                 r.crew = []; r.state = 'abandoned'; emit('ram_abandoned');
             }
             return;
         }
         r.waitingMs = 0;
-        if (r.z > 6.45) {
-            const step = Math.min(r.z - 6.45, .48 * dt);
+        if (r.z > RAM_HIT) {
+            const step = Math.min(r.z - RAM_HIT, .48 * dt);
             r.z -= step;
             for (const u of r.crew) if (distance(u, r) < 1.6) u.z -= step;
             r.state = 'advancing'; return;
@@ -298,124 +429,124 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
     function advanceFormations(dt) {
         for (const f of assault.formations) {
             if (f.released || assault.elapsedMs <= f.departMs) continue;
-            const living = f.units.filter(u => !u.dead && !u.crew);
-            if (living.some(u => radius(u) <= 7.8)) { f.released = true; continue; }
+            const living = f.units.filter(u => !u.dead && !u.crew && !u.fallback?.length); // 已改走侧翼的不随阵前推
+            const melee = living.filter(u => u.type !== 'archer');
+            if (!melee.length || melee.some(u => radius(u) <= WALL_R + 4.6)) { f.released = true; continue; }
             const step = f.speed * Math.min(dt, (assault.elapsedMs - f.departMs) / 1000);
             f.x += f.dx * step; f.z += f.dz * step;
-            for (const u of living) { u.x += f.dx * step; u.z += f.dz * step; constrain(u); }
+            for (const u of living) {
+                // An archer already on its reserved firing post has left formation travel.
+                if (atFireSlot(u)) continue;
+                u.moveTarget = { x: u.x + f.dx * 30, z: u.z + f.dz * 30 }; u.waitState = 'travel';
+                u.x += f.dx * step; u.z += f.dz * step; constrain(u);
+            }
         }
     }
     function advanceAttacker(u, dt) {
-        if (u.crew || !assault.formations[u.formation].released) return;
+        if (u.crew) { u.waitState = 'crew'; return; }
+        if (!assault.formations[u.formation].released && !u.fallback?.length) return;
         const step = u.speed * dt;
         if (u.zone === 'ladder') {
+            u.waitState = 'climbing';
             const l = assault.ladders[u.route];
-            u.climbMs = Math.min(1600, u.climbMs + dt * 1000);
+            // 翻墙段按实际渲染位置让位：下一步离同层守军（墙上或正下台阶）不足一个身位时停在栅栏外沿，等守军让开
+            const next = Math.min(1600, u.climbMs + dt * 1000), nk = next / 1600;
+            const ahead = { ...u, x: l.x + (l.topX - l.x) * nk, z: l.z + (l.topZ - l.z) * nk, y: nk };
+            const [px, pz] = viewPoint(ahead);
+            const clear = nk <= LADDER_LIP || assault.defenders.every(d => {
+                if (!bodyPartners(ahead, d)) return true;
+                const [dx, dz] = viewPoint(d);
+                return Math.hypot(dx - px, dz - pz) >= BODY_GAP + .01;
+            });
+            u.climbMs = clear ? next : Math.max(u.climbMs, Math.min(next, 1600 * LADDER_LIP));
             const k = u.climbMs / 1600;
-            u.x = l.x + (l.topX - l.x) * k; u.z = l.z; u.y = k;
+            u.x = l.x + (l.topX - l.x) * k; u.z = l.z + (l.topZ - l.z) * k; u.y = k;
             if (k === 1) { changeZone(u, 'wall'); u.wallMs = 0; }
             return;
         }
         if (u.zone === 'wall') {
+            u.waitState = 'climbing';
             const l = assault.ladders[u.route];
             u.wallMs += dt * 1000;
             if (u.wallMs >= 1000 && !nearest(assault.defenders, u, 1, d => d.zone === 'wall')) {
-                changeZone(u, 'inside', 'ladder'); u.x = Math.sign(l.topX) * 4.4; u.y = 0;
+                changeZone(u, 'inside', 'ladder'); startStepDown(u);
                 if (l.climber === u) l.climber = null;
             }
             return;
         }
+        if (stepDown(u, dt)) { u.waitState = 'climbing'; return; }
         if (u.zone === 'inside') {
             const enemy = nearest(assault.defenders, u, 2.8, d => d.zone === 'inside');
-            if (enemy && distance(u, enemy) <= rangeOf(u) * .85) return;
-            move(u, enemy ? enemy.x : 0, enemy ? enemy.z : 0, step); constrain(u); return;
+            u.moveTarget = enemy ? { x: enemy.x, z: enemy.z } : { x: 0, z: 0 };
+            if (enemy && distance(u, enemy) <= rangeOf(u) * .85 || !enemy && Math.hypot(u.x, u.z) < FLAG_RADIUS - .2) {
+                u.waitState = 'staging'; return;
+            }
+            u.waitState = 'travel';
+            move(u, u.moveTarget.x, u.moveTarget.z, step); constrain(u); return;
         }
-        if (u.type === 'archer' && !assault.gate.broken) {
-            const r = Math.hypot(u.x, u.z);
-            if (r > ARCHER_STOP_R) outsideMove(u, u.x * ARCHER_STOP_R / r, u.z * ARCHER_STOP_R / r, step);
+        if (u.type === 'archer') {
+            travel(u, u.fireSlot, step);
+            if (distance(u, u.fireSlot) <= .04) u.waitState = 'firing';
             return;
         }
-        if (typeof u.route === 'number' && !assault.gate.broken) {
-            const l = assault.ladders[u.route], side = Math.sign(l.x);
-            let members = [...l.queue, ...l.waiters];
+        if (typeof u.route === 'number') {
+            const l = assault.ladders[u.route];
+            const members = [...l.queue, ...l.waiters];
             let index = members.indexOf(u);
-            if (index < 0 && u.x * side >= MELEE_STOP_R && u.x * side <= 8 && u.z <= 7.7) {
-                (l.queue.length < LADDER_QUEUE_CAPACITY ? l.queue : l.waiters).push(u);
-                members = [...l.queue, ...l.waiters]; index = members.length - 1;
-            }
-            if (index >= 0) {
-                const target = ladderSlot(l, index);
-                if (distance(u, target) < .04) u.queueAligned = true;
-                const waypoint = !u.queueAligned && Math.abs(u.z - target.z) > .04 ?
-                    { x: l.x + side * .85, z: target.z } : target;
-                const obstacles = [...members.filter(v => v !== u), l.climber].filter(v => v && !v.dead);
-                const climbPathDistance = p => Math.hypot(p.x - Math.max(Math.min(l.x, l.topX),
-                    Math.min(Math.max(l.x, l.topX), p.x)), p.z - l.z);
-                const angle = Math.atan2(waypoint.z - u.z, waypoint.x - u.x);
-                // Reserved members steer themselves to their slots; separation treats them
-                // as fixed points. Deterministic headings prevent approach lanes crossing.
-                const candidates = [0, .5, -.5, 1, -1, 1.5, -1.5, 2, -2, Math.PI]
-                    .map(turn => ({ x: u.x + Math.cos(angle + turn) * Math.min(step, distance(u, waypoint)),
-                        z: u.z + Math.sin(angle + turn) * Math.min(step, distance(u, waypoint)) }))
-                    .filter(p => p.x * side >= MELEE_STOP_R && obstacles.every(v => distance(p, v) >= .32 - 1e-9) &&
-                        (index === 0 && !l.climber || climbPathDistance(p) >= .32));
-                candidates.sort((a, b) => distance(a, waypoint) - distance(b, waypoint));
-                if (candidates.length) {
-                    const p = candidates[0]; u.yaw = Math.atan2(p.x - u.x, p.z - u.z); u.x = p.x; u.z = p.z;
-                }
-                if (index === 0 && !l.climber && distance(u, l) < .04 && obstacles.every(v => climbPathDistance(v) >= .32)) {
-                    l.queue.shift();
-                    if (l.waiters.length) l.queue.push(l.waiters.shift());
-                    l.climber = u; changeZone(u, 'ladder'); u.climbMs = 0;
-                    u.x = l.x; u.z = l.z;
+            if (index < 0) { l.waiters.push(u); index = members.length; }
+            const target = ladderSlot(l, index);
+            if (u.fallback?.length) {
+                travel(u, u.fallback[0], step);
+                if (distance(u, u.fallback[0]) < .04) {
+                    const p = u.fallback.shift(); u.x = p.x; u.z = p.z;
                 }
                 return;
             }
-            if (!u.ladderApproach && u.z >= MELEE_STOP_R && u.x * side < MELEE_STOP_R)
-                u.ladderApproach = 'outward';
-            if (u.ladderApproach === 'outward' && u.z >= 7.6) u.ladderApproach = 'corner';
-            if (u.ladderApproach === 'corner' && u.x * side >= 7.15) u.ladderApproach = 'side';
-            if (u.ladderApproach === 'outward') {
-                move(u, u.x, 7.65, step); constrain(u); return;
+            travel(u, target, step);
+            if (distance(u, target) <= .04) u.waitState = 'queued';
+            if (index === 0 && !l.climber && distance(u, l) < .04) {
+                l.queue.shift(); if (l.waiters.length) l.queue.push(l.waiters.shift());
+                l.climber = u; changeZone(u, 'ladder'); u.climbMs = 0; u.x = l.x; u.z = l.z;
+                u.waitState = 'climbing';
             }
-            if (u.ladderApproach === 'corner') {
-                outsideMove(u, side * 7.2, 7.65, step); return;
-            }
-            const target = ladderSlot(l, members.length);
-            outsideMove(u, l.x + side * .85, target.z, step);
             return;
         }
         // A broken gate is the only ground-level transition. Enter at the mouth, never through a wall.
-        if (assault.gate.broken && Math.abs(u.x) <= 1 && u.z >= 5.4 && u.z <= 5.6) {
-            changeZone(u, 'inside', 'gate'); u.z = 5.39; return;
+        if (assault.gate.broken && Math.abs(u.x) <= 1 && u.z >= MELEE_STOP_R && u.z <= MELEE_STOP_R + 1e-6) {
+            changeZone(u, 'inside', 'gate'); u.z = (MELEE_STOP_R - .01); return;
         }
         const lane = (u.x < 0 ? -1 : 1) * .86;
-        const slot = u.gateSlot ?? u.id;
-        const waitX = (u.waitSide ?? (u.x < 0 ? -1 : 1)) * (1.2 + slot % 4 * .56);
-        const waitZ = 5.75 + Math.floor(slot / 4) * .56;
-        outsideMove(u, assault.gate.broken ? lane : waitX, assault.gate.broken ? 5.4 : waitZ, step);
+        const target = assault.gate.broken ? { x: lane, z: MELEE_STOP_R } : gateWaitSlot(u.waitSide, u.gateSlot);
+        travel(u, target, step);
+        if (!assault.gate.broken && distance(u, target) <= .04) u.waitState = 'staging';
     }
     function ladderSlot(l, index) {
-        return l.slots[index] ?? { x: l.x, z: l.z + index * LADDER_QUEUE_SPACING };
+        // Keep the occupied climb path free by waiting at the next explicit slot.
+        return ladderQueueSlot(l, index + (l.climber ? 1 : 0));
     }
     function inLadderQueue(u) {
         const l = assault.ladders[u.route];
-        return l && (l.queue.includes(u) || l.waiters.includes(u));
+        return l && u.waitState === 'queued' && distance(u, u.moveTarget) <= .04;
     }
     function updateLadderQueues() {
         for (const [route, l] of assault.ladders.entries()) {
-            if (l.climber?.dead || assault.retreated) l.climber = null;
+            // Retreat keeps ownership until the occupant actually leaves the ladder.
+            if (l.climber?.dead || l.climber && !(l.climber.zone === 'ladder' || l.climber.zone === 'wall' && !assault.retreated))
+                l.climber = null;
             const valid = u => !u.dead && !u.crew && u.zone === 'outside' && u.route === route &&
-                !assault.gate.broken && !assault.retreated;
+                !assault.retreated;
             const members = [...l.queue, ...l.waiters].filter(valid);
-            l.queue = members.slice(0, LADDER_QUEUE_CAPACITY);
-            l.waiters = members.slice(LADDER_QUEUE_CAPACITY);
+            l.queue = members.slice(0, l.slots.length);
+            l.waiters = members.slice(l.slots.length);
         }
     }
-    function separateAttackers(units) {
-        const traveling = u => !assault.gate.broken && u.zone === 'outside' && !u.crew &&
-            typeof u.route === 'number' && assault.formations[u.formation].released &&
-            distance(u, assault.ladders[u.route]) > 1.2;
+    function atFireSlot(u) {
+        return u.type === 'archer' && u.zone === 'outside' && u.waitState === 'firing' && distance(u, u.fireSlot) <= .04;
+    }
+    function fixedAttacker(u) {
+        return u.zone === 'ladder' || u.zone === 'wall' || inLadderQueue(u) || atFireSlot(u);
+    }
+    function separateAttackers(units, origin = null, dt = 0) {
         // A wider collision diameter leaves margin for corner projection. Squared-distance broad rejection
         // avoids square roots for distant pairs; stable pair order preserves exact replays.
         for (let pass = 0; pass < 16; pass++) {
@@ -426,17 +557,13 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
                 const sq = dx * dx + dz * dz;
                 if (sq >= .48 * .48) continue;
                 overlaps = true;
-                const fixedA = a.zone === 'ladder' || a.zone === 'wall' || inLadderQueue(a) || (a.crew && !b.crew);
-                const fixedB = b.zone === 'ladder' || b.zone === 'wall' || inLadderQueue(b) || (b.crew && !a.crew);
+                const fixedA = fixedAttacker(a) || (a.crew && !b.crew);
+                const fixedB = fixedAttacker(b) || (b.crew && !a.crew);
                 if (fixedA && fixedB) continue;
                 let d = Math.sqrt(sq);
                 if (d < 1e-9) { dx = 1; dz = 0; d = 1; }
                 const push = .48 - Math.sqrt(sq), nx = dx / d, nz = dz / d;
-                // Gate waiters yield to passing ladder traffic; neither side loses its
-                // collision radius, and crew / ladder occupants retain their priority.
-                let shareA = .5;
-                if (traveling(a) && b.zone === 'outside' && b.route === 'gate') shareA = .05;
-                else if (traveling(b) && a.zone === 'outside' && a.route === 'gate') shareA = .95;
+                const shareA = .5;
                 if (!fixedA) { const k = fixedB ? 1 : shareA; a.x -= nx * push * k; a.z -= nz * push * k; constrain(a); }
                 if (!fixedB) { const k = fixedA ? 1 : 1 - shareA; b.x += nx * push * k; b.z += nz * push * k; constrain(b); }
             }
@@ -445,11 +572,11 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         // Projection against two perpendicular obstacles can trap a residual overlap. Resolve only
         // those cases against the already placed units; immutable ladder occupants go first.
         const ordered = [...units].sort((a, b) =>
-            Number(b.zone === 'ladder' || b.zone === 'wall' || inLadderQueue(b)) - Number(a.zone === 'ladder' || a.zone === 'wall' || inLadderQueue(a)));
+            Number(fixedAttacker(b)) - Number(fixedAttacker(a)));
         const placed = [];
         for (const u of ordered) {
             const clear = () => placed.every(v => (u.x - v.x) ** 2 + (u.z - v.z) ** 2 >= .32 ** 2);
-            if (!clear() && u.zone !== 'ladder' && u.zone !== 'wall' && !inLadderQueue(u)) {
+            if (!clear() && !fixedAttacker(u)) {
                 const x = u.x, z = u.z;
                 let found = false;
                 for (let ring = 1; ring <= 32 && !found; ring++) for (let i = 0; i < 16; i++) {
@@ -462,24 +589,74 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
             }
             placed.push(u);
         }
+        // 本帧总位移（移动 + 推挤）不超过 2 x speed x dt：人群里是挤开而不是瞬移
+        if (origin) for (const u of units) {
+            const o = origin.get(u);
+            if (!o || fixedAttacker(u)) continue;
+            const [x, z] = o, d = Math.hypot(u.x - x, u.z - z), cap = 2 * u.speed * dt + .015;
+            if (d > cap) { u.x = x + (u.x - x) * cap / d; u.z = z + (u.z - z) * cap / d; constrain(u); }
+        }
     }
     function updateDefenders(dt) {
-        const threats = assault.ladders.filter(l => l.climber && !l.climber.dead);
-        if (assault.ram.state === 'hitting') threats.push({ x: 0, z: 5 });
+        const tops = assault.ladders.filter(l => l.climber && !l.climber.dead).map(l => ({ x: l.topX, z: l.topZ, ladder: true }));
+        const threats = [...tops];
+        if (assault.ram.state === 'hitting') threats.push({ x: 0, z: WALL_R });
+        const guards = assault.defenders.filter(d => !d.dead && !d.fixed && d.zone === 'wall');
+        const assignments = new Map(), per = 8 * WALL_R;
+        const along = (from, to) => ((to - from + per * 1.5) % per) - per / 2;
+        for (const t of threats) {
+            const center = wallParamToward(t.x, t.z);
+            const chosen = guards.filter(d => !assignments.has(d))
+                .sort((a, b) => distance(a, t) - distance(b, t) || a.id - b.id).slice(0, 3);
+            const side = d => along(center, wallParamToward(d.x, d.z));
+            chosen.sort((a, b) => side(a) - side(b) || a.homeT - b.homeT);
+            // 梯顶有攻方：守军按所在侧分站梯顶两侧、隔一个身位对砍，不站到攻方身上
+            const left = chosen.filter(d => side(d) < 0).length;
+            const offsets = !t.ladder ? chosen.map((_, i) => (i - (chosen.length - 1) / 2) * .6) :
+                chosen.length === 1 ? [side(chosen[0]) < 0 ? -.6 : .6] :
+                    chosen.length === 2 ? [-.6, .6] : left >= 2 ? [-1.2, -.6, .6] : [-.6, .6, 1.2];
+            chosen.forEach((d, i) => assignments.set(d, center + offsets[i]));
+        }
+        // Reserve unassigned posts first. Guards walk at most one step along the wall and never
+        // step closer than .5 to another guard or an occupied ladder top (no hopping past anyone);
+        // .5 on the logical wall leaves at least .45 between the inset walkway positions.
+        for (const d of [...guards].sort((a, b) => Number(assignments.has(a)) - Number(assignments.has(b)) || a.id - b.id)) {
+            const have = wallParamToward(d.x, d.z), diff = along(have, assignments.get(d) ?? d.homeT);
+            if (Math.abs(diff) < 1e-12) continue;
+            const others = [...guards.filter(v => v !== d && !v.dead && v.zone === 'wall'), ...tops];
+            // 翻墙段的攀爬者、刚下台阶的人与墙上守军同层，按渲染位置让出一个身位
+            const near = [...assault.attackers, ...assault.defenders].filter(v => v.zone !== 'wall' && bodyPartners(d, v))
+                .map(viewPoint);
+            const dv = inwardPoint(d.x, d.z);
+            const ok = p => {
+                const pv = inwardPoint(p[0], p[1]);
+                return others.every(v => {
+                    const n = Math.hypot(p[0] - v.x, p[1] - v.z);
+                    return n >= .5 + 1e-9 || n >= Math.hypot(d.x - v.x, d.z - v.z) - 1e-9;
+                }) && near.every(([vx, vz]) => {
+                    const n = Math.hypot(pv[0] - vx, pv[1] - vz);
+                    return n >= BODY_GAP + .01 || n >= Math.hypot(dv[0] - vx, dv[1] - vz) - 1e-9;
+                });
+            };
+            for (let f = 1; f > 0; f -= .25) {
+                const p = wallPoint(have + Math.sign(diff) * Math.min(Math.abs(diff), d.speed * dt) * f);
+                if (ok(p)) { [d.x, d.z] = p; break; }
+            }
+        }
         for (const d of assault.defenders) {
             if (d.dead) continue;
             const enemy = nearest(assault.attackers, d);
-            if (d.zone === 'inside') {
+            if (stepDown(d, dt)) {
+                // 下台阶途中不追敌、不走环道
+            } else if (d.zone === 'inside' && d.blockPath?.length) {
+                move(d, d.blockPath[0].x, d.blockPath[0].z, d.speed * dt);
+                if (distance(d, d.blockPath[0]) < .04) d.blockPath.shift();
+                constrain(d);
+            } else if (d.zone === 'inside') {
                 const target = nearest(assault.attackers, d, 3, u => u.zone === 'inside');
                 if (!target || distance(d, target) > rangeOf(d) * .8)
-                    move(d, target ? target.x : d.blockX, target ? target.z : 3.8, d.speed * dt);
+                    move(d, target ? target.x : d.blockX, target ? target.z : BLOCK_Z, d.speed * dt);
                 constrain(d);
-            } else if (!d.fixed) {
-                const threat = threats.reduce((best, t) => !best || distance(d, t) < distance(d, best) ? t : best, null);
-                const have = wallParamToward(d.x, d.z), want = threat ? wallParamToward(threat.x, threat.z) : d.homeT;
-                let diff = ((want - have + 60) % 40) - 20;
-                const [x, z] = wallPoint(have + Math.sign(diff) * Math.min(Math.abs(diff), d.speed * dt));
-                d.x = x; d.z = z;
             }
             if (enemy) d.yaw = Math.atan2(enemy.x - d.x, enemy.z - d.z);
         }
@@ -546,17 +723,25 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         if (!assault.active || assault.result !== null) return [];
         assault.events = []; assault.elapsedMs += ms;
         const dt = ms / 1000;
+        const origin = frameOrigin = new Map([...assault.attackers, ...assault.defenders].filter(u => !u.dead && !u.fixed).map(u => [u, [u.x, u.z]]));
         updateLadderQueues();
         if (assault.retreated) {
             for (const u of assault.attackers) if (!u.dead) {
                 if (u.zone === 'ladder') {
-                    changeZone(u, 'outside'); u.y = 0; u.x = assault.ladders[u.route].x;
+                    // 顺梯子爬回梯脚再后撤，不瞬移
+                    const l = assault.ladders[u.route];
+                    u.climbMs = Math.max(0, u.climbMs - dt * 1000);
+                    const k = u.climbMs / 1600;
+                    u.x = l.x + (l.topX - l.x) * k; u.z = l.z + (l.topZ - l.z) * k; u.y = k;
+                    if (k > 0) { u.waitState = 'retreat'; continue; }
+                    changeZone(u, 'outside'); u.y = 0;
                 }
+                u.waitState = 'retreat';
                 const formation = assault.formations[u.formation];
                 move(u, u.x - formation.dx, u.z - formation.dz, u.speed * dt);
                 constrain(u);
             }
-            separateAttackers(assault.attackers.filter(u => !u.dead));
+            separateAttackers(assault.attackers.filter(u => !u.dead), origin, dt);
             updateDefenders(dt);
             fight(assault.defenders, assault.attackers, ms);
             assault.retreatMs += ms;
@@ -566,8 +751,15 @@ export function createAssaultSim({ towerPositions = DEFAULT_TOWERS } = {}) {
         }
         advanceFormations(dt); updateRam(dt); updateLadderQueues();
         for (const u of assault.attackers) if (!u.dead) advanceAttacker(u, dt);
-        separateAttackers(assault.attackers.filter(u => !u.dead));
+        separateAttackers(assault.attackers.filter(u => !u.dead), origin, dt);
+        // Collision projection runs after movement. Waiting describes the final
+        // physical position, never just a reservation or an earlier arrival.
+        for (const u of assault.attackers) if (!u.dead && u.zone === 'outside' &&
+            ['staging', 'queued', 'firing'].includes(u.waitState) && distance(u, u.moveTarget) > .04)
+            u.waitState = 'travel';
         updateDefenders(dt);
+        // 寨内敌我同层，守军移动后再分离一次，保证敌我不重叠
+        separateAttackers([...assault.attackers, ...assault.defenders].filter(u => !u.dead && u.zone === 'inside'), origin, dt);
         fight(assault.attackers, assault.defenders, ms); fight(assault.defenders, assault.attackers, ms);
         updateVictory(ms);
         limitDuration();

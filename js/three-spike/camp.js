@@ -7,13 +7,12 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 // 攻寨推演复用真实模拟口径：兵种数值与伤害结算、营寨守军倍率/掩体
 import { createAssaultSim, WALL_R, wallPoint, ATTACK_KINDS, slotKind, ASSAULT_STEP_MS,
-    ATK_ANIM_MS, HIT_ANIM_MS, TOWER_ARCHER_SLOTS, TOWER_ORIGIN } from './camp-assault-sim.js';
+    ATK_ANIM_MS, HIT_ANIM_MS, TOWER_ARCHER_SLOTS, TOWER_ORIGINS, TOWER_HALF, ramButtonText, TENTS, LADDERS, GATE_HALF, WALK_INSET, RAM_REST, RAM_HIT, inwardPoint, viewPoint, bodyGap, poseOffset, meshPoint } from './camp-assault-sim.js';
 
 // ---- 换算链：世界高度 = px / 24 × 2（Terrain.HEIGHT_SCALE = 24，spike 的 H_WORLD = 2）----
 // 兵高 ≈ 1.145 世界单位（腿 0→0.42、躯干 0.43→0.93、头到 1.145）。
 const H_WORLD = 2.0;
 const WALL_SLOTS = 6;                     // 垛口数 = 周长等分
-const GATE_HALF = 1.2;                    // +gy 侧寨门半宽（2D 已有此约定：中间留 2 段缺口）
 const GATE_POST_T = .26;                  // 寨门门柱断面（gateGroup 与栅栏让位共用）
 const GATE_CLEAR = GATE_HALF + GATE_POST_T;    // 栅栏桩让开门柱的半宽（1.46）：否则桩会捅进门扇
 const GATE_SPAN = GATE_HALF + .05;        // 门洞净宽半值（1.25）：踩台剖口 + 门内桥板半宽
@@ -21,12 +20,10 @@ const POST_STEP = 0.2;                    // 桩间距：一圈 8r=40 → ≈200
 const FENCE_TOP = 1.75;                   // 齐胸栅栏顶面（≈1.53 兵高）＝ 21px
 const WALKWAY_H = 1.0;                    // 内侧踩台面（守军脚底）＝ 12px
 const WALKWAY_W = 0.6;                    // 踩台宽度
-const WALK_INSET = WALL_R * .11;          // 踩台中心相对墙线的内缩（≈0.55）
 const FENCE_TOP_OLD = 3.5;                // 对照：旧口径 42px 桩
 const GUARD_FEET_OLD = 28 / 24 * H_WORLD; // 对照：旧口径守军抬 28px 站墙顶
-// 内部 5 顶帐篷：中军大帐 2.2 居中 + 四角兵帐 1.8，角帐中心 ±2.8
-// （角帐锥顶外沿 2.8+0.95＝3.75 < 踩台内沿 4.15，不顶墙）
-const TENT_CMD = 2.2, TENT_SQ = 1.8, TENT_PITCH = 2.8;
+// 帐篷位置与尺寸由模拟模块 TENTS 提供。
+
 // 箭塔：移入寨内后整体缩到 0.8（原按墙外高台口径，3D 里过高）。
 const TOWER_S = .8;
 const TOWER_DECK = 3.2 * TOWER_S;         // ≈2.56
@@ -96,7 +93,7 @@ function soldierMesh(kind, mat, x, y, z, yaw = 0) {
 }
 
 // ---------------- 墙环几何：与 js/battle/camps.js 的 wallPointAt 同口径 ----------------
-const inward = (gx, gy) => { const l = Math.hypot(gx, gy) || 1; return [gx - gx / l * WALK_INSET, gy - gy / l * WALK_INSET]; };
+const inward = (gx, gy) => inwardPoint(gx, gy);
 
 // ---------------- 木栅墙（栅栏 + 一道横撑 + 踏板 + 垛口守军） ----------------
 // platformH：守军踏板面高（新口径 = 内侧踩台 1.0；旧口径 = 墙顶 2.33），null 表示不设踏板。
@@ -170,10 +167,7 @@ function tentGroup(x, z, size, withFlag) {
 // ---------------- 寨内 5 顶帐篷：中军大帐居中（带旗）+ 四角兵帐 ----------------
 function tentsGroup() {
     const group = new THREE.Group();
-    group.add(tentGroup(0, 0, TENT_CMD, true));
-    for (const sx of [-1, 1])
-        for (const sz of [-1, 1])
-            group.add(tentGroup(sx * TENT_PITCH, sz * TENT_PITCH, TENT_SQ, false));
+    for (const t of TENTS) group.add(tentGroup(t.x, t.z, t.half * 2, t.x === 0 && t.z === 0));
     return group;
 }
 
@@ -295,25 +289,25 @@ function ramGroup() {
 // 注意：x=±r 墙段走向沿 Z，故梯子的倾角是绕 Z 轴（rz），且必须从地面起算（中点=两端之中点）。
 function ladderGroup() {
     const parts = [], group = new THREE.Group();
-    // side:-1 → 靠 x=-r 墙外侧；side:+1 → 靠 x=+r 墙外侧
-    const wallLadder = (side, wz) => {
-        const wallX = side * WALL_R;
-        const baseX = wallX + side * .62;                 // 梯脚离墙 .62（外倾）
-        const topX  = wallX + side * .04;                 // 梯顶抵住踩台沿口
-        const topY  = WALKWAY_H + .38;                    // 顶端略高出踩台面
-        const len   = Math.hypot(baseX - topX, topY);
-        const tilt  = Math.atan2(baseX - topX, topY);     // 相对竖直的倾角（含方向符号）
-        const midX  = (baseX + topX) / 2, midY = topY / 2;
-        for (const dz of [-.15, .15])                     // 两根竖撑：rz=tilt 使顶端落在墙侧、底端落地外倾
-            parts.push(box(.05, len, .05, midX, midY, wz + dz, TIMBER, 0, tilt));
-        const steps = Math.max(3, Math.round(len / .3));
-        for (let i = 1; i < steps; i++) {                 // 横档落在斜线上
-            const t = i / steps;
-            parts.push(box(.05, .05, .34, baseX + (topX - baseX) * t, topY * t, wz, 0x6b4a2a));
+    for (const l of LADDERS) {
+        const topX = l.topX + l.nx * .04, topZ = l.topZ + l.nz * .04;
+        const topY = WALKWAY_H + .38;
+        const base = new THREE.Vector3(l.x, 0, l.z), top = new THREE.Vector3(topX, topY, topZ);
+        const direction = top.clone().sub(base), len = direction.length();
+        const rotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+        for (const offset of [-.15, .15]) {
+            const rail = box(.05, len, .05, 0, 0, 0, TIMBER);
+            rail.applyQuaternion(rotation);
+            rail.translate((l.x + topX) / 2 + l.nz * offset, topY / 2, (l.z + topZ) / 2 - l.nx * offset);
+            parts.push(rail);
         }
-    };
-    wallLadder(-1, -1.2);
-    wallLadder( 1,  1.2);
+        const steps = Math.max(3, Math.round(len / .3));
+        for (let i = 1; i < steps; i++) {
+            const t = i / steps;
+            parts.push(box(l.nz ? .34 : .05, .05, l.nx ? .34 : .05,
+                l.x + (topX - l.x) * t, topY * t, l.z + (topZ - l.z) * t, WOOD));
+        }
+    }
     const mesh = new THREE.Mesh(mergeGeometries(parts), campMat);
     mesh.castShadow = true; mesh.receiveShadow = true;
     group.add(mesh);
@@ -321,9 +315,9 @@ function ladderGroup() {
 }
 
 // ---------------- 箭塔（寨内望楼：四腿高台 + 四面垛口 + 塔梯 + 驻塔弓手，敞顶） ----------------
-function towerGroup() {
+function singleTowerGroup(origin) {
     const s = TOWER_S, deck = TOWER_DECK, railY = deck + .45 * s;    // 整体按 s 缩放
-    const pt = 1.7 * s, ry = .8 * s, th = .16 * s, leg = .65 * s;
+    const pt = 2 * TOWER_HALF, ry = .8 * s, th = .16 * s, leg = .65 * s;
     const parts = [
         box(pt, th, pt, 0, deck + th / 2, 0, 0xbf9d66),                 // 平台
         // 四面垛口闭合：四条边栏均沿各自边线走向（此前 z=-0.8 那条把宽/深写反，
@@ -347,11 +341,11 @@ function towerGroup() {
     mesh.castShadow = true; mesh.receiveShadow = true;
     const group = new THREE.Group();
     group.add(mesh);
-    // 移到寨内 -z 后墙中线：x=0 保持镜像对称，且远离 +gy 寨门与四角帐篷
-    const { x: px, z: pz } = TOWER_ORIGIN;
+    // 整组移动到模拟定义的塔位。
+    const { x: px, z: pz } = origin;
     // 弓手站在平台上：位置用「组内局部坐标」，组再整体搬到塔位
     // 世界坐标与网格一并挂到 userData，供攻寨推演把塔上弓手当守方复用（fixed，不跑位）
-    // 6 名弓手在平台上排 3×2（箭塔本就容得下多名弓手；单塔 2 人时守方远程火力太弱）
+    // 每座塔四名弓手，共用模拟槽位。
     const archers = [];
     for (const { x: ox, z: oz, yaw } of TOWER_ARCHER_SLOTS) {
         const m = soldierMesh('archer', guardMat, ox, deck + th, oz, yaw);
@@ -361,6 +355,14 @@ function towerGroup() {
     }
     group.userData.archers = archers;
     group.position.set(px, 0, pz);
+    return group;
+}
+
+function towerGroup() {
+    const group = new THREE.Group();
+    const towers = TOWER_ORIGINS.map(singleTowerGroup);
+    group.add(...towers);
+    group.userData.archers = towers.flatMap(t => t.userData.archers);
     return group;
 }
 
@@ -419,7 +421,6 @@ scene.add(soldierMesh('infantry', refMat, 2.8, 0, WALL_R + 1.8, Math.PI));
 // ---------------- 寨门开合 + 冲车撞门（仅展示页视觉：无耐久数值、无 sim 判定） ----------------
 const GATE_OPEN_OUT = 1.3;      // 手动开门：双扇朝寨外（+z）推开 ≈74°（日常出入，不碰门内桥板）
 const GATE_OPEN_IN  = Math.PI / 2;  // 冲车撞门：双扇朝寨内（-z）彻底敞开 90°——门扇贴着门柱立起，门洞完全畅通
-const RAM_REST = 8.2, RAM_HIT = 6.45;              // 冲车停放位 / 撞门位（撞头铁箍正好抵住门扇）
 const HITS_TO_BREAK = 6;        // 撞满 6 次门才破；前 5 次只把门撞得晃一下、冲车弹回
 const JOLT_DUR = .3;            // 单次撞击后门扇回弹的时长
 const BURST_DUR = .62;          // 破门阶段时长：前 CRUSH_DUR 内门闩/桥板/守门兵报废，之后门扇向内翻到 90°
@@ -471,7 +472,7 @@ function updateGateAnim(dt) {
     // 撞击回弹：每次冲车撞上门，双扇朝寨内抖一下再衰减。振幅上限 ~0.1rad，
     // 保证门板内缘（z ≈ 4.92 − 1.17·sin a）不会扎进门内桥板（板外沿 z = 4.75）
     st.jolt = Math.max(0, st.jolt - dt / JOLT_DUR);
-    const jolt = st.jolt * (.045 + .009 * Math.min(st.hits, HITS_TO_BREAK));
+    const jolt = st.jolt * (.045 + .009 * Math.min(st.hits, assault.active ? assault.gate.maxHp : HITS_TO_BREAK));
     const sgn = st.inward ? 1 : -1;                  // 左扇铰链在 -x：朝寨内为正角、朝寨外为负角（右扇镜像取反）
     u.doorL.rotation.y = sgn * st.angle + jolt;
     u.doorR.rotation.y = -sgn * st.angle - jolt;
@@ -489,7 +490,7 @@ function updateGateAnim(dt) {
         g.mesh.rotation.set(-1.4 * p, 1.1 * p * g.side, .35 * p);
     }
     // 裂纹逐击显现：撞到第 3 次起门板开始裂；门闩只挂在关门位，一被撞断就整体消失（不留残骸）
-    u.doorL.userData.crack.visible = u.doorR.userData.crack.visible = st.hits >= 3;
+    u.doorL.userData.crack.visible = u.doorR.userData.crack.visible = st.hits / (assault.active ? assault.gate.maxHp : HITS_TO_BREAK) >= .5;
     u.bar.visible = !st.rammed && st.angle < .18;
 
     if (!assault.active && st.phase === 'shut') {                               // 门开着：先关合到位再撞
@@ -515,7 +516,8 @@ function updateGateAnim(dt) {
     if (assault.active) ram.position.z = assault.ram.z + .12 * Math.sin(st.jolt * Math.PI);
     const want = st.open ? '关门' : '开门';
     if (gateBtn.textContent !== want) gateBtn.textContent = want;
-    const ramWant = st.hits > 0 && st.hits < HITS_TO_BREAK ? `冲车撞门 (${st.hits}/${HITS_TO_BREAK})` : '冲车撞门';
+    ramBtn.disabled = assault.active;
+    const ramWant = ramButtonText(assault.active, assault.gate, st.hits, assault.active ? undefined : HITS_TO_BREAK);
     if (ramBtn.textContent !== ramWant) ramBtn.textContent = ramWant;
 }
 
@@ -548,7 +550,7 @@ const dummy = new THREE.Object3D();
 
 // 守方网格池：寨墙守军按「守军数量」档启用前 N 个（6/12/24），一律站寨墙环的踩台上；
 // 兵种按同一周期规则分配（每 3 个垛口 1 名弓手 → N/3 名弓手），网格与逻辑兵种天然一致。
-// 箭塔 6 名弓手见 tower.userData.archers，也当守方复用（fixed=true，不跑位）。
+// 双塔 8 名弓手见 tower.userData.archers，也当守方复用（fixed=true，不跑位）。
 const MAX_WALL_GUARDS = 24;
 const defMeshes = [];
 for (let i = 0; i < MAX_WALL_GUARDS; i++) {
@@ -716,12 +718,13 @@ function stepAssault(ms) {
 // 攻方实例矩阵：位置用 (x, 0, z)，yaw = atan2(方向x, 方向z)
 // 活着：出手前扑 + 受击后仰的位移；阵亡：朝面向前扑倒 → 沉没 → 缩为 0 隐藏（纯视觉）
 function syncAssaultMeshes() {
+    const bodies = [...assault.attackers, ...assault.defenders];
     const n = { infantry: 0, pikeman: 0, archer: 0 };
     for (const a of assault.attackers) n[a.type]++;
     for (const kind of ATTACK_KINDS) assaultMeshes[kind].count = n[kind];
     for (const a of assault.attackers) {
         const im = assaultMeshes[a.type];
-        const [mx, mz] = a.zone === 'wall' ? inward(a.x, a.z) : [a.x, a.z];
+        const [mx, mz] = viewPoint(a);
         if (a.dead) {
             const f = fxMs - effectOf(a).dieAt;
             if (f >= DIE_FALL_MS + DIE_SINK_MS) {
@@ -739,9 +742,8 @@ function syncAssaultMeshes() {
             }
         } else {
             const { atkN, hitN } = animOf(a);
-            dummy.position.set(
-                mx + Math.sin(a.yaw) * Math.sin(Math.PI * atkN) * .18 - a.hitDX * .09 * hitN, a.y,
-                mz + Math.cos(a.yaw) * Math.sin(Math.PI * atkN) * .18 - a.hitDZ * .09 * hitN);
+            const [px, pz] = meshPoint(a, atkN, hitN, bodyGap(a, bodies));
+            dummy.position.set(px, a.y, pz);
             dummy.rotation.set(0, a.yaw, 0);
             dummy.scale.setScalar(1);
         }
@@ -754,6 +756,7 @@ function syncAssaultMeshes() {
 // 守军网格：逻辑位置在寨墙环，网格仍落在踩台（内缩 WALK_INSET，与静态样张一致）；
 // 出手前扑/受击后仰/倒地沉没与攻方同套；箭塔弓手（fixed）网格坐标是塔组局部坐标，只加偏移
 function syncGuardMeshes() {
+    const bodies = [...assault.attackers, ...assault.defenders];
     for (const d of assault.defenders) {
         const { mesh, meshBase } = guardViews.get(d);
         if (d.dead) {
@@ -765,7 +768,7 @@ function syncGuardMeshes() {
             if (d.fixed) {
                 mesh.position.set(meshBase.x, meshBase.y - .85 * sink, meshBase.z);
             } else {
-                const [ix, iz] = d.zone === 'wall' ? inward(d.x, d.z) : [d.x, d.z];
+                const [ix, iz] = viewPoint(d);
                 mesh.position.set(ix, d.y - .85 * sink, iz);
             }
             _q1.setFromAxisAngle(_AXIS_Y, d.yaw);
@@ -775,13 +778,13 @@ function syncGuardMeshes() {
         }
         mesh.visible = true;
         const { atkN, hitN } = animOf(d);
-        const lx = Math.sin(d.yaw) * Math.sin(Math.PI * atkN) * .18 - d.hitDX * .09 * hitN;
-        const lz = Math.cos(d.yaw) * Math.sin(Math.PI * atkN) * .18 - d.hitDZ * .09 * hitN;
+        // 箭塔弓手（fixed）不参与身位口径，姿态偏移不截断
+        const [lx, lz] = poseOffset(d, atkN, hitN, d.fixed ? Infinity : bodyGap(d, bodies));
         if (d.fixed) {
             mesh.position.set(meshBase.x + lx, meshBase.y, meshBase.z + lz);
             mesh.rotation.set(0, d.yaw, 0);
         } else {
-            const [ix, iz] = d.zone === 'wall' ? inward(d.x, d.z) : [d.x, d.z];
+            const [ix, iz] = viewPoint(d);
             mesh.position.set(ix + lx, d.y, iz + lz);
             mesh.rotation.set(0, d.yaw, 0);
         }
