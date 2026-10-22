@@ -67,7 +67,7 @@ export function resolveBlockedEngage(scene, unit, target, now, reach) {
                 Math.hypot(o.gx - sx, o.gy - sy) < 0.42) taken = true;
         });
         if (!taken) {
-            const legal = Terrain.segmentClear(scene.battleOptions.terrain, sx, sy, target.gx, target.gy) &&
+            const legal = Terrain.segmentClear(scene.battleOptions.terrain, sx, sy, target.gx, target.gy, 0, Terrain.dynOf(scene)) &&
                 CombatRules.clearLane(scene, unit, target, undefined, sx, sy);
             if (legal) { fallback = { sx, sy }; break; }
             fallback ??= { sx, sy };
@@ -325,7 +325,7 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
                 } else {
                     moveToward(unit, unit.strafeX, unit.strafeY, unit.typeData.speed * 0.8, dt);
                 }
-            } else if (minD > range || !Terrain.segmentClear(scene.battleOptions.terrain, unit.gx, unit.gy, nearest.gx, nearest.gy)) {
+            } else if (minD > range || !Terrain.segmentClear(scene.battleOptions.terrain, unit.gx, unit.gy, nearest.gx, nearest.gy, 0, Terrain.dynOf(scene))) {
                 unit.blockedEngageAt = null;
                 // 遇骑结阵：矛邻成排且来骑弹道朝本队压来（±60°）时停步——
                 // 停稳半秒即触发现有架枪快照，行军矛兵就地变临时枪墙。
@@ -336,7 +336,7 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
                 const rider = unit.type === 'pikeman' && unit.braceSupport >= 2 ? scene.incomingCharge(unit, 7) : null;
                 if (rider) {
                     // 钉死原地，保持行进朝向迎击
-                } else if (!Terrain.segmentClear(scene.battleOptions.terrain, unit.gx, unit.gy, nearest.gx, nearest.gy)) {
+                } else if (!Terrain.segmentClear(scene.battleOptions.terrain, unit.gx, unit.gy, nearest.gx, nearest.gy, 0, Terrain.dynOf(scene))) {
                     moveToward(unit, nearest.gx, nearest.gy, unit.typeData.speed, dt);
                 } else if (unit.type === 'pikeman' && unit.braceHold) {
                     // 钉死原地，迎击

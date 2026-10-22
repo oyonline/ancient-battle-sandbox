@@ -144,7 +144,7 @@ export function updatePikeBrace(unit, dt) {
             support++;
             if (dx * unit.braceFacingX + dy * unit.braceFacingY < -0.25) depth++;
         } else if (isHostile(unit.scene, unit.team, other.team) && distance <= 6) {
-            if (!Terrain.segmentClear(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, other.gx, other.gy)) return;
+            if (!Terrain.segmentClear(unit.scene?.battleOptions?.terrain, unit.gx, unit.gy, other.gx, other.gy, 0, Terrain.dynOf(unit.scene))) return;
             if (distance < nearestDistance - 1e-9 ||
                 (Math.abs(distance - nearestDistance) <= 1e-9 && other.id < nearestEnemy.id)) {
                 nearestEnemy = other; nearestDistance = distance;
@@ -166,7 +166,7 @@ export function updatePikeBrace(unit, dt) {
 export function isPreparedPike(guard, cavalry, dx, dy) {
     if (guard.withdrawn || guard.moraleState === 'routing') return false;
     if (guard.type !== 'pikeman' || !guard.braceReady || guard.braceSupport < 2) return false;
-    if (!Terrain.segmentClear(guard.scene?.battleOptions?.terrain, guard.gx, guard.gy, cavalry.gx, cavalry.gy)) return false;
+    if (!Terrain.segmentClear(guard.scene?.battleOptions?.terrain, guard.gx, guard.gy, cavalry.gx, cavalry.gy, 0, Terrain.dynOf(guard.scene))) return false;
     const distance = dist(guard, cavalry);
     if (distance < 0.001) return false;
     const front = ((cavalry.gx - guard.gx) * guard.braceFacingX + (cavalry.gy - guard.gy) * guard.braceFacingY) / distance;
@@ -483,7 +483,7 @@ export class CavalryAI {
         let contact = null, bestD = Infinity;
         unit.scene.forEachNear(unit.gx, unit.gy, UNIT_TYPES.pikeman.range + step, enemy => {
             if (enemy.team === unit.team || enemy.dead || enemy.withdrawn || unit.pierceHits?.has(enemy.id)) return;
-            if (!Terrain.segmentClear(terrain, unit.gx, unit.gy, enemy.gx, enemy.gy)) return;
+            if (!Terrain.segmentClear(terrain, unit.gx, unit.gy, enemy.gx, enemy.gy, 0, Terrain.dynOf(unit.scene))) return;
             const braced = isPreparedPike(enemy, unit, nx, ny);
             const reach = braced ? UNIT_TYPES.pikeman.range : routed ? CombatRules.contactDistance(unit, enemy) + 0.04 : 0.65;
             const ex = enemy.gx - unit.gx, ey = enemy.gy - unit.gy;
@@ -501,7 +501,7 @@ export class CavalryAI {
 
     impact(unit, target, braced, now, first) {
         const terrain = unit.scene?.battleOptions?.terrain;
-        if (!Terrain.segmentClear(terrain, unit.gx, unit.gy, target.gx, target.gy)) return;
+        if (!Terrain.segmentClear(terrain, unit.gx, unit.gy, target.gx, target.gy, 0, Terrain.dynOf(unit.scene))) return;
         if (!Terrain.chargeAllowed(terrain, unit.gx, unit.gy, target.gx, target.gy)) {
             this.enterMelee(unit);
             return;
@@ -587,7 +587,7 @@ export class CavalryAI {
             this.impact(unit, contact.enemy, contact.braced, now, true);
             return true;
         }
-        if (distance <= data.range + 0.25 && Terrain.segmentClear(terrain, unit.gx, unit.gy, target.gx, target.gy)) {
+        if (distance <= data.range + 0.25 && Terrain.segmentClear(terrain, unit.gx, unit.gy, target.gx, target.gy, 0, Terrain.dynOf(unit.scene))) {
             // 首撞只看冲锋独立冷却：缠斗收尾刀（lastAttack）不再把整趟助跑作废。
             if (unit.chargeDistance < 3 || now - (unit.lastChargeImpact ?? -Infinity) < data.atkSpeed) {
                 this.enterMelee(unit);
@@ -904,7 +904,7 @@ export function resolveAttack(target, from, options = {}) {
     if (target.dead || target.withdrawn || target.hp <= 0) return 0;
     const scene = target.scene;
     if (!from.typeData.ranged && !Terrain.segmentClear(scene?.battleOptions?.terrain,
-        from.gx, from.gy, target.gx, target.gy)) return 0;
+        from.gx, from.gy, target.gx, target.gy, 0, Terrain.dynOf(scene))) return 0;
     const formationMultiplier = scene?.tactics?.incomingMultiplier(from, target) ?? 1;
     const terrainMultiplier = Terrain.attackMultiplier(scene?.battleOptions?.terrain, from, target, options.sourceHeight);
     const damage = calculateAttackDamage(from, target, {

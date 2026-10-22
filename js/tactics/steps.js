@@ -201,7 +201,7 @@ export const StepsMethods = {
 
     fight(unit, target, now, dt, reach) {
         if (dist(unit, target) > reach || !Terrain.segmentClear(this.scene.battleOptions.terrain,
-            unit.gx, unit.gy, target.gx, target.gy)) this.move(unit, target.gx, target.gy, unit.typeData.speed, dt);
+            unit.gx, unit.gy, target.gx, target.gy, 0, Terrain.dynOf(this.scene))) this.move(unit, target.gx, target.gy, unit.typeData.speed, dt);
         else this.attack(unit, target, now, reach);
     },
 

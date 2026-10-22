@@ -3,8 +3,9 @@
 // 默认关闭——不开时所有 Terrain/导航调用走原路径，行为逐字节不变。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { makeScene, addUnit, moveToward, Terrain, CombatRules, knockback } from './battle-harness.js';
+import { makeScene, addUnit, moveToward, Terrain, CombatRules, knockback, resolveAttack } from './battle-harness.js';
 import { DynamicBlockers } from '../js/terrain.js';
+import { resolveBrace } from '../js/battle/core.js';
 
 // 封闭方框：x 30–40 / y 30–40，北墙留 2 格门洞，由 'door' 障碍单独控制。
 const WALLS = [
@@ -324,7 +325,9 @@ test('knockback toward wall: body stays out of the wall immediately after knockb
     addUnit(scene, 'blue', 'infantry', 60, 60);
     // 直接调用 knockback：朝 +x 方向（朝墙内） amount=5
     const from = { gx: 35, gy: 35 };
+    const gx0 = u.gx;
     knockback(u, from, 5);   // angle = atan2(0,3)=0 → 朝 +x
+    assert.ok(u.gx > gx0, `knockback must push the unit (${gx0} → ${u.gx})`);
     const wall = scene.dynamicBlockers.active.get('wall-knock');
     // 去掉事后的 step：knockback 返回的当帧，单位中心 + 身体半径就不得越过墙的近端面
     assert.ok(u.gx + CombatRules.bodyRadius(u) <= wall.x1 + 1e-6,
@@ -338,21 +341,29 @@ test('knockback toward wall: body stays out of the wall immediately after knockb
 // —— 同一方 5 个兵在墙边密集站位（x≈34.15 一带，间距 0.26 < 身体直径 0.72），
 //    不手动塞 separateX/Y，靠真实推挤分离逻辑产生推力。两组对照：
 //    1) 无墙：同样站位，推进后必须有人被推过墙所在的 x 坐标——证明推挤确实发生；
-//    2) 有墙：挂墙，逐帧断言所有兵的身体圆都不与墙体重叠。
+//    2) 有墙：挂墙，墙两侧各一组镜像密集兵，逐帧断言两侧身体都不与墙体重叠，
+//       也没有人被推到墙的另一侧（右侧兵 gx < wall.x1，左侧兵 gx > wall.x2）。
 test('separation near a wall: crowding really pushes bodies, wall never lets one overlap it', () => {
     const CRAMPED_X = [33.63, 33.89, 34.15, 34.41, 34.67];
     const WALL_SEP = { x1: 35.2, y1: 32, x2: 35.6, y2: 38, kind: 'wall' };
-    const crowd = withWall => {
+    // 以墙中心 (35.4, 35) 为对称轴：x → 70.8 - x，y 不变
+    const RIGHT_X = CRAMPED_X.map(x => 70.8 - x);   // → [36.13, 36.39, 36.65, 36.91, 37.17]
+    const crowd = (withWall, mirrored = false) => {
         const scene = makeScene();
         if (withWall) {
             scene.dynamicBlockers = new DynamicBlockers();
             scene.dynamicBlockers.requestAdd('wall-sep', WALL_SEP);
         }
-        const units = CRAMPED_X.map(x => addUnit(scene, 'red', 'infantry', x, 35));
+        const leftUnits = CRAMPED_X.map(x => addUnit(scene, 'red', 'infantry', x, 35));
+        let rightUnits = [];
+        if (mirrored) {
+            rightUnits = RIGHT_X.map(x => addUnit(scene, 'red', 'infantry', x, 35));
+        }
+        const units = [...leftUnits, ...rightUnits];
         addUnit(scene, 'blue', 'infantry', 60, 60);   // 框外旁观，保证不结算
         // 只留推挤分离：所有单位都不主动移动
         scene.updateNormalUnit = unit => { unit.moveX = 0; unit.moveY = 0; };
-        return { scene, units };
+        return { scene, units, leftUnits, rightUnits };
     };
     // 对照 1：无墙——推挤必须真的把兵推过墙所在的 x 坐标（否则本用例就是空测）
     const open = crowd(false);
@@ -360,15 +371,28 @@ test('separation near a wall: crowding really pushes bodies, wall never lets one
     const pushed = open.units.filter(unit => unit.gx > WALL_SEP.x1);
     assert.ok(pushed.length > 0,
         `separation never pushed anyone past x=${WALL_SEP.x1}: ${open.units.map(unit => unit.gx.toFixed(3)).join(', ')}`);
-    // 对照 2：有墙——逐帧断言身体不嵌入墙；墙必须真正吃住推力（最靠墙的身体贴在墙面外）
-    const sealed = crowd(true);
+    // 对照 2：有墙 + 两侧镜像兵——逐帧断言身体不嵌入墙；墙必须真正吃住推力
+    const sealed = crowd(true, true);
     const wall = { ...WALL_SEP, id: 'wall-sep' };
+    const wallMidX = (WALL_SEP.x1 + WALL_SEP.x2) / 2;   // 35.4
+    const initLeftIds = new Set(sealed.leftUnits.map(u => u.id));
+    const initRightIds = new Set(sealed.rightUnits.map(u => u.id));
     for (let frame = 0; frame < 240; frame++) {
         step(sealed.scene, 1);
         for (const unit of sealed.units) assertNotInWalls(unit, [wall]);
+        // 初始在墙左的兵始终在墙左，不得越过 wall.x1
+        for (const unit of sealed.units) {
+            if (initLeftIds.has(unit.id)) {
+                assert.ok(unit.gx < WALL_SEP.x1 + 1e-6,
+                    `left-side unit ${unit.id} was pushed through wall to right side: gx=${unit.gx}, wall.x1=${WALL_SEP.x1}`);
+            } else if (initRightIds.has(unit.id)) {
+                assert.ok(unit.gx > WALL_SEP.x2 - 1e-6,
+                    `right-side unit ${unit.id} was pushed through wall to left side: gx=${unit.gx}, wall.x2=${WALL_SEP.x2}`);
+            }
+        }
     }
-    const radius = CombatRules.bodyRadius(sealed.units[0]);
-    const maxX = Math.max(...sealed.units.map(unit => unit.gx));
+    const radius = CombatRules.bodyRadius(sealed.leftUnits[0]);
+    const maxX = Math.max(...sealed.leftUnits.map(unit => unit.gx));
     assert.ok(maxX > WALL_SEP.x1 - radius - 0.01,
         `crowd never pressed against the wall: max gx=${maxX}, expected ~${WALL_SEP.x1 - radius}`);
 });
@@ -380,7 +404,7 @@ test('separation near a wall: crowding really pushes bodies, wall never lets one
 //    三种配置下各跑 300 步，逐步记录每个单位的 id/gx/gy/hp/dead，三份轨迹必须完全一致。
 test('disabled layer, empty layer and a transient far obstacle produce byte-identical trajectories', () => {
     const FRAMES = 300;
-    const trace = configure => {
+    const trace = (configure, withTransient) => {
         const scene = makeScene();
         configure(scene);
         addUnit(scene, 'red', 'infantry', 25, 35);
@@ -389,20 +413,123 @@ test('disabled layer, empty layer and a transient far obstacle produce byte-iden
         addUnit(scene, 'blue', 'infantry', 43.5, 36);
         const frames = [];
         for (let frame = 0; frame < FRAMES; frame++) {
-            // 障碍只存在于第 1 步，且离所有单位足够远（(10,10) 一带）
-            if (frame === 0) scene.dynamicBlockers?.requestAdd('far-obstacle', { x1: 10, y1: 10, x2: 11, y2: 11.4, kind: 'wall' });
-            if (frame === 1) scene.dynamicBlockers?.requestRemove('far-obstacle');
+            // 只有 withTransient=true 时才加/删远处障碍；空层和关闭层永远不碰障碍
+            if (withTransient && frame === 0) scene.dynamicBlockers?.requestAdd('far-obstacle', { x1: 10, y1: 10, x2: 11, y2: 11.4, kind: 'wall' });
+            if (withTransient && frame === 1) scene.dynamicBlockers?.requestRemove('far-obstacle');
             step(scene, 1);
             frames.push(scene.units.map(unit => ({
                 id: unit.id, gx: unit.gx, gy: unit.gy, hp: unit.hp, dead: unit.dead
             })));
         }
+        if (withTransient && scene.dynamicBlockers) {
+            assert.ok(scene.dynamicBlockers.version >= 2,
+                `transient layer version must reach >=2 (got ${scene.dynamicBlockers.version}) proving add+remove were both committed`);
+        }
         return frames;
     };
-    const disabled = trace(scene => { scene.dynamicBlockers = null; });
-    const empty = trace(scene => { scene.dynamicBlockers = new DynamicBlockers(); });
-    const transient = trace(scene => { scene.dynamicBlockers = new DynamicBlockers(); });
+    const disabled = trace(scene => { scene.dynamicBlockers = null; }, false);
+    const empty = trace(scene => { scene.dynamicBlockers = new DynamicBlockers(); }, false);
+    const transient = trace(scene => { scene.dynamicBlockers = new DynamicBlockers(); }, true);
     assert.equal(disabled.length, FRAMES);
     assert.deepEqual(empty, disabled, 'an empty dynamic layer must not change the simulation');
     assert.deepEqual(transient, disabled, 'a transient far-away obstacle must not change the simulation');
+});
+
+// ============================================================
+// P0 第三轮新增：近战类攻击判定感知动态障碍，弓箭不受影响
+// ============================================================
+
+// —— 测试 1：隔墙近战砍不到。
+//    墙竖直 x=38.9~39.1, y=30~40。两侧各放一名步兵，直线距离 0.8 < range 0.95，
+//    中间被墙挡住。直接调用 resolveAttack，应返回 0。
+test('melee attack blocked by a dynamic wall between attacker and target yields 0 damage', () => {
+    const scene = makeScene();
+    scene.dynamicBlockers = new DynamicBlockers();
+    scene.dynamicBlockers.requestAdd('wall-melee', { x1: 38.9, y1: 30, x2: 39.1, y2: 40, kind: 'wall' });
+    step(scene, 1);   // 提交墙，让 dynOf 返回非 null
+    const red = addUnit(scene, 'red', 'infantry', 38.6, 35);
+    const blue = addUnit(scene, 'blue', 'infantry', 39.4, 35);
+    const dmg = resolveAttack(blue, red);
+    assert.equal(dmg, 0, `melee through dynamic wall must yield 0 damage, got ${dmg}`);
+    assert.equal(blue.hp, blue.maxHp, 'target hp must be unchanged');
+});
+
+// —— 测试 2：无墙对照——同站位无墙时，resolveAttack 返回 > 0，证明距离确实够近战。
+test('melee without wall at same range yields positive damage (control case)', () => {
+    const scene = makeScene();
+    // 不挂动态层（dynOf 返回 null → 走原 segmentClear 路径）
+    const red = addUnit(scene, 'red', 'infantry', 38.6, 35);
+    const blue = addUnit(scene, 'blue', 'infantry', 39.4, 35);
+    const dmg = resolveAttack(blue, red);
+    assert.ok(dmg > 0, `melee without wall must deal positive damage, got ${dmg}`);
+    assert.ok(blue.hp < blue.maxHp, 'target hp must decrease when no wall blocks');
+});
+
+// —— 测试 3：弓箭能越墙。墙隔开弓手和目标，弓手射程内，resolveAttack 远程仍能打中。
+test('archer attack is NOT blocked by a dynamic wall — ranged still hits through', () => {
+    const scene = makeScene();
+    scene.dynamicBlockers = new DynamicBlockers();
+    scene.dynamicBlockers.requestAdd('wall-archer', { x1: 39.8, y1: 30, x2: 40.2, y2: 40, kind: 'wall' });
+    step(scene, 1);
+    const archer = addUnit(scene, 'red', 'archer', 35, 35);   // range 9.5
+    const target = addUnit(scene, 'blue', 'infantry', 43, 35);  // 距离 = 8 < 9.5
+    const hpBefore = target.hp;
+    const dmg = resolveAttack(target, archer);
+    assert.ok(dmg > 0, `ranged attack through dynamic wall must still deal damage, got ${dmg}`);
+    assert.ok(target.hp < hpBefore, 'target hp must decrease from ranged shot over wall');
+});
+
+// —— 测试 4：骑兵隔墙 → 枪兵迎击不结算。
+//    墙隔开枪兵和骑兵，resolveBrace 检查 segmentClear 返回 false，迎击不触发。
+test('cavalry-charge brace is blocked by dynamic wall — no brace damage or lastBrace stamp', () => {
+    const scene = makeScene();
+    scene.dynamicBlockers = new DynamicBlockers();
+    scene.dynamicBlockers.requestAdd('wall-brace', { x1: 38.9, y1: 32, x2: 39.1, y2: 38, kind: 'wall' });
+    step(scene, 1);
+    const pike = addUnit(scene, 'blue', 'pikeman', 39.4, 35);
+    const cavalry = addUnit(scene, 'red', 'cavalry', 38.6, 35);
+    pike.lastBrace = 0;   // 初始化为 0，若 resolveBrace 不触发，它保持 0
+    cavalry.hp = cavalry.maxHp;
+    const hpBefore = cavalry.hp;
+    resolveBrace(scene, pike, cavalry);
+    assert.equal(pike.lastBrace, 0, `resolveBrace must not trigger when wall blocks LOS, lastBrace=${pike.lastBrace}`);
+    assert.equal(cavalry.hp, hpBefore, 'cavalry must take no brace damage through wall');
+});
+
+// —— 测试 5：关闭对照——近战交战 + 弓箭对射，三份轨迹完全一致。
+//    ① 不挂动态层（原路径）
+//    ② 挂空 DynamicBlockers、永不添加障碍
+//    ③ 挂一层，第 0 步加一块远离所有单位的障碍、第 1 步再删掉
+//    各跑 300 帧，记录每个单位的 hp/dead，必须逐帧一致；
+//    transient 组额外断言 version >= 2，证明临时障碍确实被提交并删除。
+test('dynamic blockers OFF: melee vs ranged battle yields identical trajectories in disabled/empty/transient layers', () => {
+    const FRAMES = 300;
+    const trace = (configure, withTransient) => {
+        const scene = makeScene();
+        configure(scene);
+        const redInf = addUnit(scene, 'red', 'infantry', 30, 30);
+        const redArch = addUnit(scene, 'red', 'archer', 25, 35);
+        const blueInf = addUnit(scene, 'blue', 'infantry', 40, 38);
+        const blueArch = addUnit(scene, 'blue', 'archer', 45, 35);
+        const frames = [];
+        for (let frame = 0; frame < FRAMES; frame++) {
+            if (withTransient && frame === 0) scene.dynamicBlockers?.requestAdd('far-wall', { x1: 10, y1: 50, x2: 11, y2: 50.4, kind: 'wall' });
+            if (withTransient && frame === 1) scene.dynamicBlockers?.requestRemove('far-wall');
+            step(scene, 1);
+            frames.push(scene.units.map(u => ({
+                id: u.id, gx: u.gx, gy: u.gy, hp: u.hp, dead: u.dead
+            })));
+        }
+        if (withTransient && scene.dynamicBlockers) {
+            assert.ok(scene.dynamicBlockers.version >= 2,
+                `transient layer version must reach >=2 (got ${scene.dynamicBlockers.version}) proving add+remove were both committed`);
+        }
+        return frames;
+    };
+    const disabled = trace(s => { s.dynamicBlockers = null; }, false);
+    const empty = trace(s => { s.dynamicBlockers = new DynamicBlockers(); }, false);
+    const transient = trace(s => { s.dynamicBlockers = new DynamicBlockers(); }, true);
+    assert.equal(disabled.length, FRAMES);
+    assert.deepEqual(empty, disabled, 'empty DynamicBlockers must not alter melee/ranged battle');
+    assert.deepEqual(transient, disabled, 'transient far obstacle must not alter melee/ranged battle');
 });

@@ -183,7 +183,7 @@ export function flushBattleImpacts(scene) {
 // 迎击结算：弹道被地形遮挡则落空；迎击倍率与反骑倍率各一次。
 // 表现（动画/打击感/战报）经场景钩子，本文件不出任何表现。
 export function resolveBrace(scene, guard, cavalry) {
-    if (!Terrain.segmentClear(scene.battleOptions.terrain, guard.gx, guard.gy, cavalry.gx, cavalry.gy)) return;
+    if (!Terrain.segmentClear(scene.battleOptions.terrain, guard.gx, guard.gy, cavalry.gx, cavalry.gy, 0, Terrain.dynOf(scene))) return;
     resolveAttack(cavalry, guard, { multiplier: 1.5 });
     guard.lastBrace = scene.simulationTime;
     scene.playAttackAnim(guard, cavalry);

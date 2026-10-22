@@ -48,7 +48,7 @@ export const CombatRules = {
     // fromX/fromY：枪线起点（默认单位当前位置）；受阻接战换位时从候选位预验枪线。
     clearLane(scene, unit, target, spear = unit.type === 'pikeman', fromX = unit.gx, fromY = unit.gy) {
         const terrain = scene.battleOptions?.terrain ?? unit.scene?.battleOptions?.terrain;
-        if (!Terrain.segmentClear(terrain, fromX, fromY, target.gx, target.gy)) return false;
+        if (!Terrain.segmentClear(terrain, fromX, fromY, target.gx, target.gy, 0, Terrain.dynOf(scene))) return false;
         const dx = target.gx - fromX, dy = target.gy - fromY, length2 = dx * dx + dy * dy;
         if (length2 < 0.0001) return true;
         let blocked = false, supporting = 0;
