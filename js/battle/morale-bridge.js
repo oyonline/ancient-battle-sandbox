@@ -159,7 +159,8 @@ export function updateRoutedUnit(scene, unit, dt) {
     const normalize = Math.hypot(dx, dy);
     const closeEnemy = now - (unit.routStartedAt ?? -Infinity) < 900 ? scene.nearestEnemy(unit) : null;
     const breaking = closeEnemy && dist(unit, closeEnemy) < 3;
-    if (Terrain.hasBarriers(scene.battleOptions.terrain)) {
+    const dyn = Terrain.dynOf(scene);
+    if (Terrain.hasBarriers(scene.battleOptions.terrain, dyn)) {
         // 隔岸时保留全局接应点；三格的局部躲避点可能落水，不能用它取代回撤路线。
         const fallbackX = unit.team === 'black' ? board.W / 2 : unit.team === 'red' ? 0.6 : board.W - 0.6;
         const fallbackY = unit.team === 'black' ? board.H - 0.6 : unit.gy;

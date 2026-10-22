@@ -61,8 +61,9 @@ export function separate(scene, dt) {
             const py = l > 1e-6 ? u.pshY * (l > cap ? cap / l : 1) : 0;
             // 对称累计推开，并消除长时间镜像模拟中的浮点方向偏差。
             const beforeX = u.gx, beforeY = u.gy;
+            const dyn = Terrain.dynOf(scene);
             const correction = Terrain.clipMotion(scene.battleOptions.terrain, u.gx, u.gy,
-                u.separateX + px, u.separateY + py, CombatRules.bodyRadius(u));
+                u.separateX + px, u.separateY + py, CombatRules.bodyRadius(u), dyn);
             u.gx = quantizePosition(clamp(u.gx + correction.x, 0.6, board.W - 0.6), board.W);
             u.gy = quantizePosition(clamp(u.gy + correction.y, 0.6, board.H - 0.6), board.H);
             // 保存实际纠偏量（含边界截断），供下一步架枪判定扣除。

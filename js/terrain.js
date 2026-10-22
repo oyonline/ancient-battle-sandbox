@@ -20,7 +20,7 @@ export class DynamicBlockers {
     }
     requestRemove(id) { this.pending.set(id, null); }
     // 固定时点提交（stepBattle 开头、rebuildSpatial 之后、beginStep 之前）。
-    // 提交时真正生效的变更按 id 排序，list 与合并缓存一次性排好序、冻结；
+    // 提交时真正生效的变更按 id 排序，list 一次性排好序、冻结；
     // 后续读取零排序零复制，只在 version 变化时作废重建。
     commit() {
         if (!this.pending.size) return false;
@@ -39,18 +39,20 @@ export class DynamicBlockers {
     get size() { return this.active.size; }
     // 供 Terrain 扫描：返回提交时排好序、冻结的数组；无提交时是空冻结数组。
     get list() { return this._list; }
-    // 静态障碍 + 动态障碍的合并数组缓存：同一个层、同一个版本、同一个地形 key
-    // 返回同一个数组（=== 成立）。缓存挂在本层实例上，不进 Terrain 或模块级变量。
-    getMergedWith(staticBlockers, key) {
+    // 静态障碍 + 动态障碍的合并数组缓存：同一个层、同一个版本、同一个静态障碍数组对象
+    // 返回同一个数组（=== 成立）。用数组对象本身当键，而非地形 key——这样不同地形的静态
+    // 障碍数组天然不同，缓存不串，也不需要额外传 key。缓存挂在本层实例上，不进 Terrain
+    // 或模块级变量。
+    getMergedWith(staticBlockers) {
         const v = this.version;
         if (!this._mergeCache || this._mergeCacheVersion !== v) {
             this._mergeCache = new Map(); this._mergeCacheVersion = v;
         }
-        let merged = this._mergeCache.get(key);
+        let merged = this._mergeCache.get(staticBlockers);
         if (!merged) {
             const arr = staticBlockers.length ? [...staticBlockers, ...this._list] : [...this._list];
             Object.freeze(arr);
-            this._mergeCache.set(key, arr);
+            this._mergeCache.set(staticBlockers, arr);
             merged = arr;
         }
         return merged;
@@ -75,6 +77,8 @@ export const Terrain = {
     },
 
     normalize(key) { return Object.hasOwn(this.maps, key) ? key : 'flat'; },
+    // 极小辅助：从 unit.scene 或 scene 取动态障碍层；空或无动态层时返回 null。
+    dynOf(scene) { return scene?.dynamicBlockers?.size ? scene.dynamicBlockers : null; },
     isNaturalSlope(key) { return key === 'red_pass' || key === 'blue_pass'; },
     mirror(key) {
         key = this.normalize(key);
@@ -205,7 +209,7 @@ export const Terrain = {
     // 动态层存在时经层实例的 getMergedWith 按 version 缓存合并结果，=== 成立。
     blockersOf(key, dyn) {
         const staticBlockers = this.geometry(key).blockers;
-        return dyn?.size ? dyn.getMergedWith(staticBlockers, key) : staticBlockers;
+        return dyn?.size ? dyn.getMergedWith(staticBlockers) : staticBlockers;
     },
     defenseLayout(key, team) {
         const layout = this.geometry(key).defense;

@@ -343,9 +343,10 @@ export class CavalryAI {
         }
         const stagePoint = () => {
             const point = { gx: route.stage === 0 ? route.startX : route.rearX, gy: route.y };
-            return Terrain.hasBarriers(unit.scene.battleOptions.terrain)
+            const dyn = Terrain.dynOf(unit.scene);
+            return Terrain.hasBarriers(unit.scene.battleOptions.terrain, dyn)
                 ? Terrain.projectPoint(unit.scene.battleOptions.terrain, point.gx, point.gy,
-                    CombatRules.bodyRadius(unit), unit.team === 'red' ? -1 : 1) : point;
+                    CombatRules.bodyRadius(unit), unit.team === 'red' ? -1 : 1, dyn) : point;
         };
         let point = stagePoint();
         if (Math.hypot(point.gx - unit.gx, point.gy - unit.gy) < 0.3) {
@@ -468,7 +469,8 @@ export class CavalryAI {
     // 只对实际行进线上的身体或准备好的正面枪尖产生局部阻力。
     pathContact(unit, tx, ty, speed, dt, plan = null) {
         const terrain = unit.scene?.battleOptions?.terrain;
-        const routed = Terrain.hasBarriers(terrain) || terrain === 'forest' || Terrain.isNaturalSlope(terrain);
+        const dyn = Terrain.dynOf(unit.scene);
+        const routed = Terrain.hasBarriers(terrain, dyn) || terrain === 'forest' || Terrain.isNaturalSlope(terrain);
         if (routed && !plan) plan = planMovement(unit, tx, ty, speed, dt, 'charge');
         if (routed && !plan) return null;
         const motionLength = routed ? Math.hypot(plan.motion.x, plan.motion.y) : 0;
@@ -561,7 +563,8 @@ export class CavalryAI {
             : this.detourPikes(unit, target);
         const distance = dist(unit, target);
         const plan = planMovement(unit, aim.gx, aim.gy, data.chargeSpeed, dt, 'charge');
-        const routed = Terrain.hasBarriers(terrain);
+        const dyn = Terrain.dynOf(unit.scene);
+        const routed = Terrain.hasBarriers(terrain, dyn);
         const aimDistance = dist(unit, aim);
         const dx = routed ? plan?.nx || 0 : aimDistance > 0.001 ? (aim.gx - unit.gx) / aimDistance : 0;
         const dy = routed ? plan?.ny || 0 : aimDistance > 0.001 ? (aim.gy - unit.gy) / aimDistance : 0;
@@ -810,7 +813,8 @@ function movementSpeedMultiplier(unit, tx, ty,
 // 一步只规划一次：骑兵探针、冲锋朝向与落地位移消费同一导航/裁剪结果。
 function planMovement(unit, tx, ty, speed, dt, movement = 'walk', intent = movement) {
     const terrain = unit.scene?.battleOptions?.terrain;
-    const routed = Terrain.hasBarriers(terrain);
+    const dyn = Terrain.dynOf(unit.scene);
+    const routed = Terrain.hasBarriers(terrain, dyn);
     if (routed) {
         const point = unit.scene.ensureNavigation().nextWaypoint(unit, tx, ty,
             unit.moraleState === 'routing' ? 'retreat' : intent);
@@ -825,7 +829,7 @@ function planMovement(unit, tx, ty, speed, dt, movement = 'walk', intent = movem
     const step = Math.min(d, speed * movementSpeedMultiplier(unit, tx, ty, slope) * dt);
     const intended = { x: dx / d * step, y: dy / d * step };
     let motion = movement === 'walk' ? CombatRules.constrainWalk(unit, intended.x, intended.y) : intended;
-    if (routed) motion = Terrain.clipMotion(terrain, unit.gx, unit.gy, motion.x, motion.y, CombatRules.bodyRadius(unit));
+    if (routed) motion = Terrain.clipMotion(terrain, unit.gx, unit.gy, motion.x, motion.y, CombatRules.bodyRadius(unit), dyn);
     const length = Math.hypot(motion.x, motion.y);
     return { tx, ty, slope, motion, intentX: dx / d, intentY: dy / d, nx: routed ? length ? motion.x / length : 0 : dx / d,
         ny: routed ? length ? motion.y / length : 0 : dy / d };
@@ -864,9 +868,10 @@ export function knockback(target, from, amount) {
     }
     const gx = clamp(target.gx + Math.cos(a) * amount, 1.45, board.W - 1.45);
     const gy = clamp(target.gy + Math.sin(a) * amount, 1.45, board.H - 1.45);
-    if (Terrain.hasBarriers(target.scene?.battleOptions?.terrain)) {
+    const dyn = Terrain.dynOf(target.scene);
+    if (Terrain.hasBarriers(target.scene?.battleOptions?.terrain, dyn)) {
         const motion = Terrain.clipMotion(target.scene.battleOptions.terrain, target.gx, target.gy,
-            gx - target.gx, gy - target.gy, CombatRules.bodyRadius(target));
+            gx - target.gx, gy - target.gy, CombatRules.bodyRadius(target), dyn);
         target.gx += motion.x; target.gy += motion.y;
     } else { target.gx = gx; target.gy = gy; }
 }
