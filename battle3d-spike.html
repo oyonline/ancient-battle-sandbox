@@ -1,0 +1,31 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>3D 战争感验证 · 千人对冲 spike</title><style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#111;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
+  #viewport{position:fixed;inset:0}
+  #hud{position:fixed;top:10px;left:12px;color:#fff;font-size:13px;text-shadow:0 1px 2px #000;pointer-events:none;line-height:1.7}
+  #hud b.red{color:#ff8b76}#hud b.blue{color:#7fb7e8}
+  #controls{position:fixed;top:10px;right:12px;display:flex;gap:6px}
+  #controls button{background:rgba(20,24,18,.82);color:#e8dfc8;border:1px solid #5a5a44;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer}
+  #controls button:hover{background:rgba(50,56,40,.9)}
+  #hint{position:fixed;bottom:10px;left:0;right:0;text-align:center;color:rgba(255,255,255,.55);font-size:12px;text-shadow:0 1px 2px #000;pointer-events:none}
+  #gate{position:fixed;inset:0;background:rgba(8,10,8,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:10}
+  #gate h1{color:#e8dfc8;font-size:22px;margin:0;font-weight:600}
+  #gate p{color:rgba(232,223,200,.6);font-size:13px;margin:0;max-width:420px;text-align:center;line-height:1.8}
+  #gate button{background:#8a2f22;color:#ffe9c8;border:none;border-radius:8px;padding:14px 42px;font-size:18px;cursor:pointer;font-weight:700}
+  #gate button:hover{background:#a53a2a}
+  #gate[hidden]{display:none}
+</style></head><body>
+<div id="viewport"></div>
+<div id="hud">加载中…</div>
+<div id="controls">
+  <button id="btn-pause">暂停</button>
+  <button id="btn-s1" style="font-weight:700">1×</button><button id="btn-s2">2×</button><button id="btn-s4">4×</button>
+  <button id="btn-reset">重新部署</button>
+</div>
+<div id="hint">左键拖动旋转 · 右键拖动平移 · 滚轮缩放 —— 同一套 2D 确定性模拟，3D 实例化渲染</div>
+<div id="gate">
+  <h1>3D 战争感验证</h1>
+  <p>红蓝各 500 人（剑士300 / 矛兵60 / 弓手80 / 骑兵60），跑的是与 2D 经典版同一套确定性模拟。点击开始（首次点击会解锁声音）。</p>
+  <button id="btn-start">开 战</button>
+</div>
+<script type="module" src="js/three-spike/main.js"></script>
+</body></html>
