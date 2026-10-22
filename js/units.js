@@ -818,8 +818,12 @@ function planMovement(unit, tx, ty, speed, dt, movement = 'walk', intent = movem
     if (routed) {
         const point = unit.scene.ensureNavigation().nextWaypoint(unit, tx, ty,
             unit.moraleState === 'routing' ? 'retreat' : intent);
-        if (!point.reachable) return null;
-        tx = point.gx; ty = point.gy;
+        if (!point.reachable) {
+            if (!dyn) return null;
+            // 动态围墙封路时保留原始目标，复用下方步长与裁剪，向墙推进并沿墙滑动。
+        } else {
+            tx = point.gx; ty = point.gy;
+        }
     }
     const dx = tx - unit.gx, dy = ty - unit.gy;
     const d = Math.hypot(dx, dy);

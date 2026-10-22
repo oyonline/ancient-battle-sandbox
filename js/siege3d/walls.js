@@ -59,10 +59,9 @@ export function buildCampVisuals(rects) {
             const along = (i - (count - 1) / 2) * .25;
             stakes.push([mx + (horizontal ? along : 0), my + (horizontal ? 0 : along)]);
         }
-        const thickness = horizontal ? r.y2 - r.y1 : r.x2 - r.x1;
         for (const height of [.55, 1.35]) {
-            if (horizontal) box(length, .12, .08, mx, height, my + Math.sign(cy - my) * (thickness / 2 + .04), brace);
-            else box(.08, .12, length, mx + Math.sign(cx - mx) * (thickness / 2 + .04), height, my, brace);
+            if (horizontal) box(length, .12, .08, mx, height, my + Math.sign(cy - my) * (.08 + .04), brace);
+            else box(.08, .12, length, mx + Math.sign(cx - mx) * (.08 + .04), height, my, brace);
         }
     }
     const mesh = new THREE.InstancedMesh(stakeGeometry, wood, stakes.length);

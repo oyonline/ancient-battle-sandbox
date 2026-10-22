@@ -68,7 +68,7 @@ function buildGround(w, h) {
         const x = pos.getX(i) + w / 2, z = pos.getZ(i) + h / 2;   // 网格坐标 gx∈[0,w]
         const y = groundH(x, z);
         pos.setY(i, y);
-        const c = new THREE.Color('#737e4e');
+        const c = new THREE.Color().setHSL(.23 + y * .012, .24, .34 + y * .05 + Math.sin(x * .8 + z * .5) * .015);
         colors.push(c.r, c.g, c.b);
     }
     geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
@@ -170,7 +170,7 @@ function groundNormal(gx, gy) {
 function addBlood(gx, gy, r) {
     const i = bloodCursor++ % BLOOD_CAP;
     bloodMesh.count = Math.min(bloodCursor, BLOOD_CAP);
-    dummy.position.set(gx - 35, groundH(gx, gy) + .06 + i * 1e-5, gy - 35);
+    dummy.position.set(gx - board.W / 2, groundH(gx, gy) + .06 + i * 1e-5, gy - board.H / 2);
     _nQ.setFromUnitVectors(_nUp, groundNormal(gx, gy));          // 圆片贴坡面
     _nQY.setFromAxisAngle(_nUp, Math.random() * Math.PI * 2);    // 面内随机旋转
     dummy.quaternion.copy(_nQ).multiply(_nQY);
@@ -187,7 +187,7 @@ for (let i = 0; i < 48; i++) {
 function puff(gx, gy, big = false) {
     const d = dustPool.find(p => p.life <= 0); if (!d) return;
     d.life = d.max = big ? .8 : .55;
-    d.m.position.set(gx - 35, groundH(gx, gy) + .2, gy - 35);
+    d.m.position.set(gx - board.W / 2, groundH(gx, gy) + .2, gy - board.H / 2);
     d.m.scale.setScalar(big ? .5 : .3); d.m.visible = true;
 }
 const arrowMesh = new THREE.InstancedMesh(
@@ -213,7 +213,7 @@ function sprayBlood(gx, gy, n, power, k = 1) {
         const a = Math.random() * Math.PI * 2, r = .3 + Math.random() * .7;
         const gen = bloodPCursor++;
         bloodP.push({ slot: gen % BLOOD_P_CAP, gen,
-            x0: gx - 35, y0, z0: gy - 35,
+            x0: gx - board.W / 2, y0, z0: gy - board.H / 2,
             vx: Math.sin(a) * r * v0 * .85, vy: (.55 + Math.random() * .8) * v0, vz: Math.cos(a) * r * v0 * .85,
             birth: scene.simulationTime, life: .45 + Math.random() * .3, gx, gy });
     }
@@ -232,8 +232,8 @@ function updateBloodP(simNow) {
             }
             bloodP.splice(i, 1); continue;
         }
-        const gx = p.x0 + 35 + p.vx * t, gy = p.z0 + 35 + p.vz * t;
-        dummy.position.set(gx - 35, Math.max(p.y0 + p.vy * t - .5 * G * t * t, groundH(gx, gy) + .04), gy - 35);
+        const gx = p.x0 + board.W / 2 + p.vx * t, gy = p.z0 + board.H / 2 + p.vz * t;
+        dummy.position.set(gx - board.W / 2, Math.max(p.y0 + p.vy * t - .5 * G * t * t, groundH(gx, gy) + .04), gy - board.H / 2);
         dummy.rotation.set(t * 9 + p.gen, t * 7, 0);
         dummy.scale.setScalar(1); dummy.updateMatrix();
         bloodPMesh.setMatrixAt(p.slot, dummy.matrix);
@@ -438,7 +438,7 @@ function recordCorpse(u, from) {
     const span = kind === 'cavalry' ? 1.5 : 1.1;
     let cy = groundH(u.gx, u.gy);
     for (const t of [.5, 1]) cy = Math.max(cy, groundH(u.gx + fx * span * t, u.gy + fz * span * t));
-    const f = { kind, slot: i, x: u.gx - 35, z: u.gy - 35, y: cy,
+    const f = { kind, slot: i, x: u.gx - board.W / 2, z: u.gy - board.H / 2, y: cy,
         yaw, fx, fz, slideX, slideZ,
         start: scene.simulationTime, dur: kind === 'cavalry' ? 760 : 600,   // 模拟时钟：暂停冻结/倍速同步
         lift: kind === 'cavalry' ? .3 : .16, puffed: false };
@@ -470,7 +470,7 @@ function sync3D(dt, now) {
         const bob = u.moving ? Math.abs(Math.sin(now * .012 + st.bob)) * .09 : 0;
         const lunge = u._lungeUntil > now ? .18 * Math.sin(Math.min(1, (u._lungeUntil - now) / 220) * Math.PI) : 0;
         const y = groundH(u.gx, u.gy);
-        dummy.position.set(u.gx - 35 + Math.sin(st.a) * lunge, y + bob, u.gy - 35 + Math.cos(st.a) * lunge);
+        dummy.position.set(u.gx - board.W / 2 + Math.sin(st.a) * lunge, y + bob, u.gy - board.H / 2 + Math.cos(st.a) * lunge);
         dummy.rotation.set(u.moving && u.type === 'cavalry' ? .12 : 0, st.a, 0);
         dummy.scale.setScalar(1); dummy.updateMatrix();
         mesh.setMatrixAt(slot, dummy.matrix);
@@ -490,7 +490,7 @@ function sync3D(dt, now) {
         const a = arrows[i], p = Math.min(1, a.t / a.dur);
         const gx = a.sx + (a.tx - a.sx) * p, gy = a.sy + (a.ty - a.sy) * p;
         const hgt = (a.sourceHeight || 0) * (1 - p) + (a.targetHeight || 0) * p;
-        dummy.position.set(gx - 35, hgt * H_WORLD + Math.sin(p * Math.PI) * arrowArc(a) + .5, gy - 35);
+        dummy.position.set(gx - board.W / 2, hgt * H_WORLD + Math.sin(p * Math.PI) * arrowArc(a) + .5, gy - board.H / 2);
         // 姿态沿弹道切线：水平速度恒定 + 垂直分量为高度插值与正弦弧的导数 → 上仰/下俯
         arrowVel(a, p, _bv);
         _av.copy(dummy.position).add(_bv);
@@ -505,7 +505,7 @@ function sync3D(dt, now) {
     for (let i = falling.length - 1; i >= 0; i--) {
         const f = falling[i], p = Math.min(1, (simNow - f.start) / f.dur);
         writeFall(f, p);
-        if (!f.puffed && p >= .88) { f.puffed = true; puff(f.x + 35 + f.slideX, f.z + 35 + f.slideZ, f.kind === 'cavalry'); }
+        if (!f.puffed && p >= .88) { f.puffed = true; puff(f.x + board.W / 2 + f.slideX, f.z + board.H / 2 + f.slideZ, f.kind === 'cavalry'); }
         if (p >= 1) falling.splice(i, 1);
     }
     updateBloodP(simNow);   // 血粒子抛物线推进（同一模拟时钟）
