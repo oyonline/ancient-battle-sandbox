@@ -9,17 +9,19 @@ export class TerrainNavigation {
         this.key = Terrain.normalize(key); this.battleId = battleId;
         this.graphs = new Map(); this.routes = new Map(); this.queueCounts = { red: [], blue: [] };
         this.lastQueueAt = -Infinity;
-        this._dynVersion = 0;
+        this._dynRef = null; this._dynVersion = 0;   // 同时记住层对象本身和版本号
         this.stats = { plans: 0, graphBuilds: 0 };
     }
 
-    // 本场动态障碍层的版本闸：版本一变（含层被移除回到 0），按身体半径缓存的
-    // 可见图与单位路线全部作废，下一次访问时按新障碍重建，不残留旧路线。
-    // 从未挂动态层时版本恒为 0，此方法永不清缓存——与原行为逐字节一致。
+    // 本场动态障碍层的版本闸：同时比较层对象和版本号，两者有一个变化就清空
+    // graphs + routes 并按新层重建。换一个新层实例且提交次数相同时旧版只比 version
+    // 会撞号不清——必须额外记层对象。从未挂过动态层时 _dynRef 恒为 null，版本号恒 0，
+    // 此方法永不清缓存，关闭时的行为与原逻辑逐字节一致。
     _syncBlockers() {
-        const version = this.scene.dynamicBlockers?.version || 0;
-        if (this._dynVersion !== version) {
-            this._dynVersion = version;
+        const dyn = this.scene.dynamicBlockers || null;
+        const version = dyn?.version || 0;
+        if (this._dynRef !== dyn || this._dynVersion !== version) {
+            this._dynRef = dyn; this._dynVersion = version;
             this.graphs.clear(); this.routes.clear();
         }
     }

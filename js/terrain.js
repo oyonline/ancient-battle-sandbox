@@ -11,12 +11,17 @@ import { territoryGeometry } from './territory-map.js';
 // 结果与请求先后无关，确定性不依赖 Math.random。关闭（置 null）时 Terrain 的
 // 所有读障碍入口走原路径，计算结果与此前逐字节一致。
 export class DynamicBlockers {
-    constructor() { this.active = new Map(); this.pending = new Map(); this.version = 0; }
+    constructor() {
+        this.active = new Map(); this.pending = new Map(); this.version = 0;
+        this._list = Object.freeze([]); this._mergeCache = null;   // 提交时生成，按 version 缓存
+    }
     requestAdd(id, rect) {
         this.pending.set(id, { id, x1: rect.x1, y1: rect.y1, x2: rect.x2, y2: rect.y2, kind: rect.kind });
     }
     requestRemove(id) { this.pending.set(id, null); }
     // 固定时点提交（stepBattle 开头、rebuildSpatial 之后、beginStep 之前）。
+    // 提交时真正生效的变更按 id 排序，list 与合并缓存一次性排好序、冻结；
+    // 后续读取零排序零复制，只在 version 变化时作废重建。
     commit() {
         if (!this.pending.size) return false;
         const ids = [...this.pending.keys()].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
@@ -25,13 +30,30 @@ export class DynamicBlockers {
             if (rect) this.active.set(id, rect); else this.active.delete(id);
         }
         this.pending.clear(); this.version++;
+        const list = [...this.active.keys()].sort((a, b) => a < b ? -1 : a > b ? 1 : 0)
+            .map(id => this.active.get(id));
+        this._list = Object.freeze(list);
+        this._mergeCache = null;   // version 变了，静态+动态合并缓存也作废
         return true;
     }
     get size() { return this.active.size; }
-    // 供 Terrain 扫描：顺序固定按 id 排序，与提交先后无关。
-    get list() {
-        return [...this.active.keys()].sort((a, b) => a < b ? -1 : a > b ? 1 : 0)
-            .map(id => this.active.get(id));
+    // 供 Terrain 扫描：返回提交时排好序、冻结的数组；无提交时是空冻结数组。
+    get list() { return this._list; }
+    // 静态障碍 + 动态障碍的合并数组缓存：同一个层、同一个版本、同一个地形 key
+    // 返回同一个数组（=== 成立）。缓存挂在本层实例上，不进 Terrain 或模块级变量。
+    getMergedWith(staticBlockers, key) {
+        const v = this.version;
+        if (!this._mergeCache || this._mergeCacheVersion !== v) {
+            this._mergeCache = new Map(); this._mergeCacheVersion = v;
+        }
+        let merged = this._mergeCache.get(key);
+        if (!merged) {
+            const arr = staticBlockers.length ? [...staticBlockers, ...this._list] : [...this._list];
+            Object.freeze(arr);
+            this._mergeCache.set(key, arr);
+            merged = arr;
+        }
+        return merged;
     }
 }
 
@@ -179,10 +201,11 @@ export const Terrain = {
     },
     hasBarriers(key, dyn) { return this.geometry(key).blockers.length > 0 || !!dyn?.size; },
     // 读障碍统一入口：静态几何 + 可选的本场动态层。动态层缺省或为空时返回共享静态
-    // 数组本身（不分配、不改遍历内容），所有调用方的结果与动态层出现前完全一致。
+    // 数组本身（不分配、不改遍历内容），所有调用方的结果与动态层出现前完全一致；
+    // 动态层存在时经层实例的 getMergedWith 按 version 缓存合并结果，=== 成立。
     blockersOf(key, dyn) {
-        const base = this.geometry(key).blockers;
-        return dyn?.size ? [...base, ...dyn.list] : base;
+        const staticBlockers = this.geometry(key).blockers;
+        return dyn?.size ? dyn.getMergedWith(staticBlockers, key) : staticBlockers;
     },
     defenseLayout(key, team) {
         const layout = this.geometry(key).defense;
