@@ -76,7 +76,10 @@ export function stepBattle(scene, dt) {
     scene.rebuildSpatial();
     const units = scene._aliveArr;
     scene.bodyContactDistance = CombatRules.maxContactDistance(units);
-    if (Terrain.hasBarriers(scene.battleOptions.terrain)) scene.ensureNavigation().beginStep(now, units);
+    // 本场动态障碍层：增删请求只在每步这一固定时点统一提交（commit 内按 id 排序），
+    // 同一步内不产生第二种障碍状态；导航经版本闸随后作废 graphs/routes 并重建。
+    scene.dynamicBlockers?.commit();
+    if (Terrain.hasBarriers(scene.battleOptions.terrain, scene.dynamicBlockers)) scene.ensureNavigation().beginStep(now, units);
 
     // 帧首：先用上一帧位移估计速度，再刷新快照（供箭矢预判）
     for (let i = 0; i < units.length; i++) {
@@ -139,7 +142,7 @@ export function stepBattle(scene, dt) {
     scene.planningStep = false;
     for (const unit of units) {
         const motion = Terrain.clipMotion(scene.battleOptions.terrain, unit.gx, unit.gy,
-            unit.moveX + unit.pushX, unit.moveY + unit.pushY, CombatRules.bodyRadius(unit));
+            unit.moveX + unit.pushX, unit.moveY + unit.pushY, CombatRules.bodyRadius(unit), scene.dynamicBlockers);
         unit.gx += motion.x;
         unit.gy += motion.y;
     }

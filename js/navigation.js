@@ -9,10 +9,23 @@ export class TerrainNavigation {
         this.key = Terrain.normalize(key); this.battleId = battleId;
         this.graphs = new Map(); this.routes = new Map(); this.queueCounts = { red: [], blue: [] };
         this.lastQueueAt = -Infinity;
+        this._dynVersion = 0;
         this.stats = { plans: 0, graphBuilds: 0 };
     }
 
+    // 本场动态障碍层的版本闸：版本一变（含层被移除回到 0），按身体半径缓存的
+    // 可见图与单位路线全部作废，下一次访问时按新障碍重建，不残留旧路线。
+    // 从未挂动态层时版本恒为 0，此方法永不清缓存——与原行为逐字节一致。
+    _syncBlockers() {
+        const version = this.scene.dynamicBlockers?.version || 0;
+        if (this._dynVersion !== version) {
+            this._dynVersion = version;
+            this.graphs.clear(); this.routes.clear();
+        }
+    }
+
     beginStep(now, units) {
+        this._syncBlockers();
         if (this.key !== 'river' || now - this.lastQueueAt < 500) return;
         this.lastQueueAt = now;
         const bridges = Terrain.geometry(this.key).zones;
@@ -29,19 +42,20 @@ export class TerrainNavigation {
 
     graph(radius) {
         if (this.graphs.has(radius)) return this.graphs.get(radius);
+        const dyn = this.scene.dynamicBlockers;
         const pad = radius + 0.08, points = [];
-        for (const rect of Terrain.geometry(this.key).blockers) {
+        for (const rect of Terrain.blockersOf(this.key, dyn)) {
             const xs = [rect.x1 - pad, rect.x2 + pad];
             if (this.key === 'red_pass') xs.reverse();
             for (const y of [rect.y1 - pad, rect.y2 + pad]) for (const x of xs) {
-                if (Terrain.walkable(this.key, x, y, radius)) points.push({ gx: x, gy: y });
+                if (Terrain.walkable(this.key, x, y, radius, dyn)) points.push({ gx: x, gy: y });
             }
         }
         const n = points.length, distances = Array.from({ length: n }, () => Array(n).fill(Infinity));
         const next = Array.from({ length: n }, () => Array(n).fill(-1));
         for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
             const a = points[i], b = points[j];
-            if (Terrain.segmentClear(this.key, a.gx, a.gy, b.gx, b.gy, radius)) {
+            if (Terrain.segmentClear(this.key, a.gx, a.gy, b.gx, b.gy, radius, dyn)) {
                 distances[i][j] = Math.hypot(a.gx - b.gx, a.gy - b.gy); next[i][j] = j;
             }
         }
@@ -79,8 +93,9 @@ export class TerrainNavigation {
             const y = (bridge.y1 + bridge.y2) / 2 + (lane - (lanes - 1) / 2) * 0.82;
             const entry = { gx: entryX, gy: y }, exit = { gx: exitX, gy: y };
             const inside = unit.gx > 32 - radius && unit.gx < 38 + radius;
-            if ((!inside && !Terrain.segmentClear(this.key, unit.gx, unit.gy, entry.gx, entry.gy, radius)) ||
-                !Terrain.segmentClear(this.key, exit.gx, exit.gy, goal.gx, goal.gy, radius)) continue;
+            const dyn = this.scene.dynamicBlockers;
+            if ((!inside && !Terrain.segmentClear(this.key, unit.gx, unit.gy, entry.gx, entry.gy, radius, dyn)) ||
+                !Terrain.segmentClear(this.key, exit.gx, exit.gy, goal.gx, goal.gy, radius, dyn)) continue;
             const cost = (inside ? Math.hypot(unit.gx - exit.gx, unit.gy - exit.gy) :
                 Math.hypot(unit.gx - entry.gx, unit.gy - entry.gy) + Math.abs(exitX - entryX)) +
                 Math.hypot(goal.gx - exit.gx, goal.gy - exit.gy) + Math.min(4, (this.queueCounts[unit.team][i] || 0) * 0.04);
@@ -90,7 +105,9 @@ export class TerrainNavigation {
     }
 
     plan(unit, goal, radius) {
+        this._syncBlockers();
         this.stats.plans++;
+        const dyn = this.scene.dynamicBlockers;
         if (this.key === 'river') {
             const river = this.riverRoute(unit, goal, radius);
             if (river) return river;
@@ -98,12 +115,12 @@ export class TerrainNavigation {
         const { points, distances, next } = this.graph(radius);
         // Goal visibility is identical for every start corner. Cache it once
         // per plan rather than repeating rectangle sweeps inside the n² loop.
-        const goalCosts = points.map(b => Terrain.segmentClear(this.key, b.gx, b.gy, goal.gx, goal.gy, radius)
+        const goalCosts = points.map(b => Terrain.segmentClear(this.key, b.gx, b.gy, goal.gx, goal.gy, radius, dyn)
             ? Math.hypot(b.gx - goal.gx, b.gy - goal.gy) : Infinity);
         let best = Infinity, start = -1, end = -1, bestTie = null;
         for (let i = 0; i < points.length; i++) {
             const a = points[i];
-            if (!Terrain.segmentClear(this.key, unit.gx, unit.gy, a.gx, a.gy, radius)) continue;
+            if (!Terrain.segmentClear(this.key, unit.gx, unit.gy, a.gx, a.gy, radius, dyn)) continue;
             const startCost = Math.hypot(a.gx - unit.gx, a.gy - unit.gy);
             for (let j = 0; j < points.length; j++) {
                 const b = points[j];
@@ -129,10 +146,12 @@ export class TerrainNavigation {
     }
 
     nextWaypoint(unit, goalX, goalY, intent = 'walk') {
-        if (!Terrain.hasBarriers(this.key)) return { gx: goalX, gy: goalY, direct: true, reachable: true };
+        this._syncBlockers();
+        const dyn = this.scene.dynamicBlockers;
+        if (!Terrain.hasBarriers(this.key, dyn)) return { gx: goalX, gy: goalY, direct: true, reachable: true };
         const radius = CombatRules.bodyRadius(unit), now = this.scene.simulationTime || 0;
-        const goal = Terrain.projectPoint(this.key, goalX, goalY, radius, unit.team === 'red' ? -1 : 1);
-        const direct = Terrain.segmentClear(this.key, unit.gx, unit.gy, goal.gx, goal.gy, radius);
+        const goal = Terrain.projectPoint(this.key, goalX, goalY, radius, unit.team === 'red' ? -1 : 1, dyn);
+        const direct = Terrain.segmentClear(this.key, unit.gx, unit.gy, goal.gx, goal.gy, radius, dyn);
         let cache = this.routes.get(unit);
         // 已入桥的路径不得因目标微动或拥堵快照而换桥；同岸直达则立即释放路线。
         if (direct && !(cache?.bridge && unit.gx > 31.5 && unit.gx < 38.5)) {
@@ -150,11 +169,11 @@ export class TerrainNavigation {
             const point = cache.points[0], next = cache.points[1];
             const close = Math.hypot(unit.gx - point.gx, unit.gy - point.gy) < 0.45;
             const passed = cache.bridge && Math.abs(next.gx - point.gx) > 1 && (unit.gx - point.gx) * (next.gx - point.gx) >= 0;
-            if (!(close || passed) || !Terrain.segmentClear(this.key, unit.gx, unit.gy, next.gx, next.gy, radius)) break;
+            if (!(close || passed) || !Terrain.segmentClear(this.key, unit.gx, unit.gy, next.gx, next.gy, radius, dyn)) break;
             cache.points.shift();
         }
         const point = cache.points[0];
-        if (!Terrain.segmentClear(this.key, unit.gx, unit.gy, point.gx, point.gy, radius)) {
+        if (!Terrain.segmentClear(this.key, unit.gx, unit.gy, point.gx, point.gy, radius, dyn)) {
             this.routes.delete(unit);
             return this.nextWaypoint(unit, goalX, goalY, intent);
         }

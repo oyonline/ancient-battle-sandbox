@@ -213,6 +213,7 @@ export class IsoBattleScene extends Phaser.Scene {
         this.siteTraits = null;      // 据点特色派生缓存（每次部署重建，避免跨局残留）
         this.net = null;
         this.netMySide = 'red';
+        this.dynamicBlockers = null;    // 本场动态障碍层默认关闭；归单场战斗所有，随重置丢弃
         this.selectionGfx?.clear();
         this._territoryCamInit = false;
         if (this.tacticsGfx) this.tacticsGfx.clear();

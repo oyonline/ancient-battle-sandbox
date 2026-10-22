@@ -3,6 +3,38 @@
 // 按棋盘比例布局外，其余地图是 70×70 时代设计、只在默认尺寸下运行，行为不变。
 import { board } from './board.js';
 import { territoryGeometry } from './territory-map.js';
+
+// 每场战斗可开关的动态障碍层（"千人攻寨"P0 地基），归单个战斗场景所有：
+// 不写入 Terrain._geometry，也不挂模块级状态。矩形字段与静态 blocker 相同
+// （{ x1, y1, x2, y2, kind }）外加 id。增删请求先入待提交区，由 stepBattle 在
+// 固定时点调用 commit() 统一生效；同批按 id 排序提交，遍历也按 id 排序——
+// 结果与请求先后无关，确定性不依赖 Math.random。关闭（置 null）时 Terrain 的
+// 所有读障碍入口走原路径，计算结果与此前逐字节一致。
+export class DynamicBlockers {
+    constructor() { this.active = new Map(); this.pending = new Map(); this.version = 0; }
+    requestAdd(id, rect) {
+        this.pending.set(id, { id, x1: rect.x1, y1: rect.y1, x2: rect.x2, y2: rect.y2, kind: rect.kind });
+    }
+    requestRemove(id) { this.pending.set(id, null); }
+    // 固定时点提交（stepBattle 开头、rebuildSpatial 之后、beginStep 之前）。
+    commit() {
+        if (!this.pending.size) return false;
+        const ids = [...this.pending.keys()].sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+        for (const id of ids) {
+            const rect = this.pending.get(id);
+            if (rect) this.active.set(id, rect); else this.active.delete(id);
+        }
+        this.pending.clear(); this.version++;
+        return true;
+    }
+    get size() { return this.active.size; }
+    // 供 Terrain 扫描：顺序固定按 id 排序，与提交先后无关。
+    get list() {
+        return [...this.active.keys()].sort((a, b) => a < b ? -1 : a > b ? 1 : 0)
+            .map(id => this.active.get(id));
+    }
+}
+
 export const Terrain = {
     HEIGHT_SCALE: 24,
     MAX_RANGE_MULTIPLIER: 1.2,
@@ -145,7 +177,13 @@ export const Terrain = {
         }
         return this._geometry[key] || this._geometry.flat;
     },
-    hasBarriers(key) { return this.geometry(key).blockers.length > 0; },
+    hasBarriers(key, dyn) { return this.geometry(key).blockers.length > 0 || !!dyn?.size; },
+    // 读障碍统一入口：静态几何 + 可选的本场动态层。动态层缺省或为空时返回共享静态
+    // 数组本身（不分配、不改遍历内容），所有调用方的结果与动态层出现前完全一致。
+    blockersOf(key, dyn) {
+        const base = this.geometry(key).blockers;
+        return dyn?.size ? [...base, ...dyn.list] : base;
+    },
     defenseLayout(key, team) {
         const layout = this.geometry(key).defense;
         return layout?.team === team ? layout : null;
@@ -172,9 +210,9 @@ export const Terrain = {
         if (surface === 'shallow') return shallowSpeed;    // 浅滩可通行但蹚水减速
         return 1;
     },
-    walkable(key, gx, gy, radius = 0.36) {
+    walkable(key, gx, gy, radius = 0.36, dyn) {
         return Number.isFinite(gx) && Number.isFinite(gy) && gx >= radius && gx <= board.W - radius &&
-            gy >= radius && gy <= board.H - radius && !this.geometry(key).blockers.some(r => this.contains(r, gx, gy, radius));
+            gy >= radius && gy <= board.H - radius && !this.blockersOf(key, dyn).some(r => this.contains(r, gx, gy, radius));
     },
     // Slab intersection against an expanded rectangle; endpoints on the boundary are legal.
     sweep(rect, ax, ay, bx, by, radius = 0) {
@@ -200,19 +238,20 @@ export const Terrain = {
         if (enter >= leave - 1e-12 || leave <= 1e-12 || enter >= 1 - 1e-12) return null;
         return { t: Math.max(0, enter), nx, ny };
     },
-    segmentClear(key, ax, ay, bx, by, radius = 0) {
-        return !this.geometry(key).blockers.some(r => this.sweep(r, ax, ay, bx, by, radius));
+    segmentClear(key, ax, ay, bx, by, radius = 0, dyn) {
+        return !this.blockersOf(key, dyn).some(r => this.sweep(r, ax, ay, bx, by, radius));
     },
-    clipMotion(key, gx, gy, mx, my, radius = 0.36) {
-        if (!this.hasBarriers(key)) return { x: mx, y: my, blocked: false };
+    clipMotion(key, gx, gy, mx, my, radius = 0.36, dyn) {
+        if (!this.hasBarriers(key, dyn)) return { x: mx, y: my, blocked: false };
         // 先截世界边界再扫掠；否则长击退可先绕出图外，再被 clamp 拉回另一岸。
         const edge = Math.max(0.6, radius);
         mx = Math.max(edge, Math.min(board.W - edge, gx + mx)) - gx;
         my = Math.max(edge, Math.min(board.H - edge, gy + my)) - gy;
+        const blockers = this.blockersOf(key, dyn);
         let x = gx, y = gy, dx = mx, dy = my, blocked = false;
         for (let pass = 0; pass < 3; pass++) {
             let hit = null;
-            for (const rect of this.geometry(key).blockers) {
+            for (const rect of blockers) {
                 const candidate = this.sweep(rect, x, y, x + dx, y + dy, radius);
                 if (candidate && (!hit || candidate.t < hit.t)) hit = candidate;
             }
@@ -225,9 +264,9 @@ export const Terrain = {
             if (hit.ny) dy = 0;
         }
         // 返回的是合并位移而非折线路径；多次滑移不能让这条直线切穿另一个角。
-        if (!this.segmentClear(key, gx, gy, x, y, radius)) {
+        if (!this.segmentClear(key, gx, gy, x, y, radius, dyn)) {
             let fraction = 1;
-            for (const rect of this.geometry(key).blockers) {
+            for (const rect of blockers) {
                 const hit = this.sweep(rect, gx, gy, gx + mx, gy + my, radius);
                 if (hit) fraction = Math.min(fraction, Math.max(0, hit.t - 0.000002 / Math.max(0.000002, Math.hypot(mx, my))));
             }
@@ -235,17 +274,17 @@ export const Terrain = {
         }
         return { x: x - gx, y: y - gy, blocked };
     },
-    projectPoint(key, gx, gy, radius = 0.36, preferredSide = 0) {
+    projectPoint(key, gx, gy, radius = 0.36, preferredSide = 0, dyn) {
         gx = Math.max(radius + 0.01, Math.min(board.W - radius - 0.01, gx));
         gy = Math.max(radius + 0.01, Math.min(board.H - radius - 0.01, gy));
-        if (this.walkable(key, gx, gy, radius)) return { gx, gy };
+        if (this.walkable(key, gx, gy, radius, dyn)) return { gx, gy };
         const candidates = [];
-        for (const r of this.geometry(key).blockers) {
+        for (const r of this.blockersOf(key, dyn)) {
             const pad = radius + 0.01;
             candidates.push({ gx: r.x1 - pad, gy }, { gx: r.x2 + pad, gy },
                 { gx, gy: r.y1 - pad }, { gx, gy: r.y2 + pad });
         }
-        return candidates.filter(p => this.walkable(key, p.gx, p.gy, radius)).sort((a, b) =>
+        return candidates.filter(p => this.walkable(key, p.gx, p.gy, radius, dyn)).sort((a, b) =>
             Math.hypot(a.gx - gx, a.gy - gy) - Math.hypot(b.gx - gx, b.gy - gy) ||
             preferredSide * (b.gx - a.gx) || a.gy - b.gy)[0] || { gx, gy };
     },
