@@ -856,10 +856,12 @@ function applyMovementPlan(unit, plan) {
 }
 
 export function moveToward(unit, tx, ty, speed, dt, movement = 'walk') {
+    if (unit.scene?.siege && unit.siegeAnchor) return;
     applyMovementPlan(unit, planMovement(unit, tx, ty, speed, dt, movement));
 }
 
 export function knockback(target, from, amount) {
+    if (target.scene?.siege && target.siegeAnchor) return;
     if (target.tacticalRole === 'guard' && amount > 0) {
         target.guardReady = false; target.guardStableTime = 0;
         target.braceReady = false; target.braceTime = 0; target.braceHold = false;
@@ -912,7 +914,7 @@ export function resolveAttack(target, from, options = {}) {
     const formationMultiplier = scene?.tactics?.incomingMultiplier(from, target) ?? 1;
     const terrainMultiplier = Terrain.attackMultiplier(scene?.battleOptions?.terrain, from, target, options.sourceHeight);
     const damage = calculateAttackDamage(from, target, {
-        ...options, multiplier: (options.multiplier ?? 1) * formationMultiplier * terrainMultiplier
+        ...options, multiplier: (options.multiplier ?? 1) * formationMultiplier * terrainMultiplier * (scene?.siege?.damageScale(from, target) ?? 1)
     });
     // 所有出手（近战 + 远程）在攻−防结算后做 ±10% 种子浮动：用出手者出生种子，
     // 同一出手者整场同值、换边镜像配对单位同值。弓箭/塔命中时 from 仍是射手本体

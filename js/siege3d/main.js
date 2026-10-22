@@ -11,6 +11,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Snd } from '../snd.js';
 import { Terrain } from '../terrain.js';
 import { campBounds, queueCampWalls, buildCampVisuals, disposeCampVisuals } from './walls.js';
+import { createCampSiege, siegeDeployment, installSiegeArrows, H_WORLD } from './deployment.js';
+import { buildSiegeVisuals } from './platforms.js';
 import { CavalryAI, unitRand } from '../units.js';
 import { board } from '../board.js';
 import { TW, TH, OX, OY } from '../render/metrics.js';
@@ -19,7 +21,6 @@ import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
 window.Snd = Snd;   // game.js / render 钩子里以全局 Snd 出声（die/win/arrow）
 
 const TERRAIN_KEY = 'flat';
-const H_WORLD = 2.0;                 // 1 个 2D 高度单位 ≈ 2 世界格：坡地 readable 优先
 const ATTACKERS = { infantry: 380, pikeman: 80, archer: 140 };
 const DEFENDERS = { infantry: 120, archer: 80 };
 const TEAM_COLOR = { red: 0xc4553f, blue: 0x7fb0e0 };
@@ -58,6 +59,7 @@ sun.shadow.normalBias = .05;
 scene3d.add(sun);
 
 const groundH = (gx, gy) => Terrain.height(TERRAIN_KEY, gx, gy) * H_WORLD;
+const surfaceH = (gx, gy) => groundH(gx, gy) + (scene?.siege?.heightAt(gx, gy) ?? 0) * H_WORLD;
 
 // ---------------- 地面（2D 同一块确定性地形） ----------------
 function buildGround(w, h) {
@@ -170,7 +172,7 @@ function groundNormal(gx, gy) {
 function addBlood(gx, gy, r) {
     const i = bloodCursor++ % BLOOD_CAP;
     bloodMesh.count = Math.min(bloodCursor, BLOOD_CAP);
-    dummy.position.set(gx - board.W / 2, groundH(gx, gy) + .06 + i * 1e-5, gy - board.H / 2);
+    dummy.position.set(gx - board.W / 2, surfaceH(gx, gy) + .06 + i * 1e-5, gy - board.H / 2);
     _nQ.setFromUnitVectors(_nUp, groundNormal(gx, gy));          // 圆片贴坡面
     _nQY.setFromAxisAngle(_nUp, Math.random() * Math.PI * 2);    // 面内随机旋转
     dummy.quaternion.copy(_nQ).multiply(_nQY);
@@ -207,7 +209,7 @@ scene3d.add(bloodPMesh);
 const bloodP = [];       // 存活粒子 { slot, gen, x0,y0,z0, vx,vy,vz, birth, life, gx, gy }
 let bloodPCursor = 0;
 function sprayBlood(gx, gy, n, power, k = 1) {
-    const y0 = groundH(gx, gy) + .8 * Math.max(.7, k);        // 喷口≈胸口高
+    const y0 = surfaceH(gx, gy) + .8 * Math.max(.7, k);        // 喷口≈胸口高
     const v0 = (power / 95) * (1.7 + Math.random() * 1.1);
     for (let i = 0; i < n; i++) {
         const a = Math.random() * Math.PI * 2, r = .3 + Math.random() * .7;
@@ -233,7 +235,7 @@ function updateBloodP(simNow) {
             bloodP.splice(i, 1); continue;
         }
         const gx = p.x0 + board.W / 2 + p.vx * t, gy = p.z0 + board.H / 2 + p.vz * t;
-        dummy.position.set(gx - board.W / 2, Math.max(p.y0 + p.vy * t - .5 * G * t * t, groundH(gx, gy) + .04), gy - board.H / 2);
+        dummy.position.set(gx - board.W / 2, Math.max(p.y0 + p.vy * t - .5 * G * t * t, surfaceH(gx, gy) + .04), gy - board.H / 2);
         dummy.rotation.set(t * 9 + p.gen, t * 7, 0);
         dummy.scale.setScalar(1); dummy.updateMatrix();
         bloodPMesh.setMatrixAt(p.slot, dummy.matrix);
@@ -284,30 +286,18 @@ function refreshCampVisuals() {
     // 开战前预览排队矩形；开战后读固定时点提交的 list，渲染不调用 commit。
     const rects = layer.size ? layer.list : [...layer.pending.values()].filter(Boolean);
     campVisuals = buildCampVisuals(rects);
+    campVisuals.add(buildSiegeVisuals(scene.siege));
     scene3d.add(campVisuals);
     campLayer = layer; campVersion = layer.version;
 }
 function positionArmies() {
     const b = campBounds();
-    const place = (u, x, y) => {
-        u.gx = u.pgx = x; u.gy = u.pgy = y;
+    scene.siege = createCampSiege(b);
+    for (const { unit: u, gx, gy, siegeAnchor } of siegeDeployment(scene.units, b, scene.siege)) {
+        u.gx = u.pgx = gx; u.gy = u.pgy = gy;
         u.moveX = u.moveY = u.pushX = u.pushY = u.velX = u.velY = 0;
-    };
-    const defenders = scene.units.filter(u => u.team === 'blue');
-    const rows = 14, span = b.y2 - b.y1 - 1.4;
-    let index = 0;
-    for (let row = 0; row < rows; row++) {
-        const columns = Math.floor(defenders.length / rows) + (row < defenders.length % rows ? 1 : 0);
-        for (let col = 0; col < columns; col++) {
-            place(defenders[index++], b.x1 + .7 + span * col / (columns - 1), b.y1 + .7 + span * row / (rows - 1));
-        }
+        u.siegeAnchor = siegeAnchor;
     }
-    // 沿原部署顺序交替分到西、南两翼，每翼 300。
-    scene.units.filter(u => u.team === 'red').forEach((u, i) => {
-        const wingIndex = Math.floor(i / 2), depth = Math.floor(wingIndex / 20), col = wingIndex % 20;
-        if (i % 2 === 0) place(u, b.x1 - .3 - 6 - depth * .85, b.cy - 9.5 + col);
-        else place(u, b.cx - 9.5 + col, b.y2 + .3 + 6 + depth * .85);
-    });
     scene.rebuildSpatial();
 }
 
@@ -342,6 +332,7 @@ async function boot() {
         fpsHud: null, groundImage: null, terrainLoading: false, lowFX: false,
         showVictory(winner) { hudWinner = winner === 'red' ? '红方胜' : winner === 'blue' ? '蓝方胜' : '结束'; }
     });
+    installSiegeArrows(scene);
     scene.resetBattleData();                  // 桩就位后重放初始化（士气/战报/时钟），与测试 harness 同套路
     Object.assign(scene.render.world, { drawSpawnZones() {} });
     scene._boardW = -1;                       // 强制 deployUnits 走一次棋盘尺寸分支（写入地形键）
@@ -404,7 +395,7 @@ function writeFall(f, p) {
     const tp = p < .15 ? 0 : (p - .15) / .85;
     const theta = tp * tp * Math.PI / 2;
     const drift = 1 - Math.pow(1 - p, 3);
-    dummy.position.set(f.x + f.slideX * drift, f.y + f.lift * Math.sin(theta), f.z + f.slideZ * drift);
+    dummy.position.set(f.x + f.slideX * drift, f.y + f.platformLift * (1 - p) + f.lift * Math.sin(theta), f.z + f.slideZ * drift);
     _qf.setFromAxisAngle(_faxis.set(f.fz, 0, -f.fx), theta);
     _qy.setFromAxisAngle(_up, f.yaw);
     dummy.quaternion.copy(_qf.multiply(_qy));
@@ -439,7 +430,7 @@ function recordCorpse(u, from) {
     let cy = groundH(u.gx, u.gy);
     for (const t of [.5, 1]) cy = Math.max(cy, groundH(u.gx + fx * span * t, u.gy + fz * span * t));
     const f = { kind, slot: i, x: u.gx - board.W / 2, z: u.gy - board.H / 2, y: cy,
-        yaw, fx, fz, slideX, slideZ,
+        yaw, fx, fz, slideX, slideZ, platformLift: (scene.siege?.heightAt(u.gx, u.gy) ?? 0) * H_WORLD,
         start: scene.simulationTime, dur: kind === 'cavalry' ? 760 : 600,   // 模拟时钟：暂停冻结/倍速同步
         lift: kind === 'cavalry' ? .3 : .16, puffed: false };
     falling.push(f);
@@ -469,7 +460,7 @@ function sync3D(dt, now) {
         headings.set(u.id, st);
         const bob = u.moving ? Math.abs(Math.sin(now * .012 + st.bob)) * .09 : 0;
         const lunge = u._lungeUntil > now ? .18 * Math.sin(Math.min(1, (u._lungeUntil - now) / 220) * Math.PI) : 0;
-        const y = groundH(u.gx, u.gy);
+        const y = surfaceH(u.gx, u.gy);
         dummy.position.set(u.gx - board.W / 2 + Math.sin(st.a) * lunge, y + bob, u.gy - board.H / 2 + Math.cos(st.a) * lunge);
         dummy.rotation.set(u.moving && u.type === 'cavalry' ? .12 : 0, st.a, 0);
         dummy.scale.setScalar(1); dummy.updateMatrix();

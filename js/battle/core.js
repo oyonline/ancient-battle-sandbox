@@ -115,6 +115,10 @@ export function stepBattle(scene, dt) {
         unit.moving = false;
         unit.pressX = 0; unit.pressY = 0;
         if (scene.resolvingOutcome) continue;
+        if (scene.siege && unit.siegeAnchor) {
+            scene.updateNormalUnit(unit, now, dt, unit.siegeAnchor);
+            continue;
+        }
         if (scene.territory?.camps?.updateUnit(unit, now, dt)) continue;
         if (unit.moraleState === 'routing') { scene.updateRoutedUnit(unit, dt); continue; }
         if (scene.updateFallingBackUnit(unit, now, dt)) continue;
@@ -141,6 +145,7 @@ export function stepBattle(scene, dt) {
     }
     scene.planningStep = false;
     for (const unit of units) {
+        if (scene.siege && unit.siegeAnchor) continue;
         const motion = Terrain.clipMotion(scene.battleOptions.terrain, unit.gx, unit.gy,
             unit.moveX + unit.pushX, unit.moveY + unit.pushY, CombatRules.bodyRadius(unit), scene.dynamicBlockers);
         unit.gx += motion.x;
