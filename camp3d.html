@@ -44,7 +44,7 @@
     耐久耗尽破门：<b>两扇门朝寨内彻底敞开 90°</b>、门闩被撞断消失、桥板被撞落平躺、两名守门兵被撞翻抛落 → 冲车反冲退回<br>
     寨内 <b>5 顶帐篷</b>：中军大帐 2.2 居中（带旗）+ 四角兵帐 1.8（中心 ±3.5）<br>
     箭塔 <b>2 座，每座 4 名弓手</b>（-5.3, 5.3 / 0, -5.3）、整体缩到 <b>0.8</b>：平台 2.56、敞顶、四面垛口<br>
-    攻城梯 ×4：门面两架、东西侧墙各一架；两塔各有竖梯（脚落地、顶搭踩台）<br>
+    攻城梯 ×8：门面四架、东西侧墙各两架；寨内每面 2 架木梯（上下踩台）；两塔各有竖梯（脚落地、顶搭塔台）<br>
     <span style="color:rgba(232,223,200,.6)">寨门旁单兵 = 体量参照（兵高 1.145）</span>
   </div>
   <div class="old-only">
@@ -56,16 +56,17 @@
     <span style="color:rgba(232,223,200,.6)">仅栅栏高度 + 守军落点切换</span>
   </div>
 </div>
-<div id="controls"><button id="btn-gate">开门</button><button id="btn-ram">冲车撞门</button><button id="btn-toggle">口径：齐胸栅栏（新）· 点击对照旧口径</button><button id="btn-assault">开始攻寨</button><button id="btn-assault-reset">重置</button><select id="sel-force"><option value="squad">小队</option><option value="company" selected>中队</option><option value="brigade">大队</option></select><select id="sel-def"><option value="6" selected>守军 6</option><option value="12">守军 12</option><option value="24">守军 24</option></select></div>
+<div id="controls"><button id="btn-gate">开门</button><button id="btn-ram">冲车撞门</button><button id="btn-toggle">口径：齐胸栅栏（新）· 点击对照旧口径</button><button id="btn-assault">开始攻寨</button><button id="btn-assault-reset">重置</button><select id="sel-force"><option value="squad">小队</option><option value="company" selected>中队</option><option value="brigade">大队</option></select><select id="sel-def"><option value="6" selected>守军 6</option><option value="12">守军 12</option><option value="24">守军 24</option></select><select id="sel-mode"><option value="flag" selected>夺旗</option><option value="deathmatch">死斗</option></select></div>
 <div id="battle" hidden>
   <div class="b-title">攻寨推演</div>
+  <div>模式 <b id="battle-mode">夺旗</b></div>
   <div>攻方：存活 <b id="atk-alive">0</b> / 阵亡 <b id="atk-lost">0</b></div>
   <div>守方：存活 <b id="def-alive">0</b> / 阵亡 <b id="def-lost">0</b></div>
   <div>守军编制 <b id="def-comp">-</b></div>
   <div>战损比 <b id="ratio">-</b> · 用时 <b id="elapsed">0.0</b>s</div>
   <div>阶段 <b id="battle-phase">列阵推进</b></div>
   <div>寨门耐久 <b id="gate-hp">6/6</b></div>
-  <div>夺旗进度 <span id="flag-bar"><i id="flag-fill"></i></span> <b id="flag-progress">0%</b></div>
+  <div id="flag-row">夺旗进度 <span id="flag-bar"><i id="flag-fill"></i></span> <b id="flag-progress">0%</b></div>
   <div>结果 <b id="verdict">进行中</b></div>
 </div>
 <div id="hint">左键拖动旋转 · 右键拖动平移 · 滚轮缩放</div>

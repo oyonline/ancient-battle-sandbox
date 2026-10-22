@@ -4,7 +4,12 @@ import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { createAssaultSim, WALL_R, MELEE_STOP_R, ASSAULT_STEP_MS as STEP, FORCE_PRESETS,
     RAM_IMPACT_MS, FLAG_RADIUS, FLAG_RATE, FLAG_WEIGHT, LADDER_QUEUE_CAPACITY, ASSAULT_COVER, TOWER_RANGE, GUARD_MELEE_CAP, wallPoint, wallParamToward,
-    TOWER_HALF, WALK_INSET, wallFace, viewPoint, meshPoint, bodyGap, bodyPartners, STEP_DOWN_RATE, ramButtonText, formationSizes, DEFAULT_TOWERS, TOWER_ARCHER_SLOTS, TOWER_ORIGINS, LADDERS, ladderQueueSlot, ladderQueueCapacity, gateWaitSlot, RAM_CORRIDOR, RAM_REST, RAM_HIT, BLOCK_Z, ATK_ANIM_MS, HIT_ANIM_MS, TENTS } from '../js/three-spike/camp-assault-sim.js';
+    TOWER_HALF, WALK_INSET, wallFace, viewPoint, meshPoint, bodyGap, bodyPartners, ramButtonText, formationSizes, DEFAULT_TOWERS, TOWER_ARCHER_SLOTS, TOWER_ORIGINS, LADDERS, ladderQueueSlot, ladderQueueCapacity, gateWaitSlot, RAM_CORRIDOR, RAM_REST, RAM_HIT, BLOCK_Z, ATK_ANIM_MS, HIT_ANIM_MS, TENTS,
+    INNER_LADDERS, INNER_RAIL_TOP_R, INNER_RAIL_FOOT_R, innerFootSlot, innerTopSlot, TOWER_LADDERS, towerFootSlot, TOWER_Y, TOWER_TOP_CAP,
+    CLIMB_RATE, ARCHER_MELEE_FACTOR, CLIMB_QUEUE_CAPACITY, GATE_HALF, alongT, CLIMB_ZONES, LANE_W, MATE_GAP, GRANT_PATIENCE_MS } from '../js/three-spike/camp-assault-sim.js';
+import { calculateAttackDamage } from '../js/units.js';
+import { CAMP_RULES } from '../js/battle/camps.js';
+const MAX_DY_RATE = 1.25;   // R5：每帧 |Δy| <= 1.25 × dt + .005
 
 const kill = u => { u.dead = true; u.hp = 0; };
 const tick = (sim, count = 1) => { for (let i = 0; i < count; i++) sim.stepAssault(STEP); };
@@ -18,9 +23,9 @@ function finish(sim) {
     assert.ok(sim.assault.result, '300s timeout');
     return snapshot(sim.assault);
 }
-function isolated() {
+function isolated(preset = 'squad', mode = 'flag') {
     const sim = createAssaultSim({ towerPositions: [] });
-    const s = sim.startAssault('squad', 6, 1);
+    const s = sim.startAssault(preset, 6, 1, mode);
     s.attackers.forEach(kill); s.defenders.forEach(kill);
     s.formations.forEach(f => { f.released = true; });
     return { sim, s };
@@ -42,7 +47,8 @@ test('straight axial queues have .48 spacing and explicit slots beyond capacity'
 });
 
 test('queue claims are reserved at spawn; waiting requires reaching the current slot', () => {
-    const { sim, s } = isolated(), l = s.ladders[2];
+    // 8 架梯子后 squad 每架只有 2 人（杀 1 人即触发溃退），改用 company（每架 4 人）
+    const { sim, s } = isolated('company'), l = s.ladders[2];
     const units = s.attackers.filter(u => u.originalRoute === 2);
     units.forEach((u, i) => {
         const p = ladderQueueSlot(l, i + 1);
@@ -68,16 +74,19 @@ test('reserved firing, gate, ram and ladder regions are disjoint; spawn rectangl
         const sim = createAssaultSim(), s = sim.startAssault(preset, 12, 1);
         const waits = s.attackers.filter(u => u.gateSlot != null).map(u => gateWaitSlot(u.waitSide, u.gateSlot));
         const bows = s.attackers.filter(u => u.type === 'archer').map(u => u.fireSlot);
-        const queues = s.ladders.map((l, i) => Array.from({ length: s.attackers.filter(u => u.originalRoute === i).length },
-            (_, j) => ladderQueueSlot(l, j)));
-        const regions = [bows.map(pointRect), waits.map(pointRect), [RAM_CORRIDOR], ...queues.map(q => q.map(pointRect))];
+        // 每架攻城梯：梯身占地（梯脚到墙线，横向 ±.175）+ 梯脚队列，各自一组
+        const queues = s.ladders.map((l, i) => [{ minX: Math.min(l.x, l.topX) - (l.nz ? .175 : 0), maxX: Math.max(l.x, l.topX) + (l.nz ? .175 : 0),
+            minZ: Math.min(l.z, l.topZ) - (l.nx ? .175 : 0), maxZ: Math.max(l.z, l.topZ) + (l.nx ? .175 : 0) },
+        ...Array.from({ length: s.attackers.filter(u => u.originalRoute === i).length }, (_, j) => pointRect(ladderQueueSlot(l, j)))]);
+        assert.equal(queues.length, 8);
+        const regions = [bows.map(pointRect), waits.map(pointRect), [RAM_CORRIDOR], ...queues];
         for (let i = 0; i < regions.length; i++) for (let j = i + 1; j < regions.length; j++)
             for (const a of regions[i]) for (const b of regions[j]) assert.ok(!overlaps(a, b), `${preset} regions ${i}/${j}`);
         for (const p of bows) for (const l of LADDERS) {
             const lateral = Math.abs((p.x - l.x) * l.nz - (p.z - l.z) * l.nx);
             assert.ok(lateral >= .6 + .15, 'archer body avoids the queue strip');
         }
-        for (const p of waits) for (const l of LADDERS.slice(0, 2))
+        for (const p of waits) for (const l of LADDERS.filter(l => l.nz === 1))
             assert.ok(Math.abs(p.x - l.x) - .3 >= 1, 'gate/ladder body clearance >= 1');
         const rectangles = s.formations.map(f => {
             const units = f.units.filter(u => u.type !== 'archer');
@@ -132,7 +141,7 @@ test('seeded full battles reproduce every final unit field, result and gate hp; 
 });
 
 test('27 full battles: A4 arrivals, signed travel progress, provenance, spacing and full-game strike peaks', t => {
-    let minAttack = Infinity, minGuard = Infinity, guardOverlaps = 0, longestTravelMs = 0, peak = 0, timeouts = 0;
+    let minAttack = Infinity, minGuard = Infinity, minWallMate = Infinity, guardOverlaps = 0, longestTravelMs = 0, peak = 0, timeouts = 0;
     let illegalSwordHits = 0, gateEntries = 0, ladderEntries = 0;
     const rows = [], details = [], violations = [], timings = [];
     const check = (ok, text) => { if (!ok && violations.length < 30) violations.push(text); };
@@ -141,7 +150,7 @@ test('27 full battles: A4 arrivals, signed travel progress, provenance, spacing 
         for (const seed of [1, 2, 3]) {
             const sim = createAssaultSim(), s = sim.startAssault(preset, defenders, seed);
             const entryMethods = new Map(), arrivals = new Map(), progress = new Map(), climbed = new Set(), walls = new Set(), entered = new Set();
-            const wallCounts = [0, 0, 0, 0], cost = [];
+            const wallCounts = LADDERS.map(() => 0), cost = [];
             const label = `${preset}/${defenders}/${seed}`;
             let hits = 0, frames = 0;
             for (; frames < 18000 && !s.result; frames++) {
@@ -155,14 +164,18 @@ test('27 full battles: A4 arrivals, signed travel progress, provenance, spacing 
                         e.fromZone === 'outside' && e.toZone === 'wall') illegalSwordHits++;
                     if (e.type !== 'zone' || e.unit.team !== 'blue') continue;
                     if (e.zone === 'ladder') { check(e.previous === 'outside', `${label} ladder source`); climbed.add(e.unit.id); }
+                    // 上墙：攻城梯翻墙，或从寨内经木梯爬回墙头；下寨：破门入口，或经寨内木梯/塔梯下到地面
                     if (e.zone === 'wall') {
-                        check(e.previous === 'ladder' && climbed.has(e.unit.id), `${label} wall source`);
-                        walls.add(e.unit.id); wallCounts[e.unit.route]++;
+                        check(e.previous === 'ladder' && climbed.has(e.unit.id) || e.previous === 'iladder' && entered.has(e.unit.id), `${label} wall source`);
+                        if (e.previous === 'ladder') { walls.add(e.unit.id); wallCounts[e.unit.route]++; }
                     }
+                    if (e.zone === 'iladder') check(e.previous === 'wall' || e.previous === 'inside' && entered.has(e.unit.id), `${label} inner ladder source`);
+                    if (e.zone === 'tladder' || e.zone === 'tower') check(entered.has(e.unit.id), `${label} tower source`);
                     if (e.zone === 'inside') {
-                        if (e.via === 'gate') { check(e.gateBroken && e.previous === 'outside', `${label} gate source`); gateEntries++; }
-                        else { check(e.via === 'ladder' && walls.has(e.unit.id), `${label} inside source`); ladderEntries++; }
-                        entered.add(e.unit.id); entryMethods.set(e.unit.id, e.via);
+                        if (e.previous === 'outside') { check(e.via === 'gate' && e.gateBroken, `${label} gate source`); gateEntries++; }
+                        else if (e.previous === 'iladder' && !entered.has(e.unit.id)) { check(e.via === 'ladder' && walls.has(e.unit.id), `${label} inside source`); ladderEntries++; }
+                        else check(entered.has(e.unit.id) && (e.previous === 'iladder' || e.previous === 'tladder'), `${label} re-entry source ${e.previous}`);
+                        entered.add(e.unit.id); if (!entryMethods.has(e.unit.id)) entryMethods.set(e.unit.id, e.via);
                         check(e.unit.enteredVia === e.via, `${label} entry event provenance`);
                     }
                 }
@@ -186,7 +199,7 @@ test('27 full battles: A4 arrivals, signed travel progress, provenance, spacing 
                         check(Math.abs(u.x) >= .78 - 1e-9, `${label} moving ram corridor`);
                     if (u.zone === 'outside') check(Math.max(Math.abs(u.x), Math.abs(u.z)) >= MELEE_STOP_R - 1e-9, `${label} wall penetration`);
                     if (Math.max(Math.abs(u.x), Math.abs(u.z)) < WALL_R)
-                        check(u.zone === 'inside' && entered.has(u.id), `${label} unproven inside`);
+                        check(['inside', 'iladder', 'tladder', 'tower'].includes(u.zone) && (entered.has(u.id) || u.zone === 'iladder' && walls.has(u.id)), `${label} unproven inside`);
                     if (u.zone === 'inside') for (const tent of TENTS)
                         check(Math.abs(u.x - tent.x) >= tent.half + .16 - 1e-9 || Math.abs(u.z - tent.z) >= tent.half + .16 - 1e-9, `${label} tent`);
                     if (u.waitState !== 'travel' || s.elapsedMs < f.departMs || !u.moveTarget) { progress.delete(u.id); continue; }
@@ -207,13 +220,24 @@ test('27 full battles: A4 arrivals, signed travel progress, provenance, spacing 
                     check(climbers.length <= 1, `${label} ladder ${route} multiple climbers`);
                     if (climbers.length) check(s.ladders[route].climber === climbers[0], `${label} ladder owner at=${s.elapsedMs} id=${climbers[0].id} pos=${climbers[0].x},${climbers[0].z} owner=${s.ladders[route].climber?.id ?? null} retreated=${s.retreated}`);
                 }
-                const alive = s.attackers.filter(u => !u.dead), guards = s.defenders.filter(u => !u.dead && u.zone === 'wall');
+                // 地面层人群（墙外、攻城梯、寨内、木梯/塔梯）互相 >= .3；踩台单列与塔顶的攻方另有分层规则，不按平面坐标比
+                const alive = s.attackers.filter(u => !u.dead && u.zone !== 'tower' && !(u.zone === 'wall' && u.leftTop)),
+                    guards = s.defenders.filter(u => !u.dead && u.zone === 'wall');
                 for (let i = 0; i < alive.length; i++) for (let j = i + 1; j < alive.length; j++) {
                     const d = distance(alive[i], alive[j]); minAttack = Math.min(minAttack, d);
                     check(d >= .3 - 1e-9, `${label} attack spacing ${d}`);
                 }
+                // 墙头层的攻方（踩台、攻城梯翻墙段、木梯上段）按渲染位置互相 >= MATE_GAP（错身走内外道，平面坐标可重合）
+                const top = s.attackers.filter(u => !u.dead && (u.zone === 'wall' || u.zone === 'ladder' && u.y >= .8 || u.zone === 'iladder' && u.y >= .7))
+                    .map(u => { const [x, z] = viewPoint(u); return { u, x, z }; });
+                for (let i = 0; i < top.length; i++) for (let j = i + 1; j < top.length; j++) {
+                    const d = distance(top[i], top[j]); minWallMate = Math.min(minWallMate, d);
+                    check(d >= MATE_GAP - 1e-9, `${label} wall mates ${top[i].u.id}/${top[j].u.id} ${d.toFixed(3)} at=${s.elapsedMs.toFixed(0)}`);
+                }
+                // 踩台有让行内外道（红方错身时平面坐标可重合），守军间距按渲染位置量
+                const guardViews = guards.map(u => { const [x, z] = viewPoint(u); return { x, z }; });
                 for (let i = 0; i < guards.length; i++) for (let j = i + 1; j < guards.length; j++) {
-                    const d = distance(guards[i], guards[j]); minGuard = Math.min(minGuard, d);
+                    const d = distance(guardViews[i], guardViews[j]); minGuard = Math.min(minGuard, d);
                     if (d < .45 - 1e-9) guardOverlaps++;
                 }
             }
@@ -241,7 +265,7 @@ test('27 full battles: A4 arrivals, signed travel progress, provenance, spacing 
     // Diagnostics precede all assertions, including balance observations deferred to card C.
     details.forEach(r => t.diagnostic(JSON.stringify(r))); rows.forEach(r => t.diagnostic(JSON.stringify(r)));
     t.diagnostic(`卡 C 重调：除 squad×24 守住之外，所有平衡结果只作诊断。`);
-    t.diagnostic(JSON.stringify({ minAttack, minGuard, guardOverlaps, longestTravelSeconds: longestTravelMs / 1000,
+    t.diagnostic(JSON.stringify({ minAttack, minGuard, minWallMate, guardOverlaps, longestTravelSeconds: longestTravelMs / 1000,
         peak, timeouts, illegalSwordHits, gateEntries, ladderEntries,
         brigade24MeanMs: timings.reduce((a, b) => a + b, 0) / timings.length,
         brigade24P95Ms: timings[Math.floor(timings.length * .95)], performanceTargetMs: 1.5, violations }));
@@ -250,26 +274,38 @@ test('27 full battles: A4 arrivals, signed travel progress, provenance, spacing 
     assert.ok(peak <= 5); assert.ok(gateEntries > 0); assert.ok(ladderEntries > 0);
 });
 
-test('27 full battles: no melee across the fence, enemy/red bodies >= .45 apart, no rendered teleport or height drop', t => {
-    // R1 墙外打不到墙上、墙上近战只打墙头、寨内只打寨内、下台阶途中不近战；
-    // R3 基础渲染位置与最坏姿态（前扑峰值 + 受击后仰满值，经身位截断）的最终网格位置都 >= .45，梯上翻墙段计入；
+test('54 full battles (flag + deathmatch): no melee across the fence, enemy/red bodies >= .45 apart, no rendered teleport or height jump', t => {
+    // R1 墙外打不到墙上、墙上近战只打墙头、寨内只打寨内同层；攀爬途中（攻城梯/寨内木梯/塔梯）不近战也不被近战；
+    //    塔上近战只限同一座塔的塔顶（攻方打弓手、被贴身弓手还手）；
+    // R3 基础渲染位置与最坏姿态（前扑峰值 + 受击后仰满值，经身位截断）的最终网格位置都 >= .45，梯上翻墙段、
+    //    木梯/塔梯攀爬者、塔顶攻方与同塔弓手都计入；
     // R4 基础渲染位置单帧位移 <= 2 x speed x dt + .02（含换区）；R5 单帧 |dy| <= 1.25 x dt + .005
     const rows = [], violations = [];
     const check = (ok, text) => { if (!ok && violations.length < 30) violations.push(text); };
+    for (const mode of ['flag', 'deathmatch'])
     for (const preset of Object.keys(FORCE_PRESETS)) for (const defenders of [6, 12, 24]) for (const seed of [1, 2, 3]) {
-        const sim = createAssaultSim(), s = sim.startAssault(preset, defenders, seed);
-        const label = `${preset}/${defenders}/${seed}`, last = new Map();
+        const sim = createAssaultSim(), s = sim.startAssault(preset, defenders, seed, mode);
+        const label = `${mode}/${preset}/${defenders}/${seed}`, last = new Map(), holders = new Map();
+        let stuckLate = 0;
         let outsideToWall = 0, wallToOutside = 0, illegalMelee = 0, minGap = Infinity, minMesh = Infinity, maxExcess = 0;
         for (let frame = 0; frame < 18000 && !s.result; frame++) {
             for (const e of sim.stepAssault(STEP)) {
-                if (e.type !== 'attack' || e.from.type === 'archer') continue;
+                if (e.type !== 'attack') continue;
+                if (e.melee) {
+                    // 被贴身的塔上弓手近战还手：只打同塔塔顶的攻方
+                    if (!(e.from.fixed && e.toZone === 'tower' && e.to.tower === e.from.tower)) illegalMelee++;
+                    continue;
+                }
+                if (e.from.type === 'archer') continue;
                 if (e.fromZone === 'outside' && (e.toZone === 'wall' || e.to.fixed)) outsideToWall++;
                 if (e.from.team === 'red' && e.fromZone === 'wall' && e.toZone === 'outside') wallToOutside++;
-                if (e.to.fixed || e.fromZone === 'outside' || e.fromZone === 'ladder' || e.fromZone === 'wall' && e.toZone !== 'wall' ||
+                if (CLIMB_ZONES.has(e.fromZone) || CLIMB_ZONES.has(e.toZone) || e.fromZone === 'outside' ||
+                    e.to.fixed && !(e.fromZone === 'tower' && e.from.tower === e.to.tower) ||
+                    e.fromZone === 'tower' && !e.to.fixed || e.fromZone === 'wall' && e.toZone !== 'wall' ||
                     e.fromZone === 'inside' && (e.toZone !== 'inside' || e.from.y > 0 || e.to.y > 0)) illegalMelee++;
             }
             const all = [...s.attackers, ...s.defenders];
-            const bodies = all.filter(u => !u.dead && !u.fixed).map(u => {
+            const bodies = all.filter(u => !u.dead).map(u => {
                 const [x, z] = viewPoint(u), [mx, mz] = meshPoint(u, .5, 1, bodyGap(u, all));
                 return { u, x, z, mx, mz };
             });
@@ -280,36 +316,63 @@ test('27 full battles: no melee across the fence, enemy/red bodies >= .45 apart,
                 minGap = Math.min(minGap, d); minMesh = Math.min(minMesh, m);
                 check(d >= .45 - 1e-9 && m >= .45 - 1e-9, `${label} R3 at=${s.elapsedMs.toFixed(0)} ${a.u.team}${a.u.id}/${a.u.zone}/y${a.u.y.toFixed(2)} ${b.u.team}${b.u.id}/${b.u.zone}/y${b.u.y.toFixed(2)} base=${d.toFixed(3)} mesh=${m.toFixed(3)}`);
             }
-            for (const u of [...s.attackers, ...s.defenders]) {
-                if (u.dead || u.fixed) { last.delete(u); continue; }
+            for (const u of all) {
+                if (u.dead) { last.delete(u); continue; }
                 const [x, z] = viewPoint(u), p = last.get(u);
                 if (p) {
                     const excess = Math.hypot(x - p.x, z - p.z) - (2 * u.speed * STEP / 1000 + .02);
                     maxExcess = Math.max(maxExcess, excess);
                     check(excess <= 1e-9, `${label} R4 at=${s.elapsedMs.toFixed(0)} ${u.team}${u.id} ${p.zone}->${u.zone} excess=${excess.toFixed(3)}`);
                     const dy = Math.abs(u.y - p.y);
-                    check(dy <= STEP_DOWN_RATE * STEP / 1000 + .005, `${label} R5 at=${s.elapsedMs.toFixed(0)} ${u.team}${u.id} ${p.zone}->${u.zone} dy=${dy.toFixed(3)}`);
+                    check(dy <= MAX_DY_RATE * STEP / 1000 + .005, `${label} R5 at=${s.elapsedMs.toFixed(0)} ${u.team}${u.id} ${p.zone}->${u.zone} dy=${dy.toFixed(3)}`);
                 }
                 last.set(u, { x, z, y: u.y, zone: u.zone });
             }
+            // 活性：持有梯子使用权的人不得连续 5 秒没朝起爬点前进（木梯两端与塔梯）；
+            // 看门狗交还后 1 秒内又轮到同一人，视为连续持有（防止"交还—再领"掩盖死锁）；与敌接战被挡不计
+            const seen = new Set();
+            for (const [kind, list] of [['inner', s.inner], ['tower', s.towerLadders]]) for (const [i, l] of list.entries()) {
+                const g = l.grant;
+                if (!g || g.dead) continue;
+                const key = `${kind}${i}:${g.id}`; seen.add(key);
+                const d = g.iq.kind === 'inner' && g.iq.end === 'top' ? Math.abs(alongT(wallParamToward(g.x, g.z), l.tTop)) + Math.abs(1 - (g.lane || 0)) * LANE_W
+                    : Math.hypot(g.x - l.x, g.z - l.z);
+                const h = holders.get(key);
+                if (h) h.seen = s.elapsedMs;
+                // 被 1 以内的敌人挡住正在对砍（墙头对砍规则）不算卡死：计时从脱离接战起算
+                const engaged = (g.team === 'blue' ? s.defenders : s.attackers).some(e => !e.dead && e.zone === g.zone && distance(e, g) <= 1);
+                if (!h || engaged || d < h.best - .05) holders.set(key, { best: d, since: s.elapsedMs, seen: s.elapsedMs });
+                else if (s.elapsedMs - h.since > 5000) {
+                    check(false, `${label} grant holder stuck ${key} at=${s.elapsedMs.toFixed(0)} pos=${g.x.toFixed(2)},${g.z.toFixed(2)}`);
+                    if (s.elapsedMs > 150000) stuckLate++;
+                }
+            }
+            for (const [key, h] of [...holders]) if (!seen.has(key) && s.elapsedMs - h.seen > 1000) holders.delete(key);
         }
         check(outsideToWall === 0 && wallToOutside === 0 && illegalMelee === 0, `${label} R1 outside->wall=${outsideToWall} wall->outside=${wallToOutside} illegal=${illegalMelee}`);
-        check(s.result && s.holdReason !== 'stalemate', `${label} result=${s.result} reason=${s.holdReason}`);
-        rows.push({ label, result: s.result, seconds: +(s.elapsedMs / 1000).toFixed(1), minGap: +minGap.toFixed(3), minMesh: +minMesh.toFixed(3), maxExcess: +maxExcess.toFixed(4) });
+        check(s.result, `${label} no result`);
+        // 夺旗模式不得出现 180s 僵持（与改前一致）；死斗僵持保留规则，但最后 30 秒不得有梯子使用权卡死（不能来自死锁）
+        if (mode === 'flag') check(s.holdReason !== 'stalemate', `${label} result=${s.result} reason=${s.holdReason}`);
+        else if (s.holdReason === 'stalemate') check(stuckLate === 0, `${label} stalemate with stuck ladder grants`);
+        rows.push({ label, result: s.result, reason: s.holdReason, seconds: +(s.elapsedMs / 1000).toFixed(1), minGap: +minGap.toFixed(3), minMesh: +minMesh.toFixed(3), maxExcess: +maxExcess.toFixed(4) });
     }
     rows.forEach(r => t.diagnostic(JSON.stringify(r)));
+    t.diagnostic(JSON.stringify({ deathmatchStalemates: rows.filter(r => r.reason === 'stalemate').map(r => r.label) }));
     assert.deepEqual(violations, []);
-    assert.equal(rows.length, 27);
+    assert.equal(rows.length, 54);
 });
 
-test('five task formations keep swords ahead of pikes, bows out of ladders and seeded phase jitter', () => {
+test('nine task formations (gate + 8 ladders) keep swords ahead of pikes, bows out of ladders and seeded phase jitter', () => {
     for (const preset of Object.keys(FORCE_PRESETS)) {
         const sim = createAssaultSim(), s = sim.startAssault(preset, 12, 1), a = s.attackers;
-        assert.deepEqual(s.formations.map(f => f.name), ['G', 'L0', 'L1', 'L2', 'L3']);
-        assert.equal(new Set(s.formations.map(f => f.departMs)).size, 5);
+        assert.deepEqual(s.formations.map(f => f.name), ['G', 'L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7']);
+        assert.equal(new Set(s.formations.map(f => f.departMs)).size, 9);
         const melee = a.filter(u => u.type !== 'archer');
-        for (const [i, fraction] of [.46, .15, .15, .12, .12].entries())
+        // 门队 46%，其余均分到 8 架梯子
+        for (const [i, fraction] of [.46, ...Array(8).fill(.54 / 8)].entries())
             assert.ok(Math.abs(melee.filter(u => u.formation === i).length - melee.length * fraction) <= 1);
+        // 门面 4 架、东西各 2 架、北面不搭
+        assert.deepEqual([0, 1, 2, 3].map(face => LADDERS.filter(l => wallFace(l.topX, l.topZ) === face).length), [0, 2, 4, 2]);
         const bows = a.filter(u => u.type === 'archer');
         for (const [group, fraction] of [['G', .6], ['L2', .2], ['L3', .2]])
             assert.ok(Math.abs(bows.filter(u => u.squad === group).length - bows.length * fraction) <= 1);
@@ -477,30 +540,48 @@ test('single ladder occupant climbs for 1.6s, fights on top, and cannot jump pas
     tick(sim, 49); assert.equal(a.zone, 'wall'); assert.equal(a.y, 1);
     tick(sim, 90); assert.equal(a.zone, 'wall'); assert.equal(b.zone, 'outside');
     a.cd = 0; const hp = d.hp; tick(sim); assert.ok(d.hp < hp, 'sword can fight on the walkway');
-    kill(d); tick(sim); assert.equal(a.zone, 'inside'); assert.equal(a.enteredVia, 'ladder'); assert.equal(a.y, 1, 'steps down from the walkway height');
+    // 墙头守军阵亡后不能原地跳下：沿踩台走到寨内木梯、顺梯子下到地面
+    kill(d);
+    const zones = [a.zone];
+    for (let i = 0; i < 600 && a.zone !== 'inside'; i++) { tick(sim); if (zones.at(-1) !== a.zone) zones.push(a.zone); }
+    assert.deepEqual(zones, ['wall', 'iladder', 'inside']); assert.equal(a.enteredVia, 'ladder'); assert.equal(a.y, 0);
 });
 
-test('climber entering from the wall top and breach blocker both step down monotonically in about .8s without melee', () => {
-    const descend = (sim, u) => {
-        const ys = [u.y];
-        for (let i = 0; i < 120 && u.y > 0; i++) {
+test('wall-top climber and breach blocker walk the walkway to the nearest inner ladder and climb down it in ~1.2s without melee', () => {
+    // R5 定向：只能顺寨内木梯下来——y 单调 1→0、每帧 |dy| <= 1.25 x dt + .005、全程约 1.2 秒，
+    // 梯上位置始终在该木梯的梯顶点—梯脚站位连线上，途中不近战也不被近战
+    const descend = (sim, s, u) => {
+        let frames = 0;
+        for (; frames < 1200 && u.zone !== 'iladder'; frames++) sim.stepAssault(STEP);
+        assert.equal(u.zone, 'iladder', 'walks to an inner ladder');
+        // 起爬那一帧已顺梯下了一步
+        const l = s.inner[u.climb.li], ys = u.y < 1 ? [1, u.y] : [1];
+        assert.ok(u.y >= 1 - CLIMB_RATE * STEP / 1000 - 1e-9);
+        while (u.zone === 'iladder') {
             const events = sim.stepAssault(STEP); ys.push(u.y);
-            if (u.y > 0) assert.ok(!events.some(e => e.type === 'attack' && e.from.type !== 'archer' && (e.from === u || e.to === u)), 'no melee while stepping down');
+            assert.ok(!events.some(e => e.type === 'attack' && e.from.type !== 'archer' && (e.from === u || e.to === u)), 'no melee on the ladder');
+            const k = u.y, px = l.x + (l.topX - l.x) * k, pz = l.z + (l.topZ - l.z) * k;
+            if (u.zone === 'iladder') assert.ok(Math.hypot(u.x - px, u.z - pz) < 1e-9, 'on the ladder line');
+            assert.ok(ys.length < 200);
         }
-        assert.ok(ys.every((y, i) => !i || y <= ys[i - 1]), 'monotonic');
-        assert.equal(u.y, 0);
-        return (ys.length - 1) * STEP / 1000;
+        assert.ok(ys.every((y, i) => !i || y <= ys[i - 1] && ys[i - 1] - y <= MAX_DY_RATE * STEP / 1000 + .005), 'monotonic and continuous');
+        assert.equal(u.zone, 'inside'); assert.equal(u.y, 0);
+        // 落地帧守军已朝堵门线迈出一步（攻方在本帧移动之后才落地）
+        assert.ok(Math.hypot(u.x - l.x, u.z - l.z) <= u.speed * STEP / 1000 + 1e-9, 'lands on the ladder foot');
+        return { l, seconds: (ys.length - 1) * STEP / 1000 };
     };
-    // 攻方：梯顶守军阵亡后翻入寨内
+    // 攻方：梯顶守军阵亡后沿踩台走到最近的木梯
     {
         const { sim, s } = isolated(), l = s.ladders[2];
         const a = revive(s.attackers.find(u => u.originalRoute === 2 && u.type === 'infantry'), l.topX, l.topZ, 'wall');
         Object.assign(a, { route: 2, wallMs: 1000 }); l.climber = a; s.attackers = [a];
-        tick(sim); assert.equal(a.zone, 'inside'); assert.equal(a.y, 1);
-        const seconds = descend(sim, a);
-        assert.ok(Math.abs(seconds - .8) <= .2, `attacker landed in ${seconds}s`);
+        const { l: used, seconds } = descend(sim, s, a);
+        const nearestLadder = [...INNER_LADDERS].sort((p, q) => Math.abs(alongT(wallParamToward(l.topX, l.topZ), p.tTop)) -
+            Math.abs(alongT(wallParamToward(l.topX, l.topZ), q.tTop)))[0];
+        assert.equal(used.id, nearestLadder.id, 'nearest inner ladder');
+        assert.ok(Math.abs(seconds - 1.2) <= .2, `attacker landed in ${seconds}s`);
     }
-    // 守军：破门后下踩台去堵门
+    // 守军：破门后沿踩台去木梯、下到地面去堵门
     {
         const sim = createAssaultSim({ towerPositions: [] }), s = sim.startAssault('squad', 6, 1);
         s.defenders.forEach(u => { u.cd = 1e9; });
@@ -510,10 +591,10 @@ test('climber entering from the wall top and breach blocker both step down monot
         for (const u of crew) Object.assign(u, { x: u.crewSlot % 2 ? .88 : -.88, z: RAM_HIT + (u.crewSlot < 2 ? -.5 : .5), cd: 1e9 });
         sim.stepAssault(STEP);
         assert.equal(s.gate.broken, true); crew.forEach(kill);
-        const d = s.defenders.find(u => u.zone === 'inside');
-        assert.ok(d && d.y < 1 && d.y > .9, 'blocker starts stepping down on the breach frame');
-        const seconds = descend(sim, d) + STEP / 1000;
-        assert.ok(Math.abs(seconds - .8) <= .2, `blocker landed in ${seconds}s`);
+        const d = s.defenders.find(u => u.task === 'down');
+        assert.ok(d && d.zone === 'wall' && d.y === 1, 'blocker stays on the walkway on the breach frame');
+        const { seconds } = descend(sim, s, d);
+        assert.ok(Math.abs(seconds - 1.2) <= .2, `blocker landed in ${seconds}s`);
     }
 });
 
@@ -636,7 +717,7 @@ test('posts change only at the 2s boundary of simulated time, not when the threa
 
 test('with face posts on, ladder-top responders come from the threatened face and return to their posts', () => {
     const { sim, s, guards, spare } = faceScene([[-16, 2], [-16, 2.8], [-16, 1.2], [16, 2], [0, 16], [.8, 16]]);
-    while (s.elapsedMs < 20100) tick(sim); // 先走到各自岗位，并刚过一个 2s 边界
+    while (s.elapsedMs < 24100) tick(sim); // 先走到各自岗位，并刚过一个 2s 边界（9 个编组改变了随机序列，20s 时仍有人在换岗途中）
     // 另加一名墙头攻方（不改变墙外/梯上的威胁计数）
     const l = s.ladders[3], a = revive(spare, l.topX, l.topZ, 'wall');
     Object.assign(a, { wallMs: 0, route: 3, cd: 1e9 }); s.attackers.push(a); l.climber = a;
@@ -699,20 +780,21 @@ test('wall guards respond to ladder/ram threats, return home, and nearest half o
     s.formations.forEach(f => { f.departMs = 0; });
     const crew = s.ram.crew.map(u => ({ id: u.id, slot: u.crewSlot, x: u.x, z: u.z, dead: u.dead }));
     const walk = new Map(swords.map(u => [u, viewPoint(u)]));
-    const events = sim.stepAssault(STEP), descended = swords.filter(u => u.zone === 'inside');
-    // 堵门守军就地下踩台（渲染位置不变），再沿环道走到堵门线
-    const jumps = descended.map(u => Math.max(0, Math.hypot(u.x - walk.get(u)[0], u.z - walk.get(u)[1]) - 2 * u.speed * STEP / 1000));
+    const events = sim.stepAssault(STEP), descended = swords.filter(u => u.task === 'down');
+    // 堵门守军沿踩台走到寨内木梯、顺梯子下到地面，再绕开帐篷走到堵门线（按渲染位置量位移）
+    const view = u => { const [x, z] = viewPoint(u); return { x, z }; };
+    const jumps = descended.map(u => Math.max(0, distance(view(u), { x: walk.get(u)[0], z: walk.get(u)[1] }) - 2 * u.speed * STEP / 1000));
     // Isolate the walk from the inrush: keep one idle far archer so the breached battle keeps running.
     const keep = s.attackers.find(u => u.type === 'archer');
     s.attackers.forEach(u => { if (u !== keep) kill(u); }); Object.assign(keep, { x: 20, z: 20, cd: 1e9 });
     const arrived = new Map();
     for (let i = 0; i < 600 && descended.some(u => !u.dead && !arrived.has(u)); i++) {
-        const before = new Map(descended.map(u => [u, { x: u.x, z: u.z }]));
+        const before = new Map(descended.map(u => [u, view(u)]));
         tick(sim);
         for (const u of descended) {
             if (u.dead) continue;
-            jumps.push(Math.max(0, distance(u, before.get(u)) - 2 * u.speed * STEP / 1000));
-            if (!arrived.has(u) && !u.blockPath.length) arrived.set(u, { x: u.x, z: u.z, at: s.elapsedMs });
+            jumps.push(Math.max(0, distance(view(u), before.get(u)) - 2 * u.speed * STEP / 1000));
+            if (!arrived.has(u) && !u.blockPath.length) arrived.set(u, { x: u.x, z: u.z, y: u.y, zone: u.zone, at: s.elapsedMs });
         }
     }
     t.diagnostic(JSON.stringify({ response, homeDistance, at: s.elapsedMs, crew, expected,
@@ -723,7 +805,8 @@ test('wall guards respond to ladder/ram threats, return home, and nearest half o
     assert.ok(events.some(e => e.type === 'gate_broken'));
     assert.equal(descended.length, Math.ceil(swords.length / 2));
     assert.deepEqual(descended.map(u => u.id).sort((a, b) => a - b), expected, 'nearest half descend');
-    assert.ok(descended.every(u => u.dead || u.y === 0));
+    // 到达堵门线时在寨内地面（之后 3 以内无寨内攻方会经木梯回墙头）
+    assert.ok(descended.every(u => u.dead || arrived.get(u)?.y === 0 && arrived.get(u)?.zone === 'inside'));
     assert.ok(jumps.every(d => d <= .02 + 1e-9), 'blockers walk to the gate line instead of teleporting');
     assert.ok(descended.every(u => u.dead || arrived.has(u) && Math.abs(arrived.get(u).z - BLOCK_Z) < .1));
 });
@@ -816,14 +899,45 @@ test('interior tower, tent, walkway and ladder landing clearances are >= .1', t 
         const landing = { x: l.topX - l.nx * .6, z: l.topZ - l.nz * .6 };
         rows.push({ kind: 'landing', i, j, gap: gap(landing, .15, tower, tower.half) });
     }
+    // 寨内木梯 ×8：梯身占地（梯脚 5.6 到踩台内沿 6.15、横向 ±.175）与箭塔、帐篷、门洞、攻城梯落点、塔梯、其余木梯净距 >= .1
+    const rect = (x0, x1, z0, z1) => ({ minX: Math.min(x0, x1), maxX: Math.max(x0, x1), minZ: Math.min(z0, z1), maxZ: Math.max(z0, z1) });
+    const around = (p, h) => rect(p.x - h, p.x + h, p.z - h, p.z + h);
+    const rectGap = (a, b) => Math.hypot(Math.max(0, a.minX - b.maxX, b.minX - a.maxX), Math.max(0, a.minZ - b.maxZ, b.minZ - a.maxZ));
+    const innerRects = INNER_LADDERS.map(l => l.nz ? rect(l.railFoot.x - .175, l.railTop.x + .175, l.railFoot.z, l.railTop.z)
+        : rect(l.railFoot.x, l.railTop.x, l.railFoot.z - .175, l.railTop.z + .175));
+    const obstacles = [
+        ...towers.map((p, i) => ({ kind: `tower${i}`, r: around(p, p.half) })),
+        ...tents.map((p, i) => ({ kind: `tent${i}`, r: around(p, p.half) })),
+        { kind: 'gate', r: rect(-GATE_HALF - .05, GATE_HALF + .05, INNER_RAIL_TOP_R, WALL_R) },
+        ...LADDERS.map((l, i) => ({ kind: `landing${i}`, r: around({ x: l.topX - l.nx * .6, z: l.topZ - l.nz * .6 }, .15) })),
+        ...TOWER_LADDERS.map((l, i) => ({ kind: `towerLadder${i}`, r: rect(l.x - .15, l.ox - .576 + .03, l.z - .17, l.z + .17) }))];
+    assert.equal(INNER_LADDERS.length, 8);
+    assert.deepEqual([0, 1, 2, 3].map(f => INNER_LADDERS.filter(l => wallFace(l.wx, l.wz) === f).length), [2, 2, 2, 2]);
+    for (const [i, r] of innerRects.entries()) {
+        for (const o of obstacles) rows.push({ kind: `inner${i}/${o.kind}`, gap: rectGap(r, o.r) });
+        for (let j = i + 1; j < innerRects.length; j++) rows.push({ kind: `inner${i}/inner${j}`, gap: rectGap(r, innerRects[j]) });
+        // 梯脚站位与梯脚排队槽位（容量内）不进帐篷避让区、在寨内地面范围内
+        const l = INNER_LADDERS[i];
+        for (const p of [l, ...Array.from({ length: CLIMB_QUEUE_CAPACITY }, (_, k) => innerFootSlot(l, k))]) {
+            assert.ok(Math.max(Math.abs(p.x), Math.abs(p.z)) <= WALL_R - .22, `inner${i} slot inside`);
+            for (const tent of TENTS) assert.ok(Math.abs(p.x - tent.x) >= tent.half + .16 || Math.abs(p.z - tent.z) >= tent.half + .16, `inner${i} slot vs tent`);
+        }
+        assert.ok(Math.abs(INNER_RAIL_TOP_R - INNER_RAIL_FOOT_R - .55) < 1e-9, 'ladder foot .55 from the walkway inner edge');
+    }
+    for (const l of TOWER_LADDERS) for (let k = 0; k < CLIMB_QUEUE_CAPACITY; k++) {
+        const p = towerFootSlot(l, k);
+        for (const tent of TENTS) assert.ok(Math.abs(p.x - tent.x) >= tent.half + .16 || Math.abs(p.z - tent.z) >= tent.half + .16, 'tower queue vs tent');
+    }
     rows.forEach(r => t.diagnostic(JSON.stringify(r)));
-    assert.ok(rows.every(r => r.gap >= .1 - 1e-9));
+    assert.ok(rows.every(r => r.gap >= .1 - 1e-9), JSON.stringify(rows.filter(r => r.gap < .1 - 1e-9)));
     // Vertical tower ladder, including rung thickness: x=-.576 +/-.03; z=+/-.136.
     assert.ok(.72 * .8 + .03 <= TOWER_HALF);
     assert.ok(.34 * .8 / 2 <= TOWER_HALF);
     const render = readFileSync(new URL('../js/three-spike/camp.js', import.meta.url), 'utf8');
     assert.match(render, /pt = 2 \* TOWER_HALF/);
     assert.match(render, /topX = l.topX \+ l.nx \* .04, topZ = l.topZ \+ l.nz \* .04/);
+    // 寨内木梯渲染与模拟共用同一份位置
+    assert.match(render, /for \(const l of INNER_LADDERS\) rungs\(l\.railFoot\.x, l\.railFoot\.z, l\.railTop\.x, WALKWAY_H, l\.railTop\.z, l\.nx, l\.nz\)/);
 });
 
 test('ram button uses simulation durability for 6/12/24 guards and retains manual mode', t => {
@@ -888,10 +1002,13 @@ test('archers reach firing within 10s when their entire melee formation is kille
 });
 
 test('small formation allocation preserves four gate crew and one melee per ladder', t => {
-    const rows = [8, 9, 10, 30, 60, 120].map(total => ({ total, sizes: formationSizes(total) }));
+    // 门队 4 名冲车手 + 8 架梯子各 >=1 人：下限 12
+    assert.throws(() => formationSizes(11), RangeError);
+    const rows = [12, 13, 14, 30, 60, 120].map(total => ({ total, sizes: formationSizes(total) }));
     rows.forEach(r => t.diagnostic(JSON.stringify(r)));
     for (const { total, sizes } of rows) {
         assert.equal(sizes.reduce((a, b) => a + b), total);
+        assert.equal(sizes.length, 9);
         assert.ok(sizes[0] >= 4 && sizes.slice(1).every(n => n >= 1));
     }
 });
@@ -899,7 +1016,9 @@ test('small formation allocation preserves four gate crew and one melee per ladd
 test('forced ram abandonment takes lateral exit before retreat without dislodging firing archers or stalling', t => {
     const sim = createAssaultSim(), s = sim.startAssault('squad', 6, 1);
     s.ram.crew.forEach(kill);
-    s.defenders.forEach(kill);
+    // 8 架梯子会让无守军的寨子 ~13s 即被拔旗：守军先不出手、不阵亡（墙头对砍规则把攻方挡在梯顶，暂不进寨），
+    // 全部改道者走到出口后再清场，让战斗正常结束
+    s.defenders.forEach(u => Object.assign(u, { cd: 1e9, hp: 1e9, maxHp: 1e9 }));
     // Hold replacement crew at spawn through the 8s timeout; other formations advance normally.
     s.formations[0].departMs = 8100;
     const bows = s.attackers.filter(u => u.squad === 'G' && u.type === 'archer');
@@ -926,6 +1045,7 @@ test('forced ram abandonment takes lateral exit before retreat without dislodgin
             for (const bow of bows) if (segmentDistance(bow.fireSlot, p, p.u) < .48 - 1e-9)
                 crossedFire.push({ id: p.u.id, bow: bow.id, at: s.elapsedMs });
         }
+        if (exits.length === routes.length && s.defenders.some(u => !u.dead)) s.defenders.forEach(kill);   // 全部撤出后清场
         dislodged += bows.filter(u => distance(u, u.fireSlot) > .04).length;
         for (const u of s.attackers) {
             if (u.dead || u.waitState !== 'travel' || !u.moveTarget) { progress.delete(u.id); continue; }
@@ -946,6 +1066,7 @@ test('forced ram abandonment takes lateral exit before retreat without dislodgin
         assert.ok(row.path[1].z > row.path[0].z);
         assert.equal(row.path[0].x, row.path[1].x);
     }
+    // 8 架梯子后无守军的寨子在 ~13s 即被拔旗，最后一名改道者可能还在横移途中；要求未到出口者仍在推进（violations 为空）
     assert.equal(exits.length, routes.length);
     assert.ok(exits.every(p => Math.abs(p.x) >= 3.9));
     assert.deepEqual(crossedFire, [], 'fallback segments avoid firing slots');
@@ -976,4 +1097,274 @@ test('retreat from a front ladder restores both base coordinates before outward 
     assert.ok(Math.abs(u.z - (l.z + u.speed * STEP / 1000)) < 1e-9);
     assert.equal(u.zone, 'outside'); assert.equal(u.y, 0);
     assert.equal(l.climber, null, 'ownership clears when the retreating occupant leaves');
+});
+
+// ==================== 寨内木梯 / 箭塔竖梯 / 夺旗分流 / 死斗模式（定向） ====================
+// 空场：全员阵亡、编组不出发；towers 为真时保留默认两座箭塔
+function emptyCamp({ preset = 'company', mode = 'flag', towers = false, defenders = 12 } = {}) {
+    const sim = towers ? createAssaultSim() : createAssaultSim({ towerPositions: [] });
+    const s = sim.startAssault(preset, defenders, 1, mode);
+    s.attackers.forEach(kill); s.defenders.forEach(kill); s.ram.crew = [];
+    s.formations.forEach(f => { f.released = true; f.departMs = 0; });
+    s.faceAt = Infinity;
+    const pool = [...s.attackers];
+    const blue = (type, x, z, zone = 'inside') => {
+        const u = revive(pool.find(v => v.dead && v.type === type && !s.attackers.includes(v) || v.dead && v.type === type && v.hp === 0), x, z, zone);
+        u.cd = 1e9; if (!s.attackers.includes(u)) s.attackers.push(u); return u;
+    };
+    s.attackers = [];
+    // 远处一名不出手的弓手：保证"攻方全灭 → hold"不提前结束定向场景
+    const keeper = blue('archer', 20, 20, 'outside');
+    Object.assign(keeper, { fireSlot: { x: 20, z: 20 }, waitState: 'firing', moveTarget: { x: 20, z: 20 } });
+    const red = (pred, x, z, zone = 'inside') => {
+        const d = revive(s.defenders.find(v => v.dead && pred(v)), x, z, zone);
+        d.cd = 1e9; d.homeT = wallParamToward(d.x, d.z); return d;
+    };
+    return { sim, s, blue, red };
+}
+const climbersOn = (s, li) => [...s.attackers, ...s.defenders].filter(u => !u.dead && u.zone === 'iladder' && u.climb?.li === li);
+
+test('inner ladder: one climber at a time, explicit foot slots, queue picks the less loaded of the two nearest (tie -> nearer), ~1.2s climb', t => {
+    const { sim, s, red } = emptyCamp();
+    // 三名寨内守军，附近没有寨内攻方：经最近的木梯爬回墙头
+    const spots = [[1.6, 4.0], [1.6, 4.5], [1.0, 4.5]];
+    const reds = spots.map(([x, z]) => red(u => u.type === 'infantry', x, z));
+    const foot = l => Math.hypot(l.x - 1.6, l.z - 4.25);
+    const [near, second] = [...INNER_LADDERS].sort((a, b) => foot(a) - foot(b));
+    tick(sim, 2);   // 第 1 帧判定"附近无敌、回墙头"，第 2 帧按序排队
+    // 第 1 人：两架都空 → 近的那架；第 2 人：近的那架已有人（轮到/排队）→ 人少的那架；第 3 人：两架各 1 人 → 近的那架
+    assert.deepEqual(reds.map(u => u.iq?.li), [near.id, second.id, near.id]);
+    assert.ok(reds.every(u => u.task === 'up' && u.iq.end === 'foot'));
+    const spans = new Map(), maxOn = new Map();
+    let slotted = false;
+    for (let i = 0; i < 900 && reds.some(u => u.zone !== 'wall'); i++) {
+        tick(sim);
+        // 第 3 人在近的那架梯脚排第 1 位：站在显式槽位上等
+        if (reds[2].waitState === 'queued') slotted ||= distance(reds[2], innerFootSlot(near, 0)) <= .04 + 1e-9;
+        for (const l of INNER_LADDERS) maxOn.set(l.id, Math.max(maxOn.get(l.id) ?? 0, climbersOn(s, l.id).length));
+        for (const u of reds) if (u.zone === 'iladder') spans.set(u, (spans.get(u) ?? 0) + 1);
+    }
+    t.diagnostic(JSON.stringify({ seconds: reds.map(u => (spans.get(u) ?? 0) * STEP / 1000), maxOn: [...maxOn] }));
+    assert.ok([...maxOn.values()].every(n => n <= 1), 'one at a time');
+    assert.ok(slotted, 'waits on the explicit foot slot');
+    assert.ok(reds.every(u => u.zone === 'wall' && u.y === 1));
+    for (const u of reds) assert.ok(Math.abs(spans.get(u) * STEP / 1000 - 1.2) <= .2, `climb ${spans.get(u) * STEP / 1000}s`);
+});
+
+test('inner ladder climbers can be shot but never meleed; a defender on the ground climbs back to the wall and rejoins the face posts', () => {
+    const { sim, s, blue, red } = emptyCamp();
+    const l = INNER_LADDERS[0];
+    const d = red(u => u.type === 'infantry', l.x - .6, l.z - .6);
+    for (let i = 0; i < 120 && d.zone !== 'iladder'; i++) tick(sim);
+    assert.equal(d.zone, 'iladder');
+    // 攀爬途中：梯脚旁来一名剑士（贴身）和一名墙外弓手
+    const sword = blue('infantry', l.x - .5, l.z - .2); sword.cd = 0;
+    const bow = blue('archer', l.x, WALL_R + 3, 'outside'); bow.cd = 0; bow.fireSlot = { x: bow.x, z: bow.z };
+    Object.assign(bow, { waitState: 'firing', moveTarget: { ...bow.fireSlot } });
+    let melee = 0, arrows = 0;
+    while (d.zone === 'iladder' && !d.dead) for (const e of sim.stepAssault(STEP)) if (e.type === 'attack' && (e.to === d || e.from === d)) {
+        if (e.from.type === 'archer') arrows++; else melee++;
+    }
+    assert.equal(melee, 0, 'no melee to or from a climber');
+    assert.ok(arrows > 0, 'arrows still hit the climber');
+    // 已回到墙头：守军照常参与按面分配（到下一个 2s 边界拿到岗位）
+    if (!d.dead) {
+        assert.equal(d.zone, 'wall'); assert.equal(d.task, null);
+        kill(sword); kill(bow); blue('infantry', 0, -16, 'outside');
+        s.faceAt = s.elapsedMs; tick(sim);
+        assert.ok(d.postFace != null && d.postT != null, 'gets a face post again after climbing back');
+    }
+});
+
+test('an attacker inside climbs an inner ladder back to the wall to fight a wall archer (wall-top melee)', () => {
+    const { sim, s, blue, red } = emptyCamp();
+    const archer = red(u => u.type === 'archer', 2, -WALL_R, 'wall');
+    const a = blue('infantry', 0, -3); a.cd = 0;
+    const zones = [a.zone];
+    let hit = 0;
+    for (let i = 0; i < 900 && !archer.dead; i++) for (const e of sim.stepAssault(STEP)) {
+        if (zones.at(-1) !== a.zone) zones.push(a.zone);
+        if (e.type === 'attack' && e.from === a && e.to === archer) { hit++; assert.equal(e.fromZone, 'wall'); assert.equal(e.toZone, 'wall'); }
+    }
+    assert.ok(a.hunter, 'flag mode: the only inside melee becomes the archer hunter');
+    assert.deepEqual(zones.slice(0, 3), ['inside', 'iladder', 'wall']);
+    assert.ok(hit > 0 && archer.dead);
+});
+
+test('tower ladder: attackers climb in ~3.1s one at a time, at most 2 on the platform, the rest queue at the foot; tower archers shoot climbers', t => {
+    const { sim, s, blue } = emptyCamp({ mode: 'deathmatch', towers: true });
+    const archers = s.defenders.filter(u => u.fixed && u.tower === 0);
+    archers.forEach(d => Object.assign(d, { dead: false, hp: 1e6, cd: 1e9 }));
+    const tl = TOWER_LADDERS[0];
+    const team = [0, 1, 2, 3].map(i => blue('infantry', tl.x + 1 + (i % 2) * .5, tl.z - 2 - Math.floor(i / 2) * .5));
+    let maxTop = 0, queuedWhileFull = 0, onLadder = 0;
+    const climbFrames = new Map();
+    for (let i = 0; i < 1500; i++) {
+        tick(sim);
+        const top = team.filter(u => u.zone === 'tower').length;
+        maxTop = Math.max(maxTop, top);
+        onLadder = Math.max(onLadder, team.filter(u => u.zone === 'tladder').length);
+        if (top === TOWER_TOP_CAP && team.some(u => u.iq?.kind === 'tower' && u.iq.end === 'foot')) queuedWhileFull++;
+        for (const u of team) if (u.zone === 'tladder') climbFrames.set(u, (climbFrames.get(u) ?? 0) + 1);
+    }
+    const seconds = [...climbFrames.values()].map(n => n * STEP / 1000);
+    t.diagnostic(JSON.stringify({ maxTop, onLadder, queuedWhileFull, seconds }));
+    assert.equal(TOWER_TOP_CAP, 2); assert.equal(maxTop, 2); assert.equal(onLadder, 1);
+    assert.ok(queuedWhileFull > 0, 'the rest wait in the foot queue');
+    assert.equal(team.filter(u => u.zone === 'tower').length, 2);
+    for (const sec of seconds) assert.ok(Math.abs(sec - TOWER_Y / CLIMB_RATE) <= .2 && Math.abs(sec - 3.1) <= .2, `tower climb ${sec}s`);
+    // 塔上弓手射攀爬者
+    const { sim: sim2, s: s2, blue: blue2 } = emptyCamp({ mode: 'deathmatch', towers: true });
+    s2.defenders.filter(u => u.fixed && u.tower === 0).forEach(d => Object.assign(d, { dead: false, hp: 1e6, cd: 0 }));
+    const climber = blue2('infantry', tl.x + 1, tl.z - 2); climber.hp = 1e6;
+    let shotWhileClimbing = 0;
+    for (let i = 0; i < 600; i++) for (const e of sim2.stepAssault(STEP))
+        if (e.type === 'attack' && e.to === climber && e.toZone === 'tladder' && e.from.fixed && !e.melee) shotWhileClimbing++;
+    assert.ok(shotWhileClimbing > 0);
+});
+
+test('tower top melee: attackers hit archers of the same tower; a bumped tower archer strikes back at archer attack x0.5', () => {
+    const { sim, s, blue } = emptyCamp({ mode: 'deathmatch', towers: true });
+    const archers = s.defenders.filter(u => u.fixed && u.tower === 0);
+    archers.forEach(d => Object.assign(d, { dead: false, hp: 1e6, cd: 1e9 }));
+    const tl = TOWER_LADDERS[0];
+    const a = blue('infantry', tl.x + 1, tl.z - 2); a.hp = 1e6;
+    for (let i = 0; i < 600 && a.zone !== 'tower'; i++) tick(sim);
+    for (let i = 0; i < 60; i++) tick(sim);
+    assert.equal(a.zone, 'tower'); assert.equal(a.y, TOWER_Y);
+    a.cd = 0; archers.forEach(d => { d.cd = 0; });
+    const melee = [], hits = [];
+    for (let i = 0; i < 300; i++) for (const e of sim.stepAssault(STEP)) if (e.type === 'attack') {
+        if (e.from === a) hits.push(e);
+        if (e.to === a) melee.push(e);
+    }
+    assert.ok(hits.length > 0 && hits.every(e => e.to.fixed && e.to.tower === 0 && e.fromZone === 'tower'));
+    const bumped = melee.filter(e => e.melee);
+    assert.ok(bumped.length > 0, 'bumped archers strike back in melee');
+    const archer = bumped[0].from;
+    const half = Math.max(1, Math.floor(calculateAttackDamage(archer, a, { multiplier: CAMP_RULES.WALL_GUARD_ATTACK, rawAttack: archer.typeData.atk * ARCHER_MELEE_FACTOR })));
+    const full = Math.max(1, Math.floor(calculateAttackDamage(archer, a, { multiplier: CAMP_RULES.WALL_GUARD_ATTACK })));
+    assert.equal(ARCHER_MELEE_FACTOR, .5);
+    assert.ok(bumped.every(e => e.damage === half), `melee ${bumped[0].damage} vs expected ${half}`);
+    assert.ok(half < full);
+    assert.ok(bumped.every(e => distance(e.from, a) <= .95 + 1e-9), 'only archers within the attacker reach are bumped');
+    // 不在塔顶的近战够不到塔上弓手
+    const ground = blue('infantry', tl.ox + .2, tl.oz + 1.2); ground.cd = 0;
+    for (let i = 0; i < 120; i++) assert.ok(!sim.stepAssault(STEP).some(e => e.type === 'attack' && e.from === ground && e.to.fixed));
+});
+
+test('flag mode split: with no hittable defender near the flag, at most 1/3 (at least 1) of inside melee hunt archers; a defender at the flag recalls ground hunters', () => {
+    for (const [n, quota] of [[1, 1], [3, 1], [9, 3], [10, 3]]) {
+        const { sim, s, blue, red } = emptyCamp({ preset: 'brigade' });
+        red(u => u.type === 'archer', 0, -WALL_R, 'wall');
+        const team = Array.from({ length: n }, (_, i) => blue('infantry', -1.6 + (i % 4) * .6, 1.6 + Math.floor(i / 4) * .6));
+        tick(sim);
+        assert.equal(team.filter(u => u.hunter).length, quota, `${n} inside -> ${quota} hunters`);
+        tick(sim, 30);
+        assert.equal(team.filter(u => u.hunter).length, quota);
+        if (n === 9) {
+            red(u => u.type === 'infantry', 0, -2.2);
+            tick(sim);
+            assert.equal(team.filter(u => u.hunter && u.zone === 'inside').length, 0, 'ground hunters return to the flag');
+        }
+    }
+    // 没有弓手可打时不分流
+    const { sim, s, blue, red } = emptyCamp();
+    red(u => u.type === 'infantry', 0, -WALL_R, 'wall');
+    const team = [0, 1, 2].map(i => blue('infantry', -1 + i * .6, 1.6));
+    tick(sim); assert.equal(team.filter(u => u.hunter).length, 0);
+});
+
+test('deathmatch: wall, inside and tower defenders must all fall for a break; flag progress is never updated; retreat and annihilation still hold', () => {
+    const { sim, s, blue } = emptyCamp({ mode: 'deathmatch', towers: true });
+    s.defenders.filter(u => u.fixed).forEach(d => Object.assign(d, { dead: false, hp: 1, cd: 1e9 }));
+    s.gate.broken = true;
+    const team = [0, 1, 2].map(i => blue('infantry', -.6 + i * .6, 1.4));
+    tick(sim, 60);
+    assert.equal(s.result, null, 'living tower archers block the break');
+    assert.equal(s.flagProgress, -1); assert.equal(s.flagNet, 0); assert.equal(s.phase === '夺旗中', false);
+    s.defenders.forEach(kill);
+    tick(sim);
+    assert.equal(s.result, 'break'); assert.equal(s.flagProgress, -1);
+    // 攻方全灭 → hold
+    const a = emptyCamp({ mode: 'deathmatch' });
+    a.red(u => u.type === 'infantry', 0, -WALL_R, 'wall');
+    a.s.attackers.forEach(kill);
+    tick(a.sim); assert.equal(a.s.result, 'hold');
+    // 破门前伤亡过半 → 溃退 → hold（与夺旗模式同一规则）
+    const sim2 = createAssaultSim(), s2 = sim2.startAssault('squad', 24, 1, 'deathmatch');
+    s2.attackers.slice(0, Math.ceil(s2.attackers.length * .6)).forEach(kill);
+    tick(sim2); assert.equal(s2.retreated, true);
+    tick(sim2, 181); assert.equal(s2.result, 'hold');
+});
+
+test('mode defaults to flag: omitted / explicit flag / unknown mode replay identically; flag half vs pre-change results is diagnostic', t => {
+    const runs = [undefined, 'flag', 'bogus'].map(mode => {
+        const sim = createAssaultSim(), s = mode === undefined ? sim.startAssault('company', 12, 2) : sim.startAssault('company', 12, 2, mode);
+        assert.equal(s.mode, 'flag');
+        return finish(sim);
+    });
+    assert.deepEqual(runs[1], runs[0]); assert.deepEqual(runs[2], runs[0]);
+    assert.equal(runs[0].result, 'break'); assert.equal(runs[0].flagProgress, 1);
+    // 改前（HEAD 3f4055b）27 局结果：用来对照，8 架攻城梯与木梯会改变节奏，只作诊断
+    const before = { 'squad/6': ['break', 'break', 'break'], 'squad/12': ['hold', 'hold', 'hold'], 'squad/24': ['hold', 'hold', 'hold'],
+        'company/6': ['break', 'break', 'break'], 'company/12': ['break', 'break', 'break'], 'company/24': ['break', 'hold', 'break'],
+        'brigade/6': ['break', 'break', 'break'], 'brigade/12': ['break', 'break', 'break'], 'brigade/24': ['break', 'break', 'break'] };
+    t.diagnostic(JSON.stringify(before));
+});
+
+test('crossing walkway queues cannot deadlock: two grant holders and a waiter between them all get down (Codex repro)', () => {
+    const { sim, s, blue } = emptyCamp();
+    s.gate.broken = true;
+    const [l0, l1] = [s.inner[0], s.inner[1]];
+    const wallAt = x => { const t = wallParamToward(x, WALL_R); return wallPoint(t); };
+    const put = x => { const [wx, wz] = wallAt(x), u = blue('infantry', wx, wz, 'wall'); Object.assign(u, { y: 1, lane: 1, leftTop: true }); return u; };
+    const A = put(2.908), B = put(2.579), C = put(2.25);
+    const side = (l, u) => alongT(l.tTop, wallParamToward(u.x, u.z)) < 0 ? -1 : 1;
+    A.iq = { kind: 'inner', li: l0.id, end: 'top', side: side(l0, A), seq: s.seq++ }; l0.grant = A;
+    B.iq = { kind: 'inner', li: l1.id, end: 'top', side: side(l1, B), seq: s.seq++ }; l1.grant = B;
+    C.iq = { kind: 'inner', li: l0.id, end: 'top', side: side(l0, C), seq: s.seq++ }; l0.queue.push(C);
+    const team = [A, B, C];
+    let frames = 0;
+    for (; frames < 1200 && team.some(u => u.zone !== 'inside'); frames++) tick(sim);
+    assert.ok(team.every(u => u.zone === 'inside' && u.y === 0), `all three climbed down within ${frames * STEP / 1000}s: ${team.map(u => u.zone)}`);
+    assert.ok(frames * STEP / 1000 < 15);
+});
+
+test('climbers on inner ladders and tower ladders are tier-2 targets: they outrank ram crew and break a lock on crew', () => {
+    for (const kind of ['iladder', 'tladder']) {
+        const { sim, s, d, take, ram } = archerRange();
+        const crew = ram();
+        // 寨内的攀爬者：放在射程内、比冲车手更远
+        const l = kind === 'iladder' ? s.inner[0] : s.towerLadders[0];
+        const climber = take(u => u.type === 'infantry', l.x, l.z, kind);
+        Object.assign(climber, { y: .5, climb: { kind: kind === 'iladder' ? 'inner' : 'tower', li: kind === 'iladder' ? l.id : l.tower, dir: 1 } });
+        if (kind === 'tladder') climber.tower = l.tower;
+        (kind === 'iladder' ? s.inner[0] : s.towerLadders[0]).climber = climber;
+        assert.ok(distance(d, climber) > distance(d, crew) && distance(d, climber) <= 9.5);
+        tick(sim); assert.equal(d.target, climber, `${kind} climber outranks ram crew`);
+        // 锁定冲车手时出现攀爬者：立即改打攀爬者
+        const { sim: sim2, s: s2, d: d2, take: take2, ram: ram2 } = archerRange();
+        const crew2 = ram2();
+        tick(sim2); assert.equal(d2.target, crew2);
+        const l2 = kind === 'iladder' ? s2.inner[0] : s2.towerLadders[0];
+        const c2 = take2(u => u.type === 'infantry', l2.x, l2.z, kind);
+        Object.assign(c2, { y: .5, climb: { kind: kind === 'iladder' ? 'inner' : 'tower', li: kind === 'iladder' ? l2.id : l2.tower, dir: 1 } });
+        if (kind === 'tladder') c2.tower = l2.tower;
+        l2.climber = c2;
+        tick(sim2); assert.equal(d2.target, c2, `${kind} climber breaks the crew lock`);
+    }
+});
+
+test('walkway ladder choice never routes through another ladder\'s waiting queue (the emptier far ladder is skipped)', () => {
+    const { sim, s, blue } = emptyCamp();
+    s.gate.broken = true;
+    const [l0, l1] = [s.inner[0], s.inner[1]];
+    const put = (x, lane) => { const [wx, wz] = wallPoint(wallParamToward(x, WALL_R)), u = blue('infantry', wx, wz, 'wall'); Object.assign(u, { y: 1, lane, leftTop: true }); return u; };
+    // 梯 0 已有人轮到（A）且左侧有人候梯（C）；U 夹在 C 与梯 0 之间。梯 1 空着，但去梯 1 必须穿过 C
+    const A = put(2.95, 1), C = put(2.2, 1), U = put(2.55, 0);
+    A.iq = { kind: 'inner', li: l0.id, end: 'top', side: 1, seq: s.seq++ }; l0.grant = A; A.grantBest = 0; A.grantSince = 0;
+    C.iq = { kind: 'inner', li: l0.id, end: 'top', side: -1, seq: s.seq++ }; l0.queue.push(C);
+    tick(sim);
+    assert.equal(U.iq?.li, l0.id, 'joins the near ladder instead of crossing C');
 });

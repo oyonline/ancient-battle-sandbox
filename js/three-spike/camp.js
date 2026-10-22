@@ -7,7 +7,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 // 攻寨推演复用真实模拟口径：兵种数值与伤害结算、营寨守军倍率/掩体
 import { createAssaultSim, WALL_R, wallPoint, ATTACK_KINDS, slotKind, ASSAULT_STEP_MS,
-    ATK_ANIM_MS, HIT_ANIM_MS, TOWER_ARCHER_SLOTS, TOWER_ORIGINS, TOWER_HALF, ramButtonText, TENTS, LADDERS, GATE_HALF, WALK_INSET, RAM_REST, RAM_HIT, inwardPoint, viewPoint, bodyGap, poseOffset, meshPoint } from './camp-assault-sim.js';
+    ATK_ANIM_MS, HIT_ANIM_MS, TOWER_ARCHER_SLOTS, TOWER_ORIGINS, TOWER_HALF, ramButtonText, TENTS, LADDERS, GATE_HALF, WALK_INSET, RAM_REST, RAM_HIT, inwardPoint, viewPoint, bodyGap, poseOffset, meshPoint,
+    INNER_LADDERS, TOWER_Y } from './camp-assault-sim.js';
 
 // ---- 换算链：世界高度 = px / 24 × 2（Terrain.HEIGHT_SCALE = 24，spike 的 H_WORLD = 2）----
 // 兵高 ≈ 1.145 世界单位（腿 0→0.42、躯干 0.43→0.93、头到 1.145）。
@@ -284,30 +285,34 @@ function ramGroup() {
     return group;
 }
 
-// ---------------- 寨墙靠墙梯 ×2（架在 ±gx 墙段外侧，从地面斜靠到踩台） ----------------
-// 纯视觉占位：暗示进攻方翻墙路径。支点落在墙脚地面，顶部搭在踩台沿口。
+// ---------------- 寨墙靠墙梯 ×8（门面 4 架、东西侧墙各 2 架，从墙外地面斜靠到踩台）+ 寨内木梯 ×8 ----------------
+// 攻城梯支点落在墙脚地面，顶部搭在踩台沿口；寨内木梯同一套造型：梯顶抵住踩台内沿、梯脚落在寨内地面。
 // 注意：x=±r 墙段走向沿 Z，故梯子的倾角是绕 Z 轴（rz），且必须从地面起算（中点=两端之中点）。
 function ladderGroup() {
     const parts = [], group = new THREE.Group();
-    for (const l of LADDERS) {
-        const topX = l.topX + l.nx * .04, topZ = l.topZ + l.nz * .04;
-        const topY = WALKWAY_H + .38;
-        const base = new THREE.Vector3(l.x, 0, l.z), top = new THREE.Vector3(topX, topY, topZ);
+    // 两根竖撑（截面 .05、间距 .30）+ 横档（截面 .05、长 .34，约每 .3 一根），从 (bx,0,bz) 斜到 (topX,topY,topZ)
+    const rungs = (bx, bz, topX, topY, topZ, nx, nz) => {
+        const base = new THREE.Vector3(bx, 0, bz), top = new THREE.Vector3(topX, topY, topZ);
         const direction = top.clone().sub(base), len = direction.length();
         const rotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
         for (const offset of [-.15, .15]) {
             const rail = box(.05, len, .05, 0, 0, 0, TIMBER);
             rail.applyQuaternion(rotation);
-            rail.translate((l.x + topX) / 2 + l.nz * offset, topY / 2, (l.z + topZ) / 2 - l.nx * offset);
+            rail.translate((bx + topX) / 2 + nz * offset, topY / 2, (bz + topZ) / 2 - nx * offset);
             parts.push(rail);
         }
         const steps = Math.max(3, Math.round(len / .3));
         for (let i = 1; i < steps; i++) {
             const t = i / steps;
-            parts.push(box(l.nz ? .34 : .05, .05, l.nx ? .34 : .05,
-                l.x + (topX - l.x) * t, topY * t, l.z + (topZ - l.z) * t, WOOD));
+            parts.push(box(nz ? .34 : .05, .05, nx ? .34 : .05,
+                bx + (topX - bx) * t, topY * t, bz + (topZ - bz) * t, WOOD));
         }
+    };
+    for (const l of LADDERS) {
+        const topX = l.topX + l.nx * .04, topZ = l.topZ + l.nz * .04;
+        rungs(l.x, l.z, topX, WALKWAY_H + .38, topZ, l.nx, l.nz);
     }
+    for (const l of INNER_LADDERS) rungs(l.railFoot.x, l.railFoot.z, l.railTop.x, WALKWAY_H, l.railTop.z, l.nx, l.nz);
     const mesh = new THREE.Mesh(mergeGeometries(parts), campMat);
     mesh.castShadow = true; mesh.receiveShadow = true;
     group.add(mesh);
@@ -551,6 +556,9 @@ const dummy = new THREE.Object3D();
 // 守方网格池：寨墙守军按「守军数量」档启用前 N 个（6/12/24），一律站寨墙环的踩台上；
 // 兵种按同一周期规则分配（每 3 个垛口 1 名弓手 → N/3 名弓手），网格与逻辑兵种天然一致。
 // 双塔 8 名弓手见 tower.userData.archers，也当守方复用（fixed=true，不跑位）。
+// 塔梯与塔顶：模拟高度 0→TOWER_Y(2.56) 按比例落到塔台板面（TOWER_DECK + 板厚），与驻塔弓手脚底齐平
+const TOWER_FEET = TOWER_DECK + .16 * TOWER_S;
+const renderY = u => u.zone === 'tower' || u.zone === 'tladder' ? u.y * TOWER_FEET / TOWER_Y : u.y;
 const MAX_WALL_GUARDS = 24;
 const defMeshes = [];
 for (let i = 0; i < MAX_WALL_GUARDS; i++) {
@@ -655,13 +663,15 @@ const animOf = u => ({
     hitN: Math.max(0, 1 - (fxMs - effectOf(u).hitAt) / HIT_ANIM_MS)
 });
 
-function startAssault(preset, defCount, seed = 1) {
+function startAssault(preset, defCount, seed = 1, mode = 'flag') {
     resetAssault();
-    simulation.startAssault(preset, defCount, seed);
+    simulation.startAssault(preset, defCount, seed, mode);
     let wallIndex = 0, towerIndex = 0;
     for (const u of assault.defenders) {
+        // 箭塔弓手网格挂在塔组里：渲染位置 = 模拟 viewPoint − 塔位（塔组原点）
+        const origin = u.fixed ? TOWER_ORIGINS[Math.floor(towerIndex / TOWER_ARCHER_SLOTS.length)] : null;
         const mesh = u.fixed ? tower.userData.archers[towerIndex++].mesh : defMeshes[wallIndex++];
-        guardViews.set(u, { mesh, meshBase: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z } });
+        guardViews.set(u, { mesh, origin, meshBase: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z } });
     }
     for (const m of chestHigh.userData.guards) m.visible = false;   // 装饰守军让位给守方池
     fxMs = 0; accumulator = 0;
@@ -709,7 +719,7 @@ function stepAssault(ms) {
             const a = { ...effectOf(from), atkAt: fxMs }, d = { ...effectOf(to), hitAt: fxMs };
             if (to.dead) d.dieAt = fxMs;
             effects.set(from, a); effects.set(to, d);
-            if (from.type === 'archer') spawnArrow(from, to);
+            if (from.type === 'archer' && !event.melee) spawnArrow(from, to);   // 塔上弓手近战还手不放箭
         }
     }
     return events;
@@ -734,7 +744,7 @@ function syncAssaultMeshes() {
             } else {
                 const fall = Math.min(1, f / DIE_FALL_MS);
                 const sink = f <= DIE_FALL_MS ? 0 : (f - DIE_FALL_MS) / DIE_SINK_MS;
-                dummy.position.set(mx, a.y - .85 * sink, mz);
+                dummy.position.set(mx, renderY(a) - .85 * sink, mz);
                 dummy.scale.setScalar(1);
                 _q1.setFromAxisAngle(_AXIS_Y, a.yaw);
                 _q2.setFromAxisAngle(_AXIS_X, 1.5 * fall);   // 绕本地 X 前倒（面朝下扑）
@@ -743,7 +753,7 @@ function syncAssaultMeshes() {
         } else {
             const { atkN, hitN } = animOf(a);
             const [px, pz] = meshPoint(a, atkN, hitN, bodyGap(a, bodies));
-            dummy.position.set(px, a.y, pz);
+            dummy.position.set(px, renderY(a), pz);
             dummy.rotation.set(0, a.yaw, 0);
             dummy.scale.setScalar(1);
         }
@@ -758,7 +768,7 @@ function syncAssaultMeshes() {
 function syncGuardMeshes() {
     const bodies = [...assault.attackers, ...assault.defenders];
     for (const d of assault.defenders) {
-        const { mesh, meshBase } = guardViews.get(d);
+        const { mesh, meshBase, origin } = guardViews.get(d);
         if (d.dead) {
             const f = fxMs - effectOf(d).dieAt;
             if (f >= DIE_FALL_MS + DIE_SINK_MS) { mesh.visible = false; continue; }
@@ -766,7 +776,8 @@ function syncGuardMeshes() {
             const sink = f <= DIE_FALL_MS ? 0 : (f - DIE_FALL_MS) / DIE_SINK_MS;
             mesh.visible = true;
             if (d.fixed) {
-                mesh.position.set(meshBase.x, meshBase.y - .85 * sink, meshBase.z);
+                const [vx, vz] = viewPoint(d);
+                mesh.position.set(vx - origin.x, meshBase.y - .85 * sink, vz - origin.z);
             } else {
                 const [ix, iz] = viewPoint(d);
                 mesh.position.set(ix, d.y - .85 * sink, iz);
@@ -778,10 +789,11 @@ function syncGuardMeshes() {
         }
         mesh.visible = true;
         const { atkN, hitN } = animOf(d);
-        // 箭塔弓手（fixed）不参与身位口径，姿态偏移不截断
-        const [lx, lz] = poseOffset(d, atkN, hitN, d.fixed ? Infinity : bodyGap(d, bodies));
+        // 箭塔弓手只与登上同塔的攻方互占身位（无人登塔时 bodyGap 为无穷，姿态偏移不截断）
+        const [lx, lz] = poseOffset(d, atkN, hitN, bodyGap(d, bodies));
         if (d.fixed) {
-            mesh.position.set(meshBase.x + lx, meshBase.y, meshBase.z + lz);
+            const [vx, vz] = viewPoint(d);
+            mesh.position.set(vx - origin.x + lx, meshBase.y, vz - origin.z + lz);
             mesh.rotation.set(0, d.yaw, 0);
         } else {
             const [ix, iz] = viewPoint(d);
@@ -814,7 +826,11 @@ function renderAssaultHud() {
     const fill = $('flag-fill'), reach = Math.abs(flagP) * 50;
     fill.style.width = `${reach}%`;
     fill.style.left = `${flagP >= 0 ? 50 : 50 - reach}%`;
-    $('verdict').textContent = assault.result === 'break' ? '攻方拔旗破寨' : assault.result === 'hold' ?
+    // 模式：死斗不计旗帜，整行夺旗进度隐藏
+    const deathmatch = assault.mode === 'deathmatch';
+    $('battle-mode').textContent = deathmatch ? '死斗' : '夺旗';
+    $('flag-row').hidden = deathmatch;
+    $('verdict').textContent = assault.result === 'break' ? (deathmatch ? '攻方全歼守军' : '攻方拔旗破寨') : assault.result === 'hold' ?
         (assault.retreated ? '攻方溃退' : '守方守住') : '进行中';
 }
 
@@ -838,7 +854,7 @@ function updateAssault(dtSec) {
     updateArrows(dtSec); updateBars();
 }
 
-$('btn-assault').onclick = () => { startAssault($('sel-force').value, +$('sel-def').value); };
+$('btn-assault').onclick = () => { startAssault($('sel-force').value, +$('sel-def').value, 1, $('sel-mode').value); };
 $('btn-assault-reset').onclick = () => { resetAssault(); };
 
 renderer.setAnimationLoop(() => {
