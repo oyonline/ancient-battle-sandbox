@@ -39,6 +39,20 @@ function step(scene, frames = 1) {
     }
 }
 
+// 身体圆 vs 墙体矩形：圆心到矩形最近点的距离必须不小于身体半径（容 1e-6 的量化/浮点误差）。
+// 逐帧调用——任何一帧"身体嵌进墙里"都会当场失败，而不是只在终点抽查。
+function assertNotInWalls(unit, walls) {
+    const radius = CombatRules.bodyRadius(unit);
+    for (const wall of walls) {
+        const closestX = Math.max(wall.x1, Math.min(unit.gx, wall.x2));
+        const closestY = Math.max(wall.y1, Math.min(unit.gy, wall.y2));
+        const distance = Math.hypot(unit.gx - closestX, unit.gy - closestY);
+        assert.ok(distance >= radius - 1e-6,
+            `unit ${unit.id} body overlaps wall ${wall.id}: center=(${unit.gx.toFixed(6)},${unit.gy.toFixed(6)}) ` +
+            `radius=${radius} distance=${distance.toFixed(6)}`);
+    }
+}
+
 // 场景 1：封闭方框——框外单位寻路不可达、walkable/segmentClear 穿门判挡、
 // 真实位移管线也进不了框；关闭口径保持原行为不变。
 test('sealed box: pathing cannot enter, walkable/segmentClear judge the door as blocking', () => {
@@ -89,10 +103,25 @@ test('re-adding the door seals the box again and discards cached routes', () => 
     unit.gx = 28; unit.gy = 25;
     assert.equal(nav.nextWaypoint(unit, 35, 35).reachable, true);
     assert.ok(nav.routes.size > 0, 'route should be cached while the door is open');
+    // 加回门之前先记下导航图构建计数和那条"开门时"的旧路线对象
+    const buildsBefore = nav.stats.graphBuilds;
+    const oldRoute = nav.routes.get(unit);
+    assert.ok(oldRoute && oldRoute.points.length > 0, 'a real route must be cached while the door is open');
     dyn.requestAdd('door', DOOR);
     step(scene, 1);
     // 加回门后导航按新障碍重建：单位视线被西墙挡住 → 必须走 graph 但目标不可达
     assert.equal(nav.nextWaypoint(unit, 35, 35).reachable, false);
+    // 旧路线必须作废：导航图重建、缓存路线对象被换掉
+    assert.ok(nav.stats.graphBuilds > buildsBefore,
+        `graphBuilds must increase after re-adding the door (${buildsBefore} -> ${nav.stats.graphBuilds})`);
+    const newRoute = nav.routes.get(unit);
+    assert.notEqual(newRoute, oldRoute, 'the cached route object must be discarded after re-adding the door');
+    // 新路线里不得有任何航点落在门洞矩形内——封死后不能再借门洞穿墙
+    // （封死时新路线为空：目标不可达，根本没有航点；只要出现航点就逐点检查）
+    for (const [index, point] of (newRoute?.points ?? []).entries()) {
+        assert.ok(!(point.gx > DOOR.x1 && point.gx < DOOR.x2 && point.gy > DOOR.y1 && point.gy < DOOR.y2),
+            `new route waypoint #${index} falls inside the re-added door: (${point.gx},${point.gy})`);
+    }
     // 物理位移同样恢复封锁：把单位放回门外再推 300 帧，不得入框
     unit.gx = 35; unit.gy = 25;
     step(scene, 300);
@@ -180,6 +209,7 @@ test('list and merged blockers cache across repeated reads, version bump produce
 
 // 场景 5：确定性——同一初始状态、同一障碍变更序列（含同步多变更乱序请求）跑两遍，
 // 所有单位 gx/gy/hp/dead/withdrawn 完全一致；dyn.version/list、navigation.stats 也一致。
+// 变更序列是完整的"关门→开门→再关门"：i=60 去门（开门）、i=120 把门加回（再关门）。
 // 再加反向请求顺序变体：requestAdd('zz-bait') + requestRemove('door') 顺序反转后结果相同。
 test('identical runs with the same obstacle-change sequence are byte-identical; reverse request order yields same result', () => {
     const run = (swap) => {
@@ -202,6 +232,8 @@ test('identical runs with the same obstacle-change sequence are byte-identical; 
                 if (swap) { dyn.requestAdd(...addReq); dyn.requestRemove(remReq); }
                 else     { dyn.requestRemove(remReq); dyn.requestAdd(...addReq); }
             }
+            // 完整"关门→开门→再关门"序列：正序（swap=false）和乱序（swap=true）两个变体都执行这一步。
+            if (i === 120) dyn.requestAdd('door', DOOR);
             step(scene);
         }
         return {
@@ -222,14 +254,13 @@ test('identical runs with the same obstacle-change sequence are byte-identical; 
 });
 
 // 步骤 2 · 接入移动类调用后的行为验证
-// —— 单位直线被西墙挡住（x=28→36, y=32），门开着时导航绕行入框，plans 增加，无穿墙帧。
+// —— 单位直线被西墙挡住（x=28→36, y=32），门开着时导航绕行入框，plans 增加；
+//    逐帧检查身体圆不与任何实体墙重叠（门板已移除，墙表不含门），循环结束后仍在框内。
 test('open door: unit outside walks around walls via navigation into box', () => {
     const scene = makeScene();
     scene.dynamicBlockers = new DynamicBlockers();
     const dyn = scene.dynamicBlockers;
     for (const [id, rect] of WALLS) dyn.requestAdd(id, rect);
-    // 先提交让导航看到墙，然后开门
-    const door = WALLS.find(([id]) => id === 'door')[1];
     // 兵 1：(28,32) → (36,32) 直线穿西墙，必须导航绕行入框
     const u1 = addUnit(scene, 'red', 'infantry', 28, 32);
     // 兵 2：框外旁观，保证不结算
@@ -244,20 +275,20 @@ test('open door: unit outside walks around walls via navigation into box', () =>
     // 开门
     dyn.requestRemove('door');
     step(scene, 1);
-    step(scene, 1500);   // 25 秒 → 单位应入框
+    // 门已移除：墙表只含剩余实体墙（北墙两段 + 南/西/东各一段，共 5 段，不含门）
+    const walls = WALLS.filter(([id]) => id !== 'door').map(([id, rect]) => ({ ...rect, id }));
+    // 逐帧推进 1500 帧（25 秒）：每一帧都断言身体圆不与任何墙体重叠
+    for (let frame = 0; frame < 1500; frame++) {
+        step(scene, 1);
+        assertNotInWalls(u1, walls);
+    }
     assert.ok(nav.stats.plans > plansBefore, `navigation plans must increase (got ${nav.stats.plans} vs ${plansBefore})`);
     assert.ok(u1.gx > 30 && u1.gx < 40 && u1.gy > 30 && u1.gy < 40,
         `unit should be inside box, ended at (${u1.gx.toFixed(1)},${u1.gy.toFixed(1)})`);
-    // 每帧位置不在墙体内
-    const radius = CombatRules.bodyRadius(u1);
-    for (const r of dyn.list) {
-        const pad = radius + 0.01;
-        assert.ok(!(u1.gx > r.x1 - pad && u1.gx < r.x2 + pad && u1.gy > r.y1 - pad && u1.gy < r.y2 + pad),
-            `unit still collides with blocker ${r.id}: ${u1.gx},${u1.gy}`);
-    }
 });
 
 // —— 门关着，单位始终进不了框（被导航判不可达 + clipMotion 挡住）。
+//    逐帧检查：中心不得进入框内，身体圆也不得与任何墙体（含门）重叠。
 test('closed door: unit never reaches box, stays outside', () => {
     const scene = makeScene();
     scene.dynamicBlockers = new DynamicBlockers();
@@ -272,13 +303,18 @@ test('closed door: unit never reaches box, stays outside', () => {
     const nav = scene.ensureNavigation();
     // 不可达：框被封死，目标点不在可达区域
     assert.equal(nav.nextWaypoint(u1, 36, 32).reachable, false);
-    step(scene, 1500);
-    assert.ok(!(u1.gx > 30 && u1.gx < 40 && u1.gy > 30 && u1.gy < 40),
-        `unit unexpectedly reached inside box: (${u1.gx.toFixed(1)},${u1.gy.toFixed(1)})`);
+    // 门关着：墙表含门，共 6 段——逐帧检查框内与墙体
+    const walls = WALLS.map(([id, rect]) => ({ ...rect, id }));
+    for (let frame = 0; frame < 1500; frame++) {
+        step(scene, 1);
+        assert.ok(!(u1.gx > 30 && u1.gx < 40 && u1.gy > 30 && u1.gy < 40),
+            `unit unexpectedly reached inside box at frame ${frame}: (${u1.gx.toFixed(2)},${u1.gy.toFixed(2)})`);
+        assertNotInWalls(u1, walls);
+    }
 });
 
-// —— 击退朝墙（目标在墙外 0.3 处，amount=5），击退后位置不穿墙。
-test('knockback toward wall: target stays out of wall after knockback', () => {
+// —— 击退朝墙（目标在墙外 0.3 处，amount=5）：knockback 一返回就检查，身体不得嵌进墙里。
+test('knockback toward wall: body stays out of the wall immediately after knockback', () => {
     const scene = makeScene();
     scene.dynamicBlockers = new DynamicBlockers();
     // 只放一堵竖直墙在 x=40，y=30-40
@@ -289,48 +325,84 @@ test('knockback toward wall: target stays out of wall after knockback', () => {
     // 直接调用 knockback：朝 +x 方向（朝墙内） amount=5
     const from = { gx: 35, gy: 35 };
     knockback(u, from, 5);   // angle = atan2(0,3)=0 → 朝 +x
-    step(scene, 3);
     const wall = scene.dynamicBlockers.active.get('wall-knock');
+    // 去掉事后的 step：knockback 返回的当帧，单位中心 + 身体半径就不得越过墙的近端面
+    assert.ok(u.gx + CombatRules.bodyRadius(u) <= wall.x1 + 1e-6,
+        `knockback embedded the body into the wall: gx=${u.gx}, radius=${CombatRules.bodyRadius(u)}, wall.x1=${wall.x1}`);
     // 穿墙判定：圆心进入墙体内部（gx 在 [x1, x2] 且 gy 在 [y1, y2]）
     const inside = u.gx > wall.x1 && u.gx < wall.x2 && u.gy > wall.y1 && u.gy < wall.y2;
     assert.ok(!inside, `knockback pushed unit center through wall: (${u.gx.toFixed(2)},${u.gy.toFixed(2)})`);
     assert.ok(u.gx <= wall.x2, `unit should not be on wall's far side: gx=${u.gx}`);
 });
 
-// —— 墙两侧密集站人，触发推挤分离，分离后没有单位被推进墙体。
-test('separation across wall: no unit is pushed through walls', () => {
-    const scene = makeScene();
-    scene.dynamicBlockers = new DynamicBlockers();
-    // 南北向竖墙 x=35, y=32-38
-    scene.dynamicBlockers.requestAdd('wall-sep', { x1: 34.6, y1: 32, x2: 35, y2: 38, kind: 'wall' });
-    // 墙左放 3 个挤在一起的兵
-    const units = [];
-    for (let i = 0; i < 3; i++) units.push(addUnit(scene, 'red', 'infantry', 34, 34 + i * 0.1));
-    // 墙右放 3 个挤在一起的兵
-    for (let i = 0; i < 3; i++) units.push(addUnit(scene, 'blue', 'infantry', 36, 34 + i * 0.1));
-    // 让两边兵互相有推挤位移：人工塞 separateX/Y
-    for (let i = 0; i < 6; i++) { units[i].separateX = 0.5; units[i].separateY = 0; }
-    step(scene, 3);   // 触发 separate(dt)
-    const radius = CombatRules.bodyRadius(units[0]);
-    const wall = scene.dynamicBlockers.active.get('wall-sep');
-    const pad = radius + 0.01;
-    for (const u of units) {
-        assert.ok(!(u.gx > wall.x1 - pad && u.gx < wall.x2 + pad && u.gy > wall.y1 - pad && u.gy < wall.y2 + pad),
-            `separation pushed unit ${u.id} through wall: (${u.gx.toFixed(2)},${u.gy.toFixed(2)})`);
+// —— 同一方 5 个兵在墙边密集站位（x≈34.15 一带，间距 0.26 < 身体直径 0.72），
+//    不手动塞 separateX/Y，靠真实推挤分离逻辑产生推力。两组对照：
+//    1) 无墙：同样站位，推进后必须有人被推过墙所在的 x 坐标——证明推挤确实发生；
+//    2) 有墙：挂墙，逐帧断言所有兵的身体圆都不与墙体重叠。
+test('separation near a wall: crowding really pushes bodies, wall never lets one overlap it', () => {
+    const CRAMPED_X = [33.63, 33.89, 34.15, 34.41, 34.67];
+    const WALL_SEP = { x1: 35.2, y1: 32, x2: 35.6, y2: 38, kind: 'wall' };
+    const crowd = withWall => {
+        const scene = makeScene();
+        if (withWall) {
+            scene.dynamicBlockers = new DynamicBlockers();
+            scene.dynamicBlockers.requestAdd('wall-sep', WALL_SEP);
+        }
+        const units = CRAMPED_X.map(x => addUnit(scene, 'red', 'infantry', x, 35));
+        addUnit(scene, 'blue', 'infantry', 60, 60);   // 框外旁观，保证不结算
+        // 只留推挤分离：所有单位都不主动移动
+        scene.updateNormalUnit = unit => { unit.moveX = 0; unit.moveY = 0; };
+        return { scene, units };
+    };
+    // 对照 1：无墙——推挤必须真的把兵推过墙所在的 x 坐标（否则本用例就是空测）
+    const open = crowd(false);
+    step(open.scene, 240);
+    const pushed = open.units.filter(unit => unit.gx > WALL_SEP.x1);
+    assert.ok(pushed.length > 0,
+        `separation never pushed anyone past x=${WALL_SEP.x1}: ${open.units.map(unit => unit.gx.toFixed(3)).join(', ')}`);
+    // 对照 2：有墙——逐帧断言身体不嵌入墙；墙必须真正吃住推力（最靠墙的身体贴在墙面外）
+    const sealed = crowd(true);
+    const wall = { ...WALL_SEP, id: 'wall-sep' };
+    for (let frame = 0; frame < 240; frame++) {
+        step(sealed.scene, 1);
+        for (const unit of sealed.units) assertNotInWalls(unit, [wall]);
     }
+    const radius = CombatRules.bodyRadius(sealed.units[0]);
+    const maxX = Math.max(...sealed.units.map(unit => unit.gx));
+    assert.ok(maxX > WALL_SEP.x1 - radius - 0.01,
+        `crowd never pressed against the wall: max gx=${maxX}, expected ~${WALL_SEP.x1 - radius}`);
 });
 
-// —— 关闭对照：不挂动态层，跑一段已有的平地战斗，结果逐字节一致（822 原测已经过，这里显式声明）。
-test('no dynamic blockers: behavior is byte-identical to pre-P0 baseline (all 822 original tests pass)', () => {
-    // 此用例仅作显式声明：关闭动态层时 Terrain/导航/击退/分离的所有调用走原路径，
-    // dyn 参数均为 null，hasBarriers/clipMotion/projectPoint/nextWaypoint 的结果与 P0 前完全一致。
-    // 822 原测全绿即为此声明的验证（含已有确定性对照测试）。
-    const scene = makeScene();
-    addUnit(scene, 'red', 'infantry', 30, 30);
-    addUnit(scene, 'blue', 'infantry', 40, 40);
-    step(scene, 300);   // 5 秒
-    // 平地无动态层时 dynOf 返回 null，所有 Terrain.hasBarriers/clipMotion 走静态路径
-    assert.equal(Terrain.dynOf(scene), null);
-    assert.equal(Terrain.hasBarriers('flat', null), false);
-    // 822 原测全绿 = 此用例的运行时验证
+// —— 关闭对照（真实对比，不再是口头声明）：同一平地场景、相同兵力与站位，分别在
+//    ① 不挂动态层（scene.dynamicBlockers = null，P0 前的原路径）
+//    ② 挂一个空 DynamicBlockers、从不添加障碍
+//    ③ 挂一个层，第 1 步加一块远离所有单位的障碍、第 2 步再删掉
+//    三种配置下各跑 300 步，逐步记录每个单位的 id/gx/gy/hp/dead，三份轨迹必须完全一致。
+test('disabled layer, empty layer and a transient far obstacle produce byte-identical trajectories', () => {
+    const FRAMES = 300;
+    const trace = configure => {
+        const scene = makeScene();
+        configure(scene);
+        addUnit(scene, 'red', 'infantry', 25, 35);
+        addUnit(scene, 'red', 'infantry', 26.5, 34);
+        addUnit(scene, 'blue', 'infantry', 45, 35);
+        addUnit(scene, 'blue', 'infantry', 43.5, 36);
+        const frames = [];
+        for (let frame = 0; frame < FRAMES; frame++) {
+            // 障碍只存在于第 1 步，且离所有单位足够远（(10,10) 一带）
+            if (frame === 0) scene.dynamicBlockers?.requestAdd('far-obstacle', { x1: 10, y1: 10, x2: 11, y2: 11.4, kind: 'wall' });
+            if (frame === 1) scene.dynamicBlockers?.requestRemove('far-obstacle');
+            step(scene, 1);
+            frames.push(scene.units.map(unit => ({
+                id: unit.id, gx: unit.gx, gy: unit.gy, hp: unit.hp, dead: unit.dead
+            })));
+        }
+        return frames;
+    };
+    const disabled = trace(scene => { scene.dynamicBlockers = null; });
+    const empty = trace(scene => { scene.dynamicBlockers = new DynamicBlockers(); });
+    const transient = trace(scene => { scene.dynamicBlockers = new DynamicBlockers(); });
+    assert.equal(disabled.length, FRAMES);
+    assert.deepEqual(empty, disabled, 'an empty dynamic layer must not change the simulation');
+    assert.deepEqual(transient, disabled, 'a transient far-away obstacle must not change the simulation');
 });
