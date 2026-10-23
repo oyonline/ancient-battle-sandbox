@@ -12,6 +12,7 @@ import { Snd } from '../snd.js';
 import { Terrain } from '../terrain.js';
 import { campBounds, queueCampWalls, buildCampVisuals, disposeCampVisuals, updateCampGate } from './walls.js';
 import { buildRamVisual, updateRamVisual } from './ram.js';
+import { CAMP_LAYOUT, LADDER_TOP_WORLD } from './layout.js';
 import { createCampSiege, siegeDeployment, installSiegeArrows, H_WORLD, ATTACKERS, DEFENDERS } from './deployment.js';
 import { buildSiegeVisuals, climberWorldHeight } from './platforms.js';
 import { CavalryAI, unitRand } from '../units.js';
@@ -26,6 +27,8 @@ const TEAM_COLOR = { red: 0xc4553f, blue: 0x7fb0e0 };
 
 const $ = id => document.getElementById(id);
 const hud = $('hud');
+const totalTroops = army => Object.values(army).reduce((sum, count) => sum + count, 0);
+$('gate-description').textContent = `攻方 ${totalTroops(ATTACKERS)} 人围攻木栅营寨，守方 ${totalTroops(DEFENDERS)} 人据寨死守`;
 
 // ---------------- Three 基础 ----------------
 const viewport = $('viewport');
@@ -133,7 +136,9 @@ function soldierGeo(kind) {
     return mergeGeometries(parts);
 }
 const UNIT_KINDS = ['infantry', 'pikeman', 'archer', 'cavalry'];
-const CAP = { infantry: 700, pikeman: 160, archer: 220, cavalry: 160 };
+const MIN_CAP = { infantry: 700, pikeman: 160, archer: 220, cavalry: 160 };
+const CAP = Object.fromEntries(UNIT_KINDS.map(kind =>
+    [kind, Math.max((ATTACKERS[kind] ?? 0) + (DEFENDERS[kind] ?? 0), MIN_CAP[kind])]));
 const unitMat = new THREE.MeshLambertMaterial({ vertexColors: true });
 const unitMeshes = {}, corpseMeshes = {};
 for (const kind of UNIT_KINDS) {
@@ -256,7 +261,7 @@ function arrowArc(a) {
         for (const p of [enter.t, 1 - (exit?.t ?? 0)]) {
             const t = Math.max(.001, Math.min(.999, p));
             const baseline = ((a.sourceHeight || 0) * (1 - t) + (a.targetHeight || 0) * t) * H_WORLD + .5;
-            arc = Math.max(arc, ((r.kind === 'gate' ? 2.4 : 1.75) + .15 - baseline) / Math.sin(t * Math.PI));
+            arc = Math.max(arc, ((r.kind === 'gate' ? CAMP_LAYOUT.gatePostHeight + CAMP_LAYOUT.ladderTopClearance : LADDER_TOP_WORLD) - baseline) / Math.sin(t * Math.PI));
         }
     }
     arrowArcs.set(a, arc);

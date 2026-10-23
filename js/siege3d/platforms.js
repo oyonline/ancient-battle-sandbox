@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { board } from '../board.js';
 import { H_WORLD } from './deployment.js';
 
-const LADDER_TOP_WORLD = 1.75 + .15;
+import { LADDER_TOP_WORLD } from './layout.js';
 export const climberWorldHeight = climb => climb.progress * LADDER_TOP_WORLD;
 
 export function buildSiegeVisuals(siege) {

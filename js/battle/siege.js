@@ -43,7 +43,7 @@ export function createSiegeLayer(platforms = [], assault = null) {
     };
     // Height-only layers retain the original shape and have no simulation hook.
     if (assault?.gate && assault?.ram) installRam(layer, assault);
-    if (assault?.ladders?.length) installLadders(layer, assault.ladders);
+    if (assault?.ladders?.length) installLadders(layer, assault.ladders, assault.climbSeconds);
     return layer;
 }
 
@@ -51,7 +51,7 @@ export const LADDER_LIP = .8;
 const CLIMB_SECONDS = 2.5, LADDER_RECRUIT_MS = 1000;
 const hookedMorale = new WeakSet();
 
-function installLadders(layer, configs) {
+function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS) {
     const landed = new WeakSet(), climbing = new Map();
     layer.landedCount = 0;
     layer.ladders = configs.map((c, i) => {
@@ -158,7 +158,7 @@ function installLadders(layer, configs) {
                 if (entry.ladder !== ladder) continue;
                 const occupied = scene.units.some(u => alive(u) && isHostile(scene, ladder.team, u.team) &&
                     Math.hypot(u.gx - entry.landing.gx, u.gy - entry.landing.gy) <= .6);
-                const next = entry.progress + dt / CLIMB_SECONDS;
+                const next = entry.progress + dt / climbSeconds;
                 entry.waiting = occupied && next >= LADDER_LIP;
                 entry.progress = entry.waiting ? LADDER_LIP : Math.min(1, next + 1e-12 >= 1 ? 1 : next);
                 entry.height = entry.progress * layer.heightAt(entry.landing.gx, entry.landing.gy);

@@ -2,27 +2,28 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { DynamicBlockers } from '../terrain.js';
 import { board } from '../board.js';
+import { CAMP_LAYOUT as L } from './layout.js';
 
 export function campBounds() {
     const cx = board.W / 2, cy = board.H / 2;
-    return { cx, cy, x1: cx - 7, y1: cy - 7, x2: cx + 7, y2: cy + 7 };
+    return { cx, cy, x1: cx - L.halfSize, y1: cy - L.halfSize, x2: cx + L.halfSize, y2: cy + L.halfSize };
 }
 
 export function queueCampWalls(scene) {
-    const { cx, cy, x1, y1, x2, y2 } = campBounds(), t = .3;
+    const { cx, cy, x1, y1, x2, y2 } = campBounds(), t = L.wallThickness;
     scene.dynamicBlockers = new DynamicBlockers();
     const add = (id, ax, ay, bx, by, kind = 'wall') =>
         scene.dynamicBlockers.requestAdd(id, { x1: ax, y1: ay, x2: bx, y2: by, kind });
-    // 内边长 14，墙向外延展；横墙覆盖竖墙端点，四角闭合。
+    // 内边长由配置驱动，墙向外延展；横墙覆盖竖墙端点，四角闭合。
     add('north-west', x1 - t, y1 - t, cx, y1);
     add('north-east', cx, y1 - t, x2 + t, y1);
     add('west-north', x1 - t, y1, x1, cy);
     add('west-south', x1 - t, cy, x1, y2);
     add('east-north', x2, y1, x2 + t, cy);
     add('east-south', x2, cy, x2 + t, y2);
-    add('south-west', x1 - t, y2, cx - 1.2, y2 + t);
-    add('south-east', cx + 1.2, y2, x2 + t, y2 + t);
-    add('south-gate', cx - 1.2, y2, cx + 1.2, y2 + t, 'gate');
+    add('south-west', x1 - t, y2, cx - L.gateWidth / 2, y2 + t);
+    add('south-east', cx + L.gateWidth / 2, y2, x2 + t, y2 + t);
+    add('south-gate', cx - L.gateWidth / 2, y2, cx + L.gateWidth / 2, y2 + t, 'gate');
 }
 
 // 所有视觉几何均消费动态层矩形；坐标换算与千人对冲页一致：棋盘中心 → 世界原点。
@@ -44,9 +45,10 @@ export function buildCampVisuals(rects) {
         at(mesh, gx, y, gy); mesh.castShadow = mesh.receiveShadow = true;
         group.add(mesh); return mesh;
     };
-    const shaft = new THREE.BoxGeometry(.16, 1.63, .16).translate(0, 1.63 / 2, 0);
-    const tip = new THREE.ConeGeometry(.16 / Math.sqrt(2), .12, 4)
-        .rotateY(Math.PI / 4).translate(0, 1.69, 0);
+    const shaftHeight = L.wallHeight - L.stakeTipHeight;
+    const shaft = new THREE.BoxGeometry(.16, shaftHeight, .16).translate(0, shaftHeight / 2, 0);
+    const tip = new THREE.ConeGeometry(.16 / Math.sqrt(2), L.stakeTipHeight, 4)
+        .rotateY(Math.PI / 4).translate(0, shaftHeight + L.stakeTipHeight / 2, 0);
     const stakeGeometry = mergeGeometries([shaft, tip]);
     shaft.dispose(); tip.dispose();
     const stakes = [];
@@ -60,7 +62,7 @@ export function buildCampVisuals(rects) {
             const along = (i - (count - 1) / 2) * .25;
             stakes.push([mx + (horizontal ? along : 0), my + (horizontal ? 0 : along)]);
         }
-        for (const height of [.55, 1.35]) {
+        for (const height of L.braceHeights) {
             if (horizontal) box(length, .12, .08, mx, height, my + Math.sign(cy - my) * (.08 + .04), brace);
             else box(.08, .12, length, mx + Math.sign(cx - mx) * (.08 + .04), height, my, brace);
         }
@@ -76,13 +78,13 @@ export function buildCampVisuals(rects) {
             const hinge = new THREE.Group();
             hinge.name = side < 0 ? 'gate-left' : 'gate-right';
             at(hinge, side < 0 ? r.x1 : r.x2, 0, my);
-            const leaf = new THREE.Mesh(new THREE.BoxGeometry(width / 2, 2, .12), brace);
-            leaf.position.set(-side * width / 4, 1, 0);
+            const leaf = new THREE.Mesh(new THREE.BoxGeometry(width / 2, L.gateLeafHeight, .12), brace);
+            leaf.position.set(-side * width / 4, L.gateLeafHeight / 2, 0);
             leaf.castShadow = leaf.receiveShadow = true;
             hinge.add(leaf); group.add(hinge);
             group.userData.gateHinges.push({ hinge, side });
         }
-        for (const x of [r.x1 - .13, r.x2 + .13]) box(.26, 2.4, .26, x, 1.2, my, post);
+        for (const x of [r.x1 - .13, r.x2 + .13]) box(.26, L.gatePostHeight, .26, x, L.gatePostHeight / 2, my, post);
     }
     // 内缘也由矩形反推，避免地面与碰撞墙出现两份布局。
     const vertical = walls.filter(r => r.x2 - r.x1 < r.y2 - r.y1);

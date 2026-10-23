@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { CAMP_LAYOUT as L } from '../js/siege3d/layout.js';
 import assert from 'node:assert/strict';
 import { makeScene, addUnit } from './battle-harness.js';
 import { createSiegeLayer } from '../js/battle/siege.js';
@@ -140,7 +141,7 @@ test('siege archery #5: repeated battles and redeployment reset the exact endpoi
     assert.deepEqual(endpoints(redeployed), endpoints(first));
 });
 
-test('siege archery #6: stepped siege3d deployment has 600/200 soldiers, 70/50 archers and 8 tower archers', () => {
+test('siege archery #6: stepped siege3d deployment has configured armies and tower archers', () => {
     const scene = makeScene();
     scene.deployUnits(ATTACKERS, DEFENDERS, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
     const bounds = campBounds();
@@ -151,12 +152,12 @@ test('siege archery #6: stepped siege3d deployment has 600/200 soldiers, 70/50 a
     installSiegeArrows(scene);
     step(scene);
     const count = (team, type) => scene.units.filter(u => u.team === team && (!type || u.type === type)).length;
-    assert.equal(count('red'), 600);
-    assert.equal(count('red', 'archer'), 70);
-    assert.equal(count('blue'), 200);
-    assert.equal(count('blue', 'archer'), 50);
+    assert.equal(count('red'), Object.values(L.attackers).reduce((a, b) => a + b, 0));
+    assert.equal(count('red', 'archer'), L.attackers.archer);
+    assert.equal(count('blue'), Object.values(L.defenders).reduce((a, b) => a + b, 0));
+    assert.equal(count('blue', 'archer'), L.defenders.archer);
     const towerArchers = scene.units.filter(u => u.siegeAnchor?.platformId?.startsWith('tower-'));
-    assert.equal(towerArchers.length, 8);
+    assert.equal(towerArchers.length, L.towerCount * L.archersPerTower);
     assert.ok(towerArchers.every(u => u.team === 'blue' && u.type === 'archer'));
     assert.ok(scene.units.every(u => Number.isFinite(u.gx) && Number.isFinite(u.gy)));
 });

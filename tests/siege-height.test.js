@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { CAMP_LAYOUT as L } from '../js/siege3d/layout.js';
 import assert from 'node:assert/strict';
 import { makeScene, addUnit, CombatRules } from './battle-harness.js';
 import { createSiegeLayer } from '../js/battle/siege.js';
@@ -123,7 +124,7 @@ test('siege determinism: two complete 600-frame tower battles match positions, h
     assert.deepEqual(a.hits, b.hits);
 });
 
-test('siege3d deployment: 8 tower archers, 4 per tower, infantry walkway priority and no wall overlap', t => {
+test('siege3d deployment: configured tower archers and crew, infantry walkway priority and no wall overlap', t => {
     const scene = makeScene();
     scene.deployUnits(ATTACKERS, DEFENDERS,
         'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
@@ -133,12 +134,12 @@ test('siege3d deployment: 8 tower archers, 4 per tower, infantry walkway priorit
     for (const { unit, gx, gy, siegeAnchor } of deployment) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
     queueCampWalls(scene);
     const towers = scene.siege.platforms.filter(p => p.kind === 'tower');
-    assert.equal(deployment.filter(p => p.siegeAnchor).length, 8);
+    assert.equal(deployment.filter(p => p.siegeAnchor).length, L.towerCount * L.archersPerTower);
     for (const p of towers) {
         const crew = deployment.filter(d => d.siegeAnchor?.platformId === p.id);
-        assert.equal(crew.length, 4);
+        assert.equal(crew.length, L.archersPerTower);
         assert.ok(crew.every(d => d.unit.type === 'archer' && inside(p, d)));
-        assert.equal(p.height * H_WORLD, 2.56);
+        assert.equal(p.height * H_WORLD, L.towerHeight);
     }
     const walkers = deployment.filter(d => d.platformId?.startsWith('walk-'));
     assert.ok(walkers.length > 0 && walkers.length < DEFENDERS.infantry);
@@ -146,7 +147,7 @@ test('siege3d deployment: 8 tower archers, 4 per tower, infantry walkway priorit
         const p = scene.siege.platforms.find(p => p.id === d.platformId);
         assert.ok(inside(p, d));
         assert.equal(d.unit.type, 'infantry');
-        assert.equal(p.height * H_WORLD, 1);
+        assert.equal(p.height * H_WORLD, L.walkwayHeight);
     }
     assert.equal(scene.siege.heightAt(b.cx, b.y2 - .3), 0, '2.4-wide gate gap');
     const assertClear = () => {
@@ -169,5 +170,5 @@ test('siege3d deployment: 8 tower archers, 4 per tower, infantry walkway priorit
     const rebuilt = createCampSiege(b);
     assert.notEqual(rebuilt, scene.siege);
     assert.deepEqual(rebuilt.platforms, scene.siege.platforms);
-    t.diagnostic(`deployment=${deployment.length}; tower=8 (4+4); walkway=${walkers.length}; interior=${Object.values(DEFENDERS).reduce((sum, n) => sum + n, 0) - 8 - walkers.length}`);
+    t.diagnostic(`deployment=${deployment.length}; tower=${L.towerCount * L.archersPerTower}; walkway=${walkers.length}; interior=${Object.values(DEFENDERS).reduce((sum, n) => sum + n, 0) - L.towerCount * L.archersPerTower - walkers.length}`);
 });

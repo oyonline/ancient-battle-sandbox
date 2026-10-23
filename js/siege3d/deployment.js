@@ -1,43 +1,50 @@
 import { createSiegeLayer } from '../battle/siege.js';
-import { WALL_R, TOWER_ORIGINS, TOWER_ARCHER_SLOTS } from '../three-spike/camp-assault-sim.js';
+import { CAMP_LAYOUT as L } from './layout.js';
 
-export const H_WORLD = 2;
-export const WALKWAY_HEIGHT = 1 / H_WORLD;
-export const TOWER_HEIGHT = 2.56 / H_WORLD;
-export const ATTACKERS = { infantry: 450, pikeman: 80, archer: 70 };
-export const DEFENDERS = { infantry: 150, archer: 50 };
+export const H_WORLD = L.worldHeightScale;
+export const WALKWAY_HEIGHT = L.walkwayHeight / H_WORLD;
+export const TOWER_HEIGHT = L.towerHeight / H_WORLD;
+export const ATTACKERS = L.attackers;
+export const DEFENDERS = L.defenders;
 
 export function createCampSiege(b, { ladders = false } = {}) {
-    const w = .6;
+    const w = L.walkwayWidth, gateHalf = L.gateWidth / 2;
     const walkway = (id, x1, y1, x2, y2) => ({ id, x1, y1, x2, y2, height: WALKWAY_HEIGHT, kind: 'walkway' });
     const platforms = [
         walkway('walk-north', b.x1, b.y1, b.x2, b.y1 + w),
         walkway('walk-west', b.x1, b.y1 + w, b.x1 + w, b.y2 - w),
         walkway('walk-east', b.x2 - w, b.y1 + w, b.x2, b.y2 - w),
-        walkway('walk-south-west', b.x1, b.y2 - w, b.cx - 1.2, b.y2),
-        walkway('walk-south-east', b.cx + 1.2, b.y2 - w, b.x2, b.y2)
+        walkway('walk-south-west', b.x1, b.y2 - w, b.cx - gateHalf, b.y2),
+        walkway('walk-south-east', b.cx + gateHalf, b.y2 - w, b.x2, b.y2)
     ];
-    const scale = (b.x2 - b.x1) / (2 * WALL_R);
-    TOWER_ORIGINS.forEach((o, i) => {
-        const x = b.cx + o.x * scale, y = b.cy + o.z * scale;
-        platforms.push({ id: `tower-${i}`, x1: x - .7, y1: y - .7, x2: x + .7, y2: y + .7,
+    L.towerCorners.forEach(([sx, sy], i) => {
+        const x = sx < 0 ? b.x1 + L.towerInset : b.x2 - L.towerInset;
+        const y = sy < 0 ? b.y1 + L.towerInset : b.y2 - L.towerInset;
+        const half = L.towerSize / 2;
+        platforms.push({ id: `tower-${i}`, x1: x - half, y1: y - half, x2: x + half, y2: y + half,
             height: TOWER_HEIGHT, kind: 'tower' });
     });
+    const ladderConfigs = L.sides.flatMap(side => Array.from({ length: L.laddersPerSide }, (_, i) => {
+        const fraction = (i + .5) / L.laddersPerSide;
+        const horizontal = side === 'north' || side === 'south';
+        let along = horizontal ? b.x1 + (b.x2 - b.x1) * fraction : b.y1 + (b.y2 - b.y1) * fraction;
+        if (side === 'south') {
+            const perHalf = L.laddersPerSide / 2;
+            const sign = i < perHalf ? -1 : 1;
+            const rank = i < perHalf ? perHalf - 1 - i : i - perHalf;
+            along = b.cx + sign * (gateHalf + L.southLadderGateClearance + rank * L.southLadderSpacing);
+        }
+        const edge = { west: b.x1, east: b.x2, north: b.y1, south: b.y2 }[side];
+        const outward = side === 'west' || side === 'north' ? -1 : 1;
+        const point = offset => horizontal ? { gx: along, gy: edge + outward * offset }
+            : { gx: edge + outward * offset, gy: along };
+        return { id: `${side}-${i}`, foot: point(L.ladderFootOffset),
+            top: point(L.wallThickness / 2), landing: point(-w / 2) };
+    }));
     return createSiegeLayer(platforms, {
         gate: { blockerId: 'south-gate' },
-        ram: { gx: b.cx, gateOuterY: b.y2 + .3, team: 'red' },
-        ...(ladders ? { ladders: [
-            ...[1 / 3, 2 / 3].map((fraction, i) => {
-                const gy = b.y1 + (b.y2 - b.y1) * fraction;
-                return { id: `west-${i}`, foot: { gx: b.x1 - 1.3, gy },
-                    top: { gx: b.x1 - .15, gy }, landing: { gx: b.x1 + .3, gy } };
-            }),
-            ...[-1, 1].map(side => {
-                const gx = b.cx + side * (1.2 + 2.5);
-                return { id: `south-${side}`, foot: { gx, gy: b.y2 + 1.3 },
-                    top: { gx, gy: b.y2 + .15 }, landing: { gx, gy: b.y2 - .3 } };
-            })
-        ] } : {})
+        ram: { gx: b.cx, gateOuterY: b.y2 + L.wallThickness, team: 'red' },
+        ...(ladders ? { ladders: ladderConfigs, climbSeconds: L.climbSeconds } : {})
     });
 }
 
@@ -47,7 +54,7 @@ export function siegeDeployment(units, b, siege) {
     const archers = defenders.filter(u => u.type === 'archer');
     const towers = siege.platforms.filter(p => p.kind === 'tower');
     let towerIndex = 0;
-    for (const p of towers) for (const slot of TOWER_ARCHER_SLOTS) {
+    for (const p of towers) for (const slot of L.towerArcherSlots) {
         const unit = archers[towerIndex++];
         if (!unit) continue;
         const gx = (p.x1 + p.x2) / 2 + slot.x, gy = (p.y1 + p.y2) / 2 + slot.z;
@@ -60,24 +67,38 @@ export function siegeDeployment(units, b, siege) {
     for (const p of siege.platforms.filter(p => p.kind === 'walkway')) {
         const horizontal = p.x2 - p.x1 > p.y2 - p.y1;
         // .38 from the wall clears the existing .36 body radius; .8 spacing avoids corner overlap.
-        const fixed = horizontal ? (p.y1 === b.y1 ? b.y1 + .38 : b.y2 - .38)
-            : (p.x1 === b.x1 ? b.x1 + .38 : b.x2 - .38);
-        const start = (horizontal ? p.x1 : p.y1) + .8, end = (horizontal ? p.x2 : p.y2) - .8;
-        for (let along = start; along <= end; along += .8) slots.push({
+        const fixed = horizontal ? (p.y1 === b.y1 ? b.y1 + L.defenderWallClearance : b.y2 - L.defenderWallClearance)
+            : (p.x1 === b.x1 ? b.x1 + L.defenderWallClearance : b.x2 - L.defenderWallClearance);
+        const start = (horizontal ? p.x1 : p.y1) + L.defenderSpacing, end = (horizontal ? p.x2 : p.y2) - L.defenderSpacing;
+        for (let along = start; along <= end; along += L.defenderSpacing) slots.push({
             gx: horizontal ? along : fixed, gy: horizontal ? fixed : along, platformId: p.id
         });
     }
-    for (let gy = b.y1 + 1.3; gy <= b.y2 - 1.3; gy += .8) {
-        for (let gx = b.x1 + 1.3; gx <= b.x2 - 1.3; gx += .8) {
-            if (towers.some(p => gx >= p.x1 - .4 && gx <= p.x2 + .4 && gy >= p.y1 - .4 && gy <= p.y2 + .4)) continue;
+    for (let gy = b.y1 + L.interiorInset; gy <= b.y2 - L.interiorInset; gy += L.defenderSpacing) {
+        for (let gx = b.x1 + L.interiorInset; gx <= b.x2 - L.interiorInset; gx += L.defenderSpacing) {
+            if (towers.some(p => gx >= p.x1 - L.towerClearance && gx <= p.x2 + L.towerClearance && gy >= p.y1 - L.towerClearance && gy <= p.y2 + L.towerClearance)) continue;
             slots.push({ gx, gy });
         }
     }
     remaining.forEach((unit, i) => result.push({ unit, ...slots[i] }));
-    units.filter(u => u.team === 'red').forEach((unit, i) => {
-        const wingIndex = Math.floor(i / 2), depth = Math.floor(wingIndex / 20), col = wingIndex % 20;
-        result.push({ unit, gx: i % 2 === 0 ? b.x1 - .3 - 6 - depth * .85 : b.cx - 9.5 + col,
-            gy: i % 2 === 0 ? b.cy - 9.5 + col : b.y2 + .3 + 6 + depth * .85 });
+    const wings = Object.fromEntries(Object.keys(L.attackShares).map(side => [side, []]));
+    for (const type of Object.keys(ATTACKERS)) {
+        const soldiers = units.filter(u => u.team === 'red' && u.type === type);
+        let cursor = 0;
+        Object.entries(L.attackShares).forEach(([side, share], index, entries) => {
+            const count = index === entries.length - 1 ? soldiers.length - cursor : Math.round(soldiers.length * share);
+            wings[side].push(...soldiers.slice(cursor, cursor + count));
+            cursor += count;
+        });
+    }
+    for (const [side, soldiers] of Object.entries(wings)) soldiers.forEach((unit, i) => {
+        const depth = Math.floor(i / L.attackerColumns), col = i % L.attackerColumns;
+        const along = (col - (L.attackerColumns - 1) / 2) * L.attackerSpacing;
+        const outward = L.wallThickness + L.attackerWallClearance + depth * L.attackerDepthSpacing;
+        const horizontal = side === 'south' || side === 'north';
+        result.push({ unit, side,
+            gx: horizontal ? b.cx + along : side === 'west' ? b.x1 - outward : b.x2 + outward,
+            gy: horizontal ? (side === 'north' ? b.y1 - outward : b.y2 + outward) : b.cy + along });
     });
     return result;
 }

@@ -1,9 +1,10 @@
 import test from 'node:test';
+import { CAMP_LAYOUT as L, LADDER_TOP_WORLD } from '../js/siege3d/layout.js';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { makeScene, addUnit, CombatRules, Terrain } from './battle-harness.js';
 import { createSiegeLayer, LADDER_LIP } from '../js/battle/siege.js';
-import { createCampSiege, installSiegeArrows } from '../js/siege3d/deployment.js';
+import { createCampSiege, installSiegeArrows, WALKWAY_HEIGHT } from '../js/siege3d/deployment.js';
 import { campBounds, queueCampWalls, disposeCampVisuals } from '../js/siege3d/walls.js';
 import { buildSiegeVisuals, climberWorldHeight } from '../js/siege3d/platforms.js';
 
@@ -28,8 +29,10 @@ function camp(count = 5, defended = false, ladderIndex = 0) {
     queueCampWalls(s);
     installSiegeArrows(s);
     const l = s.siege.ladders[0];
-    const attackers = Array.from({ length: count }, (_, i) => soldier(s, 'red', l.foot.gx - .75 * Math.floor(i / 3),
-        l.foot.gy + (i % 3 - 1) * .75, i === 4 ? 'pikeman' : 'infantry'));
+    const inwardX = Math.sign(l.top.gx - l.foot.gx), inwardY = Math.sign(l.top.gy - l.foot.gy);
+    const attackers = Array.from({ length: count }, (_, i) => soldier(s, 'red',
+        l.foot.gx - inwardX * .75 * Math.floor(i / 3) + l.across.gx * (i % 3 - 1) * .75,
+        l.foot.gy - inwardY * .75 * Math.floor(i / 3) + l.across.gy * (i % 3 - 1) * .75, i === 4 ? 'pikeman' : 'infantry'));
     const defender = defended ? soldier(s, 'blue', l.landing.gx + .08, l.landing.gy) : null;
     if (defender) defender.hp = 12;
     const hits = [], original = s.recordDamage;
@@ -72,7 +75,7 @@ test('ladder #1: five infantry (including a pike) enter a sealed camp, capacity 
                 assert.ok(Math.abs(u.gx - l.landing.gx) <= .071, 'only existing body-radius projection adjusts landing');
                 assert.equal(u.siegeAnchor, undefined);
                 assert.equal(u.siegeRole, undefined);
-                assert.equal(s.siege.heightAt(u.gx, u.gy), .5);
+                assert.equal(s.siege.heightAt(u.gx, u.gy), WALKWAY_HEIGHT);
             }
         }
     }
@@ -203,15 +206,19 @@ test('ladder release: routing returns to foot and ordinary AI; ranged, cavalry a
     assert.ok(ineligible.every(a => !a.siegeClimb));
 });
 
-test('ladder visuals: four placements, dimensions, materials, shadows and fresh redeployment state', () => {
+test('ladder visuals: configured placements, dimensions, materials, shadows and fresh redeployment state', () => {
     const { s } = camp();
     step(s); // Real simulation creates occupied state before rebuilding.
     const b = campBounds(), fresh = createCampSiege(b, { ladders: true });
-    assert.equal(fresh.ladders.length, 4);
+    assert.equal(fresh.ladders.length, L.sides.length * L.laddersPerSide);
     assert.equal(fresh.landedCount, 0);
     assert.ok(fresh.ladders.every(l => l.climbers.every(id => id === null) && !l.initialized));
-    for (const l of fresh.ladders.slice(2)) assert.ok(Math.abs(l.top.gx - b.cx) - 1.2 >= 2.5 - 1e-9);
-    for (const [i, l] of fresh.ladders.slice(0, 2).entries()) assert.ok(Math.abs(l.foot.gy - (b.y1 + 14 * (i + 1) / 3)) < 1e-9);
+    for (const l of fresh.ladders.filter(l => l.id.startsWith('south-'))) {
+        assert.ok(Math.abs(l.top.gx - b.cx) - L.gateWidth / 2 >= L.southLadderGateClearance - 1e-9);
+    }
+    for (const [i, l] of fresh.ladders.filter(l => l.id.startsWith('west-')).entries()) {
+        assert.equal(l.foot.gy, b.y1 + 2 * L.halfSize * (i + .5) / L.laddersPerSide);
+    }
     const group = buildSiegeVisuals(fresh);
     for (const l of fresh.ladders) {
         const rails = group.children.filter(o => o.name === `${l.id}-rail`);
@@ -223,7 +230,7 @@ test('ladder visuals: four placements, dimensions, materials, shadows and fresh 
             assert.equal(rail.geometry.parameters.width, .08);
             assert.equal(rail.geometry.parameters.depth, .08);
             assert.equal(rail.material.color.getHexString(), '785535');
-            assert.equal(rail.position.y, .95);
+            assert.equal(rail.position.y, LADDER_TOP_WORLD / 2);
         }
         for (const [i, rung] of rungs.entries()) {
             assert.equal(rung.geometry.parameters.width, .05);
@@ -322,8 +329,8 @@ test('ladder rework b: axe at the foot is ineligible and only infantry is recrui
     t.diagnostic(`frames=61 (including refill); recruited=${infantry.type}; axeRecruited=false; occupiedSlots=1`);
 });
 
-test('ladder rework c: both slots stay at least 0.35 apart through climbing and landing on all four ladders', t => {
-    for (let index = 0; index < 4; index++) {
+test('ladder rework c: both slots stay at least 0.35 apart through climbing and landing on every configured ladder', t => {
+    for (let index = 0; index < L.sides.length * L.laddersPerSide; index++) {
         const { s, l, attackers } = camp(2, false, index);
         const landings = new Map();
         let minDistance = Infinity, climbingFrames = 0;
@@ -340,8 +347,8 @@ test('ladder rework c: both slots stay at least 0.35 apart through climbing and 
             attackers.forEach((u, j) => {
                 if (previousClimbs[j] && !u.siegeClimb) {
                     assert.equal(previousClimbs[j].progress, 1);
-                    assert.equal(previousClimbs[j].height, .5);
-                    assert.equal(climberWorldHeight(previousClimbs[j]), 1.9);
+                    assert.equal(previousClimbs[j].height, WALKWAY_HEIGHT);
+                    assert.equal(climberWorldHeight(previousClimbs[j]), LADDER_TOP_WORLD);
                     landings.set(u.id, { gx: u.gx, gy: u.gy });
                     assertClear(s, u);
                 }
@@ -364,7 +371,7 @@ test('ladder rework d: every lip-fight step preserves exact interpolation and wa
     const halfRail = rail.position.clone().set(0, rail.geometry.parameters.height / 2, 0).applyQuaternion(rail.quaternion);
     const footY = rail.position.y - halfRail.y, topY = rail.position.y + halfRail.y;
     assert.ok(Math.abs(footY) < 1e-12);
-    assert.ok(Math.abs(topY - 1.9) < 1e-12);
+    assert.ok(Math.abs(topY - LADDER_TOP_WORLD) < 1e-12);
     let heldFrames = 0, maxPositionError = 0, minWallClearance = Infinity;
     for (let i = 0; i < 300; i++) {
         step(s);
@@ -375,8 +382,8 @@ test('ladder rework d: every lip-fight step preserves exact interpolation and wa
         if (!climb.waiting) continue;
         heldFrames++;
         assert.equal(p, LADDER_LIP);
-        assert.equal(renderHeight, 1.52);
-        assert.equal(climb.height, .4, 'simulation height remains the walkway interpolation');
+        assert.equal(renderHeight, LADDER_LIP * LADDER_TOP_WORLD);
+        assert.equal(climb.height, LADDER_LIP * WALKWAY_HEIGHT, 'simulation height remains the walkway interpolation');
         const expectedX = l.foot.gx + (l.top.gx - l.foot.gx) * p + l.across.gx * climb.offset;
         const expectedY = l.foot.gy + (l.top.gy - l.foot.gy) * p + l.across.gy * climb.offset;
         const error = Math.hypot(u.gx - expectedX, u.gy - expectedY);
@@ -392,6 +399,6 @@ test('ladder rework d: every lip-fight step preserves exact interpolation and wa
     assert.ok(heldFrames > 1);
     assert.ok(hits.some(h => h.from === u.id && h.target === defender.id));
     assert.ok(hits.some(h => h.from === defender.id && h.target === u.id));
-    t.diagnostic(`heldFrames=${heldFrames}; maxPositionError=${maxPositionError}; minDefenderWallClearance=${minWallClearance}; bodyRadius=${CombatRules.bodyRadius(defender)}; renderAtLip=1.52; simulationAtLip=0.4; railTop=${topY}`);
+    t.diagnostic(`heldFrames=${heldFrames}; maxPositionError=${maxPositionError}; minDefenderWallClearance=${minWallClearance}; bodyRadius=${CombatRules.bodyRadius(defender)}; renderAtLip=${LADDER_LIP * LADDER_TOP_WORLD}; simulationAtLip=${LADDER_LIP * WALKWAY_HEIGHT}; railTop=${topY}`);
     disposeCampVisuals(visuals);
 });
