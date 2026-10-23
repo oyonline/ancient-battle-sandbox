@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { board } from '../board.js';
 import { H_WORLD } from './deployment.js';
 
+const LADDER_TOP_WORLD = 1.75 + .15;
+export const climberWorldHeight = climb => climb.progress * LADDER_TOP_WORLD;
+
 export function buildSiegeVisuals(siege) {
     const group = new THREE.Group();
     group.name = 'siege-platforms';
@@ -42,6 +45,30 @@ export function buildSiegeVisuals(siege) {
             // Decorative vertical ladder on the inward/east side.
             for (const dz of [-.22, .22]) box(.06, h + .15, .06, p.x2 + .1, (h + .15) / 2, z + dz, plank);
             for (let y = .2; y < h; y += .3) box(.06, .06, .5, p.x2 + .1, y, z, brace);
+        }
+    }
+    for (const ladder of siege.ladders ?? []) {
+        const foot = new THREE.Vector3(ladder.foot.gx - board.W / 2, 0, ladder.foot.gy - board.H / 2);
+        const top = new THREE.Vector3(ladder.top.gx - board.W / 2, LADDER_TOP_WORLD, ladder.top.gy - board.H / 2);
+        const along = top.clone().sub(foot), length = along.length();
+        along.normalize();
+        const across = new THREE.Vector3(along.z, 0, -along.x).normalize();
+        const beam = (a, b, width, material) => {
+            const direction = b.clone().sub(a);
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, direction.length(), width), material);
+            mesh.position.copy(a).add(b).multiplyScalar(.5);
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+            mesh.castShadow = mesh.receiveShadow = true;
+            mesh.name = `${ladder.id}-${width === .08 ? 'rail' : 'rung'}`;
+            group.add(mesh);
+        };
+        for (const side of [-.25, .25]) {
+            const offset = across.clone().multiplyScalar(side);
+            beam(foot.clone().add(offset), top.clone().add(offset), .08, brace);
+        }
+        for (let distance = .3; distance < length; distance += .3) {
+            const center = foot.clone().addScaledVector(along, distance);
+            beam(center.clone().addScaledVector(across, -.25), center.clone().addScaledVector(across, .25), .05, plank);
         }
     }
     return group;

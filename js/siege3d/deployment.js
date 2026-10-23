@@ -5,7 +5,7 @@ export const H_WORLD = 2;
 export const WALKWAY_HEIGHT = 1 / H_WORLD;
 export const TOWER_HEIGHT = 2.56 / H_WORLD;
 
-export function createCampSiege(b) {
+export function createCampSiege(b, { ladders = false } = {}) {
     const w = .6;
     const walkway = (id, x1, y1, x2, y2) => ({ id, x1, y1, x2, y2, height: WALKWAY_HEIGHT, kind: 'walkway' });
     const platforms = [
@@ -23,7 +23,19 @@ export function createCampSiege(b) {
     });
     return createSiegeLayer(platforms, {
         gate: { blockerId: 'south-gate' },
-        ram: { gx: b.cx, gateOuterY: b.y2 + .3, team: 'red' }
+        ram: { gx: b.cx, gateOuterY: b.y2 + .3, team: 'red' },
+        ...(ladders ? { ladders: [
+            ...[1 / 3, 2 / 3].map((fraction, i) => {
+                const gy = b.y1 + (b.y2 - b.y1) * fraction;
+                return { id: `west-${i}`, foot: { gx: b.x1 - 1.3, gy },
+                    top: { gx: b.x1 - .15, gy }, landing: { gx: b.x1 + .3, gy } };
+            }),
+            ...[-1, 1].map(side => {
+                const gx = b.cx + side * (1.2 + 2.5);
+                return { id: `south-${side}`, foot: { gx, gy: b.y2 + 1.3 },
+                    top: { gx, gy: b.y2 + .15 }, landing: { gx, gy: b.y2 - .3 } };
+            })
+        ] } : {})
     });
 }
 
@@ -76,8 +88,8 @@ export function installSiegeArrows(scene) {
         const result = fireArrow.call(this, from, target, options);
         if (this.siege) for (let i = start; i < this.arrows.length; i++) {
             const arrow = this.arrows[i];
-            arrow.sourceHeight += this.siege.heightAt(arrow.sx, arrow.sy);
-            arrow.targetHeight += this.siege.heightAt(arrow.tx, arrow.ty);
+            arrow.sourceHeight += from.siegeClimb?.height ?? this.siege.heightAt(arrow.sx, arrow.sy);
+            arrow.targetHeight += target.siegeClimb?.height ?? this.siege.heightAt(arrow.tx, arrow.ty);
         }
         return result;
     };

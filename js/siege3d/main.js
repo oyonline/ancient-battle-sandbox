@@ -13,7 +13,7 @@ import { Terrain } from '../terrain.js';
 import { campBounds, queueCampWalls, buildCampVisuals, disposeCampVisuals, updateCampGate } from './walls.js';
 import { buildRamVisual, updateRamVisual } from './ram.js';
 import { createCampSiege, siegeDeployment, installSiegeArrows, H_WORLD } from './deployment.js';
-import { buildSiegeVisuals } from './platforms.js';
+import { buildSiegeVisuals, climberWorldHeight } from './platforms.js';
 import { CavalryAI, unitRand } from '../units.js';
 import { board } from '../board.js';
 import { TW, TH, OX, OY } from '../render/metrics.js';
@@ -301,7 +301,7 @@ function refreshCampVisuals() {
 }
 function positionArmies() {
     const b = campBounds();
-    scene.siege = createCampSiege(b);
+    scene.siege = createCampSiege(b, { ladders: true });
     for (const { unit: u, gx, gy, siegeAnchor } of siegeDeployment(scene.units, b, scene.siege)) {
         u.gx = u.pgx = gx; u.gy = u.pgy = gy;
         u.moveX = u.moveY = u.pushX = u.pushY = u.velX = u.velY = 0;
@@ -439,7 +439,7 @@ function recordCorpse(u, from) {
     let cy = groundH(u.gx, u.gy);
     for (const t of [.5, 1]) cy = Math.max(cy, groundH(u.gx + fx * span * t, u.gy + fz * span * t));
     const f = { kind, slot: i, x: u.gx - board.W / 2, z: u.gy - board.H / 2, y: cy,
-        yaw, fx, fz, slideX, slideZ, platformLift: (scene.siege?.heightAt(u.gx, u.gy) ?? 0) * H_WORLD,
+        yaw, fx, fz, slideX, slideZ, platformLift: u.siegeClimb ? climberWorldHeight(u.siegeClimb) : (scene.siege?.heightAt(u.gx, u.gy) ?? 0) * H_WORLD,
         start: scene.simulationTime, dur: kind === 'cavalry' ? 760 : 600,   // 模拟时钟：暂停冻结/倍速同步
         lift: kind === 'cavalry' ? .3 : .16, puffed: false };
     falling.push(f);
@@ -474,10 +474,14 @@ function sync3D(dt, now) {
                 st.a += d * Math.min(1, dt * 10);
             }
         }
+        if (u.siegeClimb) {
+            const { foot, top } = u.siegeClimb.ladder;
+            st.a = Math.atan2(top.gx - foot.gx, top.gy - foot.gy);
+        }
         headings.set(u.id, st);
         const bob = u.moving ? Math.abs(Math.sin(now * .012 + st.bob)) * .09 : 0;
         const lunge = u._lungeUntil > now ? .18 * Math.sin(Math.min(1, (u._lungeUntil - now) / 220) * Math.PI) : 0;
-        const y = surfaceH(u.gx, u.gy);
+        const y = u.siegeClimb ? groundH(u.gx, u.gy) + climberWorldHeight(u.siegeClimb) : surfaceH(u.gx, u.gy);
         dummy.position.set(u.gx - board.W / 2 + Math.sin(st.a) * lunge, y + bob, u.gy - board.H / 2 + Math.cos(st.a) * lunge);
         dummy.rotation.set(u.moving && u.type === 'cavalry' ? .12 : 0, st.a, 0);
         dummy.scale.setScalar(1); dummy.updateMatrix();
@@ -535,6 +539,7 @@ function sync3D(dt, now) {
             ` · sim <b>${(p.simMs || 0).toFixed(1)}</b>/sync <b>${(p.syncMs || 0).toFixed(1)}</b>/draw <b>${(p.renderMs || 0).toFixed(1)}</b>ms` +
             ` · 存活 <b class="red">${scene.redAlive}</b> / <b class="blue">${scene.blueAlive}</b> · 阵亡 ${scene.deadCount}` +
             (siege?.gate ? ` · ${siege.gate.broken ? '寨门已破' : `寨门 ${siege.gate.hp}/${siege.gate.maxHp}`}` : '') +
+            (siege?.ladders ? ` · 登墙 ${siege.landedCount}` : '') +
             (hudWinner ? ` —— <b style="color:#ffd24a">${hudWinner}</b>` : '');
     }
 }

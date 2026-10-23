@@ -909,7 +909,7 @@ export function calculateAttackDamage(from, target, { multiplier = 1, rawAttack 
 export function resolveAttack(target, from, options = {}) {
     if (target.dead || target.withdrawn || target.hp <= 0) return 0;
     const scene = target.scene;
-    if (!from.typeData.ranged && !Terrain.segmentClear(scene?.battleOptions?.terrain,
+    if (!from.typeData.ranged && !scene?.siege?.meleeBypass?.(from, target) && !Terrain.segmentClear(scene?.battleOptions?.terrain,
         from.gx, from.gy, target.gx, target.gy, 0, Terrain.dynOf(scene))) return 0;
     const formationMultiplier = scene?.tactics?.incomingMultiplier(from, target) ?? 1;
     const terrainMultiplier = Terrain.attackMultiplier(scene?.battleOptions?.terrain, from, target, options.sourceHeight);

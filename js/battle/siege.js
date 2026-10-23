@@ -1,4 +1,7 @@
 import { CAMP_RULES } from './camps.js';
+import { CombatRules } from '../combat.js';
+import { Terrain } from '../terrain.js';
+import { isHostile } from '../factions.js';
 
 // Terrain height units: 1 height = HEIGHT_SCALE screen pixels = H_WORLD world units.
 export function createSiegeLayer(platforms = [], assault = null) {
@@ -13,6 +16,7 @@ export function createSiegeLayer(platforms = [], assault = null) {
     const layer = {
         platforms: rects,
         heightAt,
+        meleeBypass: () => false,
         damageScale(from, target) {
             const difference = heightAt(from.gx, from.gy) - heightAt(target.gx, target.gy);
             let scale = 1;
@@ -23,7 +27,139 @@ export function createSiegeLayer(platforms = [], assault = null) {
     };
     // Height-only layers retain the original shape and have no simulation hook.
     if (assault?.gate && assault?.ram) installRam(layer, assault);
+    if (assault?.ladders?.length) installLadders(layer, assault.ladders);
     return layer;
+}
+
+export const LADDER_LIP = .8;
+const CLIMB_SECONDS = 2.5, LADDER_RECRUIT_MS = 1000;
+const hookedMorale = new WeakSet();
+
+function installLadders(layer, configs) {
+    const landed = new WeakSet(), climbing = new Map();
+    layer.landedCount = 0;
+    layer.ladders = configs.map((c, i) => {
+        const dx = c.top.gx - c.foot.gx, dy = c.top.gy - c.foot.gy;
+        const length = Math.hypot(dx, dy);
+        return {
+            id: c.id ?? `ladder-${i}`, team: c.team ?? 'red',
+            foot: { ...c.foot }, top: { ...c.top }, landing: { ...c.landing },
+            across: { gx: dy / length, gy: -dx / length },
+            climbers: [null, null], recruitMs: 0, initialized: false
+        };
+    });
+    const alive = u => u && !u.dead && !u.withdrawn && u.hp > 0;
+    const resetCombat = u => {
+        u.actionEpoch++;
+        u.target = u.meleeTarget = null;
+        u.lastRetarget = -Infinity;
+        u.strafeUntil = 0;
+        u.blockedEngageAt = null;
+        u.moving = false;
+    };
+    const release = (u, entry) => {
+        entry.ladder.climbers[entry.slot] = null;
+        climbing.delete(u);
+        delete u.siegeAnchor;
+        delete u.siegeRole;
+        delete u.siegeClimb;
+        resetCombat(u);
+    };
+    layer.releaseInvalidClimbers = () => {
+        for (const [u, entry] of climbing) {
+            if (alive(u) && u.moraleState !== 'routing') continue;
+            if (alive(u)) {
+                u.gx = entry.ladder.foot.gx; u.gy = entry.ladder.foot.gy;
+                u.pgx = u.gx; u.pgy = u.gy;
+            }
+            release(u, entry);
+        }
+    };
+    const pair = (climber, defender) => {
+        const entry = climbing.get(climber);
+        return !!entry && alive(climber) && climber.moraleState !== 'routing' &&
+            entry.waiting && alive(defender) &&
+            isHostile(climber.scene, entry.ladder.team, defender.team) &&
+            Math.hypot(defender.gx - entry.landing.gx, defender.gy - entry.landing.gy) <= 1.2;
+    };
+    layer.meleeBypass = (from, target) => pair(from, target) || pair(target, from);
+    // Core already routes anchored soldiers through ordinary AI. Handle only ladder
+    // occupants here, keeping cooldown, friendly obstruction and delayed hits intact.
+    layer.actClimber = (scene, unit, now) => {
+        const entry = climbing.get(unit);
+        if (!entry) return false;
+        if (!entry.waiting) return true;
+        const targets = scene.units.filter(u => pair(unit, u) && CombatRules.canStrike(scene, unit, u, unit.typeData.range))
+            .sort((a, b) => Math.hypot(a.gx - unit.gx, a.gy - unit.gy) - Math.hypot(b.gx - unit.gx, b.gy - unit.gy) || a.id - b.id);
+        if (targets.length) CombatRules.attack(scene, unit, targets[0], now);
+        return true;
+    };
+    const ramStep = layer.step;
+    layer.step = (scene, dt) => {
+        ramStep?.(scene, dt);
+        // Morale runs after damage in the same full step. Release deaths/routs there,
+        // without adding a shared core hook or leaving a dead soldier in a slot.
+        if (!hookedMorale.has(scene.morale)) {
+            const update = scene.morale.update;
+            scene.morale.update = function (elapsed) {
+                const result = update.call(this, elapsed);
+                scene.siege?.releaseInvalidClimbers?.();
+                return result;
+            };
+            hookedMorale.add(scene.morale);
+        }
+        layer.releaseInvalidClimbers();
+        if (scene.resolvingOutcome) return;
+        for (const ladder of layer.ladders) {
+            ladder.recruitMs += dt * 1000;
+            if (!ladder.initialized || ladder.recruitMs + 1e-7 >= LADDER_RECRUIT_MS) {
+                ladder.recruitMs = ladder.initialized ? Math.max(0, ladder.recruitMs - LADDER_RECRUIT_MS) % LADDER_RECRUIT_MS : 0;
+                ladder.initialized = true;
+                const distance = u => Math.hypot(u.gx - ladder.foot.gx, u.gy - ladder.foot.gy);
+                const inward = u => (u.gx - ladder.top.gx) * (ladder.landing.gx - ladder.top.gx) +
+                    (u.gy - ladder.top.gy) * (ladder.landing.gy - ladder.top.gy);
+                const candidates = scene.units.filter(u => alive(u) && u.moraleState !== 'routing' && u.team === ladder.team &&
+                    ['infantry', 'pikeman'].includes(u.type) && !u.siegeRole && !u.siegeAnchor && !landed.has(u) &&
+                    inward(u) <= 0 && distance(u) <= 4)
+                    .sort((a, b) => distance(a) - distance(b) || a.id - b.id);
+                for (let slot = 0; slot < 2 && candidates.length; slot++) {
+                    if (ladder.climbers[slot] !== null) continue;
+                    const offset = slot === 0 ? -.2 : .2;
+                    const u = candidates.shift(), entry = { ladder, slot, offset, progress: 0, height: 0, waiting: false,
+                        landing: { gx: ladder.landing.gx + ladder.across.gx * offset,
+                            gy: ladder.landing.gy + ladder.across.gy * offset } };
+                    ladder.climbers[slot] = u.id;
+                    climbing.set(u, entry);
+                    u.siegeClimb = entry;
+                    u.siegeRole = 'ladder';
+                    u.siegeAnchor = { ...ladder.foot };
+                    resetCombat(u);
+                    u.tacticalRole = null; u.guardAnchor = null; u.groundGuardReturning = false;
+                    scene.navigation?.routes.delete(u);
+                }
+            }
+            for (const [u, entry] of climbing) {
+                if (entry.ladder !== ladder) continue;
+                const occupied = scene.units.some(u => alive(u) && isHostile(scene, ladder.team, u.team) &&
+                    Math.hypot(u.gx - entry.landing.gx, u.gy - entry.landing.gy) <= .6);
+                const next = entry.progress + dt / CLIMB_SECONDS;
+                entry.waiting = occupied && next >= LADDER_LIP;
+                entry.progress = entry.waiting ? LADDER_LIP : Math.min(1, next + 1e-12 >= 1 ? 1 : next);
+                entry.height = entry.progress * layer.heightAt(entry.landing.gx, entry.landing.gy);
+                u.gx = u.siegeAnchor.gx = ladder.foot.gx + (ladder.top.gx - ladder.foot.gx) * entry.progress + ladder.across.gx * entry.offset;
+                u.gy = u.siegeAnchor.gy = ladder.foot.gy + (ladder.top.gy - ladder.foot.gy) * entry.progress + ladder.across.gy * entry.offset;
+                if (entry.progress < 1) continue;
+                // The .3-inset walkway center is narrower than the .36 body radius.
+                // Project inward to the existing legal ground position before AI resumes.
+                const point = Terrain.projectPoint(scene.battleOptions.terrain, entry.landing.gx, entry.landing.gy,
+                    CombatRules.bodyRadius(u), 0, scene.dynamicBlockers);
+                u.gx = point.gx; u.gy = point.gy; u.pgx = u.gx; u.pgy = u.gy;
+                landed.add(u); layer.landedCount++;
+                release(u, entry);
+            }
+        }
+        scene.rebuildSpatial();
+    };
 }
 
 const IMPACT_MS = 2200, RECRUIT_MS = 2000;

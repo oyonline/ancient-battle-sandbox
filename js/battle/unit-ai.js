@@ -82,6 +82,7 @@ export function resolveBlockedEngage(scene, unit, target, now, reach) {
 
 export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
         if (unit.dead || unit.withdrawn || unit.moraleState === 'routing') return;
+        if (unit.siegeRole === 'ladder' && scene.siege?.actClimber?.(scene, unit, now)) return;
         if (unit.type === 'worker') return; // 民夫仅由营寨命令驱动，不进行普攻或夺旗
         // 军医：无攻击无占旗，随营行军 + 战地急救光环（光环治疗在 HealingSystem 推进）。
         if (unit.type === 'medic') return updateMedic(scene, unit, now, dt);
@@ -325,7 +326,7 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
                 } else {
                     moveToward(unit, unit.strafeX, unit.strafeY, unit.typeData.speed * 0.8, dt);
                 }
-            } else if (minD > range || !Terrain.segmentClear(scene.battleOptions.terrain, unit.gx, unit.gy, nearest.gx, nearest.gy, 0, Terrain.dynOf(scene))) {
+            } else if (minD > range || (!scene.siege?.meleeBypass?.(unit, nearest) && !Terrain.segmentClear(scene.battleOptions.terrain, unit.gx, unit.gy, nearest.gx, nearest.gy, 0, Terrain.dynOf(scene)))) {
                 unit.blockedEngageAt = null;
                 // 遇骑结阵：矛邻成排且来骑弹道朝本队压来（±60°）时停步——
                 // 停稳半秒即触发现有架枪快照，行军矛兵就地变临时枪墙。
