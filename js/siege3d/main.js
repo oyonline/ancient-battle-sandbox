@@ -10,7 +10,8 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Snd } from '../snd.js';
 import { Terrain } from '../terrain.js';
-import { campBounds, queueCampWalls, buildCampVisuals, disposeCampVisuals } from './walls.js';
+import { campBounds, queueCampWalls, buildCampVisuals, disposeCampVisuals, updateCampGate } from './walls.js';
+import { buildRamVisual, updateRamVisual } from './ram.js';
 import { createCampSiege, siegeDeployment, installSiegeArrows, H_WORLD } from './deployment.js';
 import { buildSiegeVisuals } from './platforms.js';
 import { CavalryAI, unitRand } from '../units.js';
@@ -279,14 +280,22 @@ let lastSound = {};
 function throttled(key, gap = 60) { const t = performance.now(); if (t - (lastSound[key] || 0) < gap) return false; lastSound[key] = t; return true; }
 
 let groundBuilt = false, campVisuals = null, campLayer = null, campVersion = -1;
+let gateRects = [], ramVisual = null, heardRamHits = 0, heardGateBreak = false;
 function refreshCampVisuals() {
     const layer = scene.dynamicBlockers;
     if (campLayer === layer && campVersion === layer.version) return;
     disposeCampVisuals(campVisuals);
     // 开战前预览排队矩形；开战后读固定时点提交的 list，渲染不调用 commit。
     const rects = layer.size ? layer.list : [...layer.pending.values()].filter(Boolean);
-    campVisuals = buildCampVisuals(rects);
+    if (campLayer !== layer) {
+        gateRects = rects.filter(r => r.kind === 'gate');
+        heardRamHits = 0; heardGateBreak = false;
+    }
+    // Physics removes the gate; keep its leaves and posts for the opening animation.
+    campVisuals = buildCampVisuals([...rects.filter(r => r.kind !== 'gate'), ...gateRects]);
     campVisuals.add(buildSiegeVisuals(scene.siege));
+    ramVisual = scene.siege?.ram ? buildRamVisual() : null;
+    if (ramVisual) campVisuals.add(ramVisual);
     scene3d.add(campVisuals);
     campLayer = layer; campVersion = layer.version;
 }
@@ -441,6 +450,13 @@ function recordCorpse(u, from) {
 // ---------------- 每帧同步：模拟状态 → 实例矩阵 ----------------
 let hudWinner = null;
 function sync3D(dt, now) {
+    const siege = scene.siege;
+    if (siege?.ram && ramVisual) {
+        updateRamVisual(ramVisual, siege.ram, scene.simulationTime, groundH(siege.ram.gx, siege.ram.gy));
+        updateCampGate(campVisuals, siege.gate, scene.simulationTime);
+        if (siege.ram.hits > heardRamHits) { Snd.play('hit'); heardRamHits = siege.ram.hits; }
+        if (siege.gate.broken && !heardGateBreak) { Snd.play('die'); heardGateBreak = true; }
+    }
     let cursor = { infantry: 0, pikeman: 0, archer: 0, cavalry: 0 };
     for (const u of scene.units) {
         if (u.dead || u.withdrawn) continue; // 尸体由独立实例层接管，不等模拟数组周期压实。
@@ -449,6 +465,7 @@ function sync3D(dt, now) {
         // 朝向：跟随实际位移（短弧平滑），静止保持
         let st = headings.get(u.id);
         if (!st) st = { a: u.team === 'red' ? Math.PI / 2 : -Math.PI / 2, bob: Math.random() * 6 };
+        if (u.siegeRole === 'ram') st.a = Math.PI;
         if (u.moving) {
             const target = Math.atan2(u.velX ?? 0, u.velY ?? 0);
             if ((u.velX ?? 0) ** 2 + (u.velY ?? 0) ** 2 > 1e-6) {
@@ -517,6 +534,7 @@ function sync3D(dt, now) {
         hud.innerHTML = `<span style="color:${fps >= 55 ? '#9cf5a0' : fps >= 30 ? '#ffd24a' : '#ff6b6b'}">${fps} FPS</span>` +
             ` · sim <b>${(p.simMs || 0).toFixed(1)}</b>/sync <b>${(p.syncMs || 0).toFixed(1)}</b>/draw <b>${(p.renderMs || 0).toFixed(1)}</b>ms` +
             ` · 存活 <b class="red">${scene.redAlive}</b> / <b class="blue">${scene.blueAlive}</b> · 阵亡 ${scene.deadCount}` +
+            (siege?.gate ? ` · ${siege.gate.broken ? '寨门已破' : `寨门 ${siege.gate.hp}/${siege.gate.maxHp}`}` : '') +
             (hudWinner ? ` —— <b style="color:#ffd24a">${hudWinner}</b>` : '');
     }
 }

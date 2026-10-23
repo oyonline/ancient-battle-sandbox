@@ -21,7 +21,10 @@ export function createCampSiege(b) {
         platforms.push({ id: `tower-${i}`, x1: x - .7, y1: y - .7, x2: x + .7, y2: y + .7,
             height: TOWER_HEIGHT, kind: 'tower' });
     });
-    return createSiegeLayer(platforms);
+    return createSiegeLayer(platforms, {
+        gate: { blockerId: 'south-gate' },
+        ram: { gx: b.cx, gateOuterY: b.y2 + .3, team: 'red' }
+    });
 }
 
 // Pure placement data: the page and headless tests consume exactly the same slots.

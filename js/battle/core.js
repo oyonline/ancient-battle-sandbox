@@ -79,6 +79,7 @@ export function stepBattle(scene, dt) {
     // 本场动态障碍层：增删请求只在每步这一固定时点统一提交（commit 内按 id 排序），
     // 同一步内不产生第二种障碍状态；导航经版本闸随后作废 graphs/routes 并重建。
     scene.dynamicBlockers?.commit();
+    scene.siege?.step?.(scene, dt);
     if (Terrain.hasBarriers(scene.battleOptions.terrain, scene.dynamicBlockers)) scene.ensureNavigation().beginStep(now, units);
 
     // 帧首：先用上一帧位移估计速度，再刷新快照（供箭矢预判）
@@ -116,6 +117,7 @@ export function stepBattle(scene, dt) {
         unit.pressX = 0; unit.pressY = 0;
         if (scene.resolvingOutcome) continue;
         if (scene.siege && unit.siegeAnchor) {
+            if (scene.siege.ram && unit.siegeRole === 'ram') continue;
             scene.updateNormalUnit(unit, now, dt, unit.siegeAnchor);
             continue;
         }

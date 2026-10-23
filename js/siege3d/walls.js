@@ -29,6 +29,7 @@ export function queueCampWalls(scene) {
 export function buildCampVisuals(rects) {
     const group = new THREE.Group();
     group.name = 'siege-camp';
+    group.userData.gateHinges = [];
     const walls = rects.filter(r => r.kind === 'wall');
     if (!walls.length) return group;
     const west = Math.min(...rects.map(r => r.x1)), east = Math.max(...rects.map(r => r.x2));
@@ -71,7 +72,16 @@ export function buildCampVisuals(rects) {
     mesh.instanceMatrix.needsUpdate = true; group.add(mesh);
     for (const r of rects.filter(r => r.kind === 'gate')) {
         const width = r.x2 - r.x1, my = (r.y1 + r.y2) / 2;
-        for (const fraction of [.25, .75]) box(width / 2, 2, .12, r.x1 + width * fraction, 1, my, brace);
+        for (const side of [-1, 1]) {
+            const hinge = new THREE.Group();
+            hinge.name = side < 0 ? 'gate-left' : 'gate-right';
+            at(hinge, side < 0 ? r.x1 : r.x2, 0, my);
+            const leaf = new THREE.Mesh(new THREE.BoxGeometry(width / 2, 2, .12), brace);
+            leaf.position.set(-side * width / 4, 1, 0);
+            leaf.castShadow = leaf.receiveShadow = true;
+            hinge.add(leaf); group.add(hinge);
+            group.userData.gateHinges.push({ hinge, side });
+        }
         for (const x of [r.x1 - .13, r.x2 + .13]) box(.26, 2.4, .26, x, 1.2, my, post);
     }
     // 内缘也由矩形反推，避免地面与碰撞墙出现两份布局。
@@ -85,6 +95,14 @@ export function buildCampVisuals(rects) {
         new THREE.MeshStandardMaterial({ color: '#6a7448', roughness: 1 }));
     at(floor, cx, .015, cy); floor.receiveShadow = true; group.add(floor);
     return group;
+}
+
+export function updateCampGate(group, gate, now) {
+    const progress = gate?.broken ? Math.min(1, Math.max(0, (now - gate.brokenAt) / 400)) : 0;
+    for (const { hinge, side } of group.userData.gateHinges) {
+        // South gate: both leaves swing toward -Z (the camp interior).
+        hinge.rotation.y = -side * Math.PI / 2 * progress;
+    }
 }
 
 export function disposeCampVisuals(group) {
