@@ -70,7 +70,33 @@ export function buildCampVisuals(rects) {
     const mesh = new THREE.InstancedMesh(stakeGeometry, wood, stakes.length);
     mesh.name = 'palisade-stakes'; mesh.castShadow = mesh.receiveShadow = true;
     const dummy = new THREE.Object3D();
-    stakes.forEach(([gx, gy], i) => { at(dummy, gx, 0, gy); dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix); });
+    // 基于桩坐标的确定性 32-bit mulberry32（桩位置 → 稳定种子 → 桩的随机姿态）
+    function stakeRng(gx, gy) {
+        let a = ((Math.floor(gx * 1000) * 374761393) ^ (Math.floor(gy * 1000) * 668265263)) >>> 0;
+        return function () {
+            a |= 0; a = (a + 0x6D2B79F5) | 0;
+            let t = a;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+    let slot = 0;
+    stakes.forEach(([gx, gy]) => {
+        const rng = stakeRng(gx, gy);
+        // 5% 破损桩：跳过生成（不影响墙的 DynamicBlocker，只影响视觉）
+        if (rng() < 0.05) return;
+        const ry = rng() * Math.PI / 2;       // 绕竖轴旋转 0–90°
+        const leanX = (rng() - 0.5) * 0.05;   // 前后倾 ≤ ~3°
+        const leanZ = (rng() - 0.5) * 0.05;
+        const scaleY = 0.94 + rng() * 0.12;   // ±6% 高度（含更短的破损）
+        at(dummy, gx, 0, gy);
+        dummy.rotation.set(leanX, ry, leanZ);
+        dummy.scale.set(1, scaleY, 1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(slot++, dummy.matrix);
+    });
+    mesh.count = slot;
     mesh.instanceMatrix.needsUpdate = true; group.add(mesh);
     for (const r of rects.filter(r => r.kind === 'gate')) {
         const width = r.x2 - r.x1, my = (r.y1 + r.y2) / 2;

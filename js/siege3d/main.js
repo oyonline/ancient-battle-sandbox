@@ -19,6 +19,10 @@ import { CavalryAI, unitRand } from '../units.js';
 import { board } from '../board.js';
 import { TW, TH, OX, OY } from '../render/metrics.js';
 import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
+import {
+    buildGrassTexture, buildGrassPatches, buildCampTents, createTentFlag,
+    buildSurroundings
+} from './scenery.js';
 
 window.Snd = Snd;   // game.js / render 钩子里以全局 Snd 出声（die/win/arrow）
 
@@ -63,21 +67,23 @@ scene3d.add(sun);
 const groundH = (gx, gy) => Terrain.height(TERRAIN_KEY, gx, gy) * H_WORLD;
 const surfaceH = (gx, gy) => groundH(gx, gy) + (scene?.siege?.heightAt(gx, gy) ?? 0) * H_WORLD;
 
-// ---------------- 地面（2D 同一块确定性地形） ----------------
+// ---------------- 地面（2D 同一块确定性地形 + 草地质感 CanvasTexture）----------------
+let _grassTex = null;
 function buildGround(w, h) {
     const geo = new THREE.PlaneGeometry(w, h, 140, 140);
     geo.rotateX(-Math.PI / 2);
-    const pos = geo.attributes.position, colors = [];
+    const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
-        const x = pos.getX(i) + w / 2, z = pos.getZ(i) + h / 2;   // 网格坐标 gx∈[0,w]
+        const x = pos.getX(i) + w / 2, z = pos.getZ(i) + h / 2;
         const y = groundH(x, z);
         pos.setY(i, y);
-        const c = new THREE.Color().setHSL(.23 + y * .012, .24, .34 + y * .05 + Math.sin(x * .8 + z * .5) * .015);
-        colors.push(c.r, c.g, c.b);
     }
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geo.computeVertexNormals();
-    const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 }));
+    // 草地质感（1024×1024 CanvasTexture 平铺 8×8）——只生成一次
+    if (!_grassTex) _grassTex = buildGrassTexture(1024);
+    const ground = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+        map: _grassTex, roughness: 1
+    }));
     ground.receiveShadow = true;
     scene3d.add(ground);
 }
@@ -284,6 +290,7 @@ function throttled(key, gap = 60) { const t = performance.now(); if (t - (lastSo
 
 let groundBuilt = false, campVisuals = null, campLayer = null, campVersion = -1;
 let gateRects = [], ramVisual = null, heardRamHits = 0, heardGateBreak = false;
+let _tentFlag = null;
 function refreshCampVisuals() {
     const layer = scene.dynamicBlockers;
     if (campLayer === layer && campVersion === layer.version) return;
@@ -389,7 +396,16 @@ async function boot() {
     positionArmies();
     queueCampWalls(scene);
     refreshCampVisuals();
-    if (!groundBuilt) { buildGround(board.W, board.H); groundBuilt = true; }
+    if (!groundBuilt) {
+        buildGround(board.W, board.H);
+        groundBuilt = true;
+        // ---- 美术层组装（第一轮）----
+        scene3d.add(buildGrassPatches(6000));
+        scene3d.add(buildCampTents(scene.siege));
+        _tentFlag = createTentFlag();
+        scene3d.add(_tentFlag.mesh);
+        scene3d.add(buildSurroundings(_grassTex));
+    }
     sync3D._t = 0;
     sync3D(0, performance.now());
 }
@@ -577,6 +593,8 @@ renderer.setAnimationLoop(now => {
     if (scene) { refreshCampVisuals(); sync3D(scene.battleStarted && !scene.paused && !scene.battleOver ? delta / 1000 * scene.gameSpeed : 0, now); }
     sync3D._perf.syncMs = performance.now() - _t1;
     controls.update();
+    // 每帧飘旗（纯视觉，不走模拟时钟）
+    if (_tentFlag) _tentFlag.update(now * 0.001);
     const _t2 = performance.now();
     renderer.render(scene3d, camera);
     sync3D._perf.renderMs = performance.now() - _t2;
