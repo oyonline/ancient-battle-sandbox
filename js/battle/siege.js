@@ -55,7 +55,7 @@ export function createSiegeLayer(platforms = [], assault = null) {
     if (assault?.gate && assault?.ram) installRam(layer, assault);
     if (assault?.ladders?.length) installLadders(layer, assault.ladders, assault.climbSeconds);
     if (assault?.defense) installSiegeDefense(layer, assault.defense);
-    if (assault?.rules?.enabled) installSiegeRules(layer, assault.bounds, assault.rules);
+    if (assault?.rules?.enabled) installSiegeRules(layer, assault.bounds, assault.rules, assault.wallThickness);
     return layer;
 }
 

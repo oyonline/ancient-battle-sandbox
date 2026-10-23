@@ -13,7 +13,8 @@ export const CAMP_LAYOUT = {
         defenderMoraleBonus: 0, retreatRadius: 3, surrenderRadius: 4,
         surrenderFraction: .1, attackerRetreatFraction: .35, attackerStallSeconds: 20,
         captureRadius: 2.5, captureSeconds: 8, wallFootRadius: 2,
-        ladderGuardDamage: 1.5, gateHp: 1800, fireDiscipline: true
+        ladderGuardDamage: 1.5, gateHp: 1800, fireDiscipline: true,
+        deadZone: 1.5, advanceRadius: 9, walkwayRangeScale: 1.1, towerRangeScale: 1.2, ramRoofCover: .3
     },
     halfSize: 10,
     wallThickness: .3,

@@ -104,8 +104,11 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
             }
             return;
         }
-        const nearest = scene.siege?.defense?.owns(unit)
+        const siegeAim = scene.siege?.rules?.config.deadZone !== undefined && unit.typeData.ranged &&
+            scene.siege.rules.defender(unit) ? scene.siege.rules : null;
+        const nearest = siegeAim ? siegeAim.rangedTarget(scene, unit) : scene.siege?.defense?.owns(unit)
             ? scene.siege.defense.targetFor(scene, unit) : scene.stickyTarget(unit);
+        if (siegeAim) unit.target = unit.meleeTarget = nearest;
         if (!nearest) {
             if (guardAnchor && dist(unit, guardAnchor) > 0.2) {
                 unit.groundGuardReturning = true;
@@ -240,7 +243,10 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
 
         if (unit.typeData.ranged) {
             const terrain = scene.battleOptions.terrain;
-            const targetRange = Terrain.rangedRange(terrain, unit, nearest);
+            const siegeRules = scene.siege?.rules;
+            const siegeRangeScale = siegeRules?.rangeScale(unit) ?? 1;
+            const rangedRange = target => Terrain.rangedRange(terrain, unit, target) * (siegeRules?.rangeScale(unit) ?? 1);
+            const targetRange = rangedRange(nearest);
             // 弓箭手：射程内集火同一残血目标（血量主导、id 决胜），保持距离放风筝
             if (guardAnchor) {
                 const fromPost = dist(unit, guardAnchor);
@@ -269,9 +275,10 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
             }
             if (now - unit.lastAttack > unit.typeData.atkSpeed) {
                 let shootTarget = null, bestScore = Infinity;
-                scene.forEachNear(unit.gx, unit.gy, range * Terrain.MAX_RANGE_MULTIPLIER, e => {
+                scene.forEachNear(unit.gx, unit.gy, range * Terrain.MAX_RANGE_MULTIPLIER * siegeRangeScale, e => {
                     if (e.team === unit.team || e.dead || e.withdrawn) return;
-                    if (dist(unit, e) > Terrain.rangedRange(terrain, unit, e)) return;
+                    if (siegeRules && !siegeRules.canShoot(unit, e)) return;
+                    if (dist(unit, e) > rangedRange(e)) return;
                     // 火力纪律：正在冲锋且朝己方逼近的敌骑压过残血集火——等它贴脸不如现在就射。
                     // 冲锋朝向读帧首快照，保证换座对称（见 advanceBattle 帧首注释）。
                     const incoming = e.type === 'cavalry' &&
@@ -315,7 +322,9 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
                     scene.scheduleBattleAction(110, () => {
                         if (unit.dead || unit.withdrawn || unit.moraleState === 'routing' || unit.actionEpoch !== actionEpoch ||
                             victim.dead || victim.withdrawn || scene.battleOver) return;
-                        if (terrain !== 'flat' && dist(unit, victim) > Terrain.rangedRange(terrain, unit, victim)) return;
+                        if (siegeRules && !siegeRules.canShoot(unit, victim)) return;
+                        if ((terrain !== 'flat' || (siegeRules && siegeRules.config.deadZone !== undefined)) &&
+                            dist(unit, victim) > rangedRange(victim)) return;
                         scene.fireArrow(unit, victim);
                     });
                 }

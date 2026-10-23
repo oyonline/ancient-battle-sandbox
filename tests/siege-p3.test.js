@@ -327,11 +327,11 @@ test('P3 #5: tower and ground archers choose waiting climber, crew, wall foot, t
         const tied = fixed(s, 'red', b.cx, b.y1 + 1.5); tied.hp = 100;
         let chosen;
         s.playAttackAnim = (from, to) => { if (from === archer) chosen = to; };
-        for (const expected of [waiting, crew, foot, low, tied]) {
+        for (const expected of [waiting, low, tied, crew, null]) {
             chosen = null; archer.lastAttack = -Infinity;
             step(s);
             assert.equal(chosen, expected);
-            s.scheduleBattleAction(0, () => s.withdrawUnit(expected));
+            if (expected) s.scheduleBattleAction(0, () => s.withdrawUnit(expected));
         }
     }
 });

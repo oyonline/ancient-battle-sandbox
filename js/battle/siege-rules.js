@@ -3,10 +3,15 @@ import { moveToward } from '../units.js';
 import { withdrawUnit } from './morale-bridge.js';
 import { UI } from '../ui.js';
 
-export function installSiegeRules(layer, b, config) {
+export function installSiegeRules(layer, b, config, wallThickness = 0) {
     const alive = u => !u.dead && !u.withdrawn && u.hp > 0;
     const inside = u => u.gx >= b.x1 && u.gx <= b.x2 && u.gy >= b.y1 && u.gy <= b.y2;
     const distance = u => Math.hypot(u.gx - b.cx, u.gy - b.cy);
+    // Bounds are the inner edge; walls extend outwards by wallThickness.
+    const wallDistance = u => Math.hypot(Math.max(b.x1 - wallThickness - u.gx, 0, u.gx - b.x2 - wallThickness),
+        Math.max(b.y1 - wallThickness - u.gy, 0, u.gy - b.y2 - wallThickness));
+    const outsideWall = u => u.gx < b.x1 - wallThickness || u.gx > b.x2 + wallThickness ||
+        u.gy < b.y1 - wallThickness || u.gy > b.y2 + wallThickness;
     const rules = layer.rules = {
         config, bounds: b, captureSeconds: 0, attackersAtTent: false, attackerLossRate: 0,
         lastProgressAt: null, attackerStallSeconds: 0, everInside: new Set(), landedCount: 0, ramHits: 0,
@@ -43,10 +48,57 @@ export function installSiegeRules(layer, b, config) {
         scaleImpacts(impacts) {
             // Scale the complete batch before deaths apply: simultaneous return hits
             // keep the same bonus even if the guard dies earlier in the batch.
-            for (const hit of impacts) if (hit.from && rules.defender(hit.from) && !hit.from.typeData.ranged &&
-                hit.target.siegeClimb?.waiting && layer.meleeBypass(hit.from, hit.target)) hit.damage *= config.ladderGuardDamage;
+            for (const hit of impacts) {
+                if (hit.from && rules.defender(hit.from) && !hit.from.typeData.ranged &&
+                    hit.target.siegeClimb?.waiting && layer.meleeBypass(hit.from, hit.target)) hit.damage *= config.ladderGuardDamage;
+                // Apply after armor and the existing height/cover/roll calculation so
+                // roof damage is exactly the uncovered hit x cover (no extra rounding).
+                if (layer.ram && hit.from?.typeData.ranged && hit.target.siegeRole === 'ram')
+                    hit.damage *= config.ramRoofCover ?? 1;
+            }
+        },
+        inDeadZone(u) {
+            return config.deadZone !== undefined && u.team === config.attackerTeam &&
+                !u.siegeClimb && u.siegeRole !== 'ram' && outsideWall(u) && wallDistance(u) <= config.deadZone;
+        },
+        canShoot(unit, target) {
+            return !rules.defender(unit) || layer.heightAt(unit.gx, unit.gy) > 0 || !rules.inDeadZone(target);
+        },
+        rangedTarget(scene, unit) {
+            let target = null;
+            for (const e of scene.units) {
+                if (!alive(e) || e.team !== config.attackerTeam || !rules.canShoot(unit, e)) continue;
+                const d = Math.hypot(e.gx - unit.gx, e.gy - unit.gy);
+                const previous = target ? Math.hypot(target.gx - unit.gx, target.gy - unit.gy) : Infinity;
+                if (d < previous || (d === previous && e.id < target.id)) target = e;
+            }
+            return target;
+        },
+        rangeScale(unit) {
+            if (!rules.defender(unit) || unit.type !== 'archer') return 1;
+            const height = layer.heightAt(unit.gx, unit.gy);
+            if (height === 0) return 1;
+            const tower = layer.platforms.some(p => p.kind === 'tower' && p.height === height &&
+                unit.gx >= p.x1 && unit.gx <= p.x2 && unit.gy >= p.y1 && unit.gy <= p.y2);
+            return (tower ? config.towerRangeScale : config.walkwayRangeScale) ?? 1;
         },
         archerPrefers(unit, candidate, current) {
+            if (config.deadZone !== undefined) {
+                const elevated = layer.heightAt(unit.gx, unit.gy) > 0;
+                const advancing = e => outsideWall(e) && wallDistance(e) > config.deadZone &&
+                    wallDistance(e) <= config.advanceRadius &&
+                    // Frame-start velocity, unaffected by planning order or facing animation.
+                    (Math.max(b.x1 - wallThickness, Math.min(b.x2 + wallThickness, e.gx)) - e.gx) * (e.velX ?? 0) +
+                    (Math.max(b.y1 - wallThickness, Math.min(b.y2 + wallThickness, e.gy)) - e.gy) * (e.velY ?? 0) > 0;
+                const rank = e => e.siegeClimb?.waiting ? 0 :
+                    elevated && rules.inDeadZone(e) ? 1 : e.type === 'archer' ? 2 :
+                    !elevated && advancing(e) ? 3 : 4;
+                if (!current) return true;
+                const delta = rank(candidate) - rank(current) ||
+                    Math.hypot(candidate.gx - unit.gx, candidate.gy - unit.gy) - Math.hypot(current.gx - unit.gx, current.gy - unit.gy);
+                return delta < 0 || (delta === 0 && candidate.id < current.id);
+            }
+            // Legacy layers without the new configuration retain P3's original discipline.
             const rank = e => e.siegeClimb?.waiting ? 0 : e.siegeRole === 'ram' ? 1 :
                 !inside(e) && Math.hypot(Math.max(b.x1 - e.gx, 0, e.gx - b.x2),
                     Math.max(b.y1 - e.gy, 0, e.gy - b.y2)) <= config.wallFootRadius ? 2 : 3;
@@ -111,4 +163,10 @@ export function installSiegeRules(layer, b, config) {
             UI.onBattleEnd(winner, scene.getBattleReport());
         }
     };
+    if (config.deadZone !== undefined) {
+        const meleeBypass = layer.meleeBypass;
+        layer.meleeBypass = (from, target) => meleeBypass(from, target) ||
+            (rules.defender(from) && !from.typeData.ranged && layer.heightAt(from.gx, from.gy) > 0 &&
+                rules.inDeadZone(target));
+    }
 }
