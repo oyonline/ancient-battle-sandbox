@@ -106,7 +106,8 @@ test('ram #3: three crew deaths trigger siege withdrawal; battle end freezes ram
     assert.equal(crew.filter(u => !u.dead).length, 1);
     assert.ok(crew.slice(0, 3).every(u => hits.some(h => h.from === archer.id && h.target === u.id)));
     const stoppedAt = frameOf(scene), stopped = [ram.gx, ram.gy, gate.hp, ram.hitMs];
-    for (let i = 0; i < 150; i++) {
+    // Plan C requires ≥35% casualties and 20 seconds without progress; allow extra frames after the crew deaths.
+    for (let i = 0; i < 1350; i++) {
         step(scene);
         assert.deepEqual([ram.gx, ram.gy, gate.hp, ram.hitMs], stopped);
     }

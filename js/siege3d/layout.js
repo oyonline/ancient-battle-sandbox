@@ -10,8 +10,8 @@ const towerArcherSlots = [{ x: -.38, z: -.3 }, { x: .38, z: -.3 }, { x: 0, z: .3
 export const CAMP_LAYOUT = {
     rules: {
         enabled: true, defenderTeam: 'blue', attackerTeam: 'red',
-        defenderMoraleBonus: .01, retreatRadius: 3, surrenderRadius: 4,
-        surrenderFraction: .1, attackerRetreatFraction: .35,
+        defenderMoraleBonus: 0, retreatRadius: 3, surrenderRadius: 4,
+        surrenderFraction: .1, attackerRetreatFraction: .35, attackerStallSeconds: 20,
         captureRadius: 2.5, captureSeconds: 8, wallFootRadius: 2,
         ladderGuardDamage: 1.5, gateHp: 1800, fireDiscipline: true
     },

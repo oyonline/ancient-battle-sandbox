@@ -560,6 +560,8 @@ function sync3D(dt, now) {
             (siege?.gate ? ` · ${siege.gate.broken ? '寨门已破' : `寨门 ${siege.gate.hp}/${siege.gate.maxHp}`}` : '') +
             (siege?.ladders ? ` · 登墙 ${siege.landedCount}` : '') +
             (siege?.rules ? ` · 攻方伤亡 ${(siege.rules.attackerLossRate * 100).toFixed(1)}% / ${siege.rules.config.attackerRetreatFraction * 100}%` +
+                (siege.rules.attackerLossRate + 1e-12 >= siege.rules.config.attackerRetreatFraction ?
+                    ` · 攻势停滞 ${siege.rules.attackerStallSeconds.toFixed(1)}/${siege.rules.config.attackerStallSeconds}s` : '') +
                 (siege.rules.attackersAtTent ? ` · 夺寨 ${siege.rules.captureSeconds.toFixed(1)}/${siege.rules.config.captureSeconds}s` : '') : '') +
             (hudWinner ? ` —— <b style="color:#ffd24a">${hudWinner}</b>` : '');
     }

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { pathToFileURL } from 'node:url';
+import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { makeScene } from '../tests/battle-harness.js';
 import { CAMP_LAYOUT as L } from '../js/siege3d/layout.js';
 import { createCampSiege, siegeDeployment, installSiegeArrows } from '../js/siege3d/deployment.js';
@@ -33,7 +34,9 @@ export function resultOf(s, variant) {
         routing: s.units.filter(u => !u.dead && !u.withdrawn && u.team === team && u.moraleState === 'routing').length,
         withdrawn: s.battleStats[team].withdrawn, alive: s.battleStats[team].alive });
     return { variant, winner: s.winner ?? null, reason: s.endReason ?? '超时未决', seconds: +(s.simulationTime / 1000).toFixed(3),
-        red: casualties('red'), blue: casualties('blue'), attackerLossRate: s.siege.rules.attackerLossRate, gateHp: s.siege.gate.hp, landed: s.siege.landedCount };
+        red: casualties('red'), blue: casualties('blue'), attackerLossRate: s.siege.rules.attackerLossRate,
+        stallSeconds: s.siege.rules.attackerStallSeconds, lastProgressSeconds: s.siege.rules.lastProgressAt / 1000,
+        gateHp: s.siege.gate.hp, landed: s.siege.landedCount };
 }
 export function summarize(results) {
     const wins = results.filter(r => r.winner === 'blue');
@@ -45,22 +48,56 @@ export function summarize(results) {
         defenderWinCasualtyRatio: ratio(sum(wins, r => r.red.dead + r.red.routingAtOutcome), sum(wins, r => r.blue.dead + r.blue.routingAtOutcome)),
         defenderWinMeanAttackerLossRate: sum(wins, r => r.attackerLossRate) / (wins.length || 1),
         averageSeconds: sum(results, r => r.seconds) / results.length,
+        shortestSeconds: Math.min(...results.map(r => r.seconds)), longestSeconds: Math.max(...results.map(r => r.seconds)),
+        winners: Object.fromEntries([...new Set(results.map(r => r.winner))].map(winner => [winner, results.filter(r => r.winner === winner).length])),
+        outcomes: Object.fromEntries([...new Set(results.map(r => `${r.winner}:${r.reason}`))]
+            .map(outcome => [outcome, results.filter(r => `${r.winner}:${r.reason}` === outcome).length])),
         reasons: Object.fromEntries([...new Set(results.map(r => r.reason))].map(reason => [reason, results.filter(r => r.reason === reason).length])) };
 }
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (!isMainThread) {
+    const { options, variant, maxSeconds } = workerData;
+    const s = deployVariant({ ...options, variant });
+    step(s, Math.ceil(maxSeconds * 60));
+    parentPort.postMessage(resultOf(s, variant));
+} else if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
     const args = process.argv.slice(2), get = (key, fallback) => args.includes(key) ? Number(args[args.indexOf(key) + 1]) : fallback;
     const games = get('--games', 20), start = get('--start', 1), maxSeconds = get('--max-seconds', 360);
+    const workers = get('--workers', 1);
     const options = { seed: get('--seed', 173), jitter: get('--jitter', .3), bonus: get('--bonus', L.rules.defenderMoraleBonus) };
     if (![games, start, maxSeconds, options.seed, options.jitter, options.bonus].every(Number.isFinite) ||
-        !Number.isInteger(games) || games < 1 || options.jitter < 0 || options.jitter > .3 || options.bonus < 0 || maxSeconds <= 0) {
-        throw new Error('Invalid arguments: --games N --start N --seed N --jitter 0..0.3 --bonus >=0 --max-seconds >0');
+        !Number.isInteger(games) || games < 1 || !Number.isInteger(workers) || workers < 1 || workers > 4 ||
+        options.jitter < 0 || options.jitter > .3 || options.bonus <= -1 || maxSeconds <= 0) {
+        throw new Error('Invalid arguments: --games N --start N --seed N --jitter 0..0.3 --bonus >-1 --max-seconds >0 --workers 1..4');
     }
-    console.log(JSON.stringify({ options, games, start, maxSeconds }));
+    console.log(JSON.stringify({ options, games, start, maxSeconds, workers }));
     const results = [];
-    for (let variant = start; variant < start + games; variant++) {
-        const s = deployVariant({ ...options, variant });
-        step(s, Math.ceil(maxSeconds * 60));
-        const result = resultOf(s, variant); results.push(result); console.log(JSON.stringify(result));
+    let nextVariant = start;
+    async function runWorker() {
+        while (nextVariant < start + games) {
+            const variant = nextVariant++;
+            let result;
+            if (workers === 1) {
+                const s = deployVariant({ ...options, variant });
+                step(s, Math.ceil(maxSeconds * 60));
+                result = resultOf(s, variant);
+            } else {
+                // Isolated globals, four simulation lanes, and only one Node process.
+                // Resolve after exit so the next lane never overlaps a retiring worker.
+                result = await new Promise((resolve, reject) => {
+                    const worker = new Worker(new URL(import.meta.url), { workerData: { options, variant, maxSeconds } });
+                    let received;
+                    worker.once('message', row => { received = row; });
+                    worker.once('error', reject);
+                    worker.once('exit', code => {
+                        if (code !== 0 || received?.variant !== variant) reject(new Error(`Worker failed for variant ${variant}: exit ${code}`));
+                        else resolve(received);
+                    });
+                });
+            }
+            results.push(result); console.log(JSON.stringify(result));
+        }
     }
+    await Promise.all(Array.from({ length: Math.min(workers, games) }, runWorker));
+    results.sort((a, b) => a.variant - b.variant);
     console.log(JSON.stringify({ summary: summarize(results) }));
 }

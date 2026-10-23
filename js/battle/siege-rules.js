@@ -9,6 +9,7 @@ export function installSiegeRules(layer, b, config) {
     const distance = u => Math.hypot(u.gx - b.cx, u.gy - b.cy);
     const rules = layer.rules = {
         config, bounds: b, captureSeconds: 0, attackersAtTent: false, attackerLossRate: 0,
+        lastProgressAt: null, attackerStallSeconds: 0, everInside: new Set(), landedCount: 0, ramHits: 0,
         defender: u => u.team === config.defenderTeam,
         sheltered: u => rules.defender(u) && inside(u) && distance(u) <= config.retreatRadius,
         moraleLoss(u, loss) { return rules.defender(u) ? loss / (1 + config.defenderMoraleBonus) : loss; },
@@ -63,9 +64,23 @@ export function installSiegeRules(layer, b, config) {
             rules.attackersAtTent = attackers.some(u => distance(u) <= config.captureRadius);
             const uncontested = rules.attackersAtTent && !defenders.some(u => distance(u) <= config.captureRadius);
             const now = scene.simulationTime;
+            rules.lastProgressAt ??= now;
+            const previousCaptureSeconds = rules.captureSeconds;
             if (!uncontested) rules.captureSince = null;
             else if (rules.captureSince == null) rules.captureSince = now;
             rules.captureSeconds = uncontested ? (now - rules.captureSince) / 1000 : 0;
+            // Only a unit's first entry counts, even if it later leaves and returns.
+            let newEntry = false;
+            for (const u of attackers) if (inside(u) && !u.siegeClimb && !rules.everInside.has(u.id)) {
+                rules.everInside.add(u.id);
+                newEntry = true;
+            }
+            const landedCount = layer.landedCount ?? 0, ramHits = layer.ram?.hits ?? 0;
+            if (newEntry || landedCount > rules.landedCount || ramHits > rules.ramHits ||
+                rules.captureSeconds > previousCaptureSeconds) rules.lastProgressAt = now;
+            rules.landedCount = landedCount;
+            rules.ramHits = ramHits;
+            rules.attackerStallSeconds = (now - rules.lastProgressAt) / 1000;
             let winner, reason, withdraw;
             if (!attackers.length || !defenders.length) {
                 winner = !attackers.length && !defenders.length ? 'draw' : attackers.length ? config.attackerTeam : config.defenderTeam;
@@ -76,7 +91,8 @@ export function installSiegeRules(layer, b, config) {
                 !defenders.some(u => inside(u) && ['steady', 'wavering'].includes(u.moraleState))) ||
                 defenders.length <= stats[config.defenderTeam].initial * config.surrenderFraction) {
                 winner = config.attackerTeam; reason = '守军投降'; withdraw = defenders;
-            } else if (rules.attackerLossRate + 1e-12 >= config.attackerRetreatFraction) {
+            } else if (rules.attackerLossRate + 1e-12 >= config.attackerRetreatFraction &&
+                rules.attackerStallSeconds + 1e-9 >= (config.attackerStallSeconds ?? 20)) {
                 winner = config.defenderTeam; reason = '攻方受挫撤退'; withdraw = attackers;
             }
             if (!winner) return;

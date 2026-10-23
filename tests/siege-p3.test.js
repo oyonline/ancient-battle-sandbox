@@ -113,7 +113,7 @@ test('P3 #2b: surviving ten percent also surrenders without a tent intruder', ()
     assert.equal(s.endReason, '守军投降'); assert.equal(defenders[0].withdrawn, true);
 });
 
-test('P3 #3: deaths plus current routs at 35% withdraw the whole attacking army', () => {
+test('P3 #3: deaths plus current routs reach 35%, but rally before 20 stalled seconds prevents retreat', () => {
     const { s, b } = camp();
     const red = Array.from({ length: 20 }, (_, i) => fixed(s, 'red', b.x1 - 7, b.y1 + i * .8));
     fixed(s, 'blue', b.cx, b.cy);
@@ -121,6 +121,178 @@ test('P3 #3: deaths plus current routs at 35% withdraw the whole attacking army'
     s.scheduleBattleAction(0, () => red.slice(0, 4).forEach(u => applyDamage(u, 10000)));
     step(s);
     assert.equal(s.siege.rules.attackerLossRate, .35);
+    // Old immediate-retreat expectation becomes no retreat: these routs rally before 20s.
+    assert.equal(s.battleOver, false);
+    step(s, 1198);
+    assert.equal(s.battleOver, false);
+    step(s);
+    assert.equal(s.battleOver, false);
+    assert.ok(s.siege.rules.attackerLossRate < .35);
+    assert.ok(red.slice(4, 7).every(u => u.moraleState !== 'routing'));
+    assert.ok(red.every(u => !u.withdrawn));
+});
+
+function stalledCamp(losses = 7) {
+    const { s, b } = camp();
+    const red = Array.from({ length: 20 }, (_, i) => fixed(s, 'red', b.x1 - 7, b.y1 + i * .8));
+    fixed(s, 'blue', b.cx, b.cy);
+    s.scheduleBattleAction(0, () => red.slice(0, losses).forEach(u => applyDamage(u, 10000)));
+    return { s, b, red };
+}
+
+test('P3 #3a: a real new ladder landing above 35% losses resets the 20-second stall timer', t => {
+    const { s, b, red } = stalledCamp();
+    s.siege = createCampSiege(b, { ladders: true, defense: false });
+    queueCampWalls(s);
+    step(s, 900);
+    assert.equal(s.siege.rules.attackerLossRate, .35);
+    assert.ok(s.siege.rules.attackerStallSeconds >= 14.9);
+    const ladder = s.siege.ladders[0], climber = red[7];
+    s.scheduleBattleAction(0, () => { climber.gx = ladder.foot.gx; climber.gy = ladder.foot.gy; });
+    while (!s.siege.landedCount && !s.battleOver && s.simulationTime < 20000) step(s);
+    assert.equal(s.siege.landedCount, 1);
+    const progressAt = s.siege.rules.lastProgressAt;
+    assert.equal(progressAt, s.simulationTime);
+    assert.equal(s.siege.rules.attackerStallSeconds, 0);
+    assert.equal(s.battleOver, false);
+    step(s, 1199);
+    assert.equal(s.battleOver, false);
+    step(s);
+    assert.equal(s.winner, 'blue'); assert.equal(s.endReason, '攻方受挫撤退');
+    assert.ok(red.every(u => u.dead || u.withdrawn));
+    assert.ok(Math.abs(s.simulationTime - progressAt - 20000) <= 1000 / 60);
+    t.diagnostic(`landingAtMs=${progressAt}; retreatAtMs=${s.simulationTime}; elapsedFrames=${Math.round((s.simulationTime - progressAt) / (1000 / 60))}`);
+});
+
+test('P3 #3b: a new camp entrant resets the timer once; continued occupancy cannot postpone retreat', () => {
+    const { s, b, red } = stalledCamp();
+    step(s, 900);
+    s.scheduleBattleAction(0, () => { red[7].gx = b.x1 + 2; red[7].gy = b.cy; });
+    step(s);
+    const progressAt = s.simulationTime;
+    assert.equal(s.siege.rules.lastProgressAt, progressAt);
+    assert.equal(s.siege.rules.attackerStallSeconds, 0);
+    step(s, 1199); assert.equal(s.battleOver, false);
+    step(s);
+    assert.equal(s.winner, 'blue'); assert.equal(s.endReason, '攻方受挫撤退');
+    assert.ok(Math.abs(s.simulationTime - progressAt - 20000) <= 1000 / 60);
+});
+
+test('P3 #3c: below 35% losses, even 60 seconds without progress cannot trigger retreat', () => {
+    const { s } = stalledCamp(6);
+    step(s, 3600);
+    assert.equal(s.siege.rules.attackerLossRate, .3);
+    assert.ok(s.siege.rules.attackerStallSeconds >= 59.9);
+    assert.equal(s.battleOver, false);
+});
+
+test('P3 #3b2: leaving and entering the camp again never resets first-entry progress', () => {
+    const { s, b, red } = stalledCamp();
+    const entrant = red[7];
+    step(s, 300);
+    s.scheduleBattleAction(0, () => { entrant.gx = b.x1 + 2; entrant.gy = b.cy; });
+    step(s);
+    const firstEntryAt = s.siege.rules.lastProgressAt;
+    step(s, 300);
+    assert.equal(s.siege.rules.lastProgressAt, firstEntryAt);
+    s.scheduleBattleAction(0, () => { entrant.gx = b.x1 - 2; });
+    step(s);
+    assert.equal(s.siege.rules.lastProgressAt, firstEntryAt);
+    s.scheduleBattleAction(0, () => { entrant.gx = b.x1 + 2; });
+    step(s);
+    assert.equal(s.siege.rules.lastProgressAt, firstEntryAt);
+    assert.ok(s.siege.rules.attackerStallSeconds > 5);
+    assert.deepEqual([...s.siege.rules.everInside], [entrant.id]);
+    assert.equal(s.battleOver, false);
+    step(s, 897); assert.equal(s.battleOver, false);
+    step(s);
+    assert.equal(s.endReason, '攻方受挫撤退');
+    assert.ok(Math.abs(s.simulationTime - firstEntryAt - 20000) <= 1000 / 60);
+});
+
+test('P3 #3d: capture gains keep resetting stall time above 35% losses until attacker victory', () => {
+    const { s, b, red } = stalledCamp();
+    const blue = s.units.find(u => u.team === 'blue');
+    step(s, 1199);
+    s.scheduleBattleAction(0, () => {
+        red[7].gx = b.cx; red[7].gy = b.cy;
+        blue.gx = b.cx + 6;
+    });
+    step(s);
+    assert.equal(s.battleOver, false);
+    for (let i = 0; i < 480; i++) {
+        step(s);
+        assert.equal(s.siege.rules.attackerStallSeconds, 0);
+        assert.equal(s.siege.rules.lastProgressAt, s.simulationTime);
+    }
+    assert.equal(s.siege.rules.attackerLossRate, .35);
+    assert.equal(s.winner, 'red'); assert.equal(s.endReason, '攻方夺寨');
+});
+
+test('P3 #3e: real ram impacts above 35% losses reset the timer until the gate breaks', () => {
+    const { s, b, red } = stalledCamp();
+    s.siege = createCampSiege(b, { defense: false });
+    queueCampWalls(s);
+    step(s, 600);
+    const { ram, gate } = s.siege;
+    s.scheduleBattleAction(0, () => red.slice(7, 11).forEach((u, i) => {
+        u.gx = ram.gx + [-.5, .5, -1, 1][i]; u.gy = ram.gy;
+    }));
+    let hits = 0;
+    while (!gate.broken && !s.battleOver && s.simulationTime < 45000) {
+        step(s);
+        if (ram.hits === hits) continue;
+        assert.equal(ram.hits, ++hits);
+        assert.equal(s.siege.rules.attackerLossRate, .35);
+        assert.equal(s.siege.rules.lastProgressAt, s.simulationTime);
+        assert.equal(s.siege.rules.attackerStallSeconds, 0);
+        assert.equal(s.battleOver, false);
+    }
+    assert.equal(hits, 12); assert.equal(gate.broken, true);
+    const progressAt = s.siege.rules.lastProgressAt;
+    step(s, 1199); assert.equal(s.battleOver, false);
+    step(s);
+    assert.equal(s.winner, 'blue'); assert.equal(s.endReason, '攻方受挫撤退');
+    assert.ok(Math.abs(s.simulationTime - progressAt - 20000) <= 1000 / 60);
+});
+
+test('P3 #3f: stall starts at the first check, even when installed at a nonzero simulation time', () => {
+    const { s, red } = stalledCamp();
+    s.simulationTime = 123000;
+    assert.equal(s.siege.rules.lastProgressAt, null);
+    step(s);
+    const startedAt = s.simulationTime;
+    assert.equal(s.siege.rules.lastProgressAt, startedAt);
+    assert.equal(s.siege.rules.attackerStallSeconds, 0);
+    step(s, 1199); assert.equal(s.battleOver, false);
+    step(s);
+    assert.equal(s.siege.rules.attackerLossRate, .35);
+    assert.equal(s.siege.rules.lastProgressAt, startedAt);
+    assert.equal(s.winner, 'blue'); assert.equal(s.endReason, '攻方受挫撤退');
+    assert.ok(Math.abs(s.simulationTime - startedAt - 20000) <= 1000 / 60);
+    assert.ok(red.every(u => u.dead || u.withdrawn));
+});
+
+test('P3 #3f2: missing stall configuration defaults to 20 seconds and preserves a zero first-check time', () => {
+    const { s, red } = stalledCamp();
+    s.siege.rules.config.attackerStallSeconds = undefined;
+    s.siege.rules.checkWin(s);
+    assert.equal(s.siege.rules.lastProgressAt, 0);
+    step(s, 1199); assert.equal(s.battleOver, false);
+    step(s);
+    assert.equal(s.siege.rules.lastProgressAt, 0);
+    assert.equal(s.winner, 'blue'); assert.equal(s.endReason, '攻方受挫撤退');
+    assert.ok(red.every(u => u.dead || u.withdrawn));
+});
+
+test('P3 #3g: deaths plus a current rout at the stall deadline trigger full withdrawal', () => {
+    const { s, red } = stalledCamp(6);
+    step(s, 1200); assert.equal(s.battleOver, false);
+    // Prepare the rout before step() snapshots morale at the start of the frame.
+    rout(red[6]);
+    step(s);
+    assert.equal(s.siege.rules.attackerLossRate, .35);
+    assert.equal(s.siege.rules.routedAtOutcome.red, 1);
     assert.equal(s.winner, 'blue'); assert.equal(s.endReason, '攻方受挫撤退');
     assert.ok(red.every(u => u.dead || u.withdrawn));
 });
@@ -131,6 +303,8 @@ test('P3 #4: eight uninterrupted seconds capture; a living defender resets the c
     const blue = fixed(s, 'blue', b.cx + 6, b.cy);
     step(s, 240);
     assert.ok(s.siege.rules.captureSeconds > 3.9 && !s.battleOver);
+    assert.equal(s.siege.rules.lastProgressAt, s.simulationTime);
+    assert.equal(s.siege.rules.attackerStallSeconds, 0);
     s.scheduleBattleAction(0, () => { blue.gx = b.cx + 2.4; });
     step(s);
     assert.equal(s.siege.rules.captureSeconds, 0);
@@ -175,6 +349,8 @@ test('P3 #6a: gate starts at 1800 and breaks on the twelfth 150 hp impact', () =
         if (ram.hits !== hits) {
             hits++; assert.equal(ram.hits, hits); assert.equal(gate.hp, 1800 - 150 * hits);
             assert.equal(gate.broken, hits === 12);
+            assert.equal(s.siege.rules.lastProgressAt, s.simulationTime);
+            assert.equal(s.siege.rules.attackerStallSeconds, 0);
         }
     }
     assert.equal(hits, 12);
@@ -325,7 +501,7 @@ test('P3 #7b: siege still settles elimination with an explicit reason', () => {
     step(s); assert.equal(s.winner, 'red'); assert.equal(s.endReason, '一方全灭');
 });
 
-test('P3 #8: same 600v300 variant repeats an entire battle frame-for-frame', () => {
+test('P3 #8: same 600v300 variant repeats an entire battle frame-for-frame', t => {
     function run() {
         const s = deployVariant({ variant: 1 }), frames = [];
         for (let i = 0; i < 21600 && !s.battleOver; i++) {
@@ -333,9 +509,13 @@ test('P3 #8: same 600v300 variant repeats an entire battle frame-for-frame', () 
             frames.push(hash([s.units.map(u => [u.id, u.gx, u.gy, u.hp, u.dead, u.withdrawn, u.morale, u.moraleState,
                 u.siegeRole, u.siegeDefenseRole, u.siegeClimb?.progress]), s.siege.ram, s.siege.gate,
                 s.siege.rules.captureSeconds, s.siege.rules.attackerLossRate,
+                s.siege.rules.lastProgressAt, s.siege.rules.attackerStallSeconds,
+                [...s.siege.rules.everInside], s.siege.rules.landedCount, s.siege.rules.ramHits,
                 s.arrows.map(a => ({ ...a, source: a.source?.id })), s.endReason, s.winner]));
         }
         assert.equal(s.battleOver, true); return frames;
     }
-    assert.deepEqual(run(), run());
+    const frames = run();
+    assert.deepEqual(frames, run());
+    t.diagnostic(`variant=1 frames=${frames.length} trajectorySha256=${hash(frames)}`);
 });
