@@ -53,7 +53,8 @@ export function createSiegeLayer(platforms = [], assault = null) {
     };
     // Height-only layers retain the original shape and have no simulation hook.
     if (assault?.gate && assault?.ram) installRam(layer, assault);
-    if (assault?.ladders?.length) installLadders(layer, assault.ladders, assault.climbSeconds);
+    if (assault?.ladders?.length) installLadders(layer, assault.ladders, assault.climbSeconds,
+        assault.rules?.enabled ? assault.rules.climbersPerLadder : undefined);
     if (assault?.defense) installSiegeDefense(layer, assault.defense);
     if (assault?.rules?.enabled) installSiegeRules(layer, assault.bounds, assault.rules, assault.wallThickness);
     return layer;
@@ -83,7 +84,7 @@ export const LADDER_LIP = .8;
 const CLIMB_SECONDS = 2.5, LADDER_RECRUIT_MS = 1000;
 const hookedMorale = new WeakSet();
 
-function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS) {
+function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS, climbersPerLadder = 2) {
     const landed = new WeakSet(), climbing = new Map();
     layer.landedCount = 0;
     layer.ladders = configs.map((c, i) => {
@@ -93,7 +94,7 @@ function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS) {
             id: c.id ?? `ladder-${i}`, team: c.team ?? 'red',
             foot: { ...c.foot }, top: { ...c.top }, landing: { ...c.landing },
             across: { gx: dy / length, gy: -dx / length },
-            climbers: [null, null], recruitMs: 0, initialized: false
+            climbers: Array(climbersPerLadder).fill(null), recruitMs: 0, initialized: false
         };
     });
     const alive = u => u && !u.dead && !u.withdrawn && u.hp > 0;
@@ -171,7 +172,7 @@ function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS) {
                     ['infantry', 'pikeman'].includes(u.type) && !u.siegeRole && !u.siegeAnchor && !landed.has(u) &&
                     inward(u) <= 0 && distance(u) <= 4)
                     .sort((a, b) => distance(a) - distance(b) || a.id - b.id);
-                for (let slot = 0; slot < 2 && candidates.length; slot++) {
+                for (let slot = 0; slot < ladder.climbers.length && candidates.length; slot++) {
                     if (ladder.climbers[slot] !== null) continue;
                     const offset = slot === 0 ? -.2 : .2;
                     const u = candidates.shift(), entry = { ladder, slot, offset, progress: 0, height: 0, waiting: false,

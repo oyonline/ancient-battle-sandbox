@@ -49,6 +49,8 @@ export function installSiegeRules(layer, b, config, wallThickness = 0) {
             // Scale the complete batch before deaths apply: simultaneous return hits
             // keep the same bonus even if the guard dies earlier in the batch.
             for (const hit of impacts) {
+                if (config.interiorMeleeCover !== undefined && hit.from && !hit.from.typeData.ranged &&
+                    rules.defender(hit.target) && inside(hit.target)) hit.damage *= config.interiorMeleeCover;
                 if (hit.from && rules.defender(hit.from) && !hit.from.typeData.ranged &&
                     hit.target.siegeClimb?.waiting && layer.meleeBypass(hit.from, hit.target)) hit.damage *= config.ladderGuardDamage;
                 // Apply after armor and the existing height/cover/roll calculation so

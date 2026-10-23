@@ -10,10 +10,11 @@ const towerArcherSlots = [{ x: -.38, z: -.3 }, { x: .38, z: -.3 }, { x: 0, z: .3
 export const CAMP_LAYOUT = {
     rules: {
         enabled: true, defenderTeam: 'blue', attackerTeam: 'red',
-        defenderMoraleBonus: .05, retreatRadius: 3, surrenderRadius: 4,
+        defenderMoraleBonus: -.025, retreatRadius: 3, surrenderRadius: 4,
         surrenderFraction: .1, attackerRetreatFraction: .35, attackerStallSeconds: 20,
         captureRadius: 2.5, captureSeconds: 8, wallFootRadius: 2,
         ladderGuardDamage: 1.5, gateHp: 1800, fireDiscipline: true,
+        interiorMeleeCover: .8, climbersPerLadder: 1,
         deadZone: 1.5, advanceRadius: 9, walkwayRangeScale: 1.1, towerRangeScale: 1.2, ramRoofCover: .3
     },
     halfSize: 10,
@@ -44,7 +45,7 @@ export const CAMP_LAYOUT = {
     baselineWallHeight,
     baselineClimbSeconds,
     climbSeconds: baselineClimbSeconds * wallHeight / baselineWallHeight,
-    attackers: { infantry: 450, pikeman: 80, archer: 70 },
+    attackers: { infantry: 470, pikeman: 80, archer: 50 },
     defenders: { infantry: 250, archer: 50 },
     attackShares: { south: .4, north: .2, east: .2, west: .2 },
     attackerWallClearance: 6,
