@@ -129,7 +129,7 @@ test('siege3d deployment: configured tower archers and crew, infantry walkway pr
     scene.deployUnits(ATTACKERS, DEFENDERS,
         'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
     const b = campBounds();
-    scene.siege = createCampSiege(b);
+    scene.siege = createCampSiege(b, { defense: false });
     const deployment = siegeDeployment(scene.units, b, scene.siege);
     for (const { unit, gx, gy, siegeAnchor } of deployment) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
     queueCampWalls(scene);
@@ -167,7 +167,7 @@ test('siege3d deployment: configured tower archers and crew, infantry walkway pr
     const visuals = buildSiegeVisuals(scene.siege);
     visuals.traverse(o => { if (o.isMesh) assert.ok(o.castShadow && o.receiveShadow); });
     disposeCampVisuals(visuals);
-    const rebuilt = createCampSiege(b);
+    const rebuilt = createCampSiege(b, { defense: false });
     assert.notEqual(rebuilt, scene.siege);
     assert.deepEqual(rebuilt.platforms, scene.siege.platforms);
     t.diagnostic(`deployment=${deployment.length}; tower=${L.towerCount * L.archersPerTower}; walkway=${walkers.length}; interior=${Object.values(DEFENDERS).reduce((sum, n) => sum + n, 0) - L.towerCount * L.archersPerTower - walkers.length}`);

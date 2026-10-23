@@ -7,7 +7,7 @@ export const TOWER_HEIGHT = L.towerHeight / H_WORLD;
 export const ATTACKERS = L.attackers;
 export const DEFENDERS = L.defenders;
 
-export function createCampSiege(b, { ladders = false } = {}) {
+export function createCampSiege(b, { ladders = false, defense = true } = {}) {
     const w = L.walkwayWidth, gateHalf = L.gateWidth / 2;
     const walkway = (id, x1, y1, x2, y2) => ({ id, x1, y1, x2, y2, height: WALKWAY_HEIGHT, kind: 'walkway' });
     const platforms = [
@@ -42,13 +42,14 @@ export function createCampSiege(b, { ladders = false } = {}) {
             top: point(L.wallThickness / 2), landing: point(-w / 2) };
     }));
     return createSiegeLayer(platforms, {
+        ...(defense ? { defense: { bounds: b, gateHalf, wallInset: L.defenderWallClearance } } : {}),
         gate: { blockerId: 'south-gate' },
         ram: { gx: b.cx, gateOuterY: b.y2 + L.wallThickness, team: 'red' },
         ...(ladders ? { ladders: ladderConfigs, climbSeconds: L.climbSeconds } : {})
     });
 }
 
-// Pure placement data: the page and headless tests consume exactly the same slots.
+// The page and headless tests consume the same placements and initial siege orders.
 export function siegeDeployment(units, b, siege) {
     const result = [], defenders = units.filter(u => u.team === 'blue');
     const archers = defenders.filter(u => u.type === 'archer');
@@ -100,6 +101,7 @@ export function siegeDeployment(units, b, siege) {
             gx: horizontal ? b.cx + along : side === 'west' ? b.x1 - outward : b.x2 + outward,
             gy: horizontal ? (side === 'north' ? b.y1 - outward : b.y2 + outward) : b.cy + along });
     });
+    siege.defense?.deploy(units, result);
     return result;
 }
 

@@ -14,7 +14,7 @@ function step(scene) { scene.simulationTime += DT * 1000; scene.stepBattle(DT); 
 function deploy(scene = makeScene()) {
     scene.deployUnits(L.attackers, L.defenders, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
     const bounds = campBounds();
-    scene.siege = createCampSiege(bounds, { ladders: true });
+    scene.siege = createCampSiege(bounds, { ladders: true, defense: false });
     const placements = siegeDeployment(scene.units, bounds, scene.siege);
     for (const { unit, gx, gy, siegeAnchor } of placements) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
     queueCampWalls(scene);
@@ -99,7 +99,7 @@ test('siege layout #2: exact armies, four corner towers, proportional four-side 
 });
 
 test('siege layout #3: configured climb completes within one frame of height-scaled duration', t => {
-    const s = makeScene(), b = campBounds(), full = createCampSiege(b, { ladders: true });
+    const s = makeScene(), b = campBounds(), full = createCampSiege(b, { ladders: true, defense: false });
     s.checkWin = () => {}; // Isolate duration, with no defender to hold the lip.
     s.siege = full;
     queueCampWalls(s);

@@ -20,7 +20,7 @@ function soldier(s, team, gx, gy, type = 'infantry') {
     return u;
 }
 function camp(count = 5, defended = false, ladderIndex = 0) {
-    const s = makeScene(), b = campBounds(), full = createCampSiege(b, { ladders: true });
+    const s = makeScene(), b = campBounds(), full = createCampSiege(b, { ladders: true, defense: false });
     s.battleOptions.deathmatch = true;
     // These fixtures deliberately keep stepping after the last defender dies so
     // the remaining climb and ordinary AI handoff can be observed.
@@ -209,7 +209,7 @@ test('ladder release: routing returns to foot and ordinary AI; ranged, cavalry a
 test('ladder visuals: configured placements, dimensions, materials, shadows and fresh redeployment state', () => {
     const { s } = camp();
     step(s); // Real simulation creates occupied state before rebuilding.
-    const b = campBounds(), fresh = createCampSiege(b, { ladders: true });
+    const b = campBounds(), fresh = createCampSiege(b, { ladders: true, defense: false });
     assert.equal(fresh.ladders.length, L.sides.length * L.laddersPerSide);
     assert.equal(fresh.landedCount, 0);
     assert.ok(fresh.ladders.every(l => l.climbers.every(id => id === null) && !l.initialized));

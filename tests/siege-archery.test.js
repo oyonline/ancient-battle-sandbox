@@ -145,7 +145,7 @@ test('siege archery #6: stepped siege3d deployment has configured armies and tow
     const scene = makeScene();
     scene.deployUnits(ATTACKERS, DEFENDERS, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
     const bounds = campBounds();
-    scene.siege = createCampSiege(bounds);
+    scene.siege = createCampSiege(bounds, { defense: false });
     const deployment = siegeDeployment(scene.units, bounds, scene.siege);
     for (const { unit, gx, gy, siegeAnchor } of deployment) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
     queueCampWalls(scene);

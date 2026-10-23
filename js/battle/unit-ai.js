@@ -104,7 +104,8 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
             }
             return;
         }
-        const nearest = scene.stickyTarget(unit);
+        const nearest = scene.siege?.defense?.owns(unit)
+            ? scene.siege.defense.targetFor(scene, unit) : scene.stickyTarget(unit);
         if (!nearest) {
             if (guardAnchor && dist(unit, guardAnchor) > 0.2) {
                 unit.groundGuardReturning = true;

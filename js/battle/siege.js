@@ -1,3 +1,4 @@
+import { installSiegeDefense } from './siege-defense.js';
 import { CAMP_RULES } from './camps.js';
 import { CombatRules } from '../combat.js';
 import { Terrain } from '../terrain.js';
@@ -44,6 +45,7 @@ export function createSiegeLayer(platforms = [], assault = null) {
     // Height-only layers retain the original shape and have no simulation hook.
     if (assault?.gate && assault?.ram) installRam(layer, assault);
     if (assault?.ladders?.length) installLadders(layer, assault.ladders, assault.climbSeconds);
+    if (assault?.defense) installSiegeDefense(layer, assault.defense);
     return layer;
 }
 

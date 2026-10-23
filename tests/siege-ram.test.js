@@ -26,7 +26,7 @@ function soldier(scene, team, x, y, type = 'infantry') {
 function camp(extra = false) {
     const scene = makeScene(), b = campBounds();
     scene.battleOptions.deathmatch = true;
-    scene.siege = createCampSiege(b);
+    scene.siege = createCampSiege(b, { defense: false });
     queueCampWalls(scene);
     const { ram } = scene.siege;
     const crew = [-1, 1, -2, 2].map(dx => soldier(scene, 'red', ram.gx + dx * .4, ram.gy));
