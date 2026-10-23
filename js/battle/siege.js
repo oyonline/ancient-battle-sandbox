@@ -2,9 +2,19 @@ import { CAMP_RULES } from './camps.js';
 import { CombatRules } from '../combat.js';
 import { Terrain } from '../terrain.js';
 import { isHostile } from '../factions.js';
+import { board } from '../board.js';
 
 // Terrain height units: 1 height = HEIGHT_SCALE screen pixels = H_WORLD world units.
 export function createSiegeLayer(platforms = [], assault = null) {
+    // The battle scene has no battle seed. A fixed seed and layer-local sample
+    // counter keep shots reproducible; redeployment creates a fresh layer.
+    let scatterCounter = 0;
+    const random = () => {
+        let h = (0x6d2b79f5 + Math.imul(++scatterCounter, 0x6d2b79f5)) | 0;
+        h = Math.imul(h ^ (h >>> 15), h | 1);
+        h ^= h + Math.imul(h ^ (h >>> 7), h | 61);
+        return ((h ^ (h >>> 14)) >>> 0) / 4294967296;
+    };
     const rects = platforms.map(p => ({ ...p }));
     const heightAt = (gx, gy) => {
         let height = 0;
@@ -16,6 +26,12 @@ export function createSiegeLayer(platforms = [], assault = null) {
     const layer = {
         platforms: rects,
         heightAt,
+        scatterArrow(arrow, from) {
+            const radius = .12 * Math.hypot(arrow.tx - from.gx, arrow.ty - from.gy);
+            const r = radius * Math.sqrt(random()), angle = 2 * Math.PI * random();
+            arrow.tx = Math.max(.5, Math.min(board.W - .5, arrow.tx + r * Math.cos(angle)));
+            arrow.ty = Math.max(.5, Math.min(board.H - .5, arrow.ty + r * Math.sin(angle)));
+        },
         meleeBypass: () => false,
         damageScale(from, target) {
             const difference = heightAt(from.gx, from.gy) - heightAt(target.gx, target.gy);

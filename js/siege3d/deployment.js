@@ -4,6 +4,8 @@ import { WALL_R, TOWER_ORIGINS, TOWER_ARCHER_SLOTS } from '../three-spike/camp-a
 export const H_WORLD = 2;
 export const WALKWAY_HEIGHT = 1 / H_WORLD;
 export const TOWER_HEIGHT = 2.56 / H_WORLD;
+export const ATTACKERS = { infantry: 450, pikeman: 80, archer: 70 };
+export const DEFENDERS = { infantry: 150, archer: 50 };
 
 export function createCampSiege(b, { ladders = false } = {}) {
     const w = .6;
@@ -88,8 +90,11 @@ export function installSiegeArrows(scene) {
         const result = fireArrow.call(this, from, target, options);
         if (this.siege) for (let i = start; i < this.arrows.length; i++) {
             const arrow = this.arrows[i];
+            const originalTerrainHeight = this.terrainHeight(arrow.tx, arrow.ty);
+            this.siege.scatterArrow(arrow, from);
             arrow.sourceHeight += from.siegeClimb?.height ?? this.siege.heightAt(arrow.sx, arrow.sy);
-            arrow.targetHeight += target.siegeClimb?.height ?? this.siege.heightAt(arrow.tx, arrow.ty);
+            arrow.targetHeight += this.terrainHeight(arrow.tx, arrow.ty) - originalTerrainHeight +
+                (target.siegeClimb?.height ?? this.siege.heightAt(arrow.tx, arrow.ty));
         }
         return result;
     };

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { makeScene, addUnit, CombatRules } from './battle-harness.js';
 import { createSiegeLayer } from '../js/battle/siege.js';
 import { campBounds, queueCampWalls, disposeCampVisuals } from '../js/siege3d/walls.js';
-import { createCampSiege, siegeDeployment, installSiegeArrows, H_WORLD } from '../js/siege3d/deployment.js';
+import { createCampSiege, siegeDeployment, installSiegeArrows, H_WORLD, ATTACKERS, DEFENDERS } from '../js/siege3d/deployment.js';
 import { buildSiegeVisuals } from '../js/siege3d/platforms.js';
 
 function step(scene) {
@@ -125,7 +125,7 @@ test('siege determinism: two complete 600-frame tower battles match positions, h
 
 test('siege3d deployment: 8 tower archers, 4 per tower, infantry walkway priority and no wall overlap', t => {
     const scene = makeScene();
-    scene.deployUnits({ infantry: 380, pikeman: 80, archer: 140 }, { infantry: 120, archer: 80 },
+    scene.deployUnits(ATTACKERS, DEFENDERS,
         'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
     const b = campBounds();
     scene.siege = createCampSiege(b);
@@ -141,7 +141,7 @@ test('siege3d deployment: 8 tower archers, 4 per tower, infantry walkway priorit
         assert.equal(p.height * H_WORLD, 2.56);
     }
     const walkers = deployment.filter(d => d.platformId?.startsWith('walk-'));
-    assert.ok(walkers.length > 0 && walkers.length < 120);
+    assert.ok(walkers.length > 0 && walkers.length < DEFENDERS.infantry);
     for (const d of walkers) {
         const p = scene.siege.platforms.find(p => p.id === d.platformId);
         assert.ok(inside(p, d));
@@ -169,5 +169,5 @@ test('siege3d deployment: 8 tower archers, 4 per tower, infantry walkway priorit
     const rebuilt = createCampSiege(b);
     assert.notEqual(rebuilt, scene.siege);
     assert.deepEqual(rebuilt.platforms, scene.siege.platforms);
-    t.diagnostic(`deployment=${deployment.length}; tower=8 (4+4); walkway=${walkers.length}; interior=${200 - 8 - walkers.length}`);
+    t.diagnostic(`deployment=${deployment.length}; tower=8 (4+4); walkway=${walkers.length}; interior=${Object.values(DEFENDERS).reduce((sum, n) => sum + n, 0) - 8 - walkers.length}`);
 });

@@ -12,7 +12,7 @@ import { Snd } from '../snd.js';
 import { Terrain } from '../terrain.js';
 import { campBounds, queueCampWalls, buildCampVisuals, disposeCampVisuals, updateCampGate } from './walls.js';
 import { buildRamVisual, updateRamVisual } from './ram.js';
-import { createCampSiege, siegeDeployment, installSiegeArrows, H_WORLD } from './deployment.js';
+import { createCampSiege, siegeDeployment, installSiegeArrows, H_WORLD, ATTACKERS, DEFENDERS } from './deployment.js';
 import { buildSiegeVisuals, climberWorldHeight } from './platforms.js';
 import { CavalryAI, unitRand } from '../units.js';
 import { board } from '../board.js';
@@ -22,8 +22,6 @@ import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
 window.Snd = Snd;   // game.js / render 钩子里以全局 Snd 出声（die/win/arrow）
 
 const TERRAIN_KEY = 'flat';
-const ATTACKERS = { infantry: 380, pikeman: 80, archer: 140 };
-const DEFENDERS = { infantry: 120, archer: 80 };
 const TEAM_COLOR = { red: 0xc4553f, blue: 0x7fb0e0 };
 
 const $ = id => document.getElementById(id);
