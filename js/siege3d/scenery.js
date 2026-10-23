@@ -33,57 +33,40 @@ export function buildGrassTexture(size = 1024) {
     const img = ctx.createImageData(size, size);
     const data = img.data;
 
+    // 主色保持 #6f7d4c；噪点只做 ±6% 明暗细节，整体亮度与改动前一致。
     const BASE = [0x6f, 0x7d, 0x4c];
-    const DARK = [0x5d, 0x6b, 0x3e];
-    const LIGHT = [0x83, 0x90, 0x5a];
-    const DIRT = [0x8a, 0x7d, 0x55];
 
     const hash = (x, y, s = 0) => {
         let h = (Math.imul(x + s, 374761393) + Math.imul(y + s, 668265263)) | 0;
         h = Math.imul(h ^ (h >>> 13), 1274126177);
         return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
     };
-    const vnoise = (x, y, s = 0) => {
+    // 周期性格点噪声：格点按 P 取模，贴图 8×8 平铺时四边无缝
+    const pnoise = (x, y, P, s = 0) => {
         const xi = Math.floor(x), yi = Math.floor(y);
         const fx = x - xi, fy = y - yi;
         const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
-        const a = hash(xi, yi, s), b = hash(xi + 1, yi, s);
-        const c = hash(xi, yi + 1, s), d = hash(xi + 1, yi + 1, s);
+        const wrap = (a, b) => hash(((a % P) + P) % P, ((b % P) + P) % P, s);
+        const a = wrap(xi, yi), b = wrap(xi + 1, yi);
+        const c = wrap(xi, yi + 1), d = wrap(xi + 1, yi + 1);
         return a * (1 - u) * (1 - v) + b * u * (1 - v) + c * (1 - u) * v + d * u * v;
     };
 
     for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
-            const n1 = vnoise(x * 0.02, y * 0.02, 0);
-            const n2 = vnoise(x * 0.06, y * 0.06, 7) * 0.6;
-            const n3 = vnoise(x * 0.15, y * 0.15, 13) * 0.3;
-            const n = n1 + n2 + n3;
-            const dirtMask = vnoise(x * 0.04 + 50, y * 0.04 + 30, 99);
-
-            let r = BASE[0], g = BASE[1], b = BASE[2];
-            if (dirtMask > 0.82) {
-                r = DIRT[0]; g = DIRT[1]; b = DIRT[2];
-            } else {
-                const t = (n - 0.6) * 3;
-                if (t > 0) {
-                    r += (LIGHT[0] - BASE[0]) * t;
-                    g += (LIGHT[1] - BASE[1]) * t;
-                    b += (LIGHT[2] - BASE[2]) * t;
-                } else {
-                    const s = Math.max(0, -t);
-                    r += (DARK[0] - BASE[0]) * s;
-                    g += (DARK[1] - BASE[1]) * s;
-                    b += (DARK[2] - BASE[2]) * s;
-                }
-            }
-            const detail = hash(x, y, 12345);
-            const d = (detail - 0.5) * 14;
-            r = Math.max(0, Math.min(255, r + d));
-            g = Math.max(0, Math.min(255, g + d));
-            b = Math.max(0, Math.min(255, b + d));
+            const tx = x / size, ty = y / size;
+            const n = pnoise(tx * 16, ty * 16, 16, 0) * 0.5 +
+                pnoise(tx * 40, ty * 40, 40, 7) * 0.32 +
+                pnoise(tx * 96, ty * 96, 96, 13) * 0.18;
+            // 亮度因子严格锁在 0.94~1.06，绝不整体压暗
+            const grain = (hash(x, y, 12345) - 0.5) * 0.02;
+            const k = Math.max(0.94, Math.min(1.06, 1 + (n - 0.5) * 0.12 + grain));
 
             const i = (y * size + x) * 4;
-            data[i] = r; data[i + 1] = g; data[i + 2] = b; data[i + 3] = 255;
+            data[i] = BASE[0] * k;
+            data[i + 1] = BASE[1] * k;
+            data[i + 2] = BASE[2] * k;
+            data[i + 3] = 255;
         }
     }
     ctx.putImageData(img, 0, 0);
@@ -255,15 +238,15 @@ export function buildCampTents(siege) {
 
 // 大帐飘旗（顶点正弦平移）——返回 { mesh, update } 对象
 export function createTentFlag() {
-    const geo = new THREE.PlaneGeometry(1.2, 0.7, 12, 8);
+    const geo = new THREE.PlaneGeometry(1.0, 0.7, 12, 8);
     const mat = new THREE.MeshStandardMaterial({ color: 0x387bdd, roughness: 0.8, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = true;
-    // 放在营寨中心、旗杆顶端（world 坐标 ≈ board.W/2, 2.2, board.H/2）
-    const worldX = CAMP.cx - WORLD.W / 2 + 0.25;
-    const worldZ = CAMP.cy - WORLD.H / 2;
-    mesh.position.set(worldX, 2.2, worldZ);
-    mesh.rotation.y = Math.PI / 2;
+    // 旗面沿 +Z 展开（默认相机在 +Z 侧，正对旗面），左缘贴旗杆；
+    // 再向 +Z 让 0.03，遮住 walls.js 里旧的那块静态旗板（本期不允许改 walls.js）。
+    const worldX = CAMP.cx - WORLD.W / 2 + 0.5;
+    const worldZ = CAMP.cy - WORLD.H / 2 + 0.03;
+    mesh.position.set(worldX, 2.45, worldZ);
 
     // 缓存原始顶点
     const pos = geo.attributes.position;
@@ -274,8 +257,10 @@ export function createTentFlag() {
         for (let i = 0; i < pos.count; i++) {
             const x = pos.getX(i);
             const y = pos.getY(i);
-            const sway = Math.sin(t * 2.0 + y * 3.0) * 0.04 * (0.5 + Math.abs(x) * 0.6);
-            const flutter = Math.cos(t * 3.5 + y * 5.0) * 0.02;
+            // 贴杆的左缘几乎不动，自由端摆幅最大
+            const amp = 0.35 + (x + 0.5);
+            const sway = Math.sin(t * 2.0 + x * 2.4 + y * 2.0) * 0.05 * amp;
+            const flutter = Math.cos(t * 3.6 + x * 5.0 + y * 4.0) * 0.02 * amp;
             pos.setZ(i, origZ[i] + sway + flutter);
         }
         pos.needsUpdate = true;
@@ -289,17 +274,35 @@ export function createTentFlag() {
 // ============================================================================
 export function buildSurroundings(grassTexture) {
     const group = new THREE.Group();
-    const SIDE = 80;
+    const SIDE = 80;              // 外围带宽（世界单位）
+    const HX = WORLD.W / 2;       // 战场半宽 = 35
+    const HZ = WORLD.H / 2;       // 战场半高 = 35
+    const TILE = WORLD.W / 8;     // 与战场地面 8×8 平铺同尺度：8.75 单位/瓦片
 
-    // 外围地面（略暗一点的同材质）
-    const extGeo = new THREE.PlaneGeometry(WORLD.W + SIDE * 2, WORLD.H + SIDE * 2, 1, 1);
-    extGeo.rotateX(-Math.PI / 2);
+    // 外围地面：四块与战场边界严丝合缝的边框，不与战场地面重叠。
+    // 旧版是一块 230×230 的大平面压在战场平面上（同为 y=0）——深度冲突正是横向浅色条带的来源。
+    const outerTex = grassTexture.clone();
+    outerTex.repeat.set(1, 1);
+    outerTex.needsUpdate = true;
     const extMat = new THREE.MeshStandardMaterial({
-        map: grassTexture, roughness: 1, color: 0xb0b09e
+        map: outerTex, roughness: 1, color: 0xe6e6e6   // 比战场暗约 10%
     });
-    const extGround = new THREE.Mesh(extGeo, extMat);
-    extGround.receiveShadow = true;
-    group.add(extGround);
+    function strip(x1, x2, z1, z2) {
+        const geo = new THREE.PlaneGeometry(x2 - x1, z2 - z1, 1, 1);
+        geo.rotateX(-Math.PI / 2);
+        geo.translate((x1 + x2) / 2, 0, (z1 + z2) / 2);
+        // 世界尺度 UV：与战场地面同为 8.75 单位/瓦片，接缝处纹理连续
+        const pos = geo.attributes.position, uv = geo.attributes.uv;
+        for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / TILE, pos.getZ(i) / TILE);
+        uv.needsUpdate = true;
+        const mesh = new THREE.Mesh(geo, extMat);
+        mesh.receiveShadow = true;
+        group.add(mesh);
+    }
+    strip(-HX - SIDE, HX + SIDE, -HZ - SIDE, -HZ);   // 北
+    strip(-HX - SIDE, HX + SIDE, HZ, HZ + SIDE);     // 南
+    strip(-HX - SIDE, -HX, -HZ, HZ);                 // 西
+    strip(HX, HX + SIDE, -HZ, HZ);                   // 东
 
     // ---- 河流（西侧外围，弯曲）----
     const riverRng = mulberry32(998877);
@@ -414,28 +417,41 @@ function buildOutskirtsForest(maxInstances = 1500) {
 
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
     const mesh = new THREE.InstancedMesh(treeGeo, mat, maxInstances);
+    mesh.name = 'outskirts-trees';
     mesh.castShadow = true; mesh.frustumCulled = true;
     group.add(mesh);
 
-    // 分布：南侧 (gy > 50) + 西侧 (gx < 20)，避开河道 (gx 27-43, gy 12-58)
-    let slot = 0;
-    for (let i = 0; i < maxInstances * 20 && slot < maxInstances; i++) {
-        const gx = rng() * WORLD.W;
-        const gy = rng() * WORLD.H;
-        // 主战场 + 营寨禁区
-        if (Math.hypot(gx - CAMP.cx, gy - CAMP.cy) < 18) continue;
-        // 河道禁区
-        if (gx > 27 && gx < 43 && gy > 12 && gy < 58) continue;
-        // 南侧或西侧
-        if (gy <= 50 && gx >= 20) continue;
+    // 只在战场 70×70 之外的外围带取点：距战场边 2~60，以南侧 + 西侧为主。
+    // 旧版在 gx/gy ∈ [0,70] 的战场坐标里撒点，等于把 1500 棵树全种进了战场——本函数已彻底改为外圈采样。
+    const HX = WORLD.W / 2, HZ = WORLD.H / 2;
+    const NEAR = 2, FAR = 60;
+    const RIVER_X1 = -60, RIVER_X2 = -42;   // 西侧河道 + 两岸（世界坐标），树林不得覆盖
+    const SOUTH_TREES = 900, WEST_TREES = maxInstances - 900;
 
+    const place = (x, z) => {
         const scaleY = (1.8 + rng() * 1.4) / 2.2;
-        dummy.position.set(gx - WORLD.W / 2, 0, gy - WORLD.H / 2);
+        dummy.position.set(x, 0, z);
         dummy.rotation.set((rng() - 0.5) * 0.06, rng() * Math.PI * 2, (rng() - 0.5) * 0.06);
-        dummy.scale.setScalar(0.8 + rng() * 0.5);
+        dummy.scale.setScalar(0.85 + rng() * 0.55);
         dummy.scale.y *= scaleY;
         dummy.updateMatrix();
         mesh.setMatrixAt(slot++, dummy.matrix);
+    };
+
+    let slot = 0;
+    // 南侧带：z ∈ [HZ+2, HZ+60]，x 覆盖整个外围宽度
+    for (let i = 0; i < SOUTH_TREES * 12 && slot < SOUTH_TREES; i++) {
+        const x = -HX - FAR + rng() * (WORLD.W + FAR * 2);
+        const z = HZ + NEAR + rng() * (FAR - NEAR);
+        place(x, z);
+    }
+    // 西侧带：x ∈ [-(HX+60), -(HX+2)]，z ∈ [-45, HZ+60]（避开北侧山体），避开河道
+    const westEnd = SOUTH_TREES;
+    for (let i = 0; i < WEST_TREES * 12 && slot < westEnd + WEST_TREES; i++) {
+        const x = -(HX + NEAR) - rng() * (FAR - NEAR);
+        const z = -45 + rng() * (HZ + FAR + 45);
+        if (x > RIVER_X1 && x < RIVER_X2) continue;
+        place(x, z);
     }
     mesh.count = slot;
     mesh.instanceMatrix.needsUpdate = true;
