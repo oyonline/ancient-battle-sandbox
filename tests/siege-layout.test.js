@@ -60,7 +60,7 @@ test('siege layout #1: 20-cell camp, four ladders per side, outside feet and wal
     disposeCampVisuals(visuals);
 });
 
-test('siege layout #2: exact armies, four corner towers, proportional four-side deployment and legal bodies', t => {
+test('siege layout #2: exact armies, four assault-side towers, proportional four-side deployment and legal bodies', t => {
     const { scene: s, bounds: b, placements } = deploy();
     assert.equal(total(L.attackers), 600); assert.equal(total(L.defenders), 300);
     assert.equal(placements.filter(p => p.unit.team === 'red').length, total(L.attackers));
@@ -72,9 +72,10 @@ test('siege layout #2: exact armies, four corner towers, proportional four-side 
         assert.equal(crew.length, L.archersPerTower);
         assert.equal(crew.length, 3);
         assert.ok(crew.every(d => d.unit.type === 'archer' && d.unit.team === 'blue'));
-        const [sx, sy] = L.towerCorners[i];
-        assert.equal((p.x1 + p.x2) / 2, sx < 0 ? b.x1 + L.towerInset : b.x2 - L.towerInset);
-        assert.equal((p.y1 + p.y2) / 2, sy < 0 ? b.y1 + L.towerInset : b.y2 - L.towerInset);
+        const centers = [[b.cx, b.y1 + L.towerInset], [b.x2 - L.towerInset, b.cy],
+            [b.x1 + L.towerInset, b.cy], [b.cx + 2.4, b.y2 - L.towerInset]];
+        assert.equal((p.x1 + p.x2) / 2, centers[i][0]);
+        assert.equal((p.y1 + p.y2) / 2, centers[i][1]);
         assert.ok(Math.abs(p.x2 - p.x1 - L.towerSize) < 1e-12);
         assert.ok(Math.abs(p.y2 - p.y1 - L.towerSize) < 1e-12);
         assert.equal(p.height * L.worldHeightScale, L.towerHeight);

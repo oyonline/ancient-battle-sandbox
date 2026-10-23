@@ -39,6 +39,14 @@ export function createSiegeLayer(platforms = [], assault = null) {
             let scale = 1;
             if (difference >= .4) scale *= CAMP_RULES.WALL_GUARD_ATTACK;
             if (-difference >= .4) scale *= CAMP_RULES.WALL_GUARD_COVER;
+            if (assault?.fenceCover !== undefined && from.typeData.ranged) {
+                const b = assault.bounds, t = assault.wallThickness ?? 0;
+                const inside = target.gx >= b.x1 && target.gx <= b.x2 && target.gy >= b.y1 && target.gy <= b.y2;
+                const outside = from.gx < b.x1 - t || from.gx > b.x2 + t || from.gy < b.y1 - t || from.gy > b.y2 + t;
+                if (inside && outside && from.scene.dynamicBlockers?.list.some(r =>
+                    (r.kind === 'wall' || (r.kind === 'gate' && !layer.gate?.broken)) &&
+                    crossesFence(r, from, target))) scale *= assault.fenceCover;
+            }
             return scale;
         }
     };
@@ -47,6 +55,26 @@ export function createSiegeLayer(platforms = [], assault = null) {
     if (assault?.ladders?.length) installLadders(layer, assault.ladders, assault.climbSeconds);
     if (assault?.defense) installSiegeDefense(layer, assault.defense);
     return layer;
+}
+
+// Slab intersection like Terrain.sweep, but include rectangle edges: the two
+// halves of a wall share a seam that must not become an arrow-sized opening.
+function crossesFence(rect, from, target) {
+    let enter = 0, leave = 1;
+    for (const [start, delta, lo, hi] of [
+        [from.gx, target.gx - from.gx, rect.x1, rect.x2],
+        [from.gy, target.gy - from.gy, rect.y1, rect.y2]
+    ]) {
+        if (Math.abs(delta) < 1e-12) {
+            if (start < lo || start > hi) return false;
+        } else {
+            const a = (lo - start) / delta, b = (hi - start) / delta;
+            enter = Math.max(enter, Math.min(a, b));
+            leave = Math.min(leave, Math.max(a, b));
+        }
+        if (enter > leave) return false;
+    }
+    return leave > 0 && enter < 1;
 }
 
 export const LADDER_LIP = .8;

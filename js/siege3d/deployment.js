@@ -1,5 +1,6 @@
 import { createSiegeLayer } from '../battle/siege.js';
 import { CAMP_LAYOUT as L } from './layout.js';
+import { avoidTowerPosts } from './defense-posts.js';
 
 export const H_WORLD = L.worldHeightScale;
 export const WALKWAY_HEIGHT = L.walkwayHeight / H_WORLD;
@@ -17,9 +18,9 @@ export function createCampSiege(b, { ladders = false, defense = true } = {}) {
         walkway('walk-south-west', b.x1, b.y2 - w, b.cx - gateHalf, b.y2),
         walkway('walk-south-east', b.cx + gateHalf, b.y2 - w, b.x2, b.y2)
     ];
-    L.towerCorners.forEach(([sx, sy], i) => {
-        const x = sx < 0 ? b.x1 + L.towerInset : b.x2 - L.towerInset;
-        const y = sy < 0 ? b.y1 + L.towerInset : b.y2 - L.towerInset;
+    L.towerPositions.forEach(({ side, offset }, i) => {
+        const x = side === 'west' ? b.x1 + L.towerInset : side === 'east' ? b.x2 - L.towerInset : b.cx + offset;
+        const y = side === 'north' ? b.y1 + L.towerInset : side === 'south' ? b.y2 - L.towerInset : b.cy + offset;
         const half = L.towerSize / 2;
         platforms.push({ id: `tower-${i}`, x1: x - half, y1: y - half, x2: x + half, y2: y + half,
             height: TOWER_HEIGHT, kind: 'tower' });
@@ -41,12 +42,15 @@ export function createCampSiege(b, { ladders = false, defense = true } = {}) {
         return { id: `${side}-${i}`, foot: point(L.ladderFootOffset),
             top: point(L.wallThickness / 2), landing: point(-w / 2) };
     }));
-    return createSiegeLayer(platforms, {
+    const siege = createSiegeLayer(platforms, {
+        fenceCover: L.fenceCover, bounds: b, wallThickness: L.wallThickness,
         ...(defense ? { defense: { bounds: b, gateHalf, wallInset: L.defenderWallClearance } } : {}),
         gate: { blockerId: 'south-gate' },
         ram: { gx: b.cx, gateOuterY: b.y2 + L.wallThickness, team: 'red' },
         ...(ladders ? { ladders: ladderConfigs, climbSeconds: L.climbSeconds } : {})
     });
+    if (defense) avoidTowerPosts(siege, b);
+    return siege;
 }
 
 // The page and headless tests consume the same placements and initial siege orders.

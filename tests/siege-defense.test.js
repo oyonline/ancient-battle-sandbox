@@ -311,14 +311,22 @@ test('defense c: breach fills three semicircle ranks and one overflow rank, near
     assert.deepEqual(radii, [2.5, 3.3, 4.1, 4.9]);
     const entries = [...d.assignments].filter(([, a]) => a.role === 'gate');
     const counts = radii.map(r => entries.filter(([, a]) => Math.abs(distance(a.post, d.gateCenter) - r) < 1e-8).length);
-    assert.deepEqual(counts.slice(0, 3), [31, 41, 51]);
+    assert.deepEqual(counts.slice(0, 3), [23, 30, 48]);
     for (let row = 0; row < radii.length - 1; row++) {
         const front = entries.filter(([, a]) => Math.abs(distance(a.post, d.gateCenter) - radii[row]) < 1e-8);
         const rear = entries.filter(([, a]) => distance(a.post, d.gateCenter) > radii[row] + .1);
         assert.ok(Math.max(...front.map(([u]) => distance(positions.get(u), d.gateCenter))) <=
             Math.min(...rear.map(([u]) => distance(positions.get(u), d.gateCenter))) + 1e-8);
         const angles = front.map(([, a]) => Math.atan2(d.gateCenter.gy - a.post.gy, a.post.gx - d.gateCenter.gx)).sort((a, b) => a - b);
-        for (let i = 1; i < angles.length; i++) assert.ok(Math.abs(angles[i] - angles[i - 1] - Math.PI / angles.length) < 1e-8);
+        const slotCount = Math.floor(Math.PI * radii[row] / .25);
+        const expectedAngles = Array.from({ length: slotCount }, (_, i) => Math.PI * (i + .5) / slotCount).filter(angle => {
+            const gx = d.gateCenter.gx + radii[row] * Math.cos(angle), gy = d.gateCenter.gy - radii[row] * Math.sin(angle);
+            return !s.siege.platforms.filter(p => p.kind === 'tower').some(p =>
+                gx >= p.x1 - L.towerClearance && gx <= p.x2 + L.towerClearance &&
+                gy >= p.y1 - L.towerClearance && gy <= p.y2 + L.towerClearance);
+        });
+        assert.equal(angles.length, expectedAngles.length);
+        for (let i = 0; i < angles.length; i++) assert.ok(Math.abs(angles[i] - expectedAngles[i]) < 1e-8);
     }
     t.diagnostic(`gateRadii=${radii}; rankCounts=${counts}`);
 });
@@ -436,6 +444,8 @@ test('defense: wall threat ratios below 1.5 do not trigger transfers', t => {
     for (const [gx, gy] of [[b.x1 - 6, b.cy], [b.cx, b.y1 - 6], [b.x2 + 6, b.cy], [b.cx, b.y2 + 6]]) {
         const enemy = addUnit(s, 'red', 'infantry', gx, gy);
         enemy.typeData = { ...enemy.typeData, speed: 0 };
+        // 新塔位可射中这些静止敌兵；高血量确保威胁比测试期间敌兵存活。
+        enemy.hp = enemy.maxHp = 100000;
     }
     const calls = recordAssignments(d);
     step(s, 120);

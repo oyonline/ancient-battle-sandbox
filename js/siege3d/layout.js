@@ -2,12 +2,16 @@
 const wallHeight = 2.4;
 const baselineWallHeight = 1.75;
 const baselineClimbSeconds = 2.5;
-const towerCorners = [[-1, -1], [1, -1], [-1, 1], [1, 1]];
+const towerPositions = [
+    { side: 'north', offset: 0 }, { side: 'east', offset: 0 },
+    { side: 'west', offset: 0 }, { side: 'south', offset: 2.4 }
+];
 const towerArcherSlots = [{ x: -.38, z: -.3 }, { x: .38, z: -.3 }, { x: 0, z: .38 }];
 export const CAMP_LAYOUT = {
     halfSize: 10,
     wallThickness: .3,
     wallHeight,
+    fenceCover: .5,
     braceHeights: [.75, 1.85],
     stakeTipHeight: .12 * wallHeight / baselineWallHeight,
     gateWidth: 2.4,
@@ -19,8 +23,8 @@ export const CAMP_LAYOUT = {
     towerHeight: 3.2,
     towerSize: 1.4,
     towerInset: 1.6,
-    towerCorners,
-    towerCount: towerCorners.length,
+    towerPositions,
+    towerCount: towerPositions.length,
     towerArcherSlots,
     archersPerTower: towerArcherSlots.length,
     laddersPerSide: 4,
