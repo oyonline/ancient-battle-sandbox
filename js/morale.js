@@ -269,13 +269,15 @@ export class MoraleSystem {
             // 中央高地稳固军心：归属方 + 明确驻守令的营队成员 + 旗点 8 格内 → 士气损失 −10%。
             // 只缩放负向损失，不加生命 / 攻击 / 射程，也不影响恢复速度。
             const lossScale = moraleLossScale(this.scene, unit);
-            const totalLoss = lossScale === 1 ? realLoss + contagion : (realLoss + contagion) * lossScale;
+            let totalLoss = lossScale === 1 ? realLoss + contagion : (realLoss + contagion) * lossScale;
+            if (this.scene.siege?.rules) totalLoss = this.scene.siege.rules.moraleLoss(unit, totalLoss);
             let reason = loss.reason;
             if (casualty > Math.max(charge, contagion, pressure)) reason = loss.deaths ? '附近友军伤亡惨重' : '持续遭到打击';
             else if (contagion > Math.max(casualty, charge, pressure)) reason = '附近友军溃逃';
             else if (pressure > Math.max(casualty, charge, contagion)) reason = record.pressureReason;
             // 局部压力可每 200ms 缓存，恢复安全却必须每帧确认，不能在敌人已靠近时继续读旧安全状态。
             unit.moraleSheltered = record.sheltered && ownDamage === 0 && !this.threatenedNow(snap);
+            if (this.scene.siege?.rules?.sheltered(unit) && ownDamage === 0 && !this.threatenedNow(snap)) unit.moraleSheltered = true;
             const previousSafeTime = record.safeTime;
             record.safeTime = unit.moraleSheltered ? record.safeTime + elapsed : 0;
             const reserveSupport = unit.moraleSheltered && this.scene.tactics?.reserveSupport(unit) === true;
@@ -285,7 +287,8 @@ export class MoraleSystem {
             const previousTime = reserveSupport ? previousReserveTime : previousSafeTime;
             const wait = reserveSupport ? 1.5 : 3;
             const recoveredSeconds = Math.max(0, safeTime - wait) - Math.max(0, previousTime - wait);
-            const recovery = realLoss + contagion > 0 ? 0 : (reserveSupport ? 8 : 3) * Math.max(0, recoveredSeconds);
+            let recovery = realLoss + contagion > 0 ? 0 : (reserveSupport ? 8 : 3) * Math.max(0, recoveredSeconds);
+            if (this.scene.siege?.rules) recovery = this.scene.siege.rules.moraleRecovery(unit, recovery);
             const value = Math.max(0, Math.min(100, unit.morale - totalLoss + recovery));
             const rallyThreshold = reserveSupport ? 50 : this.scene.battleOptions?.deathmatch ? 60 : 45;
             let state = snap.state;

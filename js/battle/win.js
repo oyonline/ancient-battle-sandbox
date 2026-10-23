@@ -42,6 +42,7 @@ function checkCoopWin(scene) {
 export function checkWin(scene) {
 
         if (scene.battleOver) return;
+        if (scene.siege?.rules) { scene.siege.rules.checkWin(scene); return; }
         // 合作模式完全由基地攻城判定接管：未分胜负时不得回落到二元残局逻辑
         //（否则红方单独被打光会被误判为黑方获胜）。
         if (isCoopBattle(scene)) { checkCoopWin(scene); return; }

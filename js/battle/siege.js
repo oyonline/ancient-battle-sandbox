@@ -1,3 +1,4 @@
+import { installSiegeRules } from './siege-rules.js';
 import { installSiegeDefense } from './siege-defense.js';
 import { CAMP_RULES } from './camps.js';
 import { CombatRules } from '../combat.js';
@@ -11,7 +12,7 @@ export function createSiegeLayer(platforms = [], assault = null) {
     // counter keep shots reproducible; redeployment creates a fresh layer.
     let scatterCounter = 0;
     const random = () => {
-        let h = (0x6d2b79f5 + Math.imul(++scatterCounter, 0x6d2b79f5)) | 0;
+        let h = ((assault?.scatterSeed ?? 0x6d2b79f5) + Math.imul(++scatterCounter, 0x6d2b79f5)) | 0;
         h = Math.imul(h ^ (h >>> 15), h | 1);
         h ^= h + Math.imul(h ^ (h >>> 7), h | 61);
         return ((h ^ (h >>> 14)) >>> 0) / 4294967296;
@@ -54,6 +55,7 @@ export function createSiegeLayer(platforms = [], assault = null) {
     if (assault?.gate && assault?.ram) installRam(layer, assault);
     if (assault?.ladders?.length) installLadders(layer, assault.ladders, assault.climbSeconds);
     if (assault?.defense) installSiegeDefense(layer, assault.defense);
+    if (assault?.rules?.enabled) installSiegeRules(layer, assault.bounds, assault.rules);
     return layer;
 }
 
@@ -142,6 +144,7 @@ function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS) {
     };
     const ramStep = layer.step;
     layer.step = (scene, dt) => {
+        if (scene.battleOver) return;
         ramStep?.(scene, dt);
         // Morale runs after damage in the same full step. Release deaths/routs there,
         // without adding a shared core hook or leaving a dead soldier in a slot.
@@ -212,7 +215,7 @@ const IMPACT_MS = 2200, RECRUIT_MS = 2000;
 const CREW_SLOTS = [[-.88, -.5], [.88, -.5], [-.88, .5], [.88, .5]];
 
 function installRam(layer, { gate: config, ram: start }) {
-    const gate = layer.gate = { blockerId: config.blockerId, hp: 900, maxHp: 900, broken: false, brokenAt: null };
+    const gate = layer.gate = { blockerId: config.blockerId, hp: config.hp ?? 900, maxHp: config.hp ?? 900, broken: false, brokenAt: null };
     const ram = layer.ram = {
         gx: start.gx, gy: start.gateOuterY + 3.2, team: start.team ?? 'red',
         restY: start.gateOuterY + 3.2, hitY: start.gateOuterY + 1.45,
@@ -229,7 +232,7 @@ function installRam(layer, { gate: config, ram: start }) {
         unit.moving = false;
     };
     layer.step = (scene, dt) => {
-        if (scene.resolvingOutcome) return;
+        if (scene.battleOver || scene.resolvingOutcome) return;
         if (ram.state === 'spent') {
             ram.gy = Math.min(ram.restY, ram.gy + .9 * dt);
             return;

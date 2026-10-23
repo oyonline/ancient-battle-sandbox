@@ -96,6 +96,11 @@ export function buildCampVisuals(rects) {
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(innerEast - innerWest, innerSouth - innerNorth).rotateX(-Math.PI / 2),
         new THREE.MeshStandardMaterial({ color: '#6a7448', roughness: 1 }));
     at(floor, cx, .015, cy); floor.receiveShadow = true; group.add(floor);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(L.rules.captureRadius - .06, L.rules.captureRadius, 64).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ color: '#c7dcff', transparent: true, opacity: .55, side: THREE.DoubleSide }));
+    ring.name = 'tent-capture-ring'; at(ring, cx, .035, cy); group.add(ring);
+    box(.08, 2.8, .08, cx, 1.4, cy, post);
+    box(.85, .5, .025, cx + .44, 2.45, cy, new THREE.MeshStandardMaterial({ color: '#387bdd' }));
     return group;
 }
 

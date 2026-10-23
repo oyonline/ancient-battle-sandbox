@@ -8,7 +8,8 @@ export const TOWER_HEIGHT = L.towerHeight / H_WORLD;
 export const ATTACKERS = L.attackers;
 export const DEFENDERS = L.defenders;
 
-export function createCampSiege(b, { ladders = false, defense = true } = {}) {
+export function createCampSiege(b, { ladders = false, defense = true, rules = {}, scatterSeed } = {}) {
+    const config = rules === false ? null : { ...L.rules, ...rules };
     const w = L.walkwayWidth, gateHalf = L.gateWidth / 2;
     const walkway = (id, x1, y1, x2, y2) => ({ id, x1, y1, x2, y2, height: WALKWAY_HEIGHT, kind: 'walkway' });
     const platforms = [
@@ -43,9 +44,10 @@ export function createCampSiege(b, { ladders = false, defense = true } = {}) {
             top: point(L.wallThickness / 2), landing: point(-w / 2) };
     }));
     const siege = createSiegeLayer(platforms, {
+        rules: config, scatterSeed,
         fenceCover: L.fenceCover, bounds: b, wallThickness: L.wallThickness,
         ...(defense ? { defense: { bounds: b, gateHalf, wallInset: L.defenderWallClearance } } : {}),
-        gate: { blockerId: 'south-gate' },
+        gate: { blockerId: 'south-gate', hp: config?.gateHp ?? L.rules.gateHp },
         ram: { gx: b.cx, gateOuterY: b.y2 + L.wallThickness, team: 'red' },
         ...(ladders ? { ladders: ladderConfigs, climbSeconds: L.climbSeconds } : {})
     });

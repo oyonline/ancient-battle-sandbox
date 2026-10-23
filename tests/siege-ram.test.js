@@ -42,7 +42,7 @@ function assault(extra = false) {
     const { ram, gate } = scene.siege;
     const frames = [], impacts = [];
     let arrivedAt = null, brokenAt = null, removedAt = null, enteredAt = null;
-    for (let frame = 1; frame <= 1911; frame++) {
+    for (let frame = 1; frame <= 2100; frame++) {
         const previousHits = ram.hits;
         step(scene);
         if (frame === 1) assert.deepEqual(ram.crew, crew.map(u => u.id), 'distance ties use ascending id');
@@ -60,7 +60,7 @@ function assault(extra = false) {
         }
         if (gate.broken && brokenAt === null) {
             brokenAt = frame;
-            assert.equal(ram.hits, 6);
+            assert.equal(ram.hits, 12);
             assert.equal(ram.state, 'spent');
             assert.ok(scene.dynamicBlockers.list.some(r => r.id === gate.blockerId), 'removal waits for next commit');
             assert.ok(crew.every(u => !u.siegeAnchor && !u.siegeRole));
@@ -70,8 +70,8 @@ function assault(extra = false) {
         frames.push({ units: state(scene), ram: [ram.gx, ram.gy, ram.state, ram.hits], hp: gate.hp });
     }
     assert.notEqual(arrivedAt, null);
-    assert.equal(impacts.length, 6);
-    assert.deepEqual(impacts.map(h => h.hp), [750, 600, 450, 300, 150, 0]);
+    assert.equal(impacts.length, 12);
+    assert.deepEqual(impacts.map(h => h.hp), Array.from({ length: 12 }, (_, i) => 1800 - 150 * (i + 1)));
     for (let i = 0; i < impacts.length; i++) assert.equal(impacts[i].frame - (i ? impacts[i - 1].frame : arrivedAt), 132);
     assert.equal(removedAt, brokenAt + 1);
     assert.equal(ram.gy, ram.restY, 'spent ram retreats to rest');
@@ -84,7 +84,7 @@ function assault(extra = false) {
     return { ...run, frames, impacts, arrivedAt, brokenAt, removedAt, enteredAt };
 }
 
-test('ram #1: four crew advance, sixth impact breaches, next step removes blocker, then retreat', t => {
+test('ram #1: four crew advance, twelfth impact breaches, next step removes blocker, then retreat', t => {
     const r = assault();
     t.diagnostic(`arrival=${r.arrivedAt}; impacts=${r.impacts.map(h => h.frame)}; breach=${r.brokenAt}; removal=${r.removedAt}`);
 });
@@ -94,7 +94,7 @@ test('ram #2: sealed camp prevents melee; breach opens navigation and both soldi
     t.diagnostic(`breach=${r.brokenAt}; entry=${r.enteredAt}; firstMelee=${r.hits[0]?.frame}; mutualHits=${r.hits.filter(h => h.from === r.red.id || h.target === r.red.id).length}`);
 });
 
-test('ram #3: real arrows kill three crew; ram freezes and a nearby replacement resumes impacts', t => {
+test('ram #3: three crew deaths trigger siege withdrawal; battle end freezes ram and crew', t => {
     const { scene, crew, hits } = camp();
     const { ram, gate } = scene.siege;
     while (ram.state !== 'hitting' && frameOf(scene) < 300) step(scene);
@@ -110,19 +110,20 @@ test('ram #3: real arrows kill three crew; ram freezes and a nearby replacement 
         step(scene);
         assert.deepEqual([ram.gx, ram.gy, gate.hp, ram.hitMs], stopped);
     }
+    assert.equal(scene.battleOver, true);
+    assert.equal(scene.endReason, '攻方受挫撤退');
+    assert.ok(crew.every(u => u.dead || u.withdrawn));
     const replacement = soldier(scene, 'red', ram.gx + 3, ram.gy);
-    const addedAt = frameOf(scene);
-    let recruitedAt = null, resumedAt = null;
+    const snapshot = () => ({ ram: structuredClone(ram), gate: structuredClone(gate),
+        crew: [...crew, replacement].map(u => ({ id: u.id, gx: u.gx, gy: u.gy, hp: u.hp,
+            dead: u.dead, withdrawn: u.withdrawn, role: u.siegeRole, anchor: u.siegeAnchor && { ...u.siegeAnchor } })) });
+    const ended = snapshot();
     for (let i = 0; i < 252; i++) {
-        step(scene);
-        if (replacement.siegeRole === 'ram' && recruitedAt === null) recruitedAt = frameOf(scene);
-        if (gate.hp < stopped[2]) { resumedAt = frameOf(scene); break; }
+        scene.siege.step(scene, 1 / 60);
+        assert.deepEqual(snapshot(), ended, 'battle end freezes ram and crew, including recruitment');
     }
-    assert.ok(recruitedAt > addedAt && recruitedAt - addedAt <= 120);
-    assert.notEqual(resumedAt, null);
-    assert.equal(ram.crew.filter(id => id !== null).length, 2);
-    assert.ok(!hits.some(h => h.from === replacement.id), 'replacement leaves ordinary combat AI');
-    t.diagnostic(`stopped=${stoppedAt}; added=${addedAt}; recruited=${recruitedAt} (${(recruitedAt - addedAt) * STEP_MS}ms); resumedImpact=${resumedAt}`);
+    assert.equal(replacement.siegeRole, undefined);
+    t.diagnostic(`stopped=${stoppedAt}; battleOver=${scene.battleOver}; frozenFrames=252`);
 });
 
 function control(layer) {
@@ -168,7 +169,7 @@ test('ram visuals: stepped breach opens retained leaves inward in 400ms; deploym
     assert.equal(ram.userData.log.position.z, .4);
     updateRamVisual(ram, scene.siege.ram, scene.siege.ram.lastHitAt + 300);
     assert.equal(ram.userData.log.position.z, 0);
-    assert.equal(fresh.scene.siege.gate.hp, 900);
+    assert.equal(fresh.scene.siege.gate.hp, 1800);
     assert.equal(fresh.scene.siege.gate.broken, false);
     assert.equal(fresh.scene.siege.ram.gy, fresh.scene.siege.ram.restY);
     assert.equal(fresh.scene.siege.ram.hits, 0);
@@ -180,10 +181,14 @@ test('ram visuals: stepped breach opens retained leaves inward in 400ms; deploym
     disposeCampVisuals(group); disposeCampVisuals(ram);
 });
 
-test('ram #6: routing crew are released to AI and fewer than two halt advancing and impacts', t => {
+test('ram #6: three crew routs below 35% release to ordinary AI and halt advancing and impacts', t => {
     for (const phase of ['advancing', 'hitting']) {
         const { scene, crew, blue } = camp();
         const { ram, gate } = scene.siege;
+        for (let i = 0; i < 6; i++) {
+            const filler = soldier(scene, 'red', 3 + i, 3);
+            filler.typeData = { ...filler.typeData, speed: 0, range: 0 };
+        }
         // Keep every slot threatened: deathmatch routers stop to rally when safe.
         blue.gx = ram.gx + 3;
         blue.gy = ram.gy;
@@ -211,6 +216,9 @@ test('ram #6: routing crew are released to AI and fewer than two halt advancing 
         const stopped = [ram.gx, ram.gy, gate.hp, ram.hitMs];
         step(scene);
         assert.equal(ram.crew.filter(id => id !== null).length, 1);
+        assert.equal(scene.siege.rules.attackerLossRate, .3);
+        assert.equal(scene.battleOver, false);
+        assert.ok(crew.every(u => !u.withdrawn));
         for (const unit of crew.slice(0, 3)) {
             assert.equal(unit.siegeRole, undefined);
             assert.equal(unit.siegeAnchor, undefined);
@@ -223,7 +231,7 @@ test('ram #6: routing crew are released to AI and fewer than two halt advancing 
             assert.deepEqual([ram.gx, ram.gy, gate.hp, ram.hitMs], stopped);
         }
         const moved = crew.slice(0, 3).map((u, i) => Math.hypot(u.gx - released[i][0], u.gy - released[i][1]));
-        assert.ok(moved.every(distance => distance > 0), 'released routers move under ordinary AI');
+        assert.ok(moved.every(d => d > 0), 'released crew return to ordinary AI and move');
         t.diagnostic(`${phase}: crew=1; stopped=${stopped}; routedDisplacement=${moved.map(d => d.toFixed(3))}`);
     }
 });

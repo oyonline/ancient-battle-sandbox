@@ -119,7 +119,8 @@ function assault() {
     installSiegeArrows(s);
     const frames = [], landed = Object.fromEntries(L.sides.map(side => [side, 0]));
     let brokenFrame = null;
-    for (let frame = 1; frame <= 1800; frame++) {
+    // 寨门 1800 hp、默认撞击间隔 2200ms，破门约在第 1803 帧；双跑均观察 2400 帧。
+    for (let frame = 1; frame <= 2400; frame++) {
         const climbs = s.units.filter(u => u.siegeClimb).map(u => [u, u.siegeClimb]);
         step(s);
         for (const [u, entry] of climbs) if (entry.progress === 1 && !u.siegeClimb) landed[entry.ladder.id.split('-')[0]]++;
@@ -141,10 +142,10 @@ function assault() {
     return { frames, landed, brokenFrame, battleOver: s.battleOver };
 }
 
-test('siege layout #4/#5: 1800 full steps land on every side and repeat exactly per frame', t => {
+test('siege layout #4/#5: 2400 full steps land on every side and repeat exactly per frame', t => {
     const first = assault(), second = assault();
     assert.deepEqual(second, first);
-    t.diagnostic(`frames=${first.frames.length}; landed=${JSON.stringify(first.landed)}; gateBrokenFrame=${first.brokenFrame}; battleOver=${first.battleOver}; identicalFrames=1800`);
+    t.diagnostic(`frames=${first.frames.length}; landed=${JSON.stringify(first.landed)}; gateBrokenFrame=${first.brokenFrame}; battleOver=${first.battleOver}; identicalFrames=2400`);
 });
 
 test('siege layout: redeploy rebuilds all platforms, ladders, anchors and ram state', () => {

@@ -116,6 +116,9 @@ export function stepBattle(scene, dt) {
         unit.moving = false;
         unit.pressX = 0; unit.pressY = 0;
         if (scene.resolvingOutcome) continue;
+        if (scene.siege?.rules?.defender(unit) && unit.moraleState === 'routing') {
+            scene.updateRoutedUnit(unit, dt); continue;
+        }
         if (scene.siege && unit.siegeAnchor) {
             if (scene.siege.ram && unit.siegeRole === 'ram') continue;
             scene.updateNormalUnit(unit, now, dt, unit.siegeAnchor);
@@ -156,6 +159,7 @@ export function stepBattle(scene, dt) {
     }
     scene.rebuildSpatial();
     scene.separate(dt);
+    scene.siege?.rules?.constrainRouts(scene);
     scene.rebuildSpatial();
     scene.updateArrows(dt, now);
     scene.braceQueue.flush((guard, cavalry) => scene.resolveBrace(guard, cavalry));
@@ -185,6 +189,7 @@ export function flushBattleImpacts(scene) {
     scene.collectingImpacts = false;
     const impacts = scene.battleImpacts;
     scene.battleImpacts = [];
+    scene.siege?.rules?.scaleImpacts(impacts);
     for (const { target, damage, from, attackStartedAt } of impacts) applyDamage(target, damage, from, attackStartedAt);
 }
 

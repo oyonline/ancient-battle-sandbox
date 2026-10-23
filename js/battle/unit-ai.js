@@ -278,6 +278,10 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
                         (e.chargeViewState === 'charge' || e.chargeViewState === 'pierce') &&
                         (unit.gx - e.gx) * (e.chargeViewX ?? 0) + (unit.gy - e.gy) * (e.chargeViewY ?? 0) > 0;
                     const score = e.hp * 1000 + e.id - (incoming ? 1e7 : 0);
+                    if (scene.siege?.rules?.config.fireDiscipline && unit.type === 'archer' && scene.siege.rules.defender(unit)) {
+                        if (scene.siege.rules.archerPrefers(unit, e, shootTarget)) shootTarget = e;
+                        return;
+                    }
                     if (score < bestScore) { bestScore = score; shootTarget = e; }
                 });
                 if (shootTarget) {

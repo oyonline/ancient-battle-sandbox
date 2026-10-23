@@ -296,7 +296,7 @@ export function installSiegeDefense(layer, config) {
     const assaultStep = layer.step;
     layer.step = (scene, dt) => {
         assaultStep?.(scene, dt);
-        if (scene.resolvingOutcome) return;
+        if (scene.battleOver || scene.resolvingOutcome) return;
         refreshEnemies(scene.units, scene);
         elapsed += dt * 1000;
         if (!initialized || elapsed + 1e-7 >= 2000) {

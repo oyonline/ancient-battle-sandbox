@@ -342,7 +342,7 @@ async function boot() {
         textures: { exists: () => false },
         time: { delayedCall(d, cb) { return { remove() {} }; } },
         fpsHud: null, groundImage: null, terrainLoading: false, lowFX: false,
-        showVictory(winner) { hudWinner = winner === 'red' ? '红方胜' : winner === 'blue' ? '蓝方胜' : '结束'; }
+        showVictory(winner) { hudWinner = `${winner === 'red' ? '红方胜' : winner === 'blue' ? '蓝方胜' : '结束'} · ${this.endReason}`; }
     });
     installSiegeArrows(scene);
     scene.resetBattleData();                  // 桩就位后重放初始化（士气/战报/时钟），与测试 harness 同套路
@@ -543,6 +543,8 @@ function sync3D(dt, now) {
             ` · 存活 <b class="red">${scene.redAlive}</b> / <b class="blue">${scene.blueAlive}</b> · 阵亡 ${scene.deadCount}` +
             (siege?.gate ? ` · ${siege.gate.broken ? '寨门已破' : `寨门 ${siege.gate.hp}/${siege.gate.maxHp}`}` : '') +
             (siege?.ladders ? ` · 登墙 ${siege.landedCount}` : '') +
+            (siege?.rules ? ` · 攻方伤亡 ${(siege.rules.attackerLossRate * 100).toFixed(1)}% / ${siege.rules.config.attackerRetreatFraction * 100}%` +
+                (siege.rules.attackersAtTent ? ` · 夺寨 ${siege.rules.captureSeconds.toFixed(1)}/${siege.rules.config.captureSeconds}s` : '') : '') +
             (hudWinner ? ` —— <b style="color:#ffd24a">${hudWinner}</b>` : '');
     }
 }

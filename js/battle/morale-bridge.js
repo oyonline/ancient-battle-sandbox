@@ -104,6 +104,7 @@ export function updateFallingBackUnit(scene, unit, now, dt) {
 }
 
 export function updateRoutedUnit(scene, unit, dt) {
+    if (scene.siege?.rules?.route(scene, unit, dt)) return;
     // 据点疗伤中的溃兵站定接受治疗（回满才归队），不再逃逸。
     if (scene.territory?.healing?.holdRouted(unit)) { unit.moving = false; return; }
     // 在安全友军身边停下等待重整，不能边逃边自动回满士气。
@@ -172,8 +173,8 @@ export function updateRoutedUnit(scene, unit, dt) {
         unit.typeData.speed * (breaking ? 0.7 : 1), dt);
 }
 
-export function withdrawUnit(scene, unit) {
-    if (scene.battleOptions.deathmatch) return;
+export function withdrawUnit(scene, unit, { force = false } = {}) {
+    if (scene.battleOptions.deathmatch && !force) return;
     if (unit.dead || unit.withdrawn || unit.battleId !== scene.battleId) return;
     unit.withdrawn = true;
     unit.actionEpoch = (unit.actionEpoch || 0) + 1;
