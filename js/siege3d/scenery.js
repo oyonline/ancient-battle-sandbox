@@ -11,6 +11,23 @@ import { CAMP_LAYOUT as L } from './layout.js';
 const WORLD = { W: board.W, H: board.H };
 const CAMP = { cx: WORLD.W / 2, cy: WORLD.H / 2 };
 
+// 外围带宽（与 buildSurroundings 的 SIDE 一致）
+const SURROUND_SIDE = 80;
+
+// 西侧河道（世界坐标）：中心线随 Z 弯曲、宽度随 Z 起伏。
+// 水面与树林避让共用同一套函数，避免树长进河里。
+const riverAxisAt = z => {
+    const t = (z + WORLD.H / 2 + SURROUND_SIDE) / (WORLD.H + SURROUND_SIDE * 2);
+    return -WORLD.W / 2 - 35 + Math.sin(t * Math.PI * 3) * 3;
+};
+const riverHalfWidthAt = z => {
+    const t = (z + WORLD.H / 2 + SURROUND_SIDE) / (WORLD.H + SURROUND_SIDE * 2);
+    // 原宽 2~6，共加宽 10 倍后取半宽（全宽 10~30，最东岸仍在战场西界 -35 之外）
+    return (4 + Math.sin(t * Math.PI * 2.5) * 2) * 5;
+};
+const inRiver = (x, z, margin = 2.5) =>
+    Math.abs(x - riverAxisAt(z)) < riverHalfWidthAt(z) + margin;
+
 // ---------- 确定性 mulberry32 ----------
 function mulberry32(seed) {
     let a = seed >>> 0;
@@ -374,7 +391,7 @@ export function createTentFlag() {
 // ============================================================================
 export function buildSurroundings(grassTexture) {
     const group = new THREE.Group();
-    const SIDE = 80;              // 外围带宽（世界单位）
+    const SIDE = SURROUND_SIDE;   // 外围带宽（世界单位）
     const HX = WORLD.W / 2;       // 战场半宽 = 35
     const HZ = WORLD.H / 2;       // 战场半高 = 35
     const TILE = WORLD.W / 8;     // 与战场地面 8×8 平铺同尺度：8.75 单位/瓦片
@@ -385,7 +402,7 @@ export function buildSurroundings(grassTexture) {
     outerTex.repeat.set(1, 1);
     outerTex.needsUpdate = true;
     const extMat = new THREE.MeshStandardMaterial({
-        map: outerTex, roughness: 1, color: 0xe6e6e6   // 比战场暗约 10%
+        map: outerTex, roughness: 1   // 与战场地面同一贴图、同一亮度，内外无色差
     });
     function strip(x1, x2, z1, z2) {
         const geo = new THREE.PlaneGeometry(x2 - x1, z2 - z1, 1, 1);
@@ -404,35 +421,54 @@ export function buildSurroundings(grassTexture) {
     strip(-HX - SIDE, -HX, -HZ, HZ);                 // 西
     strip(HX, HX + SIDE, -HZ, HZ);                   // 东
 
-    // ---- 河流（西侧外围，弯曲）----
-    const riverRng = mulberry32(998877);
+    // ---- 河流（西侧外围，弯曲；宽度为旧版 10 倍）----
+    // 连续带状网格：两岸宽度随 Z 平滑变化，不再像分段箱体那样出现锯齿台阶。
     const riverMat = new THREE.MeshStandardMaterial({
         color: 0x4f7f8a, transparent: true, opacity: 0.85, roughness: 0.4, metalness: 0.1
     });
     const bankMat = new THREE.MeshStandardMaterial({ color: 0x8a8370, roughness: 1 });
     const riverGroup = new THREE.Group();
-    const riverSegments = 50;
-    const segLen = (WORLD.H + SIDE * 2) / riverSegments;
-    const riverCenterX = -WORLD.W / 2 - 16;
-    for (let i = 0; i < riverSegments; i++) {
-        const t = i / riverSegments;
-        const zCenter = -WORLD.H / 2 - SIDE + segLen * (i + 0.5);
-        const curve = Math.sin(t * Math.PI * 3) * 3;
-        const width = 4 + Math.sin(t * Math.PI * 2.5) * 2;
-        const waterSeg = new THREE.Mesh(
-            new THREE.BoxGeometry(width, 0.02, segLen * 1.1), riverMat);
-        waterSeg.position.set(riverCenterX + curve, 0.01, zCenter);
-        waterSeg.receiveShadow = true;
-        riverGroup.add(waterSeg);
-        // 碎石岸
-        const bank = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.025, segLen * 1.1), bankMat);
-        bank.position.set(riverCenterX + curve + width / 2 + 0.35, 0.015, zCenter);
-        bank.receiveShadow = true;
-        riverGroup.add(bank);
-        const bank2 = bank.clone();
-        bank2.position.x = riverCenterX + curve - width / 2 - 0.35;
-        riverGroup.add(bank2);
+
+    // 生成一条沿 Z 延伸的带状网格；offset 为相对河心的左右边界偏移
+    function riverRibbon(edgeFn, y) {
+        const segs = 120;
+        const z0 = -WORLD.H / 2 - SIDE, z1 = WORLD.H / 2 + SIDE;
+        const pos = [];
+        for (let i = 0; i < segs; i++) {
+            const za = z0 + (z1 - z0) * (i / segs);
+            const zb = z0 + (z1 - z0) * ((i + 1) / segs);
+            const [ax1, ax2] = edgeFn(za);
+            const [bx1, bx2] = edgeFn(zb);
+            // 逆时针绕向（自上俯视 +Y 朝上）：A-C-B / B-C-D
+            pos.push(ax1, y, za, bx1, y, zb, ax2, y, za);
+            pos.push(ax2, y, za, bx1, y, zb, bx2, y, zb);
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        geo.computeVertexNormals();
+        return geo;
     }
+
+    const waterGeo = riverRibbon(z => {
+        const a = riverAxisAt(z), h = riverHalfWidthAt(z);
+        return [a - h, a + h];
+    }, 0.01);
+    const water = new THREE.Mesh(waterGeo, riverMat);
+    water.receiveShadow = true;
+    riverGroup.add(water);
+
+    // 碎石岸：沿水线内外各 0.8 宽的连续窄带
+    const BANK_W = 0.9;
+    const westBank = new THREE.Mesh(riverRibbon(z => {
+        const a = riverAxisAt(z), h = riverHalfWidthAt(z);
+        return [a - h - BANK_W, a - h + 0.05];
+    }, 0.02), bankMat);
+    const eastBank = new THREE.Mesh(riverRibbon(z => {
+        const a = riverAxisAt(z), h = riverHalfWidthAt(z);
+        return [a + h - 0.05, a + h + BANK_W];
+    }, 0.02), bankMat);
+    westBank.receiveShadow = true; eastBank.receiveShadow = true;
+    riverGroup.add(westBank, eastBank);
     group.add(riverGroup);
 
     // ---- 远山（北侧 + 东侧）----
@@ -442,11 +478,13 @@ export function buildSurroundings(grassTexture) {
     // 山脚冷灰、山腰渐浅、峰顶积雪，从造型与色调上和树冠彻底分开。
     const mountainRng = mulberry32(33333);
     const mountainMat = new THREE.MeshStandardMaterial({
-        vertexColors: true, flatShading: true, roughness: 1
+        vertexColors: true, flatShading: false, roughness: 1
     });
-    const ROCK_LOW = new THREE.Color('#6b766b');
-    const ROCK_MID = new THREE.Color('#95a093');
-    const SNOW = new THREE.Color('#e8ece6');
+    // 空气透视：远山颜色向雾色靠拢，与场景雾（#b9c5ab）自然衔接
+    const HAZE = new THREE.Color('#b9c5ab');
+    const ROCK_LOW = new THREE.Color('#7d887a');
+    const ROCK_MID = new THREE.Color('#aab4a5');
+    const SNOW = new THREE.Color('#eff3ec');
 
     // 只依赖坐标的确定性抖动
     const hashSign = (x, y, z, salt) => {
@@ -454,14 +492,28 @@ export function buildSurroundings(grassTexture) {
         h = Math.imul(h ^ (h >>> 13), 3266489917);
         return ((h ^ (h >>> 16)) >>> 0) / 4294967296 - 0.5;
     };
+    // 平滑值噪声（格点哈希 + smoothstep 双线性插值）：给山体提供连续的岩脊起伏，
+    // 而不是逐顶点白噪声那种"揉皱的纸"。只依赖坐标，换座/重演完全可复现。
+    const smoothNoise = (x, z, freq, salt) => {
+        const gx = x * freq, gz = z * freq;
+        const ix = Math.floor(gx), iz = Math.floor(gz);
+        const fx = gx - ix, fz = gz - iz;
+        const ux = fx * fx * (3 - 2 * fx), uz = fz * fz * (3 - 2 * fz);
+        const h00 = hashSign(ix, 0, iz, salt), h10 = hashSign(ix + 1, 0, iz, salt);
+        const h01 = hashSign(ix, 0, iz + 1, salt), h11 = hashSign(ix + 1, 0, iz + 1, salt);
+        return (h00 * (1 - ux) + h10 * ux) * (1 - uz) + (h01 * (1 - ux) + h11 * ux) * uz;
+    };
 
     const mountainGroup = new THREE.Group();
     // 一组山 = 一块连绵山体，整块只产生 1 个 draw call
     // axis='x' 生成东西向山脊（北侧），axis='z' 生成南北向山脊（东侧）
     function addRidge(cx, cz, spanX, spanZ, baseHeight, salt, axis = 'x') {
-        const nx = 24, nz = 7;
-        const count = 4 + Math.floor(mountainRng() * 3);
+        // 网格分辨率决定山体的形体语言：24×7 只能撑出粗略折面，
+        // 抬到 48×16 之后才有足够的起伏去承载沟壑与岩脊。
+        const nx = 48, nz = 16;
         const spanAlong = axis === 'x' ? spanX : spanZ;
+        // 峰数随山脊长度走：长脊用更多、更小的峰，脊线呈细碎锯齿而不是几个大圆包
+        const count = Math.max(4, Math.min(9, Math.round(spanAlong / 8)));
         const peaks = [];
         for (let i = 0; i < count; i++) {
             const along = count > 1 ? i / (count - 1) - 0.5 : 0;
@@ -470,8 +522,8 @@ export function buildSurroundings(grassTexture) {
                 x: axis === 'x' ? (along + jitter) * spanX * 0.9 : (mountainRng() - 0.5) * spanX * 0.35,
                 z: axis === 'x' ? (mountainRng() - 0.5) * spanZ * 0.35 : (along + jitter) * spanZ * 0.9,
                 // 两端压低、中间抬高，再叠随机，脊线不齐平
-                h: baseHeight * (0.5 + mountainRng() * 0.6) * (1 - Math.abs(along) * 0.3),
-                r: spanAlong * (0.15 + mountainRng() * 0.08)
+                h: baseHeight * (0.4 + mountainRng() * 0.72) * (1 - Math.abs(along) * 0.3),
+                r: spanAlong * (0.17 + mountainRng() * 0.07)
             });
         }
         const grid = [];
@@ -481,15 +533,25 @@ export function buildSurroundings(grassTexture) {
                 const x = u * spanX, z = v * spanZ;
                 let y = 0;
                 for (const p of peaks) {
-                    // 跨脊方向压缩 1.7 倍 → 山体拉成脊，而不是孤立圆丘
+                    // 跨脊方向压缩 1.35 倍 → 山体拉成脊，同时保留足够的进深，
+                    // 从高空看是"坡—脊—坡"的厚山体，而不是一堵竖立的岩墙
                     const d = axis === 'x'
-                        ? Math.hypot(x - p.x, (z - p.z) * 1.7)
-                        : Math.hypot((x - p.x) * 1.7, z - p.z);
-                    if (d < p.r) { const t = 1 - d / p.r; y += p.h * t * t * (3 - 2 * t); }
+                        ? Math.hypot(x - p.x, (z - p.z) * 1.35)
+                        : Math.hypot((x - p.x) * 1.35, z - p.z);
+                    // t^1.5：山脚宽缓、近顶急收，轮廓像真实山峰而不是圆丘
+                    if (d < p.r) { const t = 1 - d / p.r; y += p.h * Math.pow(t, 1.5); }
                 }
-                // 四周边缘衰减到 0，山脚落地；再叠坐标抖动让轮廓不生硬
+                // 四周边缘衰减到 0，山脚落地；再叠坐标抖动让轮廓不生硬。
+                // 指数取 0.5 让山脚过渡更缓，相邻山脊的底部能连成一片
                 const fu = Math.max(0, 1 - Math.abs(u) * 2), fv = Math.max(0, 1 - Math.abs(v) * 2);
-                y *= Math.pow(fu * fv, 0.75) * (0.84 + hashSign(x, 0, z, salt) * 0.32);
+                const edge = Math.pow(fu * fv, 0.5);
+                // 三倍频平滑噪声：大尺度岩脊 + 中尺度沟壑 + 小尺度碎石。
+                // 以 edge 加权，山脚处细节收敛到 0，不会把山脚顶起来悬空。
+                const detail = (smoothNoise(x, z, 0.12, salt + 11) * 1.0 +
+                    smoothNoise(x, z, 0.42, salt + 23) * 0.45 +
+                    smoothNoise(x, z, 1.1, salt + 37) * 0.15) * baseHeight * 0.12 * edge;
+                // 整体起伏用低频平滑噪声调制（逐顶点白噪声会在坡面上形成竖条状棱线）
+                y = y * edge * (0.88 + smoothNoise(x, z, 0.25, salt) * 0.22) + detail;
                 grid.push({ x, y: Math.max(0, y), z });
             }
         }
@@ -498,13 +560,21 @@ export function buildSurroundings(grassTexture) {
         const scale = baseHeight / maxY;
         const positions = [], colors = [];
         const c = new THREE.Color();
+        const rock = new THREE.Color();
         const pushVert = p => {
-            // pow 0.65 钝化峰顶：山顶呈宽脊而不是针尖
-            const y = baseHeight * Math.pow(Math.min(1, (p.y * scale) / baseHeight), 0.65);
+            // pow 0.8：轻微钝化峰顶，保留主轴脊线的形状
+            const y = baseHeight * Math.pow(Math.min(1, (p.y * scale) / baseHeight), 0.8);
             positions.push(p.x, y, p.z);
             const t = y / baseHeight;
-            if (t > 0.78) c.copy(SNOW);
-            else c.copy(ROCK_LOW).lerp(ROCK_MID, Math.min(1, t / 0.78));
+            // 雪线不再一刀切：0.72~1.0 之间平滑过渡，只有近峰顶残雪，山腰留岩石
+            const s = Math.max(0, Math.min(1, (t - 0.72) / 0.28));
+            rock.copy(ROCK_LOW).lerp(ROCK_MID, Math.min(1, t / 0.75));
+            c.copy(rock).lerp(SNOW, s * s * (3 - 2 * s) * 0.95);
+            // 岩面明暗微扰，避免整座山是一个纯色块
+            c.multiplyScalar(0.94 + hashSign(p.x, 0, p.z, salt + 51) * 0.12);
+            // 越远越淡：按山体到场地中心的水平距离掺入雾色
+            const d = Math.hypot(cx + p.x, cz + p.z) - 45;
+            c.lerp(HAZE, Math.max(0, Math.min(0.42, d / 260)));
             colors.push(c.r, c.g, c.b);
         };
         for (let iz = 0; iz < nz - 1; iz++) {
@@ -525,26 +595,31 @@ export function buildSurroundings(grassTexture) {
         m.castShadow = true; m.receiveShadow = true;
         mountainGroup.add(m);
     }
-    // 北侧：三道连绵山脊（东西向）
+    // 北侧：三道低矮长山脊（东西向），整体后退到雾里，只留一层剪影。
+    // 中心线整体东移，避开西侧河道。
     for (let i = 0; i < 3; i++) {
         addRidge(
-            (i - 1) * 30 + (mountainRng() - 0.5) * 8,
-            -WORLD.H / 2 - 28 - mountainRng() * 12,
-            34 + mountainRng() * 10, 12,
-            20 + mountainRng() * 12,
+            8 + i * 28 + (mountainRng() - 0.5) * 8,
+            -WORLD.H / 2 - 45 - mountainRng() * 8,
+            62 + mountainRng() * 14, 22,
+            17 + mountainRng() * 7,
             1000 + i * 131, 'x'
         );
     }
-    // 东侧：两道山脊（南北向）
+    // 东侧：两道长山脊（南北向）
     for (let i = 0; i < 2; i++) {
         addRidge(
-            WORLD.W / 2 + 28 + mountainRng() * 12,
-            (i - 0.5) * 34 + (mountainRng() - 0.5) * 8,
-            12, 34 + mountainRng() * 10,
-            18 + mountainRng() * 10,
+            WORLD.W / 2 + 44 + mountainRng() * 8,
+            (i - 0.5) * 40 + (mountainRng() - 0.5) * 8,
+            22, 72 + mountainRng() * 10,
+            15 + mountainRng() * 7,
             5000 + i * 149, 'z'
         );
     }
+    // 远山背景带：北、东各一道超长低脊，把近处山脊连成环抱山脉，
+    // 消除转角断口，同时给山脊背后补一层更淡的剪影
+    addRidge(40, -WORLD.H / 2 - 65, 150, 26, 13, 7000, 'x');
+    addRidge(WORLD.W / 2 + 65, 0, 24, 170, 11, 8000, 'z');
     group.add(mountainGroup);
 
     // ---- 外围小树林（南侧 + 西侧）----
@@ -592,7 +667,6 @@ function buildOutskirtsForest(maxInstances = 1500) {
     // 旧版在 gx/gy ∈ [0,70] 的战场坐标里撒点，等于把 1500 棵树全种进了战场——本函数已彻底改为外圈采样。
     const HX = WORLD.W / 2, HZ = WORLD.H / 2;
     const NEAR = 2, FAR = 60;
-    const RIVER_X1 = -60, RIVER_X2 = -42;   // 西侧河道 + 两岸（世界坐标），树林不得覆盖
     const SOUTH_TREES = 900, WEST_TREES = maxInstances - 900;
 
     const place = (x, z) => {
@@ -606,18 +680,19 @@ function buildOutskirtsForest(maxInstances = 1500) {
     };
 
     let slot = 0;
-    // 南侧带：z ∈ [HZ+2, HZ+60]，x 覆盖整个外围宽度
+    // 南侧带：z ∈ [HZ+2, HZ+60]，x 覆盖整个外围宽度（河流穿过的位置留空）
     for (let i = 0; i < SOUTH_TREES * 12 && slot < SOUTH_TREES; i++) {
         const x = -HX - FAR + rng() * (WORLD.W + FAR * 2);
         const z = HZ + NEAR + rng() * (FAR - NEAR);
+        if (inRiver(x, z)) continue;
         place(x, z);
     }
-    // 西侧带：x ∈ [-(HX+60), -(HX+2)]，z ∈ [-45, HZ+60]（避开北侧山体），避开河道
+    // 西侧带：x ∈ [-(HX+60), -(HX+2)]，z ∈ [-45, HZ+60]（避开北侧山体与河道）
     const westEnd = SOUTH_TREES;
     for (let i = 0; i < WEST_TREES * 12 && slot < westEnd + WEST_TREES; i++) {
         const x = -(HX + NEAR) - rng() * (FAR - NEAR);
         const z = -45 + rng() * (HZ + FAR + 45);
-        if (x > RIVER_X1 && x < RIVER_X2) continue;
+        if (inRiver(x, z)) continue;
         place(x, z);
     }
     mesh.count = slot;
