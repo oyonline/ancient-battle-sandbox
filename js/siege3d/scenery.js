@@ -436,47 +436,114 @@ export function buildSurroundings(grassTexture) {
     group.add(riverGroup);
 
     // ---- 远山（北侧 + 东侧）----
+    // 旧版用三层圆锥叠成山，与外圈树冠同为"多层锥"，隔着一层雾就像巨树。
+    // 现在改为连续高度场山脊：数个峰沿脊线叠加成一块完整山体，四周边缘高度
+    // 衰减到 0，山脚因此贴合地面，既没有独立锥体的悬空缝，也不会露出"尖塔阵"。
+    // 山脚冷灰、山腰渐浅、峰顶积雪，从造型与色调上和树冠彻底分开。
     const mountainRng = mulberry32(33333);
-    const mountainMatBody = new THREE.MeshStandardMaterial({ color: 0x7a7f6a, flatShading: true, roughness: 1 });
+    const mountainMat = new THREE.MeshStandardMaterial({
+        vertexColors: true, flatShading: true, roughness: 1
+    });
+    const ROCK_LOW = new THREE.Color('#6b766b');
+    const ROCK_MID = new THREE.Color('#95a093');
+    const SNOW = new THREE.Color('#e8ece6');
+
+    // 只依赖坐标的确定性抖动
+    const hashSign = (x, y, z, salt) => {
+        let h = Math.imul(Math.round(x * 71) ^ Math.round(y * 53) ^ Math.round(z * 97) ^ salt, 2246822519);
+        h = Math.imul(h ^ (h >>> 13), 3266489917);
+        return ((h ^ (h >>> 16)) >>> 0) / 4294967296 - 0.5;
+    };
 
     const mountainGroup = new THREE.Group();
-    // 北侧
-    for (let i = 0; i < 8; i++) {
-        const gx = (i / 7 - 0.5) * WORLD.W + (mountainRng() - 0.5) * 4;
-        const gz = -WORLD.H / 2 - 15 - mountainRng() * 20;
-        const h = 8 + mountainRng() * 14;
-        const r = 4 + mountainRng() * 3;
-        const cones = [
-            new THREE.ConeGeometry(r * 1.1, h * 0.6, 5).translate(0, h * 0.3, 0),
-            new THREE.ConeGeometry(r * 0.7, h * 0.5, 6).translate(0, h * 0.6, 0),
-            new THREE.ConeGeometry(r * 0.35, h * 0.35, 4).translate(0, h * 0.82, 0),
-        ];
-        const merged = mergeGeometries(cones);
-        cones.forEach(c => c.dispose());
-        merged.translate(gx, 0, gz);
-        merged.rotateY(mountainRng() * Math.PI * 2);
-        const m = new THREE.Mesh(merged, mountainMatBody);
+    // 一组山 = 一块连绵山体，整块只产生 1 个 draw call
+    // axis='x' 生成东西向山脊（北侧），axis='z' 生成南北向山脊（东侧）
+    function addRidge(cx, cz, spanX, spanZ, baseHeight, salt, axis = 'x') {
+        const nx = 24, nz = 7;
+        const count = 4 + Math.floor(mountainRng() * 3);
+        const spanAlong = axis === 'x' ? spanX : spanZ;
+        const peaks = [];
+        for (let i = 0; i < count; i++) {
+            const along = count > 1 ? i / (count - 1) - 0.5 : 0;
+            const jitter = (mountainRng() - 0.5) * 0.08;
+            peaks.push({
+                x: axis === 'x' ? (along + jitter) * spanX * 0.9 : (mountainRng() - 0.5) * spanX * 0.35,
+                z: axis === 'x' ? (mountainRng() - 0.5) * spanZ * 0.35 : (along + jitter) * spanZ * 0.9,
+                // 两端压低、中间抬高，再叠随机，脊线不齐平
+                h: baseHeight * (0.5 + mountainRng() * 0.6) * (1 - Math.abs(along) * 0.3),
+                r: spanAlong * (0.15 + mountainRng() * 0.08)
+            });
+        }
+        const grid = [];
+        for (let iz = 0; iz < nz; iz++) {
+            for (let ix = 0; ix < nx; ix++) {
+                const u = ix / (nx - 1) - 0.5, v = iz / (nz - 1) - 0.5;
+                const x = u * spanX, z = v * spanZ;
+                let y = 0;
+                for (const p of peaks) {
+                    // 跨脊方向压缩 1.7 倍 → 山体拉成脊，而不是孤立圆丘
+                    const d = axis === 'x'
+                        ? Math.hypot(x - p.x, (z - p.z) * 1.7)
+                        : Math.hypot((x - p.x) * 1.7, z - p.z);
+                    if (d < p.r) { const t = 1 - d / p.r; y += p.h * t * t * (3 - 2 * t); }
+                }
+                // 四周边缘衰减到 0，山脚落地；再叠坐标抖动让轮廓不生硬
+                const fu = Math.max(0, 1 - Math.abs(u) * 2), fv = Math.max(0, 1 - Math.abs(v) * 2);
+                y *= Math.pow(fu * fv, 0.75) * (0.84 + hashSign(x, 0, z, salt) * 0.32);
+                grid.push({ x, y: Math.max(0, y), z });
+            }
+        }
+        // 归一化到目标高度，避免多峰叠加后过高
+        const maxY = Math.max(...grid.map(p => p.y)) || 1;
+        const scale = baseHeight / maxY;
+        const positions = [], colors = [];
+        const c = new THREE.Color();
+        const pushVert = p => {
+            // pow 0.65 钝化峰顶：山顶呈宽脊而不是针尖
+            const y = baseHeight * Math.pow(Math.min(1, (p.y * scale) / baseHeight), 0.65);
+            positions.push(p.x, y, p.z);
+            const t = y / baseHeight;
+            if (t > 0.78) c.copy(SNOW);
+            else c.copy(ROCK_LOW).lerp(ROCK_MID, Math.min(1, t / 0.78));
+            colors.push(c.r, c.g, c.b);
+        };
+        for (let iz = 0; iz < nz - 1; iz++) {
+            for (let ix = 0; ix < nx - 1; ix++) {
+                const a = grid[iz * nx + ix], b = grid[iz * nx + ix + 1];
+                const d = grid[(iz + 1) * nx + ix], e = grid[(iz + 1) * nx + ix + 1];
+                // 逆时针绕向，保证法线朝上
+                pushVert(a); pushVert(d); pushVert(b);
+                pushVert(b); pushVert(d); pushVert(e);
+            }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geo.computeVertexNormals();
+        geo.translate(cx, -0.3, cz);
+        const m = new THREE.Mesh(geo, mountainMat);
         m.castShadow = true; m.receiveShadow = true;
         mountainGroup.add(m);
     }
-    // 东侧
-    for (let i = 0; i < 6; i++) {
-        const gx = WORLD.W / 2 + 15 + mountainRng() * 20;
-        const gz = (i / 5 - 0.5) * WORLD.H + (mountainRng() - 0.5) * 4;
-        const h = 8 + mountainRng() * 10;
-        const r = 3.5 + mountainRng() * 2.5;
-        const cones = [
-            new THREE.ConeGeometry(r * 1.1, h * 0.6, 5).translate(0, h * 0.3, 0),
-            new THREE.ConeGeometry(r * 0.7, h * 0.5, 6).translate(0, h * 0.6, 0),
-            new THREE.ConeGeometry(r * 0.35, h * 0.35, 4).translate(0, h * 0.82, 0),
-        ];
-        const merged = mergeGeometries(cones);
-        cones.forEach(c => c.dispose());
-        merged.translate(gx, 0, gz);
-        merged.rotateY(mountainRng() * Math.PI * 2);
-        const m = new THREE.Mesh(merged, mountainMatBody);
-        m.castShadow = true; m.receiveShadow = true;
-        mountainGroup.add(m);
+    // 北侧：三道连绵山脊（东西向）
+    for (let i = 0; i < 3; i++) {
+        addRidge(
+            (i - 1) * 30 + (mountainRng() - 0.5) * 8,
+            -WORLD.H / 2 - 28 - mountainRng() * 12,
+            34 + mountainRng() * 10, 12,
+            20 + mountainRng() * 12,
+            1000 + i * 131, 'x'
+        );
+    }
+    // 东侧：两道山脊（南北向）
+    for (let i = 0; i < 2; i++) {
+        addRidge(
+            WORLD.W / 2 + 28 + mountainRng() * 12,
+            (i - 0.5) * 34 + (mountainRng() - 0.5) * 8,
+            12, 34 + mountainRng() * 10,
+            18 + mountainRng() * 10,
+            5000 + i * 149, 'z'
+        );
     }
     group.add(mountainGroup);
 
