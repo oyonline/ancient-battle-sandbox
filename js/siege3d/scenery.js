@@ -168,8 +168,9 @@ export function buildGrassPatches(cap = 6000) {
 export function buildCampTents(siege) {
     const group = new THREE.Group();
     const rng = mulberry32(77777);
-    const tentMatBig = new THREE.MeshStandardMaterial({ color: '#e8e2cf', roughness: 1 });
-    const tentMatSmall = new THREE.MeshStandardMaterial({ color: '#cfc8b2', roughness: 1 });
+    const clothMat = new THREE.MeshStandardMaterial({ color: '#c9c2ac', roughness: 1 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: '#e6e0cc', roughness: 1 });
+    const trimMat = new THREE.MeshStandardMaterial({ color: '#6f6353', roughness: 1 });
     const poleMat = new THREE.MeshStandardMaterial({ color: '#6e4f2e', roughness: 1 });
 
     // 避让区域
@@ -196,41 +197,140 @@ export function buildCampTents(siege) {
         return false;
     }
 
-    const interior = half - 1.0;
-    const tentLocs = [];
-    for (let i = 0; i < 200 && tentLocs.length < 7; i++) {
-        const gx = CAMP.cx + (rng() - 0.5) * interior * 1.8;
-        const gy = CAMP.cy + (rng() - 0.5) * interior * 1.8;
-        if (avoid(gx, gy, 1.2)) continue;
-        if (tentLocs.some(t => Math.hypot(t.gx - gx, t.gy - gy) < 1.8)) continue;
-        tentLocs.push({ gx, gy });
+    // 扎营布局：预备队方阵钉死在 x 30.1~39.9 × y 34.4~39.6（见 siege-defense.js
+    // 的 reservePosts），地面弓手站在墙内 2 格线，因此小帐篷只能落在北半区
+    // y 28~34 的净空带里：两排四列、沿中轴镜像，门（山墙）朝南正对中军。
+    const tentRows = [29.2, 32.6];
+    const westCols = [29.6, 31.7];
+    const tentPairs = [];
+    for (const gy of tentRows) for (const gx of westCols)
+        tentPairs.push({ w: { gx, gy }, e: { gx: 2 * CAMP.cx - gx, gy } });
+    const tentLocs = tentPairs.filter(p => !avoid(p.w.gx, p.w.gy, .9) && !avoid(p.e.gx, p.e.gy, .9));
+
+    // 中军大帐：开敞式帅棚——四角立柱 + 深色挑檐 + 四坡尖顶，无帐身。
+    // 预备队方阵北面三排（gy 34.4~35.9）正落在棚内，封闭帐身会穿模；
+    // 凉棚让"中军听令"的画面成立，夺旗点也一眼可辨。
+    function buildCommandTent(gx, gy) {
+        const tent = new THREE.Group();
+        const eaveMat = new THREE.MeshStandardMaterial({ color: '#7a4a38', roughness: 1 });
+        const add = (geo, mat, x, y, z, rotY = 0) => {
+            const m = new THREE.Mesh(geo, mat);
+            m.position.set(x, y, z); m.rotation.y = rotY;
+            m.castShadow = true; m.receiveShadow = true;
+            tent.add(m); return m;
+        };
+        // 四角立柱（加高到 1.9，士兵在柱间穿行不碰头）
+        for (const [px, pz] of [[-.85, -.85], [.85, -.85], [-.85, .85], [.85, .85]])
+            add(new THREE.BoxGeometry(0.08, 1.9, 0.08), poleMat, px, 0.95, pz);
+        // 深色挑檐
+        add(new THREE.CylinderGeometry(1.02, 1.22, 0.16, 4, 1), eaveMat, 0, 1.98, 0, Math.PI / 4);
+        // 四坡尖顶 + 顶杆宝珠
+        add(new THREE.ConeGeometry(1.05, 0.85, 4), eaveMat, 0, 2.485, 0, Math.PI / 4);
+        add(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 6), poleMat, 0, 3.03, 0);
+        add(new THREE.SphereGeometry(0.08, 8, 6), eaveMat, 0, 3.31, 0);
+        tent.position.set(gx - WORLD.W / 2, 0, gy - WORLD.H / 2);
+        return tent;
     }
 
-    // 把中央也加进去（大帐，覆盖夺旗圈）
-    tentLocs.push({ gx: CAMP.cx, gy: CAMP.cy, big: true });
+    group.add(buildCommandTent(CAMP.cx, CAMP.cy));
 
-    for (const t of tentLocs) {
-        const isBig = !!t.big;
-        const sx = isBig ? 1.5 : 1;
-        const sz = isBig ? 1.5 : 1;
-        const h = isBig ? 2.2 : 1.5;
+    // ---- 小帐篷模板 ----
+    // 帆布墙 + 双坡顶 + 两端山墙 + 门帘 + 地布 + 脊杆/立杆/拉绳/地钉。
+    // 按材质合并成 3 份几何，8 顶帐篷共用，共 24 个 draw call。
+    function buildTentTemplate() {
+        const hw = .7, hd = .78, wallH = .45, apexY = 1.25;
+        const buckets = new Map();
+        const bucket = mat => {
+            if (!buckets.has(mat)) buckets.set(mat, { quads: [], prims: [] });
+            return buckets.get(mat);
+        };
+        const tri = (out, a, b, c) => out.push(...a, ...b, ...c);
+        const quad = (out, a, b, c, d) => { tri(out, a, b, c); tri(out, a, c, d); };
+        // 合并要求属性一致：去掉 uv，统一成非索引几何。
+        const prep = geo => { geo.deleteAttribute('uv'); return geo.index ? geo.toNonIndexed() : geo; };
+        const prim = (mat, geo, pos = [0, 0, 0], rot = null) => {
+            const m = new THREE.Matrix4();
+            if (rot) m.makeRotationFromEuler(new THREE.Euler(rot[0] || 0, rot[1] || 0, rot[2] || 0));
+            m.setPosition(pos[0], pos[1], pos[2]);
+            bucket(mat).prims.push(prep(geo.applyMatrix4(m)));
+        };
+        const strut = (mat, a, b, r) => {
+            const va = new THREE.Vector3(...a), vb = new THREE.Vector3(...b);
+            const dir = new THREE.Vector3().subVectors(vb, va);
+            const geo = new THREE.CylinderGeometry(r, r, dir.length(), 5, 1);
+            const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+            const m = new THREE.Matrix4().makeRotationFromQuaternion(q);
+            m.setPosition(va.add(vb).multiplyScalar(.5));
+            bucket(mat).prims.push(prep(geo.applyMatrix4(m)));
+        };
 
-        const shape = new THREE.Shape();
-        shape.moveTo(-sx, 0); shape.lineTo(0, h * 0.6); shape.lineTo(sx, 0);
-        const extrude = new THREE.ExtrudeGeometry(shape, { depth: sz * 2, bevelEnabled: false });
-        extrude.rotateX(-Math.PI / 2);
-        extrude.translate(0, 0, -sz);
+        // 帆布墙与两端五边形山墙（法线朝外）
+        const cloth = bucket(clothMat).quads;
+        quad(cloth, [-hw, 0, -hd], [-hw, 0, hd], [-hw, wallH, hd], [-hw, wallH, -hd]);
+        quad(cloth, [hw, 0, hd], [hw, 0, -hd], [hw, wallH, -hd], [hw, wallH, hd]);
+        tri(cloth, [-hw, 0, -hd], [-hw, wallH, -hd], [0, apexY, -hd]);
+        tri(cloth, [-hw, 0, -hd], [0, apexY, -hd], [hw, wallH, -hd]);
+        tri(cloth, [-hw, 0, -hd], [hw, wallH, -hd], [hw, 0, -hd]);
+        tri(cloth, [-hw, 0, hd], [hw, 0, hd], [hw, wallH, hd]);
+        tri(cloth, [-hw, 0, hd], [hw, wallH, hd], [0, apexY, hd]);
+        tri(cloth, [-hw, 0, hd], [0, apexY, hd], [-hw, wallH, hd]);
+        // 双坡屋顶单独用更亮的帆布，并向四面出挑 5cm，形成檐口阴影线
+        const roof = bucket(roofMat).quads;
+        const ex = hw + .05, ez = hd + .05, ey = wallH - .02;
+        quad(roof, [-ex, ey, -ez], [-ex, ey, ez], [0, apexY, ez], [0, apexY, -ez]);
+        quad(roof, [ex, ey, ez], [ex, ey, -ez], [0, apexY, -ez], [0, apexY, ez]);
 
-        const tent = new THREE.Mesh(extrude, isBig ? tentMatBig : tentMatSmall);
-        tent.position.set(t.gx - WORLD.W / 2, 0, t.gy - WORLD.H / 2);
-        tent.rotation.y = rng() * Math.PI * 2;
-        tent.castShadow = true; tent.receiveShadow = true;
+        // 门帘：开在 +Z 山墙，帐篷朝向营内街道
+        const dk = bucket(trimMat).quads;
+        quad(dk, [-.28, 0, hd + .012], [.28, 0, hd + .012], [.28, .95, hd + .012], [-.28, .95, hd + .012]);
+        // 地布：贴地一圈深色帆布，压住帐脚
+        prim(trimMat, new THREE.PlaneGeometry(2 * hw + .34, 2 * hd + .3).rotateX(-Math.PI / 2), [0, .02, 0]);
+
+        // 脊杆（两端出头）、两片山墙立杆、四根拉绳与地钉
+        prim(poleMat, new THREE.CylinderGeometry(.035, .035, 2 * hd + .26, 6).rotateX(Math.PI / 2), [0, apexY, 0]);
+        for (const z of [-hd, hd]) prim(poleMat, new THREE.BoxGeometry(.06, apexY, .06), [0, apexY / 2, z]);
+        for (const z of [-hd, hd]) for (const sx of [-1, 1]) {
+            const out = Math.sign(z);
+            const top = [0, apexY - .06, z + out * .12];
+            const foot = [sx * .62, .02, z + out * .52];
+            strut(poleMat, top, foot, .012);
+            prim(poleMat, new THREE.BoxGeometry(.07, .12, .07), [foot[0], .06, foot[2]]);
+        }
+
+        const parts = [];
+        for (const [mat, b] of buckets) {
+            const geos = b.prims.slice();
+            if (b.quads.length) {
+                const g = new THREE.BufferGeometry();
+                g.setAttribute('position', new THREE.Float32BufferAttribute(b.quads, 3));
+                g.computeVertexNormals();
+                geos.push(g);
+            }
+            parts.push({ geo: mergeGeometries(geos, false), mat });
+        }
+        return parts;
+    }
+
+    const tentParts = buildTentTemplate();
+    const addSmallTent = (gx, gy, rotY, s) => {
+        const tent = new THREE.Group();
+        for (const { geo, mat } of tentParts) {
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.castShadow = true; mesh.receiveShadow = true;
+            tent.add(mesh);
+        }
+        tent.position.set(gx - WORLD.W / 2, 0, gy - WORLD.H / 2);
+        tent.rotation.y = rotY;
+        tent.scale.setScalar(s);
         group.add(tent);
-
-        const pole = new THREE.Mesh(new THREE.BoxGeometry(0.05, h, 0.05), poleMat);
-        pole.position.set(t.gx - WORLD.W / 2, h / 2, t.gy - WORLD.H / 2);
-        pole.castShadow = true;
-        group.add(pole);
+    };
+    // 两组帐篷都让山墙朝向相机（+Z），屋脊沿南北向，远看就是三角帐形；
+    // 每对共用一组种子扰动并镜像，保持左右视觉一致。
+    for (const { w, e } of tentLocs) {
+        const jx = (rng() - .5) * .28, jy = (rng() - .5) * .28;
+        const jr = (rng() - .5) * .07, s = .95 + rng() * .1;
+        addSmallTent(w.gx + jx, w.gy + jy, jr, s);
+        addSmallTent(e.gx - jx, e.gy + jy, -jr, s);
     }
 
     return group;
@@ -246,7 +346,7 @@ export function createTentFlag() {
     // 再向 +Z 让 0.03，遮住 walls.js 里旧的那块静态旗板（本期不允许改 walls.js）。
     const worldX = CAMP.cx - WORLD.W / 2 + 0.5;
     const worldZ = CAMP.cy - WORLD.H / 2 + 0.03;
-    mesh.position.set(worldX, 2.45, worldZ);
+    mesh.position.set(worldX, 3.0, worldZ);
 
     // 缓存原始顶点
     const pos = geo.attributes.position;
