@@ -14,11 +14,12 @@ import { campBounds, queueCampWalls, buildCampVisuals, disposeCampVisuals, updat
 import { buildRamVisual, updateRamVisual } from './ram.js';
 import { CAMP_LAYOUT, LADDER_TOP_WORLD } from './layout.js';
 import { createCampSiege, siegeDeployment, installSiegeArrows, H_WORLD, ATTACKERS, DEFENDERS } from './deployment.js';
-import { buildSiegeVisuals, climberWorldHeight } from './platforms.js';
+import { buildSiegeVisuals, buildLadderVisual, climberWorldHeight, LAD_LEN } from './platforms.js';
 import { CavalryAI, unitRand } from '../units.js';
 import { board } from '../board.js';
 import { TW, TH, OX, OY } from '../render/metrics.js';
 import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
+import { ERECT_MS } from '../battle/siege.js';
 import {
     buildGrassTexture, buildGrassPatches, buildCampTents, createTentFlag,
     buildSurroundings
@@ -290,6 +291,7 @@ function throttled(key, gap = 60) { const t = performance.now(); if (t - (lastSo
 
 let groundBuilt = false, campVisuals = null, campLayer = null, campVersion = -1;
 let gateRects = [], ramVisual = null, heardRamHits = 0, heardGateBreak = false;
+let ladderVisuals = [];
 let _tentFlag = null;
 function refreshCampVisuals() {
     const layer = scene.dynamicBlockers;
@@ -306,6 +308,9 @@ function refreshCampVisuals() {
     campVisuals.add(buildSiegeVisuals(scene.siege));
     ramVisual = scene.siege?.ram ? buildRamVisual() : null;
     if (ramVisual) campVisuals.add(ramVisual);
+    // 梯子随军搬运：动态组逐帧摆放（搬运平放/架设竖起到墙），随营寨一起 dispose。
+    ladderVisuals = (scene.siege?.ladders ?? []).map(() => buildLadderVisual());
+    for (const v of ladderVisuals) campVisuals.add(v);
     scene3d.add(campVisuals);
     campLayer = layer; campVersion = layer.version;
 }
@@ -466,6 +471,35 @@ function recordCorpse(u, from) {
     addBlood(u.gx, u.gy, kind === 'cavalry' ? .8 : .5);
 }
 
+// 梯子随军搬运的逐帧摆放：carrying 平放肩高随队走、erecting 绕梯脚 easeOut 竖起、placed 搭墙。
+// 搬运/架设初段把梯子沿反方向回拉半个梯长，让梯身中段对正班组站位，竖起过程回拉收敛到梯脚。
+const LADDER_LEAN = Math.atan2(CAMP_LAYOUT.ladderFootOffset - CAMP_LAYOUT.wallThickness / 2, LADDER_TOP_WORLD);
+const LADDER_FLAT = Math.PI / 2 - .1, LADDER_CARRY_Y = .55;
+function syncLadderVisuals(siege) {
+    if (!siege?.ladders?.length || !ladderVisuals.length) return;
+    for (let i = 0; i < siege.ladders.length; i++) {
+        const ladder = siege.ladders[i], v = ladderVisuals[i];
+        if (!v) continue;
+        const carrying = ladder.state === 'carrying';
+        const dx = carrying ? ladder.carryDir.gx : ladder.top.gx - ladder.foot.gx;
+        const dz = carrying ? ladder.carryDir.gy : ladder.top.gy - ladder.foot.gy;
+        let pitch = LADDER_LEAN, lift = 0, pullback = 0;
+        if (carrying) { pitch = LADDER_FLAT; lift = LADDER_CARRY_Y; pullback = LAD_LEN / 2; }
+        else if (ladder.state === 'erecting') {
+            const t = Math.min(1, ladder.erectMs / ERECT_MS), e = 1 - (1 - t) ** 3;
+            pitch = LADDER_FLAT + (LADDER_LEAN - LADDER_FLAT) * e;
+            lift = LADDER_CARRY_Y * (1 - e);
+            pullback = LAD_LEN / 2 * (1 - e);
+        }
+        const p = ladder.state === 'placed' ? ladder.foot : ladder.pos;
+        const len = Math.hypot(dx, dz) || 1;
+        v.position.set(p.gx - board.W / 2 - dx / len * pullback, lift, p.gy - board.H / 2 - dz / len * pullback);
+        v.rotation.order = 'YXZ';
+        v.rotation.y = Math.atan2(dx, dz);
+        v.rotation.x = pitch;
+    }
+}
+
 // ---------------- 每帧同步：模拟状态 → 实例矩阵 ----------------
 let hudWinner = null;
 function sync3D(dt, now) {
@@ -476,6 +510,7 @@ function sync3D(dt, now) {
         if (siege.ram.hits > heardRamHits) { Snd.play('hit'); heardRamHits = siege.ram.hits; }
         if (siege.gate.broken && !heardGateBreak) { Snd.play('die'); heardGateBreak = true; }
     }
+    syncLadderVisuals(siege);
     let cursor = { infantry: 0, pikeman: 0, archer: 0, cavalry: 0 };
     for (const u of scene.units) {
         if (u.dead || u.withdrawn) continue; // 尸体由独立实例层接管，不等模拟数组周期压实。
@@ -485,6 +520,7 @@ function sync3D(dt, now) {
         let st = headings.get(u.id);
         if (!st) st = { a: u.team === 'red' ? Math.PI / 2 : -Math.PI / 2, bob: Math.random() * 6 };
         if (u.siegeRole === 'ram') st.a = Math.PI;
+        else if (u.siegeRole === 'ladderCrew' && u.carryYaw !== undefined) st.a = u.carryYaw;
         if (u.moving) {
             const target = Math.atan2(u.velX ?? 0, u.velY ?? 0);
             if ((u.velX ?? 0) ** 2 + (u.velY ?? 0) ** 2 > 1e-6) {

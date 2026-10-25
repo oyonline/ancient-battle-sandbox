@@ -55,7 +55,7 @@ export function createSiegeLayer(platforms = [], assault = null) {
     // Height-only layers retain the original shape and have no simulation hook.
     if (assault?.gate && assault?.ram) installRam(layer, assault);
     if (assault?.ladders?.length) installLadders(layer, assault.ladders, assault.climbSeconds,
-        assault.rules?.enabled ? assault.rules.climbersPerLadder : undefined);
+        assault.rules?.enabled ? assault.rules.climbersPerLadder : undefined, assault.ladderCarry);
     if (assault?.defense) installSiegeDefense(layer, assault.defense);
     if (assault?.infiltration) installSiegeAssault(layer, assault.infiltration);
     if (assault?.rules?.enabled) installSiegeRules(layer, assault.bounds, assault.rules, assault.wallThickness);
@@ -84,9 +84,13 @@ function crossesFence(rect, from, target) {
 
 export const LADDER_LIP = .8;
 const CLIMB_SECONDS = 2.5, LADDER_RECRUIT_MS = 1000;
+// 搬运架设：双人满速、单人拖行半速、无人原地待援（掉落可捡）；
+// 到位后架设 2s 才开放攀爬。班组招募与冲车同规则（就近 + id 决胜）。
+const CARRY_SPEED = 1.9, DRAG_SPEED = 1, CREW_RECRUIT_MS = 1000, CREW_RADIUS = 6;
+export const ERECT_MS = 2000;
 const hookedMorale = new WeakSet();
 
-function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS, climbersPerLadder = 2) {
+function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS, climbersPerLadder = 2, carry = false) {
     const landed = new WeakSet(), climbing = new Map();
     layer.landedCount = 0;
     layer.ladders = configs.map((c, i) => {
@@ -96,7 +100,12 @@ function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS, climbersPe
             id: c.id ?? `ladder-${i}`, team: c.team ?? 'red',
             foot: { ...c.foot }, top: { ...c.top }, landing: { ...c.landing },
             across: { gx: dy / length, gy: -dx / length },
-            climbers: Array(climbersPerLadder).fill(null), recruitMs: 0, initialized: false
+            climbers: Array(climbersPerLadder).fill(null), recruitMs: 0, initialized: false,
+            // 搬运架设状态机：carrying -> erecting -> placed；无 carry 配置时直接可用。
+            state: carry ? 'carrying' : 'placed',
+            pos: { ...(carry ? c.start : c.foot) }, start: carry ? { ...c.start } : null,
+            crew: [null, null], crewMs: 0, crewInitialized: false, erectMs: 0,
+            carryDir: { gx: 0, gy: 0 }
         };
     });
     const alive = u => u && !u.dead && !u.withdrawn && u.hp > 0;
@@ -115,6 +124,79 @@ function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS, climbersPe
         delete u.siegeRole;
         delete u.siegeClimb;
         resetCombat(u);
+    };
+    const releaseCrew = u => {
+        if (!u) return;
+        delete u.siegeRole;
+        delete u.siegeAnchor;
+        delete u.carryYaw;
+        resetCombat(u);
+    };
+    // 搬运/架设步：班组校验 → 招募补员（就近 + id 决胜）→ 移位/架设 → 班组站位。
+    // 班组位置每帧由梯子绝对摆放（同冲车），core 规划循环对 ladderCrew 直接跳过。
+    const carryStep = (scene, ladder, dt) => {
+        const byId = new Map(scene.units.map(u => [u.id, u]));
+        for (let i = 0; i < ladder.crew.length; i++) {
+            const u = byId.get(ladder.crew[i]);
+            if (!u || u.dead || u.withdrawn || u.moraleState === 'routing') { releaseCrew(u); ladder.crew[i] = null; }
+        }
+        ladder.crewMs += dt * 1000;
+        if (!ladder.crewInitialized || ladder.crewMs + 1e-7 >= CREW_RECRUIT_MS) {
+            ladder.crewMs = ladder.crewInitialized ? Math.max(0, ladder.crewMs - CREW_RECRUIT_MS) % CREW_RECRUIT_MS : 0;
+            ladder.crewInitialized = true;
+            const distance = u => Math.hypot(u.gx - ladder.pos.gx, u.gy - ladder.pos.gy);
+            const candidates = scene.units.filter(u => alive(u) && u.moraleState !== 'routing' && u.team === ladder.team &&
+                u.type === 'infantry' && !u.siegeRole && !u.siegeAnchor && !u.siegeClimb && distance(u) <= CREW_RADIUS)
+                .sort((a, b) => distance(a) - distance(b) || a.id - b.id);
+            for (let i = 0; i < ladder.crew.length && candidates.length; i++) {
+                if (ladder.crew[i] !== null) continue;
+                const u = candidates.shift();
+                ladder.crew[i] = u.id;
+                u.siegeRole = 'ladderCrew';
+                u.siegeAnchor = { ...ladder.pos };
+                resetCombat(u);
+                u.tacticalRole = null; u.guardAnchor = null; u.groundGuardReturning = false;
+                scene.navigation?.routes.delete(u);
+            }
+        }
+        const crewCount = ladder.crew.filter(id => id !== null).length;
+        const dx = ladder.foot.gx - ladder.pos.gx, dy = ladder.foot.gy - ladder.pos.gy;
+        const d = Math.hypot(dx, dy);
+        if (d > 1e-9) ladder.carryDir = { gx: dx / d, gy: dy / d };
+        if (ladder.state === 'carrying') {
+            if (crewCount && d > 1e-9) {
+                const stepLen = (crewCount >= 2 ? CARRY_SPEED : DRAG_SPEED) * dt;
+                if (d <= Math.max(.12, stepLen)) {
+                    ladder.pos = { ...ladder.foot };
+                    ladder.state = 'erecting';
+                } else {
+                    ladder.pos.gx += ladder.carryDir.gx * stepLen;
+                    ladder.pos.gy += ladder.carryDir.gy * stepLen;
+                }
+            }
+        } else if (ladder.state === 'erecting') {
+            ladder.erectMs += dt * 1000;
+            if (ladder.erectMs + 1e-7 >= ERECT_MS) {
+                ladder.state = 'placed';
+                for (const id of ladder.crew) releaseCrew(byId.get(id));
+                ladder.crew.fill(null);
+                return;
+            }
+        }
+        // 班组站位：搬运沿行进方向前后各一人，架设分站梯脚两侧（垂直于墙面朝外）。
+        const ux = ladder.carryDir.gx, uy = ladder.carryDir.gy;
+        for (let i = 0; i < ladder.crew.length; i++) {
+            const u = byId.get(ladder.crew[i]);
+            if (!u) continue;
+            u.carryYaw = Math.atan2(ux, uy);   // 渲染层朝向（锚定单位不走位移跟随）
+            if (ladder.state === 'carrying') {
+                u.gx = u.siegeAnchor.gx = ladder.pos.gx + ux * (i === 0 ? .55 : -.55);
+                u.gy = u.siegeAnchor.gy = ladder.pos.gy + uy * (i === 0 ? .55 : -.55);
+            } else {
+                u.gx = u.siegeAnchor.gx = ladder.foot.gx + ladder.across.gx * (i === 0 ? .35 : -.35) + ux * .4;
+                u.gy = u.siegeAnchor.gy = ladder.foot.gy + ladder.across.gy * (i === 0 ? .35 : -.35) + uy * .4;
+            }
+        }
     };
     layer.releaseInvalidClimbers = () => {
         for (const [u, entry] of climbing) {
@@ -163,6 +245,7 @@ function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS, climbersPe
         layer.releaseInvalidClimbers();
         if (scene.resolvingOutcome) return;
         for (const ladder of layer.ladders) {
+            if (ladder.state !== 'placed') { carryStep(scene, ladder, dt); continue; }
             ladder.recruitMs += dt * 1000;
             if (!ladder.initialized || ladder.recruitMs + 1e-7 >= LADDER_RECRUIT_MS) {
                 ladder.recruitMs = ladder.initialized ? Math.max(0, ladder.recruitMs - LADDER_RECRUIT_MS) % LADDER_RECRUIT_MS : 0;

@@ -66,7 +66,7 @@ test('ratio #1: interior and walkway melee receive exactly 0.8; outside, ranged 
 
 function climb(configured) {
     const s = makeScene(), b = campBounds();
-    const full = createCampSiege(b, { ladders: true, defense: false });
+    const full = createCampSiege(b, { ladders: true, defense: false, ladderCarry: false });
     s.checkWin = () => {};
     s.siege = configured ? full : createSiegeLayer(full.platforms, { ladders: [full.ladders[0]], climbSeconds: L.climbSeconds });
     const ladder = s.siege.ladders[0];

@@ -142,7 +142,7 @@ function stalledCamp(losses = 7) {
 
 test('P3 #3a: a real new ladder landing above 35% losses resets the 20-second stall timer', t => {
     const { s, b, red } = stalledCamp();
-    s.siege = createCampSiege(b, { ladders: true, defense: false });
+    s.siege = createCampSiege(b, { ladders: true, defense: false, ladderCarry: false });
     queueCampWalls(s);
     step(s, 900);
     assert.equal(s.siege.rules.attackerLossRate, .35);
@@ -398,7 +398,7 @@ test('P3 #6a2: below 35% losses, real arrows stop the ram and replacement crew r
 test('P3 #6b: real ladder guard hits deal exactly 1.5 times final damage', () => {
     function run(multiplier) {
         const s = makeScene(), b = campBounds();
-        s.siege = createCampSiege(b, { ladders: true, defense: false, rules: { ladderGuardDamage: multiplier } });
+        s.siege = createCampSiege(b, { ladders: true, defense: false, ladderCarry: false, rules: { ladderGuardDamage: multiplier } });
         queueCampWalls(s);
         const ladder = s.siege.ladders[0];
         const attacker = fixed(s, 'red', ladder.foot.gx, ladder.foot.gy);
@@ -418,7 +418,7 @@ test('P3 #6b: real ladder guard hits deal exactly 1.5 times final damage', () =>
 
 test('P3 #6c: battle end freezes ram, recruitment and active ladder progress', () => {
     const s = makeScene(), b = campBounds();
-    s.siege = createCampSiege(b, { ladders: true, defense: false }); queueCampWalls(s);
+    s.siege = createCampSiege(b, { ladders: true, defense: false, ladderCarry: false }); queueCampWalls(s);
     const { ram, ladders } = s.siege;
     for (const dx of [-.4, .4, -.8, .8]) fixed(s, 'red', ram.gx + dx, ram.gy);
     const climber = fixed(s, 'red', ladders[0].foot.gx, ladders[0].foot.gy);

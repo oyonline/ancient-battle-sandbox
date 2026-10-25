@@ -9,7 +9,7 @@ export const TOWER_HEIGHT = L.towerHeight / H_WORLD;
 export const ATTACKERS = L.attackers;
 export const DEFENDERS = L.defenders;
 
-export function createCampSiege(b, { ladders = false, defense = true, rules = {}, scatterSeed, ramRestOffset = L.attackerFrontClearance } = {}) {
+export function createCampSiege(b, { ladders = false, defense = true, rules = {}, scatterSeed, ramRestOffset = L.attackerFrontClearance, ladderRestOffset = L.attackerFrontClearance, ladderCarry = true } = {}) {
     const config = rules === false ? null : { ...L.rules, ...rules };
     const w = L.walkwayWidth, gateHalf = L.gateWidth / 2;
     const walkway = (id, x1, y1, x2, y2) => ({ id, x1, y1, x2, y2, height: WALKWAY_HEIGHT, kind: 'walkway' });
@@ -42,7 +42,9 @@ export function createCampSiege(b, { ladders = false, defense = true, rules = {}
         const point = offset => horizontal ? { gx: along, gy: edge + outward * offset }
             : { gx: edge + outward * offset, gy: along };
         return { id: `${side}-${i}`, foot: point(L.ladderFootOffset),
-            top: point(L.wallThickness / 2), landing: point(-w / 2) };
+            top: point(L.wallThickness / 2), landing: point(-w / 2),
+            // 搬运出发点：与攻方出发阵地前沿齐平（随攻城方一起走，到位才架设）。
+            start: point(L.wallThickness + ladderRestOffset) };
     }));
     const siege = createSiegeLayer(platforms, {
         rules: config, scatterSeed,
@@ -52,7 +54,7 @@ export function createCampSiege(b, { ladders = false, defense = true, rules = {}
         gate: { blockerId: 'south-gate', hp: config?.gateHp ?? L.rules.gateHp },
         // 冲车随南翼出发阵地一同启动（嵌入前沿），补员足够后才自行推向寨门
         ram: { gx: b.cx, gateOuterY: b.y2 + L.wallThickness, restOffset: ramRestOffset, team: 'red' },
-        ...(ladders ? { ladders: ladderConfigs, climbSeconds: L.climbSeconds } : {})
+        ...(ladders ? { ladders: ladderConfigs, climbSeconds: L.climbSeconds, ladderCarry } : {})
     });
     if (defense) avoidTowerPosts(siege, b);
     return siege;

@@ -120,7 +120,8 @@ export function stepBattle(scene, dt) {
             scene.updateRoutedUnit(unit, dt); continue;
         }
         if (scene.siege && unit.siegeAnchor) {
-            if (scene.siege.ram && unit.siegeRole === 'ram') continue;
+            // 冲车/梯子班组由各自机制每帧绝对摆放，不走普通 AI（同 climbers 由梯子步驱动）。
+            if (unit.siegeRole === 'ram' || unit.siegeRole === 'ladderCrew') continue;
             scene.updateNormalUnit(unit, now, dt, unit.siegeAnchor);
             continue;
         }
@@ -160,6 +161,11 @@ export function stepBattle(scene, dt) {
         }
         const motion = Terrain.clipMotion(scene.battleOptions.terrain, unit.gx, unit.gy,
             unit.moveX + unit.pushX, unit.moveY + unit.pushY, CombatRules.bodyRadius(unit), scene.dynamicBlockers);
+        // 钉墙守军最终把关：wavering 被 fallingBack 接管后不再跑 defense.act 的走位锁，
+        // 背离敌人的有序后退会一步步蹭下墙内沿——合成位移落点出步道则整步取消，原地硬扛。
+        // steady 转岗行军、routing 溃逃跳墙均不受影响。
+        if (unit.siegeWallAnchored && unit.moraleState === 'wavering' &&
+            scene.siege.heightAt(unit.gx + motion.x, unit.gy + motion.y) === 0) { motion.x = 0; motion.y = 0; }
         unit.gx += motion.x;
         unit.gy += motion.y;
     }

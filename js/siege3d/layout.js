@@ -36,7 +36,7 @@ export const CAMP_LAYOUT = {
     towerCount: towerPositions.length,
     towerArcherSlots,
     archersPerTower: towerArcherSlots.length,
-    laddersPerSide: 4,
+    laddersPerSide: 8,
     sides: ['west', 'north', 'east', 'south'],
     ladderFootOffset: 1.3,
     ladderTopClearance: .15,

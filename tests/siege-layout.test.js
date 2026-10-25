@@ -14,8 +14,9 @@ function step(scene) { scene.simulationTime += DT * 1000; scene.stepBattle(DT); 
 function deploy(scene = makeScene(), compact = false) {
     scene.deployUnits(L.attackers, L.defenders, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
     const bounds = campBounds();
-    // compact 钉回旧紧凑布局：破门/登墙时间线在 2400 帧预算内（验证全流程确定性）
-    scene.siege = createCampSiege(bounds, { ladders: true, defense: false, ...(compact ? { ramRestOffset: 3.2 } : {}) });
+    // compact 钉回旧紧凑布局：破门/登墙时间线在 2400 帧预算内（验证全流程确定性）；
+    // 梯子搬运出发点与攻方前沿齐平（6），保证开局班组招募半径内有人可抬。
+    scene.siege = createCampSiege(bounds, { ladders: true, defense: false, ...(compact ? { ramRestOffset: 3.2, ladderRestOffset: 6 } : {}) });
     const placements = siegeDeployment(scene.units, bounds, scene.siege, compact ? 6 : L.attackerFrontClearance);
     for (const { unit, gx, gy, siegeAnchor } of placements) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
     queueCampWalls(scene);
@@ -33,12 +34,12 @@ function assertClear(scene) {
     }
 }
 
-test('siege layout #1: 20-cell camp, four ladders per side, outside feet and walkway landings', () => {
+test('siege layout #1: 20-cell camp, eight ladders per side, outside feet and walkway landings', () => {
     const { scene: s, bounds: b } = deploy();
     step(s);
     assert.equal(b.x2 - b.x1, 20);
     assert.equal(b.y2 - b.y1, 2 * L.halfSize);
-    assert.equal(s.siege.ladders.length, 16);
+    assert.equal(s.siege.ladders.length, 32);
     for (const side of L.sides) {
         const ladders = s.siege.ladders.filter(l => l.id.startsWith(`${side}-`));
         assert.equal(ladders.length, L.laddersPerSide);
@@ -104,7 +105,8 @@ test('siege layout #2: exact armies, four assault-side towers, proportional four
 });
 
 test('siege layout #3: configured climb completes within one frame of height-scaled duration', t => {
-    const s = makeScene(), b = campBounds(), full = createCampSiege(b, { ladders: true, defense: false });
+    // ladderCarry:false 隔离搬运/架设，只验证攀爬时长本身。
+    const s = makeScene(), b = campBounds(), full = createCampSiege(b, { ladders: true, defense: false, ladderCarry: false });
     s.checkWin = () => {}; // Isolate duration, with no defender to hold the lip.
     s.siege = full;
     queueCampWalls(s);

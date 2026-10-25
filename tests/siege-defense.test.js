@@ -16,8 +16,9 @@ function step(s, count = 1) {
 function deploy(s = makeScene()) {
     s.deployUnits(L.attackers, L.defenders, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
     const b = campBounds();
-    // 防守机制测试钉回旧紧凑布局（冲车 3.2、攻方前沿 6），1500 帧预算内才能破门
-    s.siege = createCampSiege(b, { ladders: true, ramRestOffset: 3.2 });
+    // 防守机制测试钉回旧紧凑布局（冲车 3.2、攻方前沿 6），1500 帧预算内才能破门；
+    // 梯子搬运出发点与攻方前沿齐平（6），保证开局班组招募半径内有人可抬。
+    s.siege = createCampSiege(b, { ladders: true, ramRestOffset: 3.2, ladderRestOffset: 6 });
     const placements = siegeDeployment(s.units, b, s.siege, 6);
     for (const { unit, gx, gy, siegeAnchor } of placements) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
     queueCampWalls(s); s.rebuildSpatial();

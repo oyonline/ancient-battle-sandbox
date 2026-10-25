@@ -2,8 +2,27 @@ import * as THREE from 'three';
 import { board } from '../board.js';
 import { H_WORLD } from './deployment.js';
 
-import { LADDER_TOP_WORLD } from './layout.js';
+import { CAMP_LAYOUT, LADDER_TOP_WORLD } from './layout.js';
 export const climberWorldHeight = climb => climb.progress * LADDER_TOP_WORLD;
+
+// 竖直梯几何：foot 在原点、梯身沿 +Y 延伸 LAD_LEN，配合外层 rotation.order 'YXZ'
+// （yaw 朝墙、pitch 控制平放/架设倾角）逐帧摆放——搬运/架设状态机见 siege.js。
+export const LAD_LEN = Math.hypot(CAMP_LAYOUT.ladderFootOffset - CAMP_LAYOUT.wallThickness / 2, LADDER_TOP_WORLD);
+export function buildLadderVisual() {
+    const ladder = new THREE.Group();
+    const plank = new THREE.MeshStandardMaterial({ color: '#8a6b42', roughness: 1 });
+    const brace = new THREE.MeshStandardMaterial({ color: '#785535', roughness: 1 });
+    const add = (w, h, d, x, y, z, material, name) => {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+        mesh.position.set(x, y, z);
+        mesh.castShadow = mesh.receiveShadow = true;
+        mesh.name = name;
+        ladder.add(mesh);
+    };
+    for (const side of [-.25, .25]) add(.08, LAD_LEN, .08, side, LAD_LEN / 2, 0, brace, 'rail');
+    for (let y = .3; y < LAD_LEN; y += .3) add(.54, .05, .05, 0, y, 0, plank, 'rung');
+    return ladder;
+}
 
 export function buildSiegeVisuals(siege) {
     const group = new THREE.Group();
@@ -45,30 +64,6 @@ export function buildSiegeVisuals(siege) {
             // Decorative vertical ladder on the inward/east side.
             for (const dz of [-.22, .22]) box(.06, h + .15, .06, p.x2 + .1, (h + .15) / 2, z + dz, plank);
             for (let y = .2; y < h; y += .3) box(.06, .06, .5, p.x2 + .1, y, z, brace);
-        }
-    }
-    for (const ladder of siege.ladders ?? []) {
-        const foot = new THREE.Vector3(ladder.foot.gx - board.W / 2, 0, ladder.foot.gy - board.H / 2);
-        const top = new THREE.Vector3(ladder.top.gx - board.W / 2, LADDER_TOP_WORLD, ladder.top.gy - board.H / 2);
-        const along = top.clone().sub(foot), length = along.length();
-        along.normalize();
-        const across = new THREE.Vector3(along.z, 0, -along.x).normalize();
-        const beam = (a, b, width, material) => {
-            const direction = b.clone().sub(a);
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, direction.length(), width), material);
-            mesh.position.copy(a).add(b).multiplyScalar(.5);
-            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
-            mesh.castShadow = mesh.receiveShadow = true;
-            mesh.name = `${ladder.id}-${width === .08 ? 'rail' : 'rung'}`;
-            group.add(mesh);
-        };
-        for (const side of [-.25, .25]) {
-            const offset = across.clone().multiplyScalar(side);
-            beam(foot.clone().add(offset), top.clone().add(offset), .08, brace);
-        }
-        for (let distance = .3; distance < length; distance += .3) {
-            const center = foot.clone().addScaledVector(along, distance);
-            beam(center.clone().addScaledVector(across, -.25), center.clone().addScaledVector(across, .25), .05, plank);
         }
     }
     return group;

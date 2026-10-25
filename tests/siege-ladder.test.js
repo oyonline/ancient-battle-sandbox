@@ -6,7 +6,7 @@ import { makeScene, addUnit, CombatRules, Terrain } from './battle-harness.js';
 import { createSiegeLayer, LADDER_LIP } from '../js/battle/siege.js';
 import { createCampSiege, installSiegeArrows, WALKWAY_HEIGHT } from '../js/siege3d/deployment.js';
 import { campBounds, queueCampWalls, disposeCampVisuals } from '../js/siege3d/walls.js';
-import { buildSiegeVisuals, climberWorldHeight } from '../js/siege3d/platforms.js';
+import { buildSiegeVisuals, buildLadderVisual, climberWorldHeight, LAD_LEN } from '../js/siege3d/platforms.js';
 
 const STEP_MS = 1000 / 60;
 const frameOf = s => Math.round(s.simulationTime / STEP_MS);
@@ -212,34 +212,37 @@ test('ladder visuals: configured placements, dimensions, materials, shadows and 
     const b = campBounds(), fresh = createCampSiege(b, { ladders: true, defense: false });
     assert.equal(fresh.ladders.length, L.sides.length * L.laddersPerSide);
     assert.equal(fresh.landedCount, 0);
-    assert.ok(fresh.ladders.every(l => l.climbers.every(id => id === null) && !l.initialized));
+    // 搬运模式初始：梯子在出发阵地（start），班组空、未架设、未开放攀爬。
+    assert.ok(fresh.ladders.every(l => l.climbers.every(id => id === null) && !l.initialized &&
+        l.state === 'carrying' && l.pos.gx === l.start.gx && l.pos.gy === l.start.gy &&
+        l.crew.every(id => id === null) && l.erectMs === 0));
     for (const l of fresh.ladders.filter(l => l.id.startsWith('south-'))) {
         assert.ok(Math.abs(l.top.gx - b.cx) - L.gateWidth / 2 >= L.southLadderGateClearance - 1e-9);
     }
     for (const [i, l] of fresh.ladders.filter(l => l.id.startsWith('west-')).entries()) {
         assert.equal(l.foot.gy, b.y1 + 2 * L.halfSize * (i + .5) / L.laddersPerSide);
     }
-    const group = buildSiegeVisuals(fresh);
-    for (const l of fresh.ladders) {
-        const rails = group.children.filter(o => o.name === `${l.id}-rail`);
-        const rungs = group.children.filter(o => o.name === `${l.id}-rung`);
-        assert.equal(rails.length, 2);
-        assert.ok(Math.abs(rails[0].position.distanceTo(rails[1].position) - .5) < 1e-9);
-        assert.ok(rungs.length > 5);
-        for (const rail of rails) {
-            assert.equal(rail.geometry.parameters.width, .08);
-            assert.equal(rail.geometry.parameters.depth, .08);
-            assert.equal(rail.material.color.getHexString(), '785535');
-            assert.equal(rail.position.y, LADDER_TOP_WORLD / 2);
-        }
-        for (const [i, rung] of rungs.entries()) {
-            assert.equal(rung.geometry.parameters.width, .05);
-            assert.ok(Math.abs(rung.geometry.parameters.height - .5) < 1e-9);
-            assert.equal(rung.material.color.getHexString(), '8a6b42');
-            if (i) assert.ok(Math.abs(rung.position.distanceTo(rungs[i - 1].position) - .3) < 1e-9);
-        }
-        for (const mesh of [...rails, ...rungs]) assert.ok(mesh.castShadow && mesh.receiveShadow);
+    // 竖直梯几何：foot 在原点、梯身沿 +Y 长 LAD_LEN；placed 姿态由外层 yaw/pitch 摆出（main.js）。
+    const group = buildLadderVisual();
+    const rails = group.children.filter(o => o.name === 'rail');
+    const rungs = group.children.filter(o => o.name === 'rung');
+    assert.equal(rails.length, 2);
+    assert.ok(Math.abs(rails[0].position.distanceTo(rails[1].position) - .5) < 1e-9);
+    assert.ok(rungs.length > 5);
+    for (const rail of rails) {
+        assert.equal(rail.geometry.parameters.width, .08);
+        assert.equal(rail.geometry.parameters.depth, .08);
+        assert.equal(rail.geometry.parameters.height, LAD_LEN);
+        assert.equal(rail.material.color.getHexString(), '785535');
+        assert.equal(rail.position.y, LAD_LEN / 2);
     }
+    for (const [i, rung] of rungs.entries()) {
+        assert.equal(rung.geometry.parameters.width, .54);
+        assert.ok(Math.abs(rung.geometry.parameters.height - .05) < 1e-9);
+        assert.equal(rung.material.color.getHexString(), '8a6b42');
+        if (i) assert.ok(Math.abs(rung.position.y - rungs[i - 1].position.y - .3) < 1e-9);
+    }
+    for (const mesh of [...rails, ...rungs]) assert.ok(mesh.castShadow && mesh.receiveShadow);
     disposeCampVisuals(group);
 });
 
@@ -366,10 +369,13 @@ test('ladder rework c: both slots stay at least 0.35 apart through climbing and 
 test('ladder rework d: every lip-fight step preserves exact interpolation and wall clearance; render height follows rails', t => {
     const { s, l, attackers: [u], defender, hits } = camp(1, true);
     defender.hp = defender.maxHp;
-    const visuals = buildSiegeVisuals(s.siege);
-    const rail = visuals.children.find(o => o.name === `${l.id}-rail`);
-    const halfRail = rail.position.clone().set(0, rail.geometry.parameters.height / 2, 0).applyQuaternion(rail.quaternion);
-    const footY = rail.position.y - halfRail.y, topY = rail.position.y + halfRail.y;
+    // 竖直梯几何 + placed 姿态（绕 X 倾 LEAN）：rail 两端世界高度 = 0 与 LADDER_TOP_WORLD。
+    const visuals = buildLadderVisual();
+    const rail = visuals.children.find(o => o.name === 'rail');
+    const lean = Math.atan2(Math.hypot(l.top.gx - l.foot.gx, l.top.gy - l.foot.gy), LADDER_TOP_WORLD);
+    const halfY = rail.geometry.parameters.height / 2 * Math.cos(lean);
+    const centerY = rail.position.y * Math.cos(lean);
+    const footY = centerY - halfY, topY = centerY + halfY;
     assert.ok(Math.abs(footY) < 1e-12);
     assert.ok(Math.abs(topY - LADDER_TOP_WORLD) < 1e-12);
     let heldFrames = 0, maxPositionError = 0, minWallClearance = Infinity;
@@ -401,4 +407,106 @@ test('ladder rework d: every lip-fight step preserves exact interpolation and wa
     assert.ok(hits.some(h => h.from === defender.id && h.target === u.id));
     t.diagnostic(`heldFrames=${heldFrames}; maxPositionError=${maxPositionError}; minDefenderWallClearance=${minWallClearance}; bodyRadius=${CombatRules.bodyRadius(defender)}; renderAtLip=${LADDER_LIP * LADDER_TOP_WORLD}; simulationAtLip=${LADDER_LIP * WALKWAY_HEIGHT}; railTop=${topY}`);
     disposeCampVisuals(visuals);
+});
+
+// 搬运架设：班组抬梯 -> 到位架设 2s -> 开放攀爬；减员掉落、就近捡梯。
+function carryScene(ladderIndex = 0) {
+    const s = makeScene(), b = campBounds();
+    s.checkWin = () => {};
+    s.siege = createCampSiege(b, { ladders: true, defense: false, ladderRestOffset: 6 });
+    queueCampWalls(s);
+    return { s, l: s.siege.ladders[ladderIndex] };
+}
+const crewOf = (s, l) => l.crew.map(id => s.units.find(u => u.id === id));
+const ladderDistance = l => Math.hypot(l.foot.gx - l.pos.gx, l.foot.gy - l.pos.gy);
+
+test('ladder carry: two-man crew hauls the ladder from the staging line, erects 2s, then opens climbing', t => {
+    const { s, l } = carryScene();
+    assert.equal(l.state, 'carrying');
+    assert.equal(l.pos.gx, l.start.gx);
+    const a = soldier(s, 'red', l.start.gx - .5, l.start.gy - .3);
+    const c = soldier(s, 'red', l.start.gx - .4, l.start.gy + .4);
+    step(s); // 首帧必招募
+    assert.deepEqual([...l.crew].sort((x, y) => x - y), [a.id, c.id].sort((x, y) => x - y));
+    assert.equal(a.siegeRole, 'ladderCrew');
+    assert.ok(a.siegeAnchor && c.siegeAnchor);
+    const d0 = ladderDistance(l);
+    for (let i = 0; i < 60; i++) step(s);
+    const d1 = ladderDistance(l);
+    assert.ok(d0 - d1 > 1.5, `one second at full carry speed 1.9: ${d0} -> ${d1}`);
+    // 班组随行：搬运中锚在梯位 ±0.55 沿行进方向
+    for (const u of crewOf(s, l)) assert.ok(Math.hypot(u.gx - l.pos.gx, u.gy - l.pos.gy) <= .56);
+    let erectingSeen = false, guard = 0;
+    while (l.state !== 'placed' && guard++ < 600) {
+        step(s);
+        if (l.state === 'erecting') {
+            erectingSeen = true;
+            assert.ok(ladderDistance(l) < 1e-9, 'erecting happens at the foot');
+            assert.ok(l.crew.every(id => id !== null), 'crew holds the ladder during erection');
+        }
+    }
+    assert.ok(erectingSeen, 'erecting phase observed');
+    assert.equal(l.state, 'placed');
+    assert.ok(l.crew.every(id => id === null), 'crew released once placed');
+    assert.equal(a.siegeRole, undefined);
+    assert.equal(a.carryYaw, undefined);
+    // placed 之后才开放攀爬：foot 旁步兵被招募为攀爬者
+    const climber = soldier(s, 'red', l.foot.gx, l.foot.gy);
+    step(s); step(s);
+    assert.ok(climber.siegeClimb, 'climb recruiting opens after placed');
+    t.diagnostic(`carry=${Math.round((d0 - 0) * 100) / 100} cells; placedAtFrame=${frameOf(s)}`);
+});
+
+test('ladder carry drop: losing crew slows then stops the ladder; nearby infantry re-crews it', t => {
+    const { s, l } = carryScene();
+    const a = soldier(s, 'red', l.start.gx - .5, l.start.gy - .3);
+    const c = soldier(s, 'red', l.start.gx - .4, l.start.gy + .4);
+    step(s);
+    for (let i = 0; i < 30; i++) step(s);
+    // 减员一人：半速拖行
+    a.dead = true; a.hp = 0;
+    step(s);
+    assert.equal(l.crew.filter(id => id !== null).length, 1);
+    assert.equal(a.siegeRole, undefined, 'dead crew released');
+    const dA = ladderDistance(l);
+    for (let i = 0; i < 60; i++) step(s);
+    const dB = ladderDistance(l);
+    assert.ok(dA - dB > .6 && dA - dB < 1.4, `single crew drags at half speed 1.0: ${dA} -> ${dB}`);
+    // 再减一人：原地待援
+    c.dead = true; c.hp = 0;
+    step(s);
+    assert.ok(l.crew.every(id => id === null));
+    for (let i = 0; i < 30; i++) step(s);
+    const dStopped = ladderDistance(l);
+    for (let i = 0; i < 30; i++) step(s);
+    assert.equal(ladderDistance(l), dStopped, 'no crew, no movement');
+    assert.equal(l.state, 'carrying');
+    // 就近补员：掉落可捡
+    const pickup = soldier(s, 'red', l.pos.gx + 1, l.pos.gy + 1);
+    const pickup2 = soldier(s, 'red', l.pos.gx + 1.2, l.pos.gy - .8);
+    for (let i = 0; i < 120 && l.crew.filter(id => id !== null).length < 2; i++) step(s);
+    assert.deepEqual([...l.crew].sort((x, y) => x - y), [pickup.id, pickup2.id].sort((x, y) => x - y));
+    const dResume = ladderDistance(l);
+    for (let i = 0; i < 60; i++) step(s);
+    assert.ok(dResume - ladderDistance(l) > 1.5, 'hauling resumes after pickup');
+    t.diagnostic(`stoppedAt=${dStopped.toFixed(2)} cells from foot; resumed with fresh crew`);
+});
+
+test('ladder carry: two identical runs match per frame (deterministic crewing and hauling)', () => {
+    const run = () => {
+        const { s, l } = carryScene();
+        soldier(s, 'red', l.start.gx - .5, l.start.gy - .3);
+        soldier(s, 'red', l.start.gx - .4, l.start.gy + .4);
+        soldier(s, 'red', l.start.gx - 1, l.start.gy);
+        const frames = [];
+        for (let i = 0; i < 300; i++) {
+            step(s);
+            frames.push(createHash('sha256').update(JSON.stringify({
+                units: state(s),
+                ladder: [l.state, l.pos.gx, l.pos.gy, l.crew, l.erectMs, l.carryDir.gx, l.carryDir.gy]
+            })).digest('hex'));
+        }
+        return frames;
+    };
+    assert.deepEqual(run(), run());
 });
