@@ -231,7 +231,7 @@ test('P3 #3d: capture gains keep resetting stall time above 35% losses until att
 
 test('P3 #3e: real ram impacts above 35% losses reset the timer until the gate breaks', () => {
     const { s, b, red } = stalledCamp();
-    s.siege = createCampSiege(b, { defense: false });
+    s.siege = createCampSiege(b, { defense: false, ramRestOffset: 3.2 });
     queueCampWalls(s);
     step(s, 600);
     const { ram, gate } = s.siege;
@@ -338,7 +338,7 @@ test('P3 #5: tower and ground archers choose waiting climber, crew, wall foot, t
 
 test('P3 #6a: gate starts at 1800 and breaks on the twelfth 150 hp impact', () => {
     const s = makeScene(), b = campBounds();
-    s.siege = createCampSiege(b, { defense: false }); queueCampWalls(s);
+    s.siege = createCampSiege(b, { defense: false, ramRestOffset: 3.2 }); queueCampWalls(s);
     const ram = s.siege.ram, gate = s.siege.gate;
     for (const dx of [-.5, .5, -1, 1]) fixed(s, 'red', ram.gx + dx, ram.gy);
     fixed(s, 'blue', b.cx, b.cy);
@@ -359,7 +359,7 @@ test('P3 #6a: gate starts at 1800 and breaks on the twelfth 150 hp impact', () =
 
 test('P3 #6a2: below 35% losses, real arrows stop the ram and replacement crew resumes impacts', () => {
     const s = makeScene(), b = campBounds();
-    s.siege = createCampSiege(b, { defense: false }); queueCampWalls(s);
+    s.siege = createCampSiege(b, { defense: false, ramRestOffset: 3.2 }); queueCampWalls(s);
     const { ram, gate } = s.siege;
     const hits = [], record = s.recordDamage;
     s.recordDamage = function (target, damage, from, at) {

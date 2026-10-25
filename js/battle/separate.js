@@ -62,8 +62,13 @@ export function separate(scene, dt) {
             // 对称累计推开，并消除长时间镜像模拟中的浮点方向偏差。
             const beforeX = u.gx, beforeY = u.gy;
             const dyn = Terrain.dynOf(scene);
-            const correction = Terrain.clipMotion(scene.battleOptions.terrain, u.gx, u.gy,
+            let correction = Terrain.clipMotion(scene.battleOptions.terrain, u.gx, u.gy,
                 u.separateX + px, u.separateY + py, CombatRules.bodyRadius(u), dyn);
+            // 钉墙墙卫（攻寨非突破面）：在墙上时挤兑位移不得把人推出步道；
+            // 已落地者不受此限（归位路径必经地面），溃逃者不受此限（逃命可以跳墙）。
+            if (u.siegeWallAnchored && u.moraleState !== 'routing' && scene.siege &&
+                scene.siege.heightAt(u.gx, u.gy) > 0 &&
+                scene.siege.heightAt(u.gx + correction.x, u.gy + correction.y) === 0) correction = { x: 0, y: 0 };
             u.gx = quantizePosition(clamp(u.gx + correction.x, 0.6, board.W - 0.6), board.W);
             u.gy = quantizePosition(clamp(u.gy + correction.y, 0.6, board.H - 0.6), board.H);
             // 保存实际纠偏量（含边界截断），供下一步架枪判定扣除。

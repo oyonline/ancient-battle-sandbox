@@ -1,4 +1,5 @@
 import { createSiegeLayer } from '../battle/siege.js';
+import { board } from '../board.js';
 import { CAMP_LAYOUT as L } from './layout.js';
 import { avoidTowerPosts } from './defense-posts.js';
 
@@ -8,7 +9,7 @@ export const TOWER_HEIGHT = L.towerHeight / H_WORLD;
 export const ATTACKERS = L.attackers;
 export const DEFENDERS = L.defenders;
 
-export function createCampSiege(b, { ladders = false, defense = true, rules = {}, scatterSeed } = {}) {
+export function createCampSiege(b, { ladders = false, defense = true, rules = {}, scatterSeed, ramRestOffset = L.attackerFrontClearance } = {}) {
     const config = rules === false ? null : { ...L.rules, ...rules };
     const w = L.walkwayWidth, gateHalf = L.gateWidth / 2;
     const walkway = (id, x1, y1, x2, y2) => ({ id, x1, y1, x2, y2, height: WALKWAY_HEIGHT, kind: 'walkway' });
@@ -46,9 +47,11 @@ export function createCampSiege(b, { ladders = false, defense = true, rules = {}
     const siege = createSiegeLayer(platforms, {
         rules: config, scatterSeed,
         fenceCover: L.fenceCover, bounds: b, wallThickness: L.wallThickness,
-        ...(defense ? { defense: { bounds: b, gateHalf, wallInset: L.defenderWallClearance } } : {}),
+        ...(defense ? { defense: { bounds: b, gateHalf, wallInset: L.defenderWallClearance, towerClearance: L.towerClearance },
+            infiltration: { bounds: b, attackerTeam: 'red' } } : {}),
         gate: { blockerId: 'south-gate', hp: config?.gateHp ?? L.rules.gateHp },
-        ram: { gx: b.cx, gateOuterY: b.y2 + L.wallThickness, team: 'red' },
+        // 冲车随南翼出发阵地一同启动（嵌入前沿），补员足够后才自行推向寨门
+        ram: { gx: b.cx, gateOuterY: b.y2 + L.wallThickness, restOffset: ramRestOffset, team: 'red' },
         ...(ladders ? { ladders: ladderConfigs, climbSeconds: L.climbSeconds } : {})
     });
     if (defense) avoidTowerPosts(siege, b);
@@ -56,7 +59,7 @@ export function createCampSiege(b, { ladders = false, defense = true, rules = {}
 }
 
 // The page and headless tests consume the same placements and initial siege orders.
-export function siegeDeployment(units, b, siege) {
+export function siegeDeployment(units, b, siege, frontClearance = L.attackerFrontClearance) {
     const result = [], defenders = units.filter(u => u.team === 'blue');
     const archers = defenders.filter(u => u.type === 'archer');
     const towers = siege.platforms.filter(p => p.kind === 'tower');
@@ -98,15 +101,24 @@ export function siegeDeployment(units, b, siege) {
             cursor += count;
         });
     }
-    for (const [side, soldiers] of Object.entries(wings)) soldiers.forEach((unit, i) => {
-        const depth = Math.floor(i / L.attackerColumns), col = i % L.attackerColumns;
-        const along = (col - (L.attackerColumns - 1) / 2) * L.attackerSpacing;
-        const outward = L.wallThickness + L.attackerWallClearance + depth * L.attackerDepthSpacing;
+    for (const [side, soldiers] of Object.entries(wings)) {
         const horizontal = side === 'south' || side === 'north';
-        result.push({ unit, side,
-            gx: horizontal ? b.cx + along : side === 'west' ? b.x1 - outward : b.x2 + outward,
-            gy: horizontal ? (side === 'north' ? b.y1 - outward : b.y2 + outward) : b.cy + along });
-    });
+        // 出发阵地钉在地图边缘：前沿距墙外沿 frontClearance，
+        // 纵深由"前沿到地图边缘"的可用空间倒推排数，列数随该翼人数自适应。
+        const frontOut = L.wallThickness + frontClearance;
+        const spanAvail = (side === 'south' ? board.H - b.y2 : side === 'north' ? b.y1
+            : side === 'east' ? board.W - b.x2 : b.x1) - L.attackerEdgeMargin;
+        const ranks = Math.max(1, Math.floor((spanAvail - frontOut) / L.attackerDepthSpacing) + 1);
+        const columns = Math.ceil(soldiers.length / ranks);
+        soldiers.forEach((unit, i) => {
+            const depth = Math.floor(i / columns), col = i % columns;
+            const along = (col - (columns - 1) / 2) * L.attackerSpacing;
+            const outward = frontOut + depth * L.attackerDepthSpacing;
+            result.push({ unit, side,
+                gx: horizontal ? b.cx + along : side === 'west' ? b.x1 - outward : b.x2 + outward,
+                gy: horizontal ? (side === 'north' ? b.y1 - outward : b.y2 + outward) : b.cy + along });
+        });
+    }
     siege.defense?.deploy(units, result);
     return result;
 }

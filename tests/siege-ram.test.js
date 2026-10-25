@@ -26,7 +26,8 @@ function soldier(scene, team, x, y, type = 'infantry') {
 function camp(extra = false) {
     const scene = makeScene(), b = campBounds();
     scene.battleOptions.deathmatch = true;
-    scene.siege = createCampSiege(b, { defense: false });
+    // 机制测试钉回旧紧凑布局：冲车 3.2 格起步，避免按真实出发阵地空跑行程
+    scene.siege = createCampSiege(b, { defense: false, ramRestOffset: 3.2 });
     queueCampWalls(scene);
     const { ram } = scene.siege;
     const crew = [-1, 1, -2, 2].map(dx => soldier(scene, 'red', ram.gx + dx * .4, ram.gy));

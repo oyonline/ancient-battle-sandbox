@@ -11,11 +11,12 @@ import { campBounds, queueCampWalls, buildCampVisuals, disposeCampVisuals } from
 const DT = 1 / 60;
 const total = army => Object.values(army).reduce((sum, n) => sum + n, 0);
 function step(scene) { scene.simulationTime += DT * 1000; scene.stepBattle(DT); }
-function deploy(scene = makeScene()) {
+function deploy(scene = makeScene(), compact = false) {
     scene.deployUnits(L.attackers, L.defenders, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
     const bounds = campBounds();
-    scene.siege = createCampSiege(bounds, { ladders: true, defense: false });
-    const placements = siegeDeployment(scene.units, bounds, scene.siege);
+    // compact 钉回旧紧凑布局：破门/登墙时间线在 2400 帧预算内（验证全流程确定性）
+    scene.siege = createCampSiege(bounds, { ladders: true, defense: false, ...(compact ? { ramRestOffset: 3.2 } : {}) });
+    const placements = siegeDeployment(scene.units, bounds, scene.siege, compact ? 6 : L.attackerFrontClearance);
     for (const { unit, gx, gy, siegeAnchor } of placements) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
     queueCampWalls(scene);
     scene.rebuildSpatial();
@@ -86,7 +87,10 @@ test('siege layout #2: exact armies, four assault-side towers, proportional four
         for (const [type, count] of Object.entries(L.attackers)) assert.equal(wing.filter(p => p.unit.type === type).length, count * share);
         for (const p of wing) {
             const distance = side === 'south' ? p.gy - b.y2 : side === 'north' ? b.y1 - p.gy : side === 'east' ? p.gx - b.x2 : b.x1 - p.gx;
-            assert.ok(distance - L.wallThickness >= L.attackerWallClearance - 1e-9);
+            assert.ok(distance - L.wallThickness >= L.attackerFrontClearance - 1e-9);
+            // 钉在地图边缘：后排行军线距边界不小于 edgeMargin
+            const inside = side === 'south' ? 70 - p.gy : side === 'north' ? p.gy : side === 'east' ? 70 - p.gx : p.gx;
+            assert.ok(inside >= L.attackerEdgeMargin - 1e-9, 'wing rank within map edge');
         }
     }
     step(s); assertClear(s);
@@ -115,7 +119,7 @@ test('siege layout #3: configured climb completes within one frame of height-sca
 });
 
 function assault() {
-    const { scene: s } = deploy();
+    const { scene: s } = deploy(makeScene(), true);
     installSiegeArrows(s);
     const frames = [], landed = Object.fromEntries(L.sides.map(side => [side, 0]));
     let brokenFrame = null;

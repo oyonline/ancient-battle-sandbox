@@ -16,8 +16,9 @@ function step(s, count = 1) {
 function deploy(s = makeScene()) {
     s.deployUnits(L.attackers, L.defenders, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
     const b = campBounds();
-    s.siege = createCampSiege(b, { ladders: true });
-    const placements = siegeDeployment(s.units, b, s.siege);
+    // 防守机制测试钉回旧紧凑布局（冲车 3.2、攻方前沿 6），1500 帧预算内才能破门
+    s.siege = createCampSiege(b, { ladders: true, ramRestOffset: 3.2 });
+    const placements = siegeDeployment(s.units, b, s.siege, 6);
     for (const { unit, gx, gy, siegeAnchor } of placements) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
     queueCampWalls(s); s.rebuildSpatial();
     return s;
@@ -79,7 +80,7 @@ function breachScenario() {
     const s = deploy(), d = s.siege.defense;
     installSiegeArrows(s);
     step(s);
-    const reserveCount = roles(s).reserve;
+    const reserveCount = roles(s).reserve, wallCountBefore = roles(s).wall;
     s.siege.gate.hp = 0; // Still require the real ram impact to transition gate.broken.
     const frames = [];
     let brokenAt = null, gateCount = 0, nearby = 0, peakNearby = 0, formedAt = null, enteredAt = null, damageAt = null, forcedEntry = false;
@@ -93,9 +94,20 @@ function breachScenario() {
         step(s); frames.push(digest(s));
         if (s.siege.gate.broken && brokenAt === null) {
             brokenAt = frame; gateCount = roles(s).gate;
-            assert.equal(gateCount, roles(s).reserve + reserveCount + 12);
-            assert.equal(roles(s).reserve, 0);
-            assert.deepEqual([...new Set(d.gatePosts.map(p => Number(distance(p, d.gateCenter).toFixed(1))))], [2.5, 3.3, 4.1]);
+            // U 型口袋：6 南墙卫 + 54 预备队 = 60 门岗；墙岗不注销，
+            // 南墙 6 个空缺由下轮换防回填（破门店内即刻体现为 wall -6）。
+            assert.equal(gateCount, 60);
+            assert.equal(roles(s).reserve, reserveCount - 54);
+            assert.equal(roles(s).wall, wallCountBefore - 6);
+            assert.equal(d.gatePosts.length, 60);
+            const arc = d.gatePosts.filter(p => p.id.startsWith('gate-arc-'));
+            assert.equal(arc.length, 10);
+            for (const p of arc) assert.equal(Number(distance(p, d.gateCenter).toFixed(1)), 2.8);
+            assert.equal(d.gatePosts.filter(p => p.id.startsWith('gate-wing-')).length, 50);
+            // 12 名弓手（南墙优先、缺额由各面补足）前移至门口两翼内侧（钉死新岗，不占墙位配额）。
+            const forward = [...d.assignments].filter(([, a]) => a.role === 'archer' && a.post.forward);
+            assert.equal(forward.length, 12);
+            assert.ok(forward.every(([, a]) => Math.abs(Math.abs(a.post.gx - d.gateCenter.gx) - (L.gateWidth / 2 + 1.5)) < 1e-9));
         }
         if (brokenAt !== null) {
             if (enteredAt === null && s.units.some(u => alive(u) && u.team === 'red' && !u.siegeClimb &&
@@ -103,7 +115,8 @@ function breachScenario() {
             if (frame <= brokenAt + 300) {
                 nearby = s.units.filter(u => alive(u) && u.team === 'blue' && u.gy < d.gateCenter.gy && distance(u, d.gateCenter) <= 4.5).length;
                 peakNearby = Math.max(peakNearby, nearby);
-                if (nearby >= reserveCount * .8) formedAt ??= frame - brokenAt;
+                // U 型口袋只有底部弧线与两翼前几排落在 4.5 量程内（几何上限约 28）。
+                if (nearby >= 20) formedAt ??= frame - brokenAt;
             }
             // Successful gate defense may stop every natural entrant. Exercise
             // the specified "enemy already inside" case AFTER the formation check,
@@ -127,11 +140,11 @@ function breachScenario() {
 
 let breachRuns;
 const getBreachRuns = () => breachRuns ??= [breachScenario(), breachScenario()];
-test('defense #4: real ram breach forms gate semicircle and fights entrants', t => {
+test('defense #4: real ram breach forms the U-pocket and fights entrants', t => {
     const [first] = getBreachRuns();
     t.diagnostic(JSON.stringify({ ...first, frames: first.frames.length }));
-    assert.ok(first.nearby >= first.reserveCount * .8 && first.formedAt <= 300,
-        `near gate=${first.nearby}; peak=${first.peakNearby}, expected >=${first.reserveCount * .8}`);
+    assert.ok(first.peakNearby >= 20 && first.formedAt !== null && first.formedAt <= 300,
+        `near gate=${first.nearby}; peak=${first.peakNearby}; formedAt=${first.formedAt}`);
 });
 test('defense #7: the breach scenario repeats exactly frame-for-frame', t => {
     const [first, second] = getBreachRuns();
@@ -300,37 +313,84 @@ test('defense b: drawing one reserve into a vacancy leaves every other reserve s
     t.diagnostic(`fixedReserveSlots=${preserved}; vacancy=1; assignCalls=${calls.length}`);
 });
 
-test('defense c: breach fills three semicircle ranks and one overflow rank, nearest troops first', t => {
+test('defense c: breach fills the 60-post U-pocket, nearest troops first', t => {
     const s = quietDeployment(), d = s.siege.defense;
-    // Normal 100-man muster fits three ranks; extra reserves exercise overflow.
+    // Extra reserves exercise the muster cap: the pocket stays at 60 posts.
     for (let i = 0; i < 30; i++) addUnit(s, 'blue', 'infantry', d.center.gx + (i % 10) * .2, d.center.gy + Math.floor(i / 10));
     step(s, 120);
     const positions = new Map(s.units.map(u => [u, { gx: u.gx, gy: u.gy }]));
     s.siege.gate.broken = true; step(s);
-    const radii = [...new Set(d.gatePosts.map(p => Number(distance(p, d.gateCenter).toFixed(1))))];
-    assert.deepEqual(radii, [2.5, 3.3, 4.1, 4.9]);
-    const entries = [...d.assignments].filter(([, a]) => a.role === 'gate');
-    const counts = radii.map(r => entries.filter(([, a]) => Math.abs(distance(a.post, d.gateCenter) - r) < 1e-8).length);
-    assert.deepEqual(counts.slice(0, 3), [23, 30, 48]);
-    for (let row = 0; row < radii.length - 1; row++) {
-        const front = entries.filter(([, a]) => Math.abs(distance(a.post, d.gateCenter) - radii[row]) < 1e-8);
-        const rear = entries.filter(([, a]) => distance(a.post, d.gateCenter) > radii[row] + .1);
-        assert.ok(Math.max(...front.map(([u]) => distance(positions.get(u), d.gateCenter))) <=
-            Math.min(...rear.map(([u]) => distance(positions.get(u), d.gateCenter))) + 1e-8);
-        const angles = front.map(([, a]) => Math.atan2(d.gateCenter.gy - a.post.gy, a.post.gx - d.gateCenter.gx)).sort((a, b) => a - b);
-        const slotCount = Math.floor(Math.PI * radii[row] / .25);
-        const expectedAngles = Array.from({ length: slotCount }, (_, i) => Math.PI * (i + .5) / slotCount).filter(angle => {
-            const gx = d.gateCenter.gx + radii[row] * Math.cos(angle), gy = d.gateCenter.gy - radii[row] * Math.sin(angle);
-            return !s.siege.platforms.filter(p => p.kind === 'tower').some(p =>
-                gx >= p.x1 - L.towerClearance && gx <= p.x2 + L.towerClearance &&
-                gy >= p.y1 - L.towerClearance && gy <= p.y2 + L.towerClearance);
-        });
-        assert.equal(angles.length, expectedAngles.length);
-        for (let i = 0; i < angles.length; i++) assert.ok(Math.abs(angles[i] - expectedAngles[i]) < 1e-8);
+    assert.equal(d.gatePosts.length, 60);
+    // 底部弧线：半径 2.8 正对门洞 14 个候选位，南塔封锁区挡掉 4 席（i=1..4），实排 10 岗。
+    const arc = d.gatePosts.filter(p => p.id.startsWith('gate-arc-'));
+    assert.equal(arc.length, 10);
+    for (const p of arc) {
+        assert.equal(Number(distance(p, d.gateCenter).toFixed(1)), 2.8);
+        assert.ok(p.gy < d.gateCenter.gy && p.gy > d.gateCenter.gy - 2.9);
     }
-    t.diagnostic(`gateRadii=${radii}; rankCounts=${counts}`);
+    // 两翼纵深：内列 ±2.8 十二排、外列 ±3.6 十一排；东内列第 1-3 排被南塔
+    // 封锁跳过（从第 4 排起），弧线损失的 4 岗由剩余列向纵深补足 60 岗。
+    const wings = [0, 1, 2, 3].map(col => d.gatePosts.filter(p => p.col === col));
+    assert.deepEqual(wings.map(w => w.length), [13, 12, 13, 12]);
+    const offsets = [2.8, 2.8, 3.6, 3.6];
+    for (const [col, posts] of wings.entries()) {
+        for (const p of posts) {
+            assert.ok(Math.abs(Math.abs(p.gx - d.gateCenter.gx) - offsets[col]) < 1e-9);
+            assert.ok(p.gy < d.gateCenter.gy);
+        }
+        const rows = posts.map(p => Number(p.id.split('-').pop()));
+        assert.equal(Math.min(...rows), col === 1 ? 4 : 1, `col ${col} first row`);
+    }
+    // 人选：6 南墙卫 + 距门最近预备队；中选预备队必近于任何落选预备队。
+    const entries = [...d.assignments].filter(([, a]) => a.role === 'gate');
+    assert.equal(entries.length, 60);
+    const reservePool = [...d.assignments].filter(([u, a]) => a.role === 'reserve');
+    for (const [u] of entries) {
+        if (!positions.get(u)) continue;
+        for (const [v] of reservePool) {
+            assert.ok(distance(positions.get(u), d.gateCenter) <= distance(positions.get(v), d.gateCenter) + 1e-9,
+                `gate unit ${u.id} picked over nearer reserve ${v.id}`);
+        }
+    }
+    // 12 名弓手（南墙优先、缺额由各面距门最近者补足）前移至门口两翼内侧，钉死新岗不回流。
+    const forward = [...d.assignments].filter(([, a]) => a.role === 'archer' && a.post.forward);
+    assert.equal(forward.length, 12);
+    assert.ok(forward.every(([, a]) => a.post.gy < d.gateCenter.gy && a.post.gy > d.gateCenter.gy - 7));
+    t.diagnostic(`gatePosts=${d.gatePosts.length}; arc=${arc.length}; wings=${wings.map(w => w.length)}; forward=${forward.length}`);
 });
 
+test('defense d2: pinned wall guards never leave the walkway once stationed', t => {
+    const s = deploy(), d = s.siege.defense;
+    installSiegeArrows(s);
+    s.siege.gate.hp = 0; // 冲车下一击即破门，全程包含破门后的混战推挤。
+    // 非突破面墙卫一旦在本岗步道上就位，不得长期滞留地面：交战中自愿走位
+    // 短暂落地由归位规则自纠正，连续 120 帧（2s）贴岗落地才算失守；溃逃
+    // （允许跳墙逃命）与换岗跨院行军（含角楼断口切地面，尚未走上新岗步道）
+    // 除外。"就位"要求 h>0 且在本岗 2.5 内——路过别家墙面的行军不算驻岗。
+    const stationed = new Set(); // `${unitId}@${postId}`
+    const streaks = new Map();
+    const violations = [];
+    for (let frame = 1; frame <= 2400 && !s.battleOver; frame++) {
+        step(s);
+        for (const [u, a] of d.assignments) {
+            if (a.role !== 'wall' || a.post.side === 'south') continue;
+            const key = `${u.id}@${a.post.id}`;
+            if (u.dead || u.withdrawn) { streaks.delete(key); continue; }
+            const h = s.siege.heightAt(u.gx, u.gy);
+            if (h > 0) {
+                if (distance(u, a.post) <= 2.5) stationed.add(key);
+                streaks.delete(key); continue;
+            }
+            if (stationed.has(key) && u.moraleState !== 'routing' && distance(u, a.post) <= 2.5) {
+                const streak = (streaks.get(key) || 0) + 1;
+                streaks.set(key, streak);
+                if (streak === 120) violations.push(`#${u.id}@${a.post.side} frame=${frame} (${u.gx.toFixed(2)},${u.gy.toFixed(2)})`);
+            } else streaks.delete(key);
+        }
+    }
+    assert.equal(violations.length, 0, `pinned guards left walkway:\n${violations.slice(0, 10).join('\n')}`);
+    t.diagnostic(`stationedKeys=${stationed.size}; frames<=2400; violations=0`);
+});
 test('defense d: deployed wall guards stand at walkway height through the first step', t => {
     const s = deploy(), d = s.siege.defense;
     const guards = [...d.assignments].filter(([, a]) => a.role === 'wall');

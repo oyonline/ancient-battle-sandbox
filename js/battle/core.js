@@ -152,6 +152,12 @@ export function stepBattle(scene, dt) {
     scene.planningStep = false;
     for (const unit of units) {
         if (scene.siege && unit.siegeAnchor) continue;
+        // 钉墙墙卫（攻寨非突破面）：在墙上时击退位移不得把人推出步道；
+        // 自身移动不受限（换岗行军、走位追击照常），溃逃者可以跳墙逃命。
+        if (unit.siegeWallAnchored && unit.moraleState !== 'routing' &&
+            scene.siege.heightAt(unit.gx + unit.pushX, unit.gy + unit.pushY) === 0) {
+            unit.pushX = 0; unit.pushY = 0;
+        }
         const motion = Terrain.clipMotion(scene.battleOptions.terrain, unit.gx, unit.gy,
             unit.moveX + unit.pushX, unit.moveY + unit.pushY, CombatRules.bodyRadius(unit), scene.dynamicBlockers);
         unit.gx += motion.x;

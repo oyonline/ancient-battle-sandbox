@@ -4,6 +4,7 @@ import { CAMP_RULES } from './camps.js';
 import { CombatRules } from '../combat.js';
 import { Terrain } from '../terrain.js';
 import { isHostile } from '../factions.js';
+import { moveToward } from '../units.js';
 import { board } from '../board.js';
 
 // Terrain height units: 1 height = HEIGHT_SCALE screen pixels = H_WORLD world units.
@@ -56,6 +57,7 @@ export function createSiegeLayer(platforms = [], assault = null) {
     if (assault?.ladders?.length) installLadders(layer, assault.ladders, assault.climbSeconds,
         assault.rules?.enabled ? assault.rules.climbersPerLadder : undefined);
     if (assault?.defense) installSiegeDefense(layer, assault.defense);
+    if (assault?.infiltration) installSiegeAssault(layer, assault.infiltration);
     if (assault?.rules?.enabled) installSiegeRules(layer, assault.bounds, assault.rules, assault.wallThickness);
     return layer;
 }
@@ -217,9 +219,10 @@ const CREW_SLOTS = [[-.88, -.5], [.88, -.5], [-.88, .5], [.88, .5]];
 
 function installRam(layer, { gate: config, ram: start }) {
     const gate = layer.gate = { blockerId: config.blockerId, hp: config.hp ?? 900, maxHp: config.hp ?? 900, broken: false, brokenAt: null };
+    const restOffset = start.restOffset ?? 3.2;
     const ram = layer.ram = {
-        gx: start.gx, gy: start.gateOuterY + 3.2, team: start.team ?? 'red',
-        restY: start.gateOuterY + 3.2, hitY: start.gateOuterY + 1.45,
+        gx: start.gx, gy: start.gateOuterY + restOffset, team: start.team ?? 'red',
+        restY: start.gateOuterY + restOffset, hitY: start.gateOuterY + 1.45,
         state: 'advancing', crew: [null, null, null, null], initialized: false,
         recruitMs: 0, hitMs: 0, hits: 0, lastHitAt: null
     };
@@ -299,5 +302,76 @@ function installRam(layer, { gate: config, ram: start }) {
         }
         // Recruitment can move a unit across spatial buckets before targeting/arrows.
         scene.rebuildSpatial();
+    };
+}
+
+// 破门后攻方渗透：每个首次进院的攻方单位按 id%10 确定性分到一个纵深渗透点
+// （中军帐区 / 东翼 / 西翼；其余就地参战），未接敌时直线穿插过去——
+// 到达或 2 格内遇敌后该点永久失效，AI 恢复正常交战。让院内混战没有分界线。
+const hookedInfiltration = new WeakSet();
+function installSiegeAssault(layer, { bounds: b, attackerTeam = 'red' }) {
+    const assigned = new WeakSet();
+    const points = layer.infiltration = new Map();
+    const inside = u => !u.siegeClimb && u.gx > b.x1 && u.gx < b.x2 && u.gy > b.y1 && u.gy < b.y2;
+    const mulberry = seed => () => {
+        seed = seed + 0x6d2b79f5 | 0;
+        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+    function pointFor(u) {
+        const zone = u.id % 10;
+        if (zone >= 8) return null; // 门区就地参战
+        const [anchor, radius] = zone <= 3 ? [{ gx: b.cx, gy: b.cy }, 2.5] :
+            zone <= 5 ? [{ gx: b.x2 - 4, gy: b.cy }, 2] : [{ gx: b.x1 + 4, gy: b.cy }, 2];
+        const rand = mulberry(Math.imul(u.id, 2654435761) >>> 0);
+        const angle = 2 * Math.PI * rand(), r = radius * Math.sqrt(rand());
+        return {
+            gx: Math.max(b.x1 + 1, Math.min(b.x2 - 1, anchor.gx + r * Math.cos(angle))),
+            gy: Math.max(b.y1 + 1, Math.min(b.y2 - 1, anchor.gy + r * Math.sin(angle)))
+        };
+    }
+    function assignPoint(u) {
+        assigned.add(u);
+        const point = pointFor(u);
+        if (!point) return;
+        points.set(u, point);
+        u.target = u.meleeTarget = null;
+        u.lastRetarget = -Infinity;
+        u.strafeUntil = 0;
+        u.blockedEngageAt = null;
+    }
+    const defenseStep = layer.step;
+    layer.step = (scene, dt) => {
+        defenseStep?.(scene, dt);
+        if (scene.battleOver || scene.resolvingOutcome) return;
+        infiltrationAware(scene);
+        if (!layer.gate?.broken) return;
+        for (const u of scene.units) {
+            if (u.dead || u.withdrawn || u.team !== attackerTeam || u.moraleState === 'routing' ||
+                u.siegeRole || assigned.has(u) || !inside(u)) continue;
+            assignPoint(u);
+        }
+    };
+}
+// 每个场景只包装一次 updateNormalUnit；重部署换新层时通过 scene.siege 动态读
+// 当前层的渗透点表，不会叠加旧包装。
+export function infiltrationAware(scene) {
+    if (hookedInfiltration.has(scene)) return;
+    hookedInfiltration.add(scene);
+    const original = scene.updateNormalUnit;
+    scene.updateNormalUnit = function (unit, now, dt, ...rest) {
+        const point = scene.siege?.infiltration?.get(unit);
+        if (!point || unit.moraleState === 'routing') return original.call(this, unit, now, dt, ...rest);
+        let engaged = false;
+        scene.forEachNear(unit.gx, unit.gy, 2, e => {
+            if (!e.dead && !e.withdrawn && e.hp > 0 && isHostile(scene, unit.team, e.team)) engaged = true;
+        });
+        if (engaged || Math.hypot(unit.gx - point.gx, unit.gy - point.gy) <= 1.2) {
+            scene.siege.infiltration.delete(unit);
+            return original.call(this, unit, now, dt, ...rest);
+        }
+        moveToward(unit, point.gx, point.gy, unit.typeData.speed, dt);
+        unit.moving = true;
     };
 }

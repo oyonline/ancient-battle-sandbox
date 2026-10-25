@@ -14,7 +14,7 @@ const nearest = (units, point) => {
 };
 
 export function installSiegeDefense(layer, config) {
-    const { bounds: b, team = 'blue', gateHalf = 1.2, wallInset = .38 } = config;
+    const { bounds: b, team = 'blue', gateHalf = 1.2, wallInset = .38, towerClearance = .4 } = config;
     const center = { gx: b.cx, gy: b.cy }, gateCenter = { gx: b.cx, gy: b.y2 };
     const distanceToGate = u => dist(u, gateCenter);
     const assignments = new Map(), wallPosts = [], gatePosts = [];
@@ -26,6 +26,9 @@ export function installSiegeDefense(layer, config) {
     const threat = Object.fromEntries(SIDES.map(s => [s, 0]));
     const inside = u => !u.siegeClimb && u.gx > b.x1 && u.gx < b.x2 && u.gy > b.y1 && u.gy < b.y2;
     const sideOf = p => SIDES.slice().sort((a, c) => edgeDistance(p, a) - edgeDistance(p, c) || SIDES.indexOf(a) - SIDES.indexOf(c))[0];
+    // 突破面：寨门所在面。非突破面墙卫被钉在墙上（白名单索敌 + 落地 1.0 缰绳），
+    // 突破面保持原 2.5 巡守，允许下墙堵门参战。
+    const gateSide = sideOf(gateCenter);
     function edgeDistance(p, side) {
         return Math.abs(side === 'west' ? p.gx - b.x1 : side === 'east' ? p.gx - b.x2 : side === 'north' ? p.gy - b.y1 : p.gy - b.y2);
     }
@@ -56,6 +59,22 @@ export function installSiegeDefense(layer, config) {
         }
     }
     const orderPosts = (a, c) => a.priority - c.priority || threat[c.side] - threat[a.side] || wallPosts.indexOf(a) - wallPosts.indexOf(c);
+    // 门阵 U 型口袋的塔位避让与翼列纵深延伸（初始 60 岗与破门后反冲补岗共用同一生成器）。
+    const towers = layer.platforms.filter(p => p.kind === 'tower');
+    const towerBlocked = p => towers.some(t => p.gx >= t.x1 - towerClearance && p.gx <= t.x2 + towerClearance &&
+        p.gy >= t.y1 - towerClearance && p.gy <= t.y2 + towerClearance);
+    const wingColumns = [[-1, 2.8], [1, 2.8], [-1, 3.6], [1, 3.6]]
+        .map(([sign, off], id) => ({ id, sign, off, nextRow: 1 }));
+    function wingPost(col) {
+        let post, row = col.nextRow;
+        do {
+            post = { id: `gate-wing-${col.id}-${row}`, col: col.id,
+                gx: gateCenter.gx + col.sign * col.off, gy: gateCenter.gy - .8 * row };
+            row++;
+        } while (towerBlocked(post));
+        col.nextRow = row;
+        return post;
+    }
     function assign(unit, role, post) {
         const old = assignments.get(unit);
         if (old?.post.id === post.id && old.role === role) return;
@@ -84,7 +103,7 @@ export function installSiegeDefense(layer, config) {
     }
     function allocate(units, rebalance = false) {
         for (const [u] of assignments) if (!active(u) || u.team !== team || u.siegeAnchor) {
-            assignments.delete(u); delete u.siegeDefenseRole;
+            assignments.delete(u); delete u.siegeDefenseRole; delete u.siegeWallAnchored;
         }
         const defenders = units.filter(u => active(u) && u.team === team && !u.siegeAnchor);
         const infantry = defenders.filter(u => u.type === 'infantry');
@@ -100,9 +119,11 @@ export function installSiegeDefense(layer, config) {
                 const post = pool.shift(); dutyPosts.push(post); counts[post.side]++;
             }
         }
-        const selected = dutyPosts.filter(p => !p.gateTransfer).sort(orderPosts);
+        const selected = dutyPosts.slice().sort(orderPosts);
         const selectedSet = new Set(selected);
-        for (const [u, a] of assignments) if (a.role === 'wall' && !selectedSet.has(a.post)) assignments.delete(u);
+        for (const [u, a] of assignments) if (a.role === 'wall' && !selectedSet.has(a.post)) {
+            assignments.delete(u); delete u.siegeDefenseRole; delete u.siegeWallAnchored;
+        }
         const occupied = new Set([...assignments.values()].map(a => a.post));
         const processed = new Set();
         for (const post of selected) {
@@ -134,7 +155,8 @@ export function installSiegeDefense(layer, config) {
             }
             assign(u, 'reserve', reservePosts.get(u));
         }
-        const archers = defenders.filter(u => u.type === 'archer');
+        // 破门后前移堵门的弓手钉死在新岗（post.forward）：不占各面弓手配额、不被轮换收回。
+        const archers = defenders.filter(u => u.type === 'archer' && !assignments.get(u)?.post?.forward);
         const counts = Object.fromEntries(SIDES.map(side => [side, 0]));
         for (let i = 0; i < archers.length; i++) {
             const side = SIDES.slice().sort((a, c) => (counts[a] + 1) / (threat[a] + 1) - (counts[c] + 1) / (threat[c] + 1) || SIDES.indexOf(a) - SIDES.indexOf(c))[0];
@@ -177,6 +199,18 @@ export function installSiegeDefense(layer, config) {
                 const u = nearest(infantry.filter(u => assignments.get(u)?.role === 'reserve'), post);
                 if (u) assign(u, 'gate', post);
             }
+            // 反冲梯队：院内敌人压过 20 时，每轮轮换从距门最近的预备队抽至多 6 人，
+            // 沿 U 型两翼纵深处追加新岗补进口袋（与初始门阵共用翼列生成器，确定性）。
+            const pool = infantry.filter(u => assignments.get(u)?.role === 'reserve');
+            if (intruders.length > 20 && pool.length) {
+                const drawn = pool.sort((a, c) => distanceToGate(a) - distanceToGate(c) || a.id - c.id).slice(0, 6);
+                for (const u of drawn) {
+                    const col = wingColumns.slice().sort((a, c) => a.nextRow - c.nextRow || a.id - c.id)[0];
+                    const post = wingPost(col);
+                    gatePosts.push(post);
+                    assign(u, 'gate', post);
+                }
+            }
         }
     }
     function rebalanceWalls() {
@@ -186,13 +220,13 @@ export function installSiegeDefense(layer, config) {
             const counts = Object.fromEntries(SIDES.map(side => [side, guards.filter(([, a]) => a.post.side === side).length]));
             const ratio = side => threat[side] / Math.max(1, counts[side]);
             const occupied = new Set([...assignments.values()].map(a => a.post.id));
-            const destinations = SIDES.filter(side => wallPosts.some(p => p.side === side && !p.gateTransfer && !occupied.has(p.id)))
+            const destinations = SIDES.filter(side => wallPosts.some(p => p.side === side && !occupied.has(p.id)))
                 .sort((a, c) => ratio(c) - ratio(a) || SIDES.indexOf(a) - SIDES.indexOf(c));
             const sources = SIDES.filter(side => guards.some(([u, a]) => a.post.side === side && a.post.priority > 0 && !moved.has(u)))
                 .sort((a, c) => ratio(a) - ratio(c) || SIDES.indexOf(a) - SIDES.indexOf(c));
             const from = sources[0], to = destinations[0];
             if (!from || !to || from === to || ratio(to) <= ratio(from) || ratio(to) < ratio(from) * 1.5) break;
-            const post = wallPosts.filter(p => p.side === to && !p.gateTransfer && !occupied.has(p.id)).sort(orderPosts)[0];
+            const post = wallPosts.filter(p => p.side === to && !occupied.has(p.id)).sort(orderPosts)[0];
             const u = nearest(guards.filter(([u, a]) => a.post.side === from && a.post.priority > 0 && !moved.has(u)).map(([u]) => u), post);
             const old = assignments.get(u).post;
             dutyPosts[dutyPosts.indexOf(old)] = post;
@@ -201,35 +235,45 @@ export function installSiegeDefense(layer, config) {
     }
     function breach() {
         breached = true;
-        const members = [...assignments].filter(([u, a]) => active(u) && !u.siegeAnchor && a.role === 'reserve').map(([u]) => u);
-        for (const sign of [-1, 1]) {
-            const guards = [...assignments].filter(([u, a]) => active(u) && !u.siegeAnchor && a.role === 'wall' && (u.gx - b.cx) * sign > 0)
-                .map(([u]) => u).sort((a, c) => dist(a, gateCenter) - dist(c, gateCenter) || a.id - c.id).slice(0, 6);
-            for (const u of guards) { assignments.get(u).post.gateTransfer = true; members.push(u); wallCount--; }
+        // 抽南墙门左右各 3 名墙卫下墙堵门；空出的 6 个墙岗不注销（不标空缺、不减
+        // 墙卫配额），下一轮 2s 轮换自动从预备队回填，南墙恢复满员。
+        const reserves = [...assignments].filter(([u, a]) => active(u) && !u.siegeAnchor && a.role === 'reserve').map(([u]) => u);
+        const pulled = [];
+        for (const sign of [-1, 1]) pulled.push(...[...assignments]
+            .filter(([u, a]) => active(u) && !u.siegeAnchor && a.role === 'wall' && a.post.side === gateSide && (u.gx - b.cx) * sign > 0)
+            .map(([u]) => u).sort((a, c) => dist(a, gateCenter) - dist(c, gateCenter) || a.id - c.id).slice(0, 3));
+        // U 型口袋：底部弧线半径 2.8 正对门洞（南塔占去的弧位跳过），两翼从门两侧
+        // 向纵深延伸（内列 ±2.8 十二排、外列 ±3.6 十一排，塔位损失的名额由翼列补足 60 岗）。
+        const arc = [];
+        for (let i = 0; i < 14; i++) {
+            const angle = Math.PI * (i + .5) / 14;
+            const p = { id: `gate-arc-${i}`, gx: gateCenter.gx + 2.8 * Math.cos(angle), gy: gateCenter.gy - 2.8 * Math.sin(angle) };
+            if (!towerBlocked(p)) arc.push(p);
         }
-        // Three semicircles at .8-cell rank spacing and .25-cell arc slots,
-        // less dense than the former two ranks; overflow musters behind
-        // the third rank. Fill the front ranks with the closest available troops.
-        const rows = 3;
-        let remaining = members.length;
-        for (let row = 0; remaining; row++) {
-            const radius = 2.5 + row * .8;
-            const count = row < rows ? Math.min(remaining, Math.floor(Math.PI * radius / .25)) : remaining;
-            const posts = [];
-            for (let i = 0; i < count; i++) {
-                const angle = Math.PI * (i + .5) / count;
-                posts.push({ id: `gate-${row}-${i}`, gx: gateCenter.gx + radius * Math.cos(angle), gy: gateCenter.gy - radius * Math.sin(angle) });
-            }
-            const front = members.sort((a, c) => distanceToGate(a) - distanceToGate(c) || a.id - c.id).splice(0, count);
-            const pairs = front.flatMap(unit => posts.map((post, index) => ({ unit, post, index, distance: dist(unit, post) })))
-                .sort((a, c) => a.distance - c.distance || a.unit.id - c.unit.id || a.index - c.index);
-            const usedUnits = new Set(), usedPosts = new Set();
-            for (const { unit, post } of pairs) {
-                if (usedUnits.has(unit) || usedPosts.has(post)) continue;
-                assign(unit, 'gate', post); usedUnits.add(unit); usedPosts.add(post);
-            }
-            gatePosts.push(...posts); remaining -= count;
+        const wingTargets = [12, 12, 11, 11];
+        for (const col of wingColumns) col.posts = Array.from({ length: wingTargets[col.id] }, () => wingPost(col));
+        const wings = wingColumns.flatMap(col => col.posts).sort((a, c) => c.gy - a.gy || a.col - c.col);
+        const posts = [...arc, ...wings];
+        while (posts.length < 60) posts.push(wingPost(wingColumns.slice().sort((a, c) => a.nextRow - c.nextRow || a.id - c.id)[0]));
+        // 人选：6 墙卫 + 距门最近预备队；按"底部弧线→两翼前排→纵深"的岗位序填充，
+        // 每个岗位落位剩余者中最近的人。
+        const unassigned = new Set([...pulled, ...reserves]
+            .sort((a, c) => distanceToGate(a) - distanceToGate(c) || a.id - c.id).slice(0, posts.length));
+        for (const post of posts) {
+            const u = nearest([...unassigned], post);
+            if (!u) break;
+            unassigned.delete(u); assign(u, 'gate', post);
         }
+        gatePosts.push(...posts);
+        // 12 名弓手前移至门口两翼内侧：南墙（岗位距门最近者）优先，缺额由各面
+        // 距门最近的弓手补足；塔位遮挡处整体北让，其余弓手留守原墙各面。
+        // 前移弓手钉死新岗（forward），不回流、不占墙位配额。
+        const forward12 = [...assignments].filter(([u, a]) => active(u) && a.role === 'archer' && !a.post.forward)
+            .sort((a, c) => (a[1].post.side === gateSide ? 0 : 1) - (c[1].post.side === gateSide ? 0 : 1) ||
+                dist(a[1].post, gateCenter) - dist(c[1].post, gateCenter) || a[0].id - c[0].id).slice(0, 12);
+        forward12.forEach(([u], i) => assign(u, 'archer', {
+            id: `gate-archer-${i}`, side: gateSide, forward: true,
+            gx: gateCenter.gx + (i % 2 === 0 ? -1 : 1) * (gateHalf + 1.5), gy: gateCenter.gy - 2.9 - Math.floor(i / 2) * .65 }));
     }
     const defense = layer.defense = {
         assignments, wallPosts, gatePosts, threat, center, gateCenter,
@@ -253,11 +297,17 @@ export function installSiegeDefense(layer, config) {
             else {
                 candidates = [];
                 const radius = 2.5 + unit.typeData.range + .5;
+                // 非突破面墙卫目标白名单：只打步道上（含墙顶梯口）/ 墙外的敌人——
+                // 院内地面敌人交给预备队与门阵，墙卫不再被诱下墙。梯子爬升段在墙外、
+                // 梯口在步道平台上，均已被覆盖；翻墙落地瞬间的敌人不再对白名单放行，
+                // 避免墙卫为追落地敌人自己走下步道。
+                const pinned = a.role === 'wall' && a.post.side !== gateSide;
                 scene.forEachNear(a.post.gx, a.post.gy, radius, e => {
                     if (!isHostile(scene, unit.team, e.team) || dist(e, a.post) > radius) return;
-                    if (a.role === 'gate' ? distanceToGate(e) <= 4.5 &&
+                    if (a.role === 'gate' ? dist(e, a.post) <= 2.5 &&
                         (inside(e) || (!e.siegeClimb && Math.abs(e.gx - b.cx) <= gateHalf && e.gy <= b.y2 + 1.5)) :
-                        dist(e, a.post) <= 2.5 || layer.meleeBypass(unit, e)) candidates.push(e);
+                        (dist(e, a.post) <= 2.5 || layer.meleeBypass(unit, e)) &&
+                        (!pinned || layer.heightAt(e.gx, e.gy) > 0 || !inside(e))) candidates.push(e);
                 });
             }
             const target = nearest(candidates.filter(e => !e.dead && !e.withdrawn && e.hp > 0), unit) ?? null;
@@ -267,12 +317,26 @@ export function installSiegeDefense(layer, config) {
         act(scene, unit, now, dt) {
             if (!this.owns(unit)) return false;
             const { role, post } = assignments.get(unit);
-            if (role !== 'reserve' && dist(unit, post) > 2.5) {
+            // 钉墙锚定标记（供 core/separate 位移层读取）：非突破面墙卫在墙上即锚定。
+            // 只挡击退/挤兑等非自愿位移（core 只清 push、separate 只清纠偏）——
+            // 单位自身的 moveToward 不受限，换岗跨院行军不会死锁在步道拐角。
+            const pinnedWall = role === 'wall' && post.side !== gateSide;
+            unit.siegeWallAnchored = pinnedWall && layer.heightAt(unit.gx, unit.gy) > 0;
+            // 非突破面墙卫一旦落地（被击退下墙）立即停止一切交战、径直归位回岗；
+            // 在墙上保持原 2.5 巡守，梯口白刃战不受影响。
+            const offWall = pinnedWall && layer.heightAt(unit.gx, unit.gy) === 0;
+            if (offWall) moveToward(unit, post.gx, post.gy, unit.typeData.speed, dt);
+            else if (role !== 'reserve' && dist(unit, post) > 2.5) {
                 unit.strafeUntil = 0;
                 moveToward(unit, post.gx, post.gy, unit.typeData.speed, dt);
             } else {
                 if (role === 'reserve' && !intruders.length) unit.strafeUntil = 0;
                 scene.updateNormalUnit(unit, now, dt, post);
+                // 钉墙防自愿下墙：在墙 pinned 墙卫的自身走位不得踏出步道（追击/走位
+                // 被墙外目标诱导时原地站定）；转岗/归位走上方 moveToward 分支，不受此限。
+                if (pinnedWall && layer.heightAt(unit.gx + unit.moveX, unit.gy + unit.moveY) === 0) {
+                    unit.moveX = 0; unit.moveY = 0;
+                }
             }
             // Dense gate ranks can block a straight walking order. Probe short
             // lateral approaches through the SAME moveToward/contact rules.
