@@ -123,7 +123,9 @@ test('scale: page startBattle(player) invokes configuration only, retaining all 
 
 test('scale: fixed config seed173 variants1/6 auto golden at 60-frame samples through 600', () => {
     const golden = fixture('siege-auto-100x100-300v100-range20-seed173.json');
-    assert.deepEqual(golden.layout, L);
+    const { archerLineClearance, ...autoLayout } = L;
+    assert.equal(archerLineClearance, 18.5);
+    assert.deepEqual(golden.layout, autoLayout);
     for (const variant of golden.variants) {
         const s = deployVariant({ layout: golden.layout, seed: golden.seed, variant: variant.id, jitter: golden.jitter });
         for (const row of variant.samples) {

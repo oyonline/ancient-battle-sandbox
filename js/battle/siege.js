@@ -361,6 +361,10 @@ function installRam(layer, { gate: config, ram: start }) {
                 unit.groundGuardReturning = false;
                 scene.navigation?.routes.delete(unit);
             }
+            // The first ordinary recruitment gets one chance at the reserves.
+            // Unrecruited, dead or routing reserves resume their ordinary AI too.
+            if (initial && layer.assault?.player)
+                for (const unit of scene.units) delete unit.siegeRamReserve;
         }
         if (ram.crew.filter(id => id !== null).length >= 2) {
             if (ram.state === 'advancing') {

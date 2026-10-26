@@ -52,6 +52,7 @@ export const CAMP_LAYOUT = {
     boardSize: { w: 100, h: 100 },
     archerRange: 20,
     stagingClearance: 27,
+    archerLineClearance: 18.5,
     attackerEdgeMargin: 1.5,
     attackerSpacing: 1,
     attackerDepthSpacing: .85,

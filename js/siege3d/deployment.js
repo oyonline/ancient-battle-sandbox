@@ -3,6 +3,7 @@ import { board } from '../board.js';
 import { campBounds, queueCampWalls } from './walls.js';
 import { CAMP_LAYOUT as L } from './layout.js';
 import { avoidTowerPosts } from './defense-posts.js';
+import { clearSiegeArcherPost } from '../battle/siege-assault.js';
 
 export const H_WORLD = L.worldHeightScale;
 export const WALKWAY_HEIGHT = L.walkwayHeight / H_WORLD;
@@ -12,6 +13,7 @@ export const DEFENDERS = L.defenders;
 
 export function createCampSiege(b, { layout = L, ladders = false, defense = true, rules = {}, scatterSeed, ramRestOffset = layout.attackerFrontClearance, ladderRestOffset = layout.attackerFrontClearance, ladderCarry = true,
     attackerControl = 'auto', stagingClearance = layout.stagingClearance,
+    archerLineClearance = layout.archerLineClearance ?? L.archerLineClearance,
     battleDeadlineSeconds = attackerControl === 'player' ? 360 : null } = {}) {
     if (!['auto', 'player'].includes(attackerControl)) throw new Error('Invalid attackerControl');
     if (attackerControl === 'player' && !ladderCarry) throw new Error('player assault requires ladderCarry');
@@ -53,7 +55,7 @@ export function createCampSiege(b, { layout = L, ladders = false, defense = true
             start: point(layout.wallThickness + ladderRestOffset) };
     }));
     const siege = createSiegeLayer(platforms, {
-        attackerControl, stagingClearance, battleDeadlineSeconds: attackerControl === 'player' ? battleDeadlineSeconds : null,
+        attackerControl, stagingClearance, archerLineClearance, battleDeadlineSeconds: attackerControl === 'player' ? battleDeadlineSeconds : null,
         attackerTeam: config?.attackerTeam ?? 'red',
         rules: config, scatterSeed,
         fenceCover: layout.fenceCover, bounds: b, wallThickness: layout.wallThickness,
@@ -70,6 +72,7 @@ export function createCampSiege(b, { layout = L, ladders = false, defense = true
 
 // The page and headless tests consume the same placements and initial siege orders.
 export function siegeDeployment(units, b, siege, frontClearance = L.attackerFrontClearance, layout = L) {
+    for (const unit of units) clearSiegeArcherPost(unit);
     const result = [], defenders = units.filter(u => u.team === 'blue');
     const archers = defenders.filter(u => u.type === 'archer');
     const towers = siege.platforms.filter(p => p.kind === 'tower');
@@ -111,7 +114,9 @@ export function siegeDeployment(units, b, siege, frontClearance = L.attackerFron
             cursor += count;
         });
     }
-    for (const [side, soldiers] of Object.entries(wings)) {
+    for (const [side, wing] of Object.entries(wings)) {
+        const archers = siege.assault?.player ? wing.filter(u => u.type === 'archer') : [];
+        const soldiers = siege.assault?.player ? wing.filter(u => u.type !== 'archer') : wing;
         const horizontal = side === 'south' || side === 'north';
         // 出发阵地钉在地图边缘：前沿距墙外沿 frontClearance，
         // 纵深由"前沿到地图边缘"的可用空间倒推排数，列数随该翼人数自适应。
@@ -135,6 +140,16 @@ export function siegeDeployment(units, b, siege, frontClearance = L.attackerFron
             result.push({ unit, side,
                 gx: horizontal ? b.cx + along : side === 'west' ? b.x1 - outward : b.x2 + outward,
                 gy: horizontal ? (side === 'north' ? b.y1 - outward : b.y2 + outward) : b.cy + along });
+        });
+        archers.forEach((unit, i) => {
+            const along = i - (archers.length - 1) / 2;
+            const outward = layout.wallThickness + siege.assault.archerLineClearance;
+            const gx = horizontal ? b.cx + along : side === 'west' ? b.x1 - outward : b.x2 + outward;
+            const gy = horizontal ? (side === 'north' ? b.y1 - outward : b.y2 + outward) : b.cy + along;
+            unit.siegeWing = side;
+            delete unit.siegeStaging;
+            unit.siegeArcherPost = { gx, gy };
+            result.push({ unit, side, gx, gy });
         });
     }
     siege.defense?.deploy(units, result);
