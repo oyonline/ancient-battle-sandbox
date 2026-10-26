@@ -117,6 +117,7 @@ test('P3 #3: deaths plus current routs reach 35%, but rally before 20 stalled se
     const { s, b } = camp();
     const red = Array.from({ length: 20 }, (_, i) => fixed(s, 'red', b.x1 - 7, b.y1 + i * .8));
     fixed(s, 'blue', b.cx, b.cy);
+    red[7].gx = b.x1 - L.rules.wallFootRadius; red[7].gy = b.cy;
     red.slice(4, 7).forEach(rout);
     s.scheduleBattleAction(0, () => red.slice(0, 4).forEach(u => applyDamage(u, 10000)));
     step(s);
@@ -132,10 +133,14 @@ test('P3 #3: deaths plus current routs reach 35%, but rally before 20 stalled se
     assert.ok(red.every(u => !u.withdrawn));
 });
 
-function stalledCamp(losses = 7) {
+function stalledCamp(losses = 7, contact = true) {
     const { s, b } = camp();
-    const red = Array.from({ length: 20 }, (_, i) => fixed(s, 'red', b.x1 - 7, b.y1 + i * .8));
+    const red = Array.from({ length: 20 }, (_, i) => fixed(s, 'red', b.x1 - 7, b.y1 + i * .8,
+        i === 19 ? 'archer' : 'infantry'));
     fixed(s, 'blue', b.cx, b.cy);
+    // Timer/progress regressions start with wall contact; pre-contact cases opt out.
+    // An archer cannot be recruited by a ladder or ram before the measured event.
+    if (contact) { red[19].gx = b.x1 - L.rules.wallFootRadius; red[19].gy = b.cy; }
     s.scheduleBattleAction(0, () => red.slice(0, losses).forEach(u => applyDamage(u, 10000)));
     return { s, b, red };
 }
@@ -234,6 +239,8 @@ test('P3 #3e: real ram impacts above 35% losses reset the timer until the gate b
     s.siege = createCampSiege(b, { defense: false, ramRestOffset: 3.2 });
     queueCampWalls(s);
     step(s, 600);
+    const contactAt = s.siege.rules.contactAt;
+    assert.notEqual(contactAt, null);
     const { ram, gate } = s.siege;
     s.scheduleBattleAction(0, () => red.slice(7, 11).forEach((u, i) => {
         u.gx = ram.gx + [-.5, .5, -1, 1][i]; u.gy = ram.gy;
@@ -246,6 +253,7 @@ test('P3 #3e: real ram impacts above 35% losses reset the timer until the gate b
         assert.equal(s.siege.rules.attackerLossRate, .35);
         assert.equal(s.siege.rules.lastProgressAt, s.simulationTime);
         assert.equal(s.siege.rules.attackerStallSeconds, 0);
+        assert.equal(s.siege.rules.contactAt, contactAt, 'ram progress cannot replace first contact');
         assert.equal(s.battleOver, false);
     }
     assert.equal(hits, 12); assert.equal(gate.broken, true);
@@ -256,27 +264,41 @@ test('P3 #3e: real ram impacts above 35% losses reset the timer until the gate b
     assert.ok(Math.abs(s.simulationTime - progressAt - 20000) <= 1000 / 60);
 });
 
-test('P3 #3f: stall starts at the first check, even when installed at a nonzero simulation time', () => {
-    const { s, red } = stalledCamp();
+test('P3 #3f: long pre-contact time never starts stall or retreats, even at a nonzero simulation time', () => {
+    const { s, b, red } = stalledCamp(7, false);
     s.simulationTime = 123000;
+    assert.equal(s.siege.rules.contactAt, null);
     assert.equal(s.siege.rules.lastProgressAt, null);
+    for (let i = 0; i < 3600; i++) {
+        step(s);
+        assert.equal(s.siege.rules.contactAt, null);
+        assert.equal(s.siege.rules.lastProgressAt, null);
+        assert.equal(s.siege.rules.attackerStallSeconds, 0);
+        assert.equal(s.battleOver, false);
+    }
+    assert.equal(s.siege.rules.attackerLossRate, .35);
+    s.scheduleBattleAction(0, () => { red[7].gx = b.x1 - L.rules.wallFootRadius; red[7].gy = b.cy; });
     step(s);
-    const startedAt = s.simulationTime;
-    assert.equal(s.siege.rules.lastProgressAt, startedAt);
+    const contactAt = s.simulationTime;
+    assert.equal(s.siege.rules.contactAt, contactAt);
+    assert.equal(s.siege.rules.lastProgressAt, contactAt);
     assert.equal(s.siege.rules.attackerStallSeconds, 0);
     step(s, 1199); assert.equal(s.battleOver, false);
     step(s);
     assert.equal(s.siege.rules.attackerLossRate, .35);
-    assert.equal(s.siege.rules.lastProgressAt, startedAt);
+    assert.equal(s.siege.rules.contactAt, contactAt);
+    assert.equal(s.siege.rules.lastProgressAt, contactAt);
     assert.equal(s.winner, 'blue'); assert.equal(s.endReason, '攻方受挫撤退');
-    assert.ok(Math.abs(s.simulationTime - startedAt - 20000) <= 1000 / 60);
+    assert.ok(Math.abs(s.simulationTime - contactAt - 20000) < 1e-6);
     assert.ok(red.every(u => u.dead || u.withdrawn));
 });
 
-test('P3 #3f2: missing stall configuration defaults to 20 seconds and preserves a zero first-check time', () => {
+test('P3 #3f2: missing stall configuration defaults to 20 seconds and preserves contact at time zero', () => {
     const { s, red } = stalledCamp();
     s.siege.rules.config.attackerStallSeconds = undefined;
-    s.siege.rules.checkWin(s);
+    s.simulationTime = -1000 / 60;
+    step(s);
+    assert.equal(s.siege.rules.contactAt, 0);
     assert.equal(s.siege.rules.lastProgressAt, 0);
     step(s, 1199); assert.equal(s.battleOver, false);
     step(s);
@@ -297,13 +319,169 @@ test('P3 #3g: deaths plus a current rout at the stall deadline trigger full with
     assert.ok(red.every(u => u.dead || u.withdrawn));
 });
 
+test('P3 #3h: actual arrow casualties above 35% never count as wall contact or start retreat', () => {
+    const { s, b } = camp();
+    s.battleOptions.deathmatch = true;
+    const red = Array.from({ length: 20 }, (_, i) => fixed(s, 'red', b.x1 - 7, b.y1 + i * .8));
+    const archer = fixed(s, 'blue', b.cx, b.cy, 'archer');
+    archer.lastAttack = Infinity;
+    const hits = [], record = s.recordDamage;
+    s.recordDamage = function (target, damage, from, at) {
+        hits.push([target.id, from.id]);
+        return record.call(this, target, damage, from, at);
+    };
+    s.scheduleBattleAction(0, () => red.slice(0, 7).forEach(u => s.fireArrow(archer, u, { rawAttack: 10000 })));
+    for (let i = 0; i < 3600; i++) {
+        step(s);
+        assert.equal(s.siege.rules.contactAt, null);
+        assert.equal(s.siege.rules.lastProgressAt, null);
+        assert.equal(s.siege.rules.attackerStallSeconds, 0);
+        assert.equal(s.battleOver, false);
+    }
+    assert.equal(s.battleStats.red.lost, 7);
+    assert.ok(s.siege.rules.attackerLossRate >= .35);
+    assert.deepEqual(hits.map(([id]) => id).sort((a, b) => a - b), red.slice(0, 7).map(u => u.id));
+    assert.ok(hits.every(([, from]) => from === archer.id));
+    assert.ok(red.every(u => !u.withdrawn));
+});
+
+test('P3 #3i: disengaging and returning never replace first wall contact or postpone the deadline', () => {
+    const { s, b, red } = stalledCamp(7, false);
+    step(s, 300);
+    s.scheduleBattleAction(0, () => { red[7].gx = b.x1 - 2; red[7].gy = b.cy; });
+    step(s);
+    const contactAt = s.siege.rules.contactAt;
+    assert.equal(contactAt, s.simulationTime);
+    s.scheduleBattleAction(0, () => { red[7].gx = b.x1 - 7; });
+    step(s, 600);
+    assert.equal(s.siege.rules.contactAt, contactAt);
+    assert.equal(s.siege.rules.lastProgressAt, contactAt);
+    assert.ok(Math.abs(s.siege.rules.attackerStallSeconds - 10) < 1e-9);
+    s.scheduleBattleAction(0, () => { red[7].gx = b.x1 - 2; });
+    step(s, 599);
+    assert.equal(s.siege.rules.contactAt, contactAt);
+    assert.equal(s.siege.rules.lastProgressAt, contactAt);
+    assert.equal(s.battleOver, false);
+    step(s);
+    assert.equal(s.siege.rules.contactAt, contactAt);
+    assert.equal(s.endReason, '攻方受挫撤退');
+    assert.ok(Math.abs(s.simulationTime - contactAt - 20000) < 1e-6);
+});
+
+test('P3 #3j: a real climb alone latches contact before landing or ram impact', () => {
+    const s = makeScene(), b = campBounds();
+    // Isolate the climb trigger from wall-foot proximity without changing production defaults.
+    s.siege = createCampSiege(b, { ladders: true, defense: false, ladderCarry: false, rules: { wallFootRadius: 0 } });
+    queueCampWalls(s);
+    const ladder = s.siege.ladders[0];
+    const climber = fixed(s, 'red', ladder.foot.gx, ladder.foot.gy);
+    fixed(s, 'blue', b.cx, b.cy);
+    assert.equal(s.siege.rules.contactAt, null);
+    step(s);
+    assert.ok(climber.siegeClimb?.progress > 0);
+    assert.ok(climber.gx < b.x1 - L.wallThickness, 'climber is still beyond the wall outer edge');
+    assert.equal(s.siege.landedCount, 0);
+    assert.equal(s.siege.ram.hits, 0);
+    assert.equal(s.siege.rules.contactAt, s.simulationTime);
+    assert.equal(s.siege.rules.lastProgressAt, s.simulationTime);
+    assert.equal(s.siege.rules.attackerStallSeconds, 0);
+});
+
+test('P3 #3k: the first real ram hit alone latches contact', () => {
+    const s = makeScene(), b = campBounds();
+    s.siege = createCampSiege(b, { defense: false, ramRestOffset: 3.2, rules: { wallFootRadius: 0 } });
+    queueCampWalls(s);
+    const { ram } = s.siege;
+    for (const dx of [-.4, .4, -.8, .8]) fixed(s, 'red', ram.gx + dx, ram.gy);
+    fixed(s, 'blue', b.cx, b.cy);
+    for (let i = 0; i < 600 && ram.hits === 0; i++) {
+        step(s);
+        assert.ok(s.units.filter(u => u.team === 'red').every(u => u.gy > b.y2 + L.wallThickness && !u.siegeClimb));
+        if (ram.hits === 0) {
+            assert.equal(s.siege.rules.contactAt, null);
+            assert.equal(s.siege.rules.lastProgressAt, null);
+            assert.equal(s.siege.rules.attackerStallSeconds, 0);
+        }
+    }
+    assert.equal(ram.hits, 1);
+    assert.equal(s.siege.rules.contactAt, ram.lastHitAt);
+    assert.equal(s.siege.rules.contactAt, s.simulationTime);
+    assert.equal(s.siege.rules.lastProgressAt, s.simulationTime);
+});
+
+test('P3 #3l: contact uses the quantized outer-wall distance and excludes ineligible units', () => {
+    for (const [offset, expected] of [[0, true], [.024999, true], [.025001, false]]) {
+        const s = makeScene(), b = campBounds();
+        s.siege = createCampSiege(b, { defense: false });
+        fixed(s, 'red', b.x1 - L.wallThickness - L.rules.wallFootRadius - offset, b.cy, 'archer');
+        fixed(s, 'blue', b.cx, b.cy);
+        step(s);
+        assert.equal(s.siege.rules.contactAt, expected ? s.simulationTime : null, `outer-wall offset=${offset}`);
+    }
+    const { s, b } = camp();
+    fixed(s, 'red', b.cx - 6, b.cy); // Already inside, but too far from the tent to capture.
+    const dead = fixed(s, 'red', b.x1 - 1, b.y1 + 2);
+    const withdrawn = fixed(s, 'red', b.x1 - 1, b.y1 + 4);
+    const routed = fixed(s, 'red', b.x1 - 1, b.y1 + 6); rout(routed);
+    fixed(s, 'blue', b.cx, b.cy);
+    s.scheduleBattleAction(0, () => { applyDamage(dead, 10000); s.withdrawUnit(withdrawn); });
+    step(s);
+    assert.equal(dead.dead, true);
+    assert.equal(withdrawn.withdrawn, true);
+    assert.equal(routed.moraleState, 'routing');
+    assert.equal(s.siege.rules.contactAt, null);
+    assert.equal(s.siege.rules.lastProgressAt, null);
+    assert.equal(s.siege.rules.attackerStallSeconds, 0);
+    assert.equal(s.battleOver, false);
+});
+
+test('P3 #3m: quantized contact, disengagement and retreat replay frame-for-frame after swapping teams and mirroring', () => {
+    function run(swapped = false) {
+        const s = makeScene(), b = campBounds(), frames = [];
+        const attackerTeam = swapped ? 'blue' : 'red', defenderTeam = swapped ? 'red' : 'blue';
+        const mirrorX = x => swapped ? 2 * b.cx - x : x;
+        s.siege = createSiegeLayer([], { bounds: b, wallThickness: L.wallThickness,
+            rules: { ...L.rules, attackerTeam, defenderTeam } });
+        const attackers = Array.from({ length: 20 }, (_, i) => fixed(s, attackerTeam, mirrorX(b.x1 - 7), b.y1 + i * .8));
+        fixed(s, defenderTeam, b.cx, b.cy);
+        s.scheduleBattleAction(0, () => attackers.slice(0, 7).forEach(u => applyDamage(u, 10000)));
+        const probe = attackers[7], rules = s.siege.rules;
+        let contactAt = null;
+        for (let frame = 1; frame <= 1500 && !s.battleOver; frame++) {
+            if ([60, 120, 300, 600].includes(frame)) s.scheduleBattleAction(0, () => {
+                const distance = frame === 60 ? L.rules.wallFootRadius + .025001 :
+                    frame === 300 ? 7 : L.rules.wallFootRadius + .024999;
+                probe.gx = mirrorX(b.x1 - L.wallThickness - distance); probe.gy = b.cy;
+            });
+            step(s);
+            if (frame < 120) assert.equal(rules.contactAt, null);
+            if (frame === 120) { contactAt = s.simulationTime; assert.equal(rules.contactAt, contactAt); }
+            if (frame >= 120) {
+                assert.equal(rules.contactAt, contactAt);
+                assert.equal(rules.lastProgressAt, contactAt);
+            }
+            frames.push([s.units.map(u => [u.id, u.hp, u.dead, u.withdrawn, u.morale, u.moraleState]),
+                rules.contactAt, rules.lastProgressAt, rules.attackerStallSeconds, rules.attackerLossRate,
+                rules.captureSeconds, [...rules.everInside], rules.landedCount, rules.ramHits,
+                s.battleOver, s.winner === undefined ? null : s.winner === attackerTeam ? 'attacker' : 'defender', s.endReason]);
+        }
+        assert.equal(s.endReason, '攻方受挫撤退');
+        assert.ok(Math.abs(s.simulationTime - contactAt - 20000) < 1e-6);
+        return frames;
+    }
+    const frames = run();
+    assert.deepEqual(run(), frames);
+    assert.deepEqual(run(true), frames);
+});
+
 test('P3 #4: eight uninterrupted seconds capture; a living defender resets the clock', () => {
     const { s, b } = camp();
     fixed(s, 'red', b.cx, b.cy);
     const blue = fixed(s, 'blue', b.cx + 6, b.cy);
     step(s, 240);
     assert.ok(s.siege.rules.captureSeconds > 3.9 && !s.battleOver);
-    assert.equal(s.siege.rules.lastProgressAt, s.simulationTime);
+    assert.equal(s.siege.rules.contactAt, null, 'starting inside alone is not siege contact');
+    assert.equal(s.siege.rules.lastProgressAt, null);
     assert.equal(s.siege.rules.attackerStallSeconds, 0);
     s.scheduleBattleAction(0, () => { blue.gx = b.cx + 2.4; });
     step(s);
@@ -509,7 +687,7 @@ test('P3 #8: same 600v300 variant repeats an entire battle frame-for-frame', t =
             frames.push(hash([s.units.map(u => [u.id, u.gx, u.gy, u.hp, u.dead, u.withdrawn, u.morale, u.moraleState,
                 u.siegeRole, u.siegeDefenseRole, u.siegeClimb?.progress]), s.siege.ram, s.siege.gate,
                 s.siege.rules.captureSeconds, s.siege.rules.attackerLossRate,
-                s.siege.rules.lastProgressAt, s.siege.rules.attackerStallSeconds,
+                s.siege.rules.contactAt, s.siege.rules.lastProgressAt, s.siege.rules.attackerStallSeconds,
                 [...s.siege.rules.everInside], s.siege.rules.landedCount, s.siege.rules.ramHits,
                 s.arrows.map(a => ({ ...a, source: a.source?.id })), s.endReason, s.winner]));
         }

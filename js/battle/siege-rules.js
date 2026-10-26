@@ -2,6 +2,7 @@
 import { moveToward } from '../units.js';
 import { withdrawUnit } from './morale-bridge.js';
 import { UI } from '../ui.js';
+import { quantizeDecision as q } from './determinism.js';
 
 export function installSiegeRules(layer, b, config, wallThickness = 0) {
     const alive = u => !u.dead && !u.withdrawn && u.hp > 0;
@@ -14,7 +15,7 @@ export function installSiegeRules(layer, b, config, wallThickness = 0) {
         u.gy < b.y1 - wallThickness || u.gy > b.y2 + wallThickness;
     const rules = layer.rules = {
         config, bounds: b, captureSeconds: 0, attackersAtTent: false, attackerLossRate: 0,
-        lastProgressAt: null, attackerStallSeconds: 0, everInside: new Set(), landedCount: 0, ramHits: 0,
+        contactAt: null, lastProgressAt: null, attackerStallSeconds: 0, everInside: new Set(), landedCount: 0, ramHits: 0,
         defender: u => u.team === config.defenderTeam,
         sheltered: u => rules.defender(u) && inside(u) && distance(u) <= config.retreatRadius,
         moraleLoss(u, loss) { return rules.defender(u) ? loss / (1 + config.defenderMoraleBonus) : loss; },
@@ -118,7 +119,13 @@ export function installSiegeRules(layer, b, config, wallThickness = 0) {
             rules.attackersAtTent = attackers.some(u => distance(u) <= config.captureRadius);
             const uncontested = rules.attackersAtTent && !defenders.some(u => distance(u) <= config.captureRadius);
             const now = scene.simulationTime;
-            rules.lastProgressAt ??= now;
+            // Contact is historical: disengaging never restarts the stall clock.
+            if (rules.contactAt === null && ((layer.ram?.hits ?? 0) > 0 || attackers.some(u =>
+                u.siegeClimb || (u.moraleState !== 'routing' && !inside({ gx: q(u.gx), gy: q(u.gy) }) &&
+                    q(wallDistance(u)) <= q(config.wallFootRadius))))) {
+                rules.contactAt = now;
+                rules.lastProgressAt = rules.contactAt;
+            }
             const previousCaptureSeconds = rules.captureSeconds;
             if (!uncontested) rules.captureSince = null;
             else if (rules.captureSince == null) rules.captureSince = now;
@@ -130,11 +137,11 @@ export function installSiegeRules(layer, b, config, wallThickness = 0) {
                 newEntry = true;
             }
             const landedCount = layer.landedCount ?? 0, ramHits = layer.ram?.hits ?? 0;
-            if (newEntry || landedCount > rules.landedCount || ramHits > rules.ramHits ||
-                rules.captureSeconds > previousCaptureSeconds) rules.lastProgressAt = now;
+            if (rules.contactAt !== null && (newEntry || landedCount > rules.landedCount || ramHits > rules.ramHits ||
+                rules.captureSeconds > previousCaptureSeconds)) rules.lastProgressAt = now;
             rules.landedCount = landedCount;
             rules.ramHits = ramHits;
-            rules.attackerStallSeconds = (now - rules.lastProgressAt) / 1000;
+            rules.attackerStallSeconds = rules.contactAt === null ? 0 : (now - rules.lastProgressAt) / 1000;
             let winner, reason, withdraw;
             if (!attackers.length || !defenders.length) {
                 winner = !attackers.length && !defenders.length ? 'draw' : attackers.length ? config.attackerTeam : config.defenderTeam;
@@ -145,7 +152,7 @@ export function installSiegeRules(layer, b, config, wallThickness = 0) {
                 !defenders.some(u => inside(u) && ['steady', 'wavering'].includes(u.moraleState))) ||
                 defenders.length <= stats[config.defenderTeam].initial * config.surrenderFraction) {
                 winner = config.attackerTeam; reason = '守军投降'; withdraw = defenders;
-            } else if (rules.attackerLossRate + 1e-12 >= config.attackerRetreatFraction &&
+            } else if (rules.contactAt !== null && rules.attackerLossRate + 1e-12 >= config.attackerRetreatFraction &&
                 rules.attackerStallSeconds + 1e-9 >= (config.attackerStallSeconds ?? 20)) {
                 winner = config.defenderTeam; reason = '攻方受挫撤退'; withdraw = attackers;
             }
