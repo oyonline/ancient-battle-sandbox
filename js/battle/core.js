@@ -129,6 +129,7 @@ export function stepBattle(scene, dt) {
         if (unit.moraleState === 'routing') { scene.updateRoutedUnit(unit, dt); continue; }
         if (scene.updateFallingBackUnit(unit, now, dt)) continue;
         if (scene.siege?.defense?.act(scene, unit, now, dt)) continue;
+        if (scene.siege?.assault?.act(scene, unit, now, dt)) continue;
         if (scene.tactics?.updateGroundGuard(unit, now, dt)) continue;
         if (unit.type === 'cavalry') {
             // 营队接管（可选场景钩子，仅领土征服）：回撤/驻守/集结/有令时骑兵受营

@@ -156,6 +156,10 @@ export function installSiegeRules(layer, b, config, wallThickness = 0) {
                 rules.attackerStallSeconds + 1e-9 >= (config.attackerStallSeconds ?? 20)) {
                 winner = config.defenderTeam; reason = '攻方受挫撤退'; withdraw = attackers;
             }
+            if (!winner && layer.assault?.player && layer.assault.battleDeadlineSeconds !== null &&
+                now + 1e-7 >= layer.assault.battleDeadlineSeconds * 1000) {
+                winner = config.defenderTeam; reason = '守住营寨';
+            }
             if (!winner) return;
             rules.routedAtOutcome = { [config.attackerTeam]: routed,
                 [config.defenderTeam]: defenders.filter(u => u.moraleState === 'routing').length };

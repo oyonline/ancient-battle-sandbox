@@ -12,12 +12,12 @@ export function step(scene, count = 1) {
         scene.stepBattle(1 / 60);
     }
 }
-export function deployVariant({ variant = 1, jitter = .3, bonus = L.rules.defenderMoraleBonus, seed = 173 } = {}) {
+export function deployVariant({ variant = 1, jitter = .3, bonus = L.rules.defenderMoraleBonus, seed = 173, siegeOptions = {} } = {}) {
     const s = makeScene();
     installSiegeArrows(s);
     s.deployUnits(L.attackers, L.defenders, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
     const b = campBounds();
-    s.siege = createCampSiege(b, { ladders: true, rules: { defenderMoraleBonus: bonus }, scatterSeed: (seed + variant) >>> 0 });
+    s.siege = createCampSiege(b, { ladders: true, rules: { defenderMoraleBonus: bonus }, scatterSeed: (seed + variant) >>> 0, ...siegeOptions });
     let state = (seed + Math.imul(variant, 2654435761)) >>> 0;
     const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 4294967296; };
     for (const { unit, gx, gy, siegeAnchor } of siegeDeployment(s.units, b, s.siege)) {

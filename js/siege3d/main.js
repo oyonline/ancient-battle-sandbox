@@ -20,6 +20,7 @@ import { board } from '../board.js';
 import { TW, TH, OX, OY } from '../render/metrics.js';
 import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
 import { ERECT_MS } from '../battle/siege.js';
+import { createLocalSiegeCommands } from './assault-commands.js';
 import {
     buildGrassTexture, buildGrassPatches, buildCampTents, createTentFlag,
     buildSurroundings
@@ -314,9 +315,10 @@ function refreshCampVisuals() {
     scene3d.add(campVisuals);
     campLayer = layer; campVersion = layer.version;
 }
-function positionArmies() {
+const localCommands = createLocalSiegeCommands();
+function positionArmies(attackerControl = 'auto') {
     const b = campBounds();
-    scene.siege = createCampSiege(b, { ladders: true });
+    scene.siege = createCampSiege(b, { ladders: true, attackerControl });
     for (const { unit: u, gx, gy, siegeAnchor } of siegeDeployment(scene.units, b, scene.siege)) {
         u.gx = u.pgx = gx; u.gy = u.pgy = gy;
         u.moveX = u.moveY = u.pushX = u.pushY = u.velX = u.velY = 0;
@@ -502,8 +504,19 @@ function syncLadderVisuals(siege) {
 
 // ---------------- 每帧同步：模拟状态 → 实例矩阵 ----------------
 let hudWinner = null;
+const faceNames = { north: '北', east: '东', south: '南', west: '西', ram: '冲车' };
+function syncAssaultControls() {
+    const assault = scene?.siege?.assault;
+    $('assault-controls').hidden = !(assault?.player && scene.battleStarted && !scene.battleOver);
+    for (const [face, name] of Object.entries(faceNames)) {
+        const button = $(`assault-${face}`), used = assault?.player && assault.released[face];
+        button.disabled = !assault?.player || used || localCommands.pending(face);
+        button.textContent = used ? `✓ ${name}${face === 'ram' ? '' : '面'}已下令` : button.dataset.label;
+    }
+}
 function sync3D(dt, now) {
     const siege = scene.siege;
+    syncAssaultControls();
     if (siege?.ram && ramVisual) {
         updateRamVisual(ramVisual, siege.ram, scene.simulationTime, groundH(siege.ram.gx, siege.ram.gy));
         updateCampGate(campVisuals, siege.gate, scene.simulationTime);
@@ -595,6 +608,7 @@ function sync3D(dt, now) {
             ` · 存活 <b class="red">${scene.redAlive}</b> / <b class="blue">${scene.blueAlive}</b> · 阵亡 ${scene.deadCount}` +
             (siege?.gate ? ` · ${siege.gate.broken ? '寨门已破' : `寨门 ${siege.gate.hp}/${siege.gate.maxHp}`}` : '') +
             (siege?.ladders ? ` · 登墙 ${siege.landedCount}` : '') +
+            (siege?.assault?.player ? ` · 待令：${['north', 'east', 'south', 'west'].filter(face => !siege.assault.released[face]).map(face => faceNames[face]).join(' ') || '无'}` : '') +
             (siege?.rules ? ` · 攻方伤亡 ${(siege.rules.attackerLossRate * 100).toFixed(1)}% / ${siege.rules.config.attackerRetreatFraction * 100}%` +
                 (siege.rules.attackerLossRate + 1e-12 >= siege.rules.config.attackerRetreatFraction ?
                     ` · 攻势停滞 ${siege.rules.attackerStallSeconds.toFixed(1)}/${siege.rules.config.attackerStallSeconds}s` : '') +
@@ -618,6 +632,7 @@ renderer.setAnimationLoop(now => {
         scene.simulationAccumulator += Math.max(0, Math.min(delta, 50)) * scene.gameSpeed;
         let steps = 0;
         while (scene.simulationAccumulator + 1e-7 >= SIMULATION_STEP_MS && !scene.battleOver && steps < 2) {
+            localCommands.beforeStep(scene);
             scene.simulationAccumulator = Math.max(0, scene.simulationAccumulator - SIMULATION_STEP_MS);
             scene.simulationTime += SIMULATION_STEP_MS;
             stepBattle(scene, SIMULATION_STEP_MS / 1000);
@@ -641,15 +656,18 @@ renderer.setAnimationLoop(now => {
 // ---------------- 控件 ----------------
 // 只读观察入口供截图/HUD 验收，模拟仍由主循环推进。
 window.__siege = { camera, controls, getScene: () => scene, unitMeshes, corpseMeshes, bloodMesh, renderer, scene3d,
+    get commandLog() { return localCommands.log; }, get pendingCommands() { return localCommands.pendingCount; },
     get campVisuals() { return campVisuals; },
     get bloodCursor() { return bloodCursor; }, get corpseCursor() { return corpseCursor; } };
 let deploying = false;
 async function redeploy() {
     if (deploying) return;
     deploying = true;
-    $('btn-start').disabled = true; $('btn-start').textContent = '部署中…';
+    localCommands.reset();
+    for (const id of ['btn-start', 'btn-watch']) $(id).disabled = true;
     $('gate').hidden = false;
     if (scene) scene.battleStarted = false;
+    syncAssaultControls();
     hudWinner = null; headings.clear(); lastSound = {};
     bloodCursor = bloodPCursor = 0; bloodP.length = falling.length = 0;
     bloodMesh.count = bloodPMesh.count = arrowMesh.count = 0;
@@ -659,15 +677,28 @@ async function redeploy() {
     for (const id of ['btn-s1', 'btn-s2', 'btn-s4']) $(id).style.fontWeight = id === 'btn-s1' ? '700' : '400';
     try {
         await boot();
-        $('btn-start').disabled = false; $('btn-start').textContent = '开 战';
+        for (const id of ['btn-start', 'btn-watch']) $(id).disabled = false;
     } catch (error) {
         console.error(error); hud.textContent = '部署失败，请查看控制台';
         $('btn-start').textContent = '部署失败';
     } finally { deploying = false; }
 }
-$('btn-start').onclick = () => {
+function startBattle(mode) {
     if (deploying || !scene) return;
+    if (mode === 'player') {
+        positionArmies(mode);
+        campVersion = -1;
+        refreshCampVisuals();
+    }
     $('gate').hidden = true; Snd.play('go'); scene.battleStarted = true;
+    sync3D._t = 0;
+    syncAssaultControls();
+}
+$('btn-start').onclick = () => startBattle('player');
+$('btn-watch').onclick = () => startBattle('auto');
+for (const face of Object.keys(faceNames)) $(`assault-${face}`).onclick = () => {
+    if (deploying || !scene?.battleStarted || scene.battleOver || !scene.siege?.assault?.player) return;
+    localCommands.enqueue(face === 'ram' ? { k: 'siegeRam', side: 'red' } : { k: 'siegeAssault', side: 'red', face });
 };
 $('btn-pause').onclick = e => { if (!scene || deploying) return; scene.paused = !scene.paused; e.target.textContent = scene.paused ? '继续' : '暂停'; };
 for (const [id, v] of [['btn-s1', 1], ['btn-s2', 2], ['btn-s4', 4]]) {

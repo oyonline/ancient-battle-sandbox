@@ -1,0 +1,90 @@
+{
+  "head": "5dc24f033766213ebb6eb1b931b50df6a53633fb",
+  "seed": 173,
+  "variants": {
+    "1": [
+      {
+        "frame": 60,
+        "sha256": "81508a485f252ce24bfc4233b4f24faf18e58fb23675f9dd582cb3ce0f0ecb87"
+      },
+      {
+        "frame": 120,
+        "sha256": "8242aa70b9c93c0c850197466367373d68a6c3890a1864308a06f43bb05070aa"
+      },
+      {
+        "frame": 180,
+        "sha256": "42f6261bbf5c123d2770370c182814c043231815c971e8f54ff11986d88aaaa7"
+      },
+      {
+        "frame": 240,
+        "sha256": "d0646701186a9240c5220c150aac2b36a372066fe6f430e65d6e5a6dfc13dddf"
+      },
+      {
+        "frame": 300,
+        "sha256": "3fdc441d1ab4e8217b72ff61fc8e1ffa03a5d15396af57716eedee3c39b25863"
+      },
+      {
+        "frame": 360,
+        "sha256": "e6713c1ab06dc32b90b359104c2c3fbc5e8c8a4ab7bdfae7a5226b62364e68de"
+      },
+      {
+        "frame": 420,
+        "sha256": "b365d0a36579c20d1392b9959e1dd39aaba839245b8a3ea8cacb6b0b2611504f"
+      },
+      {
+        "frame": 480,
+        "sha256": "d3556f432e575fcc817bb0c174d638ceacddae55b18a6d7cfe78a3393d7d74b6"
+      },
+      {
+        "frame": 540,
+        "sha256": "50761c87054218c19177651e190b0c1ee825392d07e6008fe95c7408b72dac82"
+      },
+      {
+        "frame": 600,
+        "sha256": "8736821671ead9886736ef820cae604f1aa76d90015d4648fd14fab8f5abca54"
+      }
+    ],
+    "6": [
+      {
+        "frame": 60,
+        "sha256": "57a4e00fa7cf2f75284c446602abfb14eba4254e9bfe58ef1f728cd6fb2297c9"
+      },
+      {
+        "frame": 120,
+        "sha256": "04690bb24b2c16e050ddc23887bce0cc60080021f9d4db6e39bf2c15763f12bb"
+      },
+      {
+        "frame": 180,
+        "sha256": "6f696ce68539777ab4ca98554255cf480f6d503f3598b78d608e8fd53fbabdd4"
+      },
+      {
+        "frame": 240,
+        "sha256": "8c5d58b1df45b3e4b7a63091b955c485fde76779d106024341925293b379e7b5"
+      },
+      {
+        "frame": 300,
+        "sha256": "85bddd4368bc7daa42279c2bcda40de723c5610bc105436fa4392794c52819ed"
+      },
+      {
+        "frame": 360,
+        "sha256": "bd50bfb07bbff7b3800f61cb4d33ecdb7f2557b2e76465ce4cff593f985aa08b"
+      },
+      {
+        "frame": 420,
+        "sha256": "29113e8b23b956f398dfb24ce25f0a5aa14eeeca051d14b62f6bb16d1102231d"
+      },
+      {
+        "frame": 480,
+        "sha256": "b6cd6c9378664e2663b9daa66f0136be37bcf92d23118d84e4da250efbaf2b95"
+      },
+      {
+        "frame": 540,
+        "sha256": "8ef4a1dbf21902e6e080678feb57983d3abb0db1ae90ef039ad2bb7a83930cfb"
+      },
+      {
+        "frame": 600,
+        "sha256": "0e750c3d8f172804d3fb0428614fa3382acd212113337e94d396b555bb8fd5a4"
+      }
+    ]
+  }
+}

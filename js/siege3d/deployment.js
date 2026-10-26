@@ -9,7 +9,12 @@ export const TOWER_HEIGHT = L.towerHeight / H_WORLD;
 export const ATTACKERS = L.attackers;
 export const DEFENDERS = L.defenders;
 
-export function createCampSiege(b, { ladders = false, defense = true, rules = {}, scatterSeed, ramRestOffset = L.attackerFrontClearance, ladderRestOffset = L.attackerFrontClearance, ladderCarry = true } = {}) {
+export function createCampSiege(b, { ladders = false, defense = true, rules = {}, scatterSeed, ramRestOffset = L.attackerFrontClearance, ladderRestOffset = L.attackerFrontClearance, ladderCarry = true,
+    attackerControl = 'auto', stagingClearance = 11,
+    battleDeadlineSeconds = attackerControl === 'player' ? 360 : null } = {}) {
+    if (!['auto', 'player'].includes(attackerControl)) throw new Error('Invalid attackerControl');
+    if (attackerControl === 'player' && !ladderCarry) throw new Error('player assault requires ladderCarry');
+    if (attackerControl === 'player') ramRestOffset = ladderRestOffset = stagingClearance;
     const config = rules === false ? null : { ...L.rules, ...rules };
     const w = L.walkwayWidth, gateHalf = L.gateWidth / 2;
     const walkway = (id, x1, y1, x2, y2) => ({ id, x1, y1, x2, y2, height: WALKWAY_HEIGHT, kind: 'walkway' });
@@ -41,12 +46,14 @@ export function createCampSiege(b, { ladders = false, defense = true, rules = {}
         const outward = side === 'west' || side === 'north' ? -1 : 1;
         const point = offset => horizontal ? { gx: along, gy: edge + outward * offset }
             : { gx: edge + outward * offset, gy: along };
-        return { id: `${side}-${i}`, foot: point(L.ladderFootOffset),
+        return { id: `${side}-${i}`, face: side, foot: point(L.ladderFootOffset),
             top: point(L.wallThickness / 2), landing: point(-w / 2),
             // 搬运出发点：与攻方出发阵地前沿齐平（随攻城方一起走，到位才架设）。
             start: point(L.wallThickness + ladderRestOffset) };
     }));
     const siege = createSiegeLayer(platforms, {
+        attackerControl, stagingClearance, battleDeadlineSeconds: attackerControl === 'player' ? battleDeadlineSeconds : null,
+        attackerTeam: config?.attackerTeam ?? 'red',
         rules: config, scatterSeed,
         fenceCover: L.fenceCover, bounds: b, wallThickness: L.wallThickness,
         ...(defense ? { defense: { bounds: b, gateHalf, wallInset: L.defenderWallClearance, towerClearance: L.towerClearance },
@@ -116,6 +123,14 @@ export function siegeDeployment(units, b, siege, frontClearance = L.attackerFron
             const depth = Math.floor(i / columns), col = i % columns;
             const along = (col - (columns - 1) / 2) * L.attackerSpacing;
             const outward = frontOut + depth * L.attackerDepthSpacing;
+            unit.siegeWing = side;
+            if (siege.assault?.player) {
+                const stagingOut = L.wallThickness + siege.assault.stagingClearance + depth * L.attackerDepthSpacing;
+                unit.siegeStaging = {
+                    gx: horizontal ? b.cx + along : side === 'west' ? b.x1 - stagingOut : b.x2 + stagingOut,
+                    gy: horizontal ? (side === 'north' ? b.y1 - stagingOut : b.y2 + stagingOut) : b.cy + along
+                };
+            } else delete unit.siegeStaging;
             result.push({ unit, side,
                 gx: horizontal ? b.cx + along : side === 'west' ? b.x1 - outward : b.x2 + outward,
                 gy: horizontal ? (side === 'north' ? b.y1 - outward : b.y2 + outward) : b.cy + along });

@@ -1,5 +1,6 @@
 import { installSiegeRules } from './siege-rules.js';
 import { installSiegeDefense } from './siege-defense.js';
+import { installPlayerAssault } from './siege-assault.js';
 import { CAMP_RULES } from './camps.js';
 import { CombatRules } from '../combat.js';
 import { Terrain } from '../terrain.js';
@@ -53,6 +54,7 @@ export function createSiegeLayer(platforms = [], assault = null) {
         }
     };
     // Height-only layers retain the original shape and have no simulation hook.
+    if (assault?.attackerControl) installPlayerAssault(layer, assault);
     if (assault?.gate && assault?.ram) installRam(layer, assault);
     if (assault?.ladders?.length) installLadders(layer, assault.ladders, assault.climbSeconds,
         assault.rules?.enabled ? assault.rules.climbersPerLadder : undefined, assault.ladderCarry);
@@ -98,6 +100,7 @@ function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS, climbersPe
         const length = Math.hypot(dx, dy);
         return {
             id: c.id ?? `ladder-${i}`, team: c.team ?? 'red',
+            face: c.face,
             foot: { ...c.foot }, top: { ...c.top }, landing: { ...c.landing },
             across: { gx: dy / length, gy: -dx / length },
             climbers: Array(climbersPerLadder).fill(null), recruitMs: 0, initialized: false,
@@ -135,6 +138,7 @@ function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS, climbersPe
     // 搬运/架设步：班组校验 → 招募补员（就近 + id 决胜）→ 移位/架设 → 班组站位。
     // 班组位置每帧由梯子绝对摆放（同冲车），core 规划循环对 ladderCrew 直接跳过。
     const carryStep = (scene, ladder, dt) => {
+        if (layer.assault?.player && !layer.assault.released[ladder.face]) return;
         const byId = new Map(scene.units.map(u => [u.id, u]));
         for (let i = 0; i < ladder.crew.length; i++) {
             const u = byId.get(ladder.crew[i]);
@@ -146,6 +150,7 @@ function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS, climbersPe
             ladder.crewInitialized = true;
             const distance = u => Math.hypot(u.gx - ladder.pos.gx, u.gy - ladder.pos.gy);
             const candidates = scene.units.filter(u => alive(u) && u.moraleState !== 'routing' && u.team === ladder.team &&
+                (!layer.assault?.player || u.siegeWing === ladder.face) &&
                 u.type === 'infantry' && !u.siegeRole && !u.siegeAnchor && !u.siegeClimb && distance(u) <= CREW_RADIUS)
                 .sort((a, b) => distance(a) - distance(b) || a.id - b.id);
             for (let i = 0; i < ladder.crew.length && candidates.length; i++) {
@@ -254,6 +259,7 @@ function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS, climbersPe
                 const inward = u => (u.gx - ladder.top.gx) * (ladder.landing.gx - ladder.top.gx) +
                     (u.gy - ladder.top.gy) * (ladder.landing.gy - ladder.top.gy);
                 const candidates = scene.units.filter(u => alive(u) && u.moraleState !== 'routing' && u.team === ladder.team &&
+                    (!layer.assault?.player || u.siegeWing === ladder.face) &&
                     ['infantry', 'pikeman'].includes(u.type) && !u.siegeRole && !u.siegeAnchor && !landed.has(u) &&
                     inward(u) <= 0 && distance(u) <= 4)
                     .sort((a, b) => distance(a) - distance(b) || a.id - b.id);
@@ -320,6 +326,7 @@ function installRam(layer, { gate: config, ram: start }) {
     };
     layer.step = (scene, dt) => {
         if (scene.battleOver || scene.resolvingOutcome) return;
+        if (layer.assault?.player && !layer.assault.released.ram) return;
         if (ram.state === 'spent') {
             ram.gy = Math.min(ram.restY, ram.gy + .9 * dt);
             return;
@@ -336,6 +343,7 @@ function installRam(layer, { gate: config, ram: start }) {
             ram.recruitMs = initial ? 0 : ram.recruitMs - RECRUIT_MS;
             const distance = u => Math.hypot(u.gx - ram.gx, u.gy - ram.gy);
             const candidates = scene.units.filter(u => !u.dead && !u.withdrawn && u.moraleState !== 'routing' && u.team === ram.team &&
+                (!layer.assault?.player || u.siegeWing === 'south') &&
                 u.type === 'infantry' && !u.siegeRole && !u.siegeAnchor && distance(u) <= 6)
                 .sort((a, b) => distance(a) - distance(b) || a.id - b.id);
             for (let i = 0; i < ram.crew.length && candidates.length; i++) {

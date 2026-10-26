@@ -157,7 +157,7 @@ test('双端锁步：据点特色与民夫自卫下仍逐位一致，且两端�
 
 test('模拟版本随本轮行为变化更新，旧页面无法混用', () => {
     // 首次攻城接触改变撤退时刻，旧页面不能混用。
-    assert.equal(SIM_VERSION, '2026-10-26-siege-contact-stall');
+    assert.equal(SIM_VERSION, '2026-10-26-siege-player-assault');
     assert.notEqual(SIM_VERSION, '2026-10-19-ranged-damage-seeded-variance', '首次攻城接触改变撤退时刻，必须拒绝混版本');
     assert.notEqual(SIM_VERSION, '2026-10-19-cavalry-charge-cd-brace-bail', '相对骑兵冲锋批次必须更新');
     assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2c', '相对上一批次必须递增');

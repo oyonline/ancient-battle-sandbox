@@ -6,12 +6,18 @@
   #controls{position:fixed;top:10px;right:12px;display:flex;gap:6px}
   #controls button{background:rgba(20,24,18,.82);color:#e8dfc8;border:1px solid #5a5a44;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer}
   #controls button:hover{background:rgba(50,56,40,.9)}
-  #hint{position:fixed;bottom:10px;left:0;right:0;text-align:center;color:rgba(255,255,255,.55);font-size:12px;text-shadow:0 1px 2px #000;pointer-events:none}
+  #hint{position:fixed;bottom:0;left:0;right:0;text-align:center;color:rgba(255,255,255,.55);font-size:12px;text-shadow:0 1px 2px #000;pointer-events:none}
   #gate{position:fixed;inset:0;background:rgba(8,10,8,.48);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:10}
   #gate h1{color:#e8dfc8;font-size:22px;margin:0;font-weight:600}
   #gate p{color:rgba(232,223,200,.6);font-size:13px;margin:0;max-width:420px;text-align:center;line-height:1.8}
   #gate button{background:#8a2f22;color:#ffe9c8;border:none;border-radius:8px;padding:14px 42px;font-size:18px;cursor:pointer;font-weight:700}
   #gate button:hover{background:#a53a2a}
+  #start-modes{display:flex;gap:16px}
+  #assault-controls{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;gap:12px}
+  #assault-controls[hidden]{display:none}
+  #assault-controls button{box-sizing:border-box;width:132px;height:64px;font-size:20px;font-weight:700;color:#fff;background:rgba(30,20,10,0.85);border:2px solid #c9a24a;border-radius:10px;cursor:pointer}
+  #assault-controls button:hover:not(:disabled){background:rgba(70,45,15,0.9)}
+  #assault-controls button:disabled{opacity:0.35;cursor:default}
   #gate[hidden]{display:none}
 </style></head><body>
 <div id="viewport"></div>
@@ -22,10 +28,17 @@
   <button id="btn-reset">重新部署</button>
 </div>
 <div id="hint">左键拖动旋转 · 右键拖动平移 · 滚轮缩放 —— 同一套 2D 确定性模拟，3D 实例化渲染</div>
+<div id="assault-controls" hidden>
+  <button id="assault-north" data-label="⬆ 北面登城">⬆ 北面登城</button>
+  <button id="assault-east" data-label="➡ 东面登城">➡ 东面登城</button>
+  <button id="assault-south" data-label="⬇ 南门登城">⬇ 南门登城</button>
+  <button id="assault-west" data-label="⬅ 西面登城">⬅ 西面登城</button>
+  <button id="assault-ram" data-label="🪵 冲车出发">🪵 冲车出发</button>
+</div>
 <div id="gate">
   <h1>千人攻寨 · 3D 演示</h1>
   <p id="gate-description">攻方 600 人围攻木栅营寨，守方 300 人据寨死守</p>
-  <button id="btn-start" disabled>部署中…</button>
+  <div id="start-modes"><button id="btn-start" disabled>⚔ 我来攻城</button><button id="btn-watch" disabled>👀 观战</button></div>
 </div>
 <script type="module" src="js/siege3d/main.js"></script>
 </body></html>
