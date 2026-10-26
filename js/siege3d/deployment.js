@@ -1,7 +1,7 @@
 import { createSiegeLayer } from '../battle/siege.js';
 import { board } from '../board.js';
 import { campBounds, queueCampWalls } from './walls.js';
-import { CAMP_LAYOUT as L } from './layout.js';
+import { CAMP_LAYOUT as L, PLAYER_ASSAULT_LAYOUT } from './layout.js';
 import { avoidTowerPosts } from './defense-posts.js';
 import { clearSiegeArcherPost } from '../battle/siege-assault.js';
 
@@ -14,6 +14,7 @@ export const DEFENDERS = L.defenders;
 export function createCampSiege(b, { layout = L, ladders = false, defense = true, rules = {}, scatterSeed, ramRestOffset = layout.attackerFrontClearance, ladderRestOffset = layout.attackerFrontClearance, ladderCarry = true,
     attackerControl = 'auto', stagingClearance = layout.stagingClearance,
     archerLineClearance = layout.archerLineClearance ?? L.archerLineClearance,
+    archerHoldClearance = layout.archerHoldClearance ?? PLAYER_ASSAULT_LAYOUT.archerHoldClearance,
     battleDeadlineSeconds = attackerControl === 'player' ? 360 : null } = {}) {
     if (!['auto', 'player'].includes(attackerControl)) throw new Error('Invalid attackerControl');
     if (attackerControl === 'player' && !ladderCarry) throw new Error('player assault requires ladderCarry');
@@ -55,7 +56,7 @@ export function createCampSiege(b, { layout = L, ladders = false, defense = true
             start: point(layout.wallThickness + ladderRestOffset) };
     }));
     const siege = createSiegeLayer(platforms, {
-        attackerControl, stagingClearance, archerLineClearance, battleDeadlineSeconds: attackerControl === 'player' ? battleDeadlineSeconds : null,
+        attackerControl, stagingClearance, archerLineClearance, archerHoldClearance, battleDeadlineSeconds: attackerControl === 'player' ? battleDeadlineSeconds : null,
         attackerTeam: config?.attackerTeam ?? 'red',
         rules: config, scatterSeed,
         fenceCover: layout.fenceCover, bounds: b, wallThickness: layout.wallThickness,
@@ -143,12 +144,17 @@ export function siegeDeployment(units, b, siege, frontClearance = L.attackerFron
         });
         archers.forEach((unit, i) => {
             const along = i - (archers.length - 1) / 2;
-            const outward = layout.wallThickness + siege.assault.archerLineClearance;
+            const outward = layout.wallThickness + siege.assault.archerHoldClearance;
             const gx = horizontal ? b.cx + along : side === 'west' ? b.x1 - outward : b.x2 + outward;
             const gy = horizontal ? (side === 'north' ? b.y1 - outward : b.y2 + outward) : b.cy + along;
             unit.siegeWing = side;
             delete unit.siegeStaging;
             unit.siegeArcherPost = { gx, gy };
+            const lineOut = layout.wallThickness + siege.assault.archerLineClearance;
+            unit.siegeArcherLinePost = {
+                gx: horizontal ? b.cx + along : side === 'west' ? b.x1 - lineOut : b.x2 + lineOut,
+                gy: horizontal ? (side === 'north' ? b.y1 - lineOut : b.y2 + lineOut) : b.cy + along
+            };
             result.push({ unit, side, gx, gy });
         });
     }

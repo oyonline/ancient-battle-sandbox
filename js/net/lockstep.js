@@ -43,7 +43,7 @@ export const LOCKSTEP = {
 // 2026-10-26 siege-player-assault：按面放行、器械待令和整局期限扩展模拟语义。
 // 2026-10-26 siege-scale-100v300：攻寨专用尺寸、兵数、实例射程和待令线改变轨迹。
 // 2026-10-26 siege-archer-line：player 待令弓手独立编队并复用正常远程链。
-export const SIM_VERSION = '2026-10-26-siege-archer-line';
+export const SIM_VERSION = '2026-10-26-siege-archer-order';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {

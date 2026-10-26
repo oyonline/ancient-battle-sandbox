@@ -8,8 +8,9 @@ export const ASSAULT_FACES = ['north', 'east', 'south', 'west'];
 const RAM_RESERVE_SLOTS = [[-.88, -.5], [.88, -.5], [-.88, .5], [.88, .5]];
 
 export function clearSiegeArcherPost(unit) {
-    if (!unit.siegeArcherPost) return;
+    if (!unit.siegeArcherPost && !unit.siegeArcherLinePost) return;
     delete unit.siegeArcherPost;
+    delete unit.siegeArcherLinePost;
     delete unit.guardRadius;
     unit.groundGuardReturning = false;
     unit.groundGuardTarget = null;
@@ -19,23 +20,29 @@ export function clearSiegeArcherPost(unit) {
 // melee soldiers retain their existing movement/contact and delayed hits.
 export function installPlayerAssault(layer, {
     attackerControl = 'auto', stagingClearance = 11, battleDeadlineSeconds = null,
-    attackerTeam = 'red', archerLineClearance
+    attackerTeam = 'red', archerLineClearance, archerHoldClearance
 }) {
     const player = attackerControl === 'player';
-    if (player && (!Number.isFinite(archerLineClearance) || !Number.isFinite(stagingClearance) ||
-        !(archerLineClearance < stagingClearance)))
-        throw new Error('player assault requires finite archerLineClearance < stagingClearance');
-    const keys = [...ASSAULT_FACES, 'ram'];
+    if (player && (!Number.isFinite(archerLineClearance) || !Number.isFinite(stagingClearance) || !Number.isFinite(archerHoldClearance) ||
+        !(archerLineClearance < archerHoldClearance && archerHoldClearance < stagingClearance)))
+        throw new Error('player assault requires finite archerLineClearance < stagingClearance and archerLineClearance < archerHoldClearance < stagingClearance');
+    const keys = [...ASSAULT_FACES, 'ram', 'archers'];
     const assault = layer.assault = {
-        player, attackerControl, stagingClearance, battleDeadlineSeconds, attackerTeam, archerLineClearance,
+        player, attackerControl, stagingClearance, battleDeadlineSeconds, attackerTeam, archerLineClearance, archerHoldClearance,
         released: Object.fromEntries(keys.map(k => [k, !player])),
         releasedAt: Object.fromEntries(keys.map(k => [k, player ? null : 0])),
         apply(scene, command) {
             if (!player || scene.battleOver || scene.resolvingOutcome || command?.side !== attackerTeam) return false;
-            const key = command.k === 'siegeRam' ? 'ram' : command.k === 'siegeAssault' ? command.face : null;
+            const key = command.k === 'siegeArchers' ? 'archers' : command.k === 'siegeRam' ? 'ram' : command.k === 'siegeAssault' ? command.face : null;
             if (!keys.includes(key) || (command.k === 'siegeAssault' && !ASSAULT_FACES.includes(key)) || assault.released[key]) return false;
             assault.released[key] = true;
             assault.releasedAt[key] = scene.simulationTime;
+            if (key === 'archers') {
+                for (const unit of scene.units) if (unit.team === attackerTeam &&
+                    !assault.released[unit.siegeWing] && unit.siegeArcherLinePost)
+                    unit.siegeArcherPost = { ...unit.siegeArcherLinePost };
+                return true;
+            }
             if (key === 'south' && !assault.released.ram && layer.ram) {
                 const ram = layer.ram;
                 const distance = u => q(Math.hypot(u.gx - ram.gx, u.gy - ram.gy));

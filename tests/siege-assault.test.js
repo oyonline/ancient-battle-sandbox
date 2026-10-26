@@ -13,7 +13,7 @@ import { quantizeDecision as q } from '../js/battle/determinism.js';
 
 // Fixed S1a mechanism fixture keeps its original timing/recruitment coverage.
 const player = (options = {}) => deployVariant({ seed: 173, variant: 1, layout: LEGACY_LAYOUT,
-    siegeOptions: { attackerControl: 'player', archerLineClearance: 10, ...options } });
+    siegeOptions: { attackerControl: 'player', archerLineClearance: 10, archerHoldClearance: 10.5, ...options } });
 const release = (s, face) => s.applyNetCommand(face === 'ram' ? { k: 'siegeRam', side: 'red' }
     : { k: 'siegeAssault', side: 'red', face });
 const living = u => !u.dead && !u.withdrawn && u.hp > 0;
@@ -179,7 +179,7 @@ test('assault waiting melee: deterministic id tie, stationary delayed hits and c
 
 test('assault configuration: player rejects non-carrying ladders and keeps staging independent of layout', () => {
     assert.throws(() => createCampSiege(campBounds(), { attackerControl: 'player', ladderCarry: false }), /ladderCarry/);
-    const { s } = small({ stagingClearance: 9, archerLineClearance: 8, battleDeadlineSeconds: null });
+    const { s } = small({ stagingClearance: 9, archerLineClearance: 8, archerHoldClearance: 8.5, battleDeadlineSeconds: null });
     assert.equal(s.siege.assault.stagingClearance, 9); assert.equal(s.siege.assault.battleDeadlineSeconds, null);
     assert.equal(L.attackerFrontClearance, 32);
     step(s); assert.equal(s.battleOver, false);

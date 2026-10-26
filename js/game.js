@@ -762,7 +762,7 @@ export class IsoBattleScene extends Phaser.Scene {
     // 网络命令注入：两端各自按到达回合确定性执行（买兵 / 营令）。
     // 不触碰 selectedBattalion——选中态是各端本地视图，不随对方命令漂移。
     applyNetCommand(command) {
-        if (command && ['siegeAssault', 'siegeRam'].includes(command.k))
+        if (command && ['siegeAssault', 'siegeRam', 'siegeArchers'].includes(command.k))
             return this.siege?.assault?.apply(this, command) ?? false;
         if (!command || !this.territory) return;
         if (CAMP_COMMANDS.has(command.k)) return applyCampCommand(this, command);

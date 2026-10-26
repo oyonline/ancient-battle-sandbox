@@ -27,14 +27,14 @@ const releasedState = u => {
 test('A2: player rejects missing, non-finite and overlapping archer clearances', () => {
     for (const archerLineClearance of [undefined, NaN, Infinity, 27, 28]) {
         assert.throws(() => installPlayerAssault({}, {
-            attackerControl: 'player', stagingClearance: 27, archerLineClearance
+            attackerControl: 'player', stagingClearance: 27, archerHoldClearance: 26, archerLineClearance
         }), /archerLineClearance < stagingClearance/);
     }
     assert.throws(() => createCampSiege(campBounds(), {
         attackerControl: 'player', stagingClearance: 18.5
     }), /archerLineClearance < stagingClearance/);
     assert.doesNotThrow(() => installPlayerAssault({}, {
-        attackerControl: 'player', stagingClearance: 27, archerLineClearance: 18.5
+        attackerControl: 'player', stagingClearance: 27, archerHoldClearance: 26, archerLineClearance: 18.5
     }));
     assert.doesNotThrow(() => installPlayerAssault({}, { attackerControl: 'auto' }));
 });
@@ -113,22 +113,25 @@ test('A2: ram-only release crosses the unreleased south archer line within 30 se
         !l.crewInitialized && distance(l.pos, l.start) === 0));
 });
 
-test('A2: player archers form centered single rows at clearance 18.5, separate from melee staging', () => {
+test('A2: player archers form centered single rows at clearance 26 then 18.5, separate from melee staging', () => {
     const s = player(), b = campBounds();
-    for (const face of faces) {
-        const row = archers(s).filter(u => u.siegeWing === face);
-        assert.equal(row.length, face === 'south' ? 10 : 5);
-        const horizontal = face === 'north' || face === 'south';
-        row.forEach((u, i) => {
-            assert.equal(u.siegeAnchor, undefined);
-            assert.equal(u.siegeStaging, undefined);
-            const p = u.siegeArcherPost;
-            assert.equal(horizontal ? p.gx : p.gy, 50 + i - (row.length - 1) / 2);
-            const normal = horizontal ? p.gy : p.gx;
-            const edge = face === 'north' ? b.y1 : face === 'south' ? b.y2 : face === 'west' ? b.x1 : b.x2;
-            assert.ok(Math.abs(Math.abs(normal - edge) - L.wallThickness - 18.5) < 1e-12);
-            assert.ok(distance(u, p) <= Math.SQRT2 * .3);
-        });
+    for (const clearance of [26, 18.5]) {
+        if (clearance === 18.5) assert.equal(s.applyNetCommand({ k: 'siegeArchers', side: 'red' }), true);
+        for (const face of faces) {
+            const row = archers(s).filter(u => u.siegeWing === face);
+            assert.equal(row.length, face === 'south' ? 10 : 5);
+            const horizontal = face === 'north' || face === 'south';
+            row.forEach((u, i) => {
+                assert.equal(u.siegeAnchor, undefined);
+                assert.equal(u.siegeStaging, undefined);
+                const p = u.siegeArcherPost;
+                assert.equal(horizontal ? p.gx : p.gy, 50 + i - (row.length - 1) / 2);
+                const normal = horizontal ? p.gy : p.gx;
+                const edge = face === 'north' ? b.y1 : face === 'south' ? b.y2 : face === 'west' ? b.x1 : b.x2;
+                assert.ok(Math.abs(Math.abs(normal - edge) - L.wallThickness - clearance) < 1e-12);
+                if (clearance === 26) assert.ok(distance(u, p) <= Math.SQRT2 * .3);
+            });
+        }
     }
 });
 
@@ -144,10 +147,16 @@ test('A2: seed173 variant1 waits all 3600 complete steps with four-face wall fir
     let samples = 0, maxError = 0, completed = 0;
     for (let frame = 1; frame <= 3600; frame++) {
         assert.equal(s.battleOver, false, `ended before frame ${frame}`);
+        if (frame === 600) assert.equal(s.applyNetCommand({ k: 'siegeArchers', side: 'red' }), true);
         step(s); completed++;
         const duty = attackers.filter(u => onDuty(s, u));
         assert.ok(duty.length > 0, `no on-duty samples at frame ${frame}`);
         for (const u of duty) {
+            const b = campBounds(), face = u.siegeWing;
+            const normal = face === 'north' ? b.y1 - u.gy : face === 'south' ? u.gy - b.y2 :
+                face === 'west' ? b.x1 - u.gx : u.gx - b.x2;
+            assert.ok(normal - L.wallThickness >= 18.5 - .3, `crossed line at frame ${frame}`);
+            if (frame >= 600 && frame < 1800) continue;
             samples++;
             const error = distance(u, u.siegeArcherPost);
             maxError = Math.max(maxError, error);
@@ -181,6 +190,7 @@ test('A2: seed173 variant1 waits all 3600 complete steps with four-face wall fir
         deaths(initial.filter(u => u.team === 'red' && u.type === type))]));
     assert.ok(samples > 0);
     t.diagnostic(JSON.stringify({ completed, samples, maxError,
+        beforeOrderShots: { red: shots.filter(a => a.time < 10000 && a.from.team === 'red').length, blue: shots.filter(a => a.time < 10000 && a.from.team === 'blue').length },
         shots: Object.fromEntries(['archer', 'towerArcher', 'groundArcher'].map(k => [k, shots.filter(a => a.shooter === k).length])),
         wallTargetShots: attackShots.length - exceptions.length, attackShots: attackShots.length,
         wallTargetRatio, targetExceptions, meleeDead,
@@ -294,6 +304,7 @@ test('A2: full player seed173 variant1 replays every step through 600 including 
         const s = player(), initial = [...s.units], frames = [];
         for (let frame = 1; frame <= 600; frame++) {
             assert.equal(s.battleOver, false);
+            if (frame === 60) assert.equal(s.applyNetCommand({ k: 'siegeArchers', side: 'red' }), true);
             step(s); frames.push(summary(s, initial));
         }
         return frames;
@@ -312,7 +323,7 @@ function mirrorFixture(swapped) {
     const platforms = createCampSiege(b, { defense: false }).platforms.map(p => swapped ?
         { ...p, x1: x(p.x2), x2: x(p.x1) } : p);
     s.siege = createSiegeLayer(platforms, { attackerControl: 'player', attackerTeam,
-        stagingClearance: 27, archerLineClearance: 18.5, bounds: b, wallThickness: .3,
+        stagingClearance: 27, archerLineClearance: 18.5, archerHoldClearance: 26, bounds: b, wallThickness: .3,
         rules: { ...L.rules, attackerTeam, defenderTeam } });
     for (const face of faces) {
         const horizontal = face === 'north' || face === 'south', sign = ['north', 'west'].includes(face) ? -1 : 1;

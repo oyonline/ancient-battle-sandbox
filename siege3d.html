@@ -1,7 +1,7 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>千人攻寨 · 3D 演示</title><style>
   html,body{margin:0;height:100%;overflow:hidden;background:#111;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
   #viewport{position:fixed;inset:0}
-  #hud{position:fixed;top:10px;left:12px;color:#fff;font-size:13px;text-shadow:0 1px 2px #000;pointer-events:none;line-height:1.7}
+  #hud{max-width:calc(100vw - 380px);position:fixed;top:10px;left:12px;color:#fff;font-size:13px;text-shadow:0 1px 2px #000;pointer-events:none;line-height:1.7}
   #hud b.red{color:#ff8b76}#hud b.blue{color:#7fb7e8}
   #controls{position:fixed;top:10px;right:12px;display:flex;gap:6px}
   #controls button{background:rgba(20,24,18,.82);color:#e8dfc8;border:1px solid #5a5a44;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer}
@@ -34,6 +34,7 @@
   <button id="assault-south" data-label="⬇ 南门登城">⬇ 南门登城</button>
   <button id="assault-west" data-label="⬅ 西面登城">⬅ 西面登城</button>
   <button id="assault-ram" data-label="🪵 冲车出发">🪵 冲车出发</button>
+  <button id="assault-archers" data-label="🏹 弓手压制">🏹 弓手压制</button>
 </div>
 <div id="gate">
   <h1>千人攻寨 · 3D 演示</h1>

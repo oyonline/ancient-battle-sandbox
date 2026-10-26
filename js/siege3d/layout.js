@@ -62,3 +62,6 @@ export const CAMP_LAYOUT = {
     towerClearance: .4
 };
 export const LADDER_TOP_WORLD = CAMP_LAYOUT.wallHeight + CAMP_LAYOUT.ladderTopClearance;
+
+// Player orders are separate from the unchanged automatic deployment layout.
+export const PLAYER_ASSAULT_LAYOUT = { archerHoldClearance: 26 };

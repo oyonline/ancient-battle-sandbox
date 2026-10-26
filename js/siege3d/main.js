@@ -510,14 +510,14 @@ function syncLadderVisuals(siege) {
 
 // ---------------- 每帧同步：模拟状态 → 实例矩阵 ----------------
 let hudWinner = null;
-const faceNames = { north: '北', east: '东', south: '南', west: '西', ram: '冲车' };
+const faceNames = { north: '北', east: '东', south: '南', west: '西', ram: '冲车', archers: '弓手' };
 function syncAssaultControls() {
     const assault = scene?.siege?.assault;
     $('assault-controls').hidden = !(assault?.player && scene.battleStarted && !scene.battleOver);
     for (const [face, name] of Object.entries(faceNames)) {
         const button = $(`assault-${face}`), used = assault?.player && assault.released[face];
         button.disabled = !assault?.player || used || localCommands.pending(face);
-        button.textContent = used ? `✓ ${name}${face === 'ram' ? '' : '面'}已下令` : button.dataset.label;
+        button.textContent = used ? `✓ ${name}${['ram', 'archers'].includes(face) ? '' : '面'}已下令` : button.dataset.label;
     }
 }
 function sync3D(dt, now) {
@@ -614,7 +614,7 @@ function sync3D(dt, now) {
             ` · 存活 <b class="red">${scene.redAlive}</b> / <b class="blue">${scene.blueAlive}</b> · 阵亡 ${scene.deadCount}` +
             (siege?.gate ? ` · ${siege.gate.broken ? '寨门已破' : `寨门 ${siege.gate.hp}/${siege.gate.maxHp}`}` : '') +
             (siege?.ladders ? ` · 登墙 ${siege.landedCount}` : '') +
-            (siege?.assault?.player ? ` · 待令：${['north', 'east', 'south', 'west'].filter(face => !siege.assault.released[face]).map(face => faceNames[face]).join(' ') || '无'}` : '') +
+            (siege?.assault?.player ? ` · 待令：${['north', 'east', 'south', 'west'].filter(face => !siege.assault.released[face]).map(face => faceNames[face]).join(' ') || '无'} · ${siege.assault.released.archers ? '弓手压制中' : '弓手待令'}` : '') +
             (siege?.rules ? ` · 攻方伤亡 ${(siege.rules.attackerLossRate * 100).toFixed(1)}% / ${siege.rules.config.attackerRetreatFraction * 100}%` +
                 (siege.rules.attackerLossRate + 1e-12 >= siege.rules.config.attackerRetreatFraction ?
                     ` · 攻势停滞 ${siege.rules.attackerStallSeconds.toFixed(1)}/${siege.rules.config.attackerStallSeconds}s` : '') +
@@ -704,7 +704,9 @@ $('btn-start').onclick = () => startBattle('player');
 $('btn-watch').onclick = () => startBattle('auto');
 for (const face of Object.keys(faceNames)) $(`assault-${face}`).onclick = () => {
     if (deploying || !scene?.battleStarted || scene.battleOver || !scene.siege?.assault?.player) return;
-    localCommands.enqueue(face === 'ram' ? { k: 'siegeRam', side: 'red' } : { k: 'siegeAssault', side: 'red', face });
+    if (scene.siege.assault.released[face] || localCommands.pending(face)) return;
+    localCommands.enqueue(face === 'archers' ? { k: 'siegeArchers', side: 'red' } : face === 'ram' ? { k: 'siegeRam', side: 'red' } : { k: 'siegeAssault', side: 'red', face });
+    syncAssaultControls();
 };
 $('btn-pause').onclick = e => { if (!scene || deploying) return; scene.paused = !scene.paused; e.target.textContent = scene.paused ? '继续' : '暂停'; };
 for (const [id, v] of [['btn-s1', 1], ['btn-s2', 2], ['btn-s4', 4]]) {

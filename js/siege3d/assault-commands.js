@@ -13,7 +13,7 @@ export function createLocalSiegeCommands() {
             }
         },
         reset() { queue.length = log.length = 0; step = 0; },
-        pending(face) { return queue.some(c => face === 'ram' ? c.k === 'siegeRam' : c.k === 'siegeAssault' && c.face === face); },
+        pending(face) { return queue.some(c => face === 'archers' ? c.k === 'siegeArchers' : face === 'ram' ? c.k === 'siegeRam' : c.k === 'siegeAssault' && c.face === face); },
         get log() { return log.map(row => ({ step: row.step, command: { ...row.command } })); },
         get pendingCount() { return queue.length; }
     };

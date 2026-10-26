@@ -151,7 +151,7 @@ function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS, climbersPe
             const distance = u => Math.hypot(u.gx - ladder.pos.gx, u.gy - ladder.pos.gy);
             const candidates = scene.units.filter(u => alive(u) && u.moraleState !== 'routing' && u.team === ladder.team &&
                 (!layer.assault?.player || u.siegeWing === ladder.face) &&
-                u.type === 'infantry' && !u.siegeRole && !u.siegeAnchor && !u.siegeClimb && distance(u) <= CREW_RADIUS)
+                u.type === 'infantry' && !u.siegeRamReserve && !u.siegeRole && !u.siegeAnchor && !u.siegeClimb && distance(u) <= CREW_RADIUS)
                 .sort((a, b) => distance(a) - distance(b) || a.id - b.id);
             for (let i = 0; i < ladder.crew.length && candidates.length; i++) {
                 if (ladder.crew[i] !== null) continue;
@@ -260,7 +260,7 @@ function installLadders(layer, configs, climbSeconds = CLIMB_SECONDS, climbersPe
                     (u.gy - ladder.top.gy) * (ladder.landing.gy - ladder.top.gy);
                 const candidates = scene.units.filter(u => alive(u) && u.moraleState !== 'routing' && u.team === ladder.team &&
                     (!layer.assault?.player || u.siegeWing === ladder.face) &&
-                    ['infantry', 'pikeman'].includes(u.type) && !u.siegeRole && !u.siegeAnchor && !landed.has(u) &&
+                    ['infantry', 'pikeman'].includes(u.type) && !u.siegeRamReserve && !u.siegeRole && !u.siegeAnchor && !landed.has(u) &&
                     inward(u) <= 0 && distance(u) <= 4)
                     .sort((a, b) => distance(a) - distance(b) || a.id - b.id);
                 for (let slot = 0; slot < ladder.climbers.length && candidates.length; slot++) {
