@@ -679,7 +679,7 @@ test('P3 #7b: siege still settles elimination with an explicit reason', () => {
     step(s); assert.equal(s.winner, 'red'); assert.equal(s.endReason, '一方全灭');
 });
 
-test('P3 #8: same 600v300 variant repeats an entire battle frame-for-frame', t => {
+test('P3 #8: same 300v100 variant repeats an entire battle frame-for-frame', t => {
     function run() {
         const s = deployVariant({ variant: 1 }), frames = [];
         for (let i = 0; i < 21600 && !s.battleOver; i++) {

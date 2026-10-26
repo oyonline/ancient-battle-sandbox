@@ -4,8 +4,8 @@ import { createHash } from 'node:crypto';
 import { board } from '../js/board.js';
 import { makeScene, addUnit } from './battle-harness.js';
 import { createSiegeLayer } from '../js/battle/siege.js';
-import { CAMP_LAYOUT as L } from '../js/siege3d/layout.js';
-import { createCampSiege, siegeDeployment, installSiegeArrows } from '../js/siege3d/deployment.js';
+import { LEGACY_LAYOUT as L } from './siege-legacy-support.js';
+import { createCampSiege, deployCampArmies, installSiegeArrows } from '../js/siege3d/deployment.js';
 import { campBounds, queueCampWalls } from '../js/siege3d/walls.js';
 import { buildSiegeVisuals } from '../js/siege3d/platforms.js';
 import { disposeCampVisuals } from '../js/siege3d/walls.js';
@@ -106,12 +106,9 @@ test('siege cover #4: unconfigured layer matches pre-cover height rules every fr
 });
 
 function deploy() {
-    const s = makeScene(), b = campBounds();
-    s.deployUnits(L.attackers, L.defenders, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
-    s.siege = createCampSiege(b, { ladders: true });
-    const placements = siegeDeployment(s.units, b, s.siege);
-    for (const { unit, gx, gy, siegeAnchor } of placements) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
-    queueCampWalls(s); installSiegeArrows(s); s.rebuildSpatial();
+    const s = makeScene();
+    const { bounds: b, placements } = deployCampArmies(s, { layout: L });
+    installSiegeArrows(s);
     return { s, b, placements };
 }
 

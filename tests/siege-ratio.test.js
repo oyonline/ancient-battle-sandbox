@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { resetBoardSize } from '../js/board.js';
 import { makeScene, addUnit } from './battle-harness.js';
 import { createSiegeLayer } from '../js/battle/siege.js';
 import { CAMP_LAYOUT as L } from '../js/siege3d/layout.js';
-import { createCampSiege, siegeDeployment, installSiegeArrows } from '../js/siege3d/deployment.js';
+import { createCampSiege, deployCampArmies, installSiegeArrows } from '../js/siege3d/deployment.js';
 import { campBounds, queueCampWalls } from '../js/siege3d/walls.js';
 
 const step = s => { s.simulationTime += 1000 / 60; s.stepBattle(1 / 60); };
@@ -98,24 +99,21 @@ test('ratio #2: createCampSiege passes capacity one; unconfigured siege layer re
 });
 
 function deploy() {
-    const s = makeScene(), b = campBounds();
-    s.deployUnits(L.attackers, L.defenders, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
-    s.siege = createCampSiege(b, { ladders: true });
-    const placements = siegeDeployment(s.units, b, s.siege);
-    for (const { unit, gx, gy, siegeAnchor } of placements) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
-    queueCampWalls(s); installSiegeArrows(s); s.rebuildSpatial();
+    const s = makeScene();
+    deployCampArmies(s); installSiegeArrows(s);
     return s;
 }
-test('ratio #3: actual siege3d deployment contains 470 infantry, 80 pikemen and 50 archers after step()', () => {
+test('ratio #3: actual siege3d deployment contains 235 infantry, 40 pikemen and 25 archers after step()', () => {
     const s = deploy();
     step(s);
     const counts = Object.fromEntries(['infantry', 'pikeman', 'archer'].map(type =>
         [type, s.units.filter(u => u.team === 'red' && u.type === type).length]));
-    assert.deepEqual(counts, { infantry: 470, pikeman: 80, archer: 50 });
-    assert.equal(Object.values(counts).reduce((a, b) => a + b), 600);
+    assert.deepEqual(counts, { infantry: 235, pikeman: 40, archer: 25 });
+    assert.equal(Object.values(counts).reduce((a, b) => a + b), 300);
 });
 
 function control(legacy = false) {
+    resetBoardSize(); // This pre-A1 non-camp golden always uses the classic 70x70 board.
     const s = makeScene();
     s.siege = createSiegeLayer([{ x1: 31, x2: 34, y1: 27, y2: 32, height: .8 }]);
     if (legacy) s.siege.damageScale = (from, target) => {

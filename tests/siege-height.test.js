@@ -1,10 +1,10 @@
 import test from 'node:test';
-import { CAMP_LAYOUT as L } from '../js/siege3d/layout.js';
+import { LEGACY_LAYOUT as L } from './siege-legacy-support.js';
 import assert from 'node:assert/strict';
 import { makeScene, addUnit, CombatRules } from './battle-harness.js';
 import { createSiegeLayer } from '../js/battle/siege.js';
 import { campBounds, queueCampWalls, disposeCampVisuals } from '../js/siege3d/walls.js';
-import { createCampSiege, siegeDeployment, installSiegeArrows, H_WORLD, ATTACKERS, DEFENDERS } from '../js/siege3d/deployment.js';
+import { createCampSiege, deployCampArmies, installSiegeArrows, H_WORLD } from '../js/siege3d/deployment.js';
 import { buildSiegeVisuals } from '../js/siege3d/platforms.js';
 
 function step(scene) {
@@ -126,13 +126,9 @@ test('siege determinism: two complete 600-frame tower battles match positions, h
 
 test('siege3d deployment: configured tower archers and crew, infantry walkway priority and no wall overlap', t => {
     const scene = makeScene();
-    scene.deployUnits(ATTACKERS, DEFENDERS,
-        'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
-    const b = campBounds();
-    scene.siege = createCampSiege(b, { defense: false });
-    const deployment = siegeDeployment(scene.units, b, scene.siege);
-    for (const { unit, gx, gy, siegeAnchor } of deployment) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
-    queueCampWalls(scene);
+    // Retain enough infantry to exercise walkway overflow into interior slots.
+    const { bounds: b, placements: deployment } = deployCampArmies(scene, {
+        layout: L, defense: false, ladders: false });
     const towers = scene.siege.platforms.filter(p => p.kind === 'tower');
     assert.equal(deployment.filter(p => p.siegeAnchor).length, L.towerCount * L.archersPerTower);
     for (const p of towers) {
@@ -142,7 +138,7 @@ test('siege3d deployment: configured tower archers and crew, infantry walkway pr
         assert.equal(p.height * H_WORLD, L.towerHeight);
     }
     const walkers = deployment.filter(d => d.platformId?.startsWith('walk-'));
-    assert.ok(walkers.length > 0 && walkers.length < DEFENDERS.infantry);
+    assert.ok(walkers.length > 0 && walkers.length < L.defenders.infantry);
     for (const d of walkers) {
         const p = scene.siege.platforms.find(p => p.id === d.platformId);
         assert.ok(inside(p, d));
@@ -170,5 +166,5 @@ test('siege3d deployment: configured tower archers and crew, infantry walkway pr
     const rebuilt = createCampSiege(b, { defense: false });
     assert.notEqual(rebuilt, scene.siege);
     assert.deepEqual(rebuilt.platforms, scene.siege.platforms);
-    t.diagnostic(`deployment=${deployment.length}; tower=${L.towerCount * L.archersPerTower}; walkway=${walkers.length}; interior=${Object.values(DEFENDERS).reduce((sum, n) => sum + n, 0) - L.towerCount * L.archersPerTower - walkers.length}`);
+    t.diagnostic(`deployment=${deployment.length}; tower=${L.towerCount * L.archersPerTower}; walkway=${walkers.length}; interior=${Object.values(L.defenders).reduce((sum, n) => sum + n, 0) - L.towerCount * L.archersPerTower - walkers.length}`);
 });

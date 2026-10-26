@@ -10,14 +10,14 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Snd } from '../snd.js';
 import { Terrain } from '../terrain.js';
-import { campBounds, queueCampWalls, buildCampVisuals, disposeCampVisuals, updateCampGate } from './walls.js';
+import { buildCampVisuals, disposeCampVisuals, updateCampGate } from './walls.js';
 import { buildRamVisual, updateRamVisual } from './ram.js';
 import { CAMP_LAYOUT, LADDER_TOP_WORLD } from './layout.js';
-import { createCampSiege, siegeDeployment, installSiegeArrows, H_WORLD, ATTACKERS, DEFENDERS } from './deployment.js';
+import { deployCampArmies, configureCampArmies, installSiegeArrows, H_WORLD, ATTACKERS, DEFENDERS } from './deployment.js';
 import { buildSiegeVisuals, buildLadderVisual, climberWorldHeight, LAD_LEN } from './platforms.js';
 import { CavalryAI, unitRand } from '../units.js';
 import { board } from '../board.js';
-import { TW, TH, OX, OY } from '../render/metrics.js';
+import { TW, TH, OX, OY, refreshWorldMetrics } from '../render/metrics.js';
 import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
 import { ERECT_MS } from '../battle/siege.js';
 import { createLocalSiegeCommands } from './assault-commands.js';
@@ -65,6 +65,20 @@ sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, far: 160 });
 sun.shadow.normalBias = .05;
 scene3d.add(sun);
+
+function fitBattleView() {
+    const span = Math.max(board.W, board.H);
+    const scale = span / 70;
+    camera.position.set(0, 62 * scale, 74 * scale);
+    camera.far = 400 * scale;
+    camera.updateProjectionMatrix();
+    controls.maxDistance = 170 * scale;
+    controls.update();
+    scene3d.fog.near = 90 * scale; scene3d.fog.far = 210 * scale;
+    Object.assign(sun.shadow.camera, { left: -48 * scale, right: 48 * scale,
+        top: 48 * scale, bottom: -48 * scale, far: 160 * scale });
+    sun.shadow.camera.updateProjectionMatrix();
+}
 
 const groundH = (gx, gy) => Terrain.height(TERRAIN_KEY, gx, gy) * H_WORLD;
 const surfaceH = (gx, gy) => groundH(gx, gy) + (scene?.siege?.heightAt(gx, gy) ?? 0) * H_WORLD;
@@ -317,14 +331,7 @@ function refreshCampVisuals() {
 }
 const localCommands = createLocalSiegeCommands();
 function positionArmies(attackerControl = 'auto') {
-    const b = campBounds();
-    scene.siege = createCampSiege(b, { ladders: true, attackerControl });
-    for (const { unit: u, gx, gy, siegeAnchor } of siegeDeployment(scene.units, b, scene.siege)) {
-        u.gx = u.pgx = gx; u.gy = u.pgy = gy;
-        u.moveX = u.moveY = u.pushX = u.pushY = u.velX = u.velY = 0;
-        u.siegeAnchor = siegeAnchor;
-    }
-    scene.rebuildSpatial();
+    configureCampArmies(scene, { attackerControl });
 }
 
 async function boot() {
@@ -364,7 +371,7 @@ async function boot() {
     scene._boardW = -1;                       // 强制 deployUnits 走一次棋盘尺寸分支（写入地形键）
     scene.battleOptions.terrain = TERRAIN_KEY;
     scene.clearUnits = () => {};              // 全新场景无需清理；绕开 2D 渲染层依赖
-    scene.applyBoardSize = function () { this._boardW = board.W; this._boardH = board.H; };
+    scene.applyBoardSize = function () { refreshWorldMetrics(); this._boardW = board.W; this._boardH = board.H; };
 
     // ---- 视觉钩子 → 3D 实现（覆盖原型上的 2D 委托） ----
     scene.playAttackAnim = u => { u._lungeUntil = performance.now() + 220; };
@@ -374,7 +381,7 @@ async function boot() {
     };
     // 2D 钩子契约：血液/落尘钩子收的是等距屏幕坐标（gridToScreen 系），先反解回网格
     const s2g = (sx, sy) => { const a = (sx - OX) / (TW / 2), b = (sy - OY) / (TH / 2); return [(a + b) / 2, (b - a) / 2]; };
-    const onField = (gx, gy) => gx > -2 && gx < 72 && gy > -2 && gy < 72;
+    const onField = (gx, gy) => gx > -2 && gx < board.W + 2 && gy > -2 && gy < board.H + 2;
     scene.bloodBurst = (sx, sy, n = 6, power = 95, k = 1) => {
         const [gx, gy] = s2g(sx, sy);
         if (!onField(gx, gy)) return;
@@ -399,9 +406,8 @@ async function boot() {
     };
 
     // 先部署并重排单位，再排队添加本场墙体；第一步由开战后的主循环推进。
-    scene.deployUnits(ATTACKERS, DEFENDERS, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: TERRAIN_KEY });
-    positionArmies();
-    queueCampWalls(scene);
+    deployCampArmies(scene);
+    fitBattleView();
     refreshCampVisuals();
     if (!groundBuilt) {
         buildGround(board.W, board.H);

@@ -1,27 +1,23 @@
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import * as THREE from 'three';
 import { makeScene, addUnit, CombatRules } from './battle-harness.js';
+import { LEGACY_LAYOUT } from './siege-legacy-support.js';
 import { board } from '../js/board.js';
 import { CAMP_LAYOUT as L, LADDER_TOP_WORLD } from '../js/siege3d/layout.js';
-import { createCampSiege, siegeDeployment, installSiegeArrows, WALKWAY_HEIGHT } from '../js/siege3d/deployment.js';
+import { createCampSiege, deployCampArmies, installSiegeArrows, WALKWAY_HEIGHT } from '../js/siege3d/deployment.js';
 import { campBounds, queueCampWalls, buildCampVisuals, disposeCampVisuals } from '../js/siege3d/walls.js';
 
 const DT = 1 / 60;
 const total = army => Object.values(army).reduce((sum, n) => sum + n, 0);
 function step(scene) { scene.simulationTime += DT * 1000; scene.stepBattle(DT); }
 function deploy(scene = makeScene(), compact = false) {
-    scene.deployUnits(L.attackers, L.defenders, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
-    const bounds = campBounds();
-    // compact 钉回旧紧凑布局：破门/登墙时间线在 2400 帧预算内（验证全流程确定性）；
-    // 梯子搬运出发点与攻方前沿齐平（6），保证开局班组招募半径内有人可抬。
-    scene.siege = createCampSiege(bounds, { ladders: true, defense: false, ...(compact ? { ramRestOffset: 3.2, ladderRestOffset: 6 } : {}) });
-    const placements = siegeDeployment(scene.units, bounds, scene.siege, compact ? 6 : L.attackerFrontClearance);
-    for (const { unit, gx, gy, siegeAnchor } of placements) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
-    queueCampWalls(scene);
-    scene.rebuildSpatial();
-    return { scene, bounds, placements };
+    // The compact timing mechanism retains its explicit pre-A1 fixture.
+    return deployCampArmies(scene, { layout: compact ? LEGACY_LAYOUT : L, defense: false,
+        ...(compact ? { frontClearance: 6, ramRestOffset: 3.2, ladderRestOffset: 6 } : {}) });
 }
 function assertClear(scene) {
     for (const u of scene.units) {
@@ -34,12 +30,12 @@ function assertClear(scene) {
     }
 }
 
-test('siege layout #1: 20-cell camp, eight ladders per side, outside feet and walkway landings', () => {
+test('siege layout #1: 20-cell camp, four ladders per side, outside feet and walkway landings', () => {
     const { scene: s, bounds: b } = deploy();
     step(s);
     assert.equal(b.x2 - b.x1, 20);
     assert.equal(b.y2 - b.y1, 2 * L.halfSize);
-    assert.equal(s.siege.ladders.length, 32);
+    assert.equal(s.siege.ladders.length, 16);
     for (const side of L.sides) {
         const ladders = s.siege.ladders.filter(l => l.id.startsWith(`${side}-`));
         assert.equal(ladders.length, L.laddersPerSide);
@@ -64,7 +60,7 @@ test('siege layout #1: 20-cell camp, eight ladders per side, outside feet and wa
 
 test('siege layout #2: exact armies, four assault-side towers, proportional four-side deployment and legal bodies', t => {
     const { scene: s, bounds: b, placements } = deploy();
-    assert.equal(total(L.attackers), 600); assert.equal(total(L.defenders), 300);
+    assert.equal(total(L.attackers), 300); assert.equal(total(L.defenders), 100);
     assert.equal(placements.filter(p => p.unit.team === 'red').length, total(L.attackers));
     assert.equal(placements.filter(p => p.unit.team === 'blue').length, total(L.defenders));
     const towers = s.siege.platforms.filter(p => p.kind === 'tower');
@@ -90,7 +86,7 @@ test('siege layout #2: exact armies, four assault-side towers, proportional four
             const distance = side === 'south' ? p.gy - b.y2 : side === 'north' ? b.y1 - p.gy : side === 'east' ? p.gx - b.x2 : b.x1 - p.gx;
             assert.ok(distance - L.wallThickness >= L.attackerFrontClearance - 1e-9);
             // 钉在地图边缘：后排行军线距边界不小于 edgeMargin
-            const inside = side === 'south' ? 70 - p.gy : side === 'north' ? p.gy : side === 'east' ? 70 - p.gx : p.gx;
+            const inside = side === 'south' ? board.H - p.gy : side === 'north' ? p.gy : side === 'east' ? board.W - p.gx : p.gx;
             assert.ok(inside >= L.attackerEdgeMargin - 1e-9, 'wing rank within map edge');
         }
     }
@@ -101,7 +97,7 @@ test('siege layout #2: exact armies, four assault-side towers, proportional four
     assert.equal(s.siege.ram.crew.filter(id => id !== null).length, 4);
     const southIds = new Set(placements.filter(p => p.side === 'south').map(p => p.unit.id));
     assert.ok(s.siege.ram.crew.every(id => southIds.has(id)));
-    t.diagnostic('attackers south/north/east/west=240/120/120/120; defenders=300; tower archers=12');
+    t.diagnostic('attackers south/north/east/west=120/60/60/60; defenders=100; tower archers=12');
 });
 
 test('siege layout #3: configured climb completes within one frame of height-scaled duration', t => {
@@ -168,10 +164,14 @@ test('siege layout: redeploy rebuilds all platforms, ladders, anchors and ram st
     step(s); assertClear(s);
 });
 
-test('siege layout: unchanged camera covers initial camp and four armies at landscape aspect ratios', t => {
+test('siege layout: scaled camera covers initial camp and four armies at landscape aspect ratios', t => {
     const { placements } = deploy();
     const camera = new THREE.PerspectiveCamera(45, 1, .1, 400);
-    camera.position.set(0, 62, 74); camera.lookAt(0, 1, 0); camera.updateMatrixWorld();
+    // Run the page's actual fit function, so the frustum assertion tracks the shipped camera.
+    const source = readFileSync(new URL('../js/siege3d/main.js', import.meta.url), 'utf8');
+    const context = { board, camera, scene3d: { fog: {} }, sun: { shadow: { camera: new THREE.OrthographicCamera() } },
+        controls: { update() { camera.lookAt(0, 1, 0); camera.updateMatrixWorld(); } } };
+    vm.runInNewContext(source.match(/function fitBattleView\([^]*?\n}/)[0] + '\nfitBattleView();', context);
     const points = placements.flatMap(p => [0, (p.siegeAnchor ? L.towerHeight : 0) + 2].map(h =>
         new THREE.Vector3(p.gx - board.W / 2, h, p.gy - board.H / 2)));
     for (const x of [-L.halfSize, L.halfSize]) for (const z of [-L.halfSize, L.halfSize]) points.push(new THREE.Vector3(x, LADDER_TOP_WORLD, z));
@@ -184,5 +184,5 @@ test('siege layout: unchanged camera covers initial camp and four armies at land
             assert.ok(Math.abs(p.x) <= 1 && Math.abs(p.y) <= 1 && Math.abs(p.z) <= 1);
         }
     }
-    t.diagnostic(`camera=(0,62,74), target=(0,1,0), FOV=45; covered at 4:3 and 16:9; minimum aspect=${minAspect.toFixed(4)}; max vertical NDC=${Math.max(...projected.map(p => Math.abs(p.y))).toFixed(4)}`);
+    t.diagnostic(`camera=scaled(0,62,74), target=(0,1,0), FOV=45; covered at 4:3 and 16:9; minimum aspect=${minAspect.toFixed(4)}; max vertical NDC=${Math.max(...projected.map(p => Math.abs(p.y))).toFixed(4)}`);
 });

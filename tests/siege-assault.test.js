@@ -7,9 +7,11 @@ import { createCampSiege, siegeDeployment } from '../js/siege3d/deployment.js';
 import { CAMP_LAYOUT as L } from '../js/siege3d/layout.js';
 import { campBounds, queueCampWalls } from '../js/siege3d/walls.js';
 import { createLocalSiegeCommands } from '../js/siege3d/assault-commands.js';
+import { LEGACY_LAYOUT } from './siege-legacy-support.js';
 import { stateSummary, digest } from './siege-assault-support.js';
 
-const player = (options = {}) => deployVariant({ seed: 173, variant: 1,
+// Fixed S1a mechanism fixture keeps its original timing/recruitment coverage.
+const player = (options = {}) => deployVariant({ seed: 173, variant: 1, layout: LEGACY_LAYOUT,
     siegeOptions: { attackerControl: 'player', ...options } });
 const release = (s, face) => s.applyNetCommand(face === 'ram' ? { k: 'siegeRam', side: 'red' }
     : { k: 'siegeAssault', side: 'red', face });
@@ -39,7 +41,7 @@ test('assault auto: variants 1/6 match HEAD 5dc24f0 every 60 frames through 600'
     const golden = JSON.parse(readFileSync(new URL('./fixtures/siege-assault-auto-5dc24f0.json', import.meta.url)));
     assert.equal(golden.head, '5dc24f033766213ebb6eb1b931b50df6a53633fb');
     for (const variant of [1, 6]) {
-        const s = deployVariant({ seed: golden.seed, variant });
+        const s = deployVariant({ seed: golden.seed, variant, layout: LEGACY_LAYOUT });
         assert.ok(Object.values(s.siege.assault.released).every(Boolean));
         assert.equal(s.siege.assault.battleDeadlineSeconds, null);
         for (const row of golden.variants[variant]) {
@@ -53,9 +55,9 @@ test('assault player: 60s waiting and north-only release use complete steps', t 
     const s = player(), b = campBounds(), ramBefore = structuredClone(s.siege.ram);
     assert.equal(s.siege.assault.battleDeadlineSeconds, 360);
     // Each column keeps its original rank depth; the goal is a translation, not a projection.
-    const placements = siegeDeployment(s.units, b, s.siege);
+    const placements = siegeDeployment(s.units, b, s.siege, LEGACY_LAYOUT.attackerFrontClearance, LEGACY_LAYOUT);
     for (const { unit, gx, gy } of placements.filter(p => p.unit.team === 'red')) {
-        assert.ok(Math.abs(Math.hypot(gx - unit.siegeStaging.gx, gy - unit.siegeStaging.gy) - 7) < 1e-10);
+        assert.ok(Math.abs(Math.hypot(gx - unit.siegeStaging.gx, gy - unit.siegeStaging.gy) - (LEGACY_LAYOUT.attackerFrontClearance - LEGACY_LAYOUT.stagingClearance)) < 1e-10);
     }
     step(s, 3600);
     assert.equal(s.battleOver, false); assert.equal(s.siege.rules.contactAt, null);
@@ -174,7 +176,7 @@ test('assault configuration: player rejects non-carrying ladders and keeps stagi
     assert.throws(() => createCampSiege(campBounds(), { attackerControl: 'player', ladderCarry: false }), /ladderCarry/);
     const { s } = small({ stagingClearance: 9, battleDeadlineSeconds: null });
     assert.equal(s.siege.assault.stagingClearance, 9); assert.equal(s.siege.assault.battleDeadlineSeconds, null);
-    assert.equal(L.attackerFrontClearance, 18);
+    assert.equal(L.attackerFrontClearance, 32);
     step(s); assert.equal(s.battleOver, false);
 });
 

@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
 import { makeScene, addUnit } from './battle-harness.js';
 import { createSiegeLayer } from '../js/battle/siege.js';
-import { CAMP_LAYOUT as L } from '../js/siege3d/layout.js';
+import { LEGACY_LAYOUT as L } from './siege-legacy-support.js';
 import { createCampSiege, installSiegeArrows } from '../js/siege3d/deployment.js';
 import { campBounds, queueCampWalls } from '../js/siege3d/walls.js';
 import { deployVariant, step } from '../tools/siege-balance.mjs';
@@ -18,7 +18,7 @@ function fixed(s, team, type, gx, gy) {
 }
 function setup(kind = 'ground', config = {}) {
     const s = makeScene(), b = campBounds();
-    s.siege = createCampSiege(b, { defense: false, rules: config });
+    s.siege = createCampSiege(b, { layout: L, defense: false, rules: config });
     installSiegeArrows(s); queueCampWalls(s);
     const p = s.siege.platforms.find(p => p.kind === kind);
     const x = p ? (p.x1 + p.x2) / 2 : b.cx + 5;

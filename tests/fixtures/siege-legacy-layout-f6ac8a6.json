@@ -1,0 +1,121 @@
+{
+  "rules": {
+    "enabled": true,
+    "defenderTeam": "blue",
+    "attackerTeam": "red",
+    "defenderMoraleBonus": -0.025,
+    "retreatRadius": 3,
+    "surrenderRadius": 4,
+    "surrenderFraction": 0.1,
+    "attackerRetreatFraction": 0.35,
+    "attackerStallSeconds": 20,
+    "captureRadius": 2.5,
+    "captureSeconds": 8,
+    "wallFootRadius": 2,
+    "ladderGuardDamage": 1.5,
+    "gateHp": 1800,
+    "fireDiscipline": true,
+    "interiorMeleeCover": 0.8,
+    "climbersPerLadder": 1,
+    "deadZone": 1.5,
+    "advanceRadius": 9,
+    "walkwayRangeScale": 1.1,
+    "towerRangeScale": 1.2,
+    "ramRoofCover": 0.3
+  },
+  "halfSize": 10,
+  "wallThickness": 0.3,
+  "wallHeight": 2.4,
+  "fenceCover": 0.5,
+  "braceHeights": [
+    0.75,
+    1.85
+  ],
+  "stakeTipHeight": 0.16457142857142856,
+  "gateWidth": 2.4,
+  "gateLeafHeight": 2,
+  "gatePostHeight": 2.4,
+  "worldHeightScale": 2,
+  "walkwayHeight": 1.6,
+  "walkwayWidth": 0.6,
+  "towerHeight": 3.2,
+  "towerSize": 1.4,
+  "towerInset": 1.6,
+  "towerPositions": [
+    {
+      "side": "north",
+      "offset": 0
+    },
+    {
+      "side": "east",
+      "offset": 0
+    },
+    {
+      "side": "west",
+      "offset": 0
+    },
+    {
+      "side": "south",
+      "offset": 2.4
+    }
+  ],
+  "towerCount": 4,
+  "towerArcherSlots": [
+    {
+      "x": -0.38,
+      "z": -0.3
+    },
+    {
+      "x": 0.38,
+      "z": -0.3
+    },
+    {
+      "x": 0,
+      "z": 0.38
+    }
+  ],
+  "archersPerTower": 3,
+  "laddersPerSide": 8,
+  "sides": [
+    "west",
+    "north",
+    "east",
+    "south"
+  ],
+  "ladderFootOffset": 1.3,
+  "ladderTopClearance": 0.15,
+  "southLadderGateClearance": 2,
+  "southLadderSpacing": 2,
+  "baselineWallHeight": 1.75,
+  "baselineClimbSeconds": 2.5,
+  "climbSeconds": 3.4285714285714284,
+  "attackers": {
+    "infantry": 470,
+    "pikeman": 80,
+    "archer": 50
+  },
+  "defenders": {
+    "infantry": 250,
+    "archer": 50
+  },
+  "attackShares": {
+    "south": 0.4,
+    "north": 0.2,
+    "east": 0.2,
+    "west": 0.2
+  },
+  "attackerFrontClearance": 18,
+  "attackerEdgeMargin": 1.5,
+  "attackerSpacing": 1,
+  "attackerDepthSpacing": 0.85,
+  "defenderWallClearance": 0.38,
+  "defenderSpacing": 0.8,
+  "interiorInset": 1.3,
+  "towerClearance": 0.4,
+  "boardSize": {
+    "w": 70,
+    "h": 70
+  },
+  "archerRange": 9.5,
+  "stagingClearance": 11
+}

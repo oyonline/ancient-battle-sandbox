@@ -5,7 +5,7 @@ import { makeScene, addUnit } from './battle-harness.js';
 import { createSiegeLayer } from '../js/battle/siege.js';
 import { board } from '../js/board.js';
 import { campBounds, queueCampWalls } from '../js/siege3d/walls.js';
-import { ATTACKERS, DEFENDERS, createCampSiege, siegeDeployment, installSiegeArrows } from '../js/siege3d/deployment.js';
+import { createCampSiege, deployCampArmies, installSiegeArrows } from '../js/siege3d/deployment.js';
 
 const SHOTS = 200, HP = 1e9;
 function step(scene) {
@@ -143,12 +143,7 @@ test('siege archery #5: repeated battles and redeployment reset the exact endpoi
 
 test('siege archery #6: stepped siege3d deployment has configured armies and tower archers', () => {
     const scene = makeScene();
-    scene.deployUnits(ATTACKERS, DEFENDERS, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
-    const bounds = campBounds();
-    scene.siege = createCampSiege(bounds, { defense: false });
-    const deployment = siegeDeployment(scene.units, bounds, scene.siege);
-    for (const { unit, gx, gy, siegeAnchor } of deployment) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
-    queueCampWalls(scene);
+    deployCampArmies(scene, { defense: false, ladders: false });
     installSiegeArrows(scene);
     step(scene);
     const count = (team, type) => scene.units.filter(u => u.team === team && (!type || u.type === type)).length;

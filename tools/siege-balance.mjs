@@ -3,8 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { makeScene } from '../tests/battle-harness.js';
 import { CAMP_LAYOUT as L } from '../js/siege3d/layout.js';
-import { createCampSiege, siegeDeployment, installSiegeArrows } from '../js/siege3d/deployment.js';
-import { campBounds, queueCampWalls } from '../js/siege3d/walls.js';
+import { deployCampArmies, installSiegeArrows } from '../js/siege3d/deployment.js';
 
 export function step(scene, count = 1) {
     for (let i = 0; i < count && !scene.battleOver; i++) {
@@ -12,20 +11,17 @@ export function step(scene, count = 1) {
         scene.stepBattle(1 / 60);
     }
 }
-export function deployVariant({ variant = 1, jitter = .3, bonus = L.rules.defenderMoraleBonus, seed = 173, siegeOptions = {} } = {}) {
+export function deployVariant({ variant = 1, jitter = .3, bonus = L.rules.defenderMoraleBonus, seed = 173, layout = L, siegeOptions = {} } = {}) {
     const s = makeScene();
     installSiegeArrows(s);
-    s.deployUnits(L.attackers, L.defenders, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
-    const b = campBounds();
-    s.siege = createCampSiege(b, { ladders: true, rules: { defenderMoraleBonus: bonus }, scatterSeed: (seed + variant) >>> 0, ...siegeOptions });
     let state = (seed + Math.imul(variant, 2654435761)) >>> 0;
     const random = () => { state = (Math.imul(state, 1664525) + 1013904223) >>> 0; return state / 4294967296; };
-    for (const { unit, gx, gy, siegeAnchor } of siegeDeployment(s.units, b, s.siege)) {
-        const x = gx + (unit.team === 'red' ? (random() * 2 - 1) * jitter : 0);
-        const y = gy + (unit.team === 'red' ? (random() * 2 - 1) * jitter : 0);
-        Object.assign(unit, { gx: x, gy: y, pgx: x, pgy: y, siegeAnchor });
-    }
-    queueCampWalls(s); s.rebuildSpatial();
+    deployCampArmies(s, { layout, rules: { defenderMoraleBonus: bonus },
+        scatterSeed: (seed + variant) >>> 0, ...siegeOptions,
+        placementOffset: ({ unit, gx, gy }) => ({
+            gx: gx + (unit.team === 'red' ? (random() * 2 - 1) * jitter : 0),
+            gy: gy + (unit.team === 'red' ? (random() * 2 - 1) * jitter : 0)
+        }) });
     return s;
 }
 export function resultOf(s, variant) {

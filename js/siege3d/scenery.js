@@ -7,9 +7,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { board } from '../board.js';
 import { CAMP_LAYOUT as L } from './layout.js';
+import { campBounds } from './walls.js';
 
-const WORLD = { W: board.W, H: board.H };
-const CAMP = { cx: WORLD.W / 2, cy: WORLD.H / 2 };
 
 // 外围带宽（与 buildSurroundings 的 SIDE 一致）
 const SURROUND_SIDE = 80;
@@ -17,11 +16,11 @@ const SURROUND_SIDE = 80;
 // 西侧河道（世界坐标）：中心线随 Z 弯曲、宽度随 Z 起伏。
 // 水面与树林避让共用同一套函数，避免树长进河里。
 const riverAxisAt = z => {
-    const t = (z + WORLD.H / 2 + SURROUND_SIDE) / (WORLD.H + SURROUND_SIDE * 2);
-    return -WORLD.W / 2 - 35 + Math.sin(t * Math.PI * 3) * 3;
+    const t = (z + board.H / 2 + SURROUND_SIDE) / (board.H + SURROUND_SIDE * 2);
+    return -board.W / 2 - 35 + Math.sin(t * Math.PI * 3) * 3;
 };
 const riverHalfWidthAt = z => {
-    const t = (z + WORLD.H / 2 + SURROUND_SIDE) / (WORLD.H + SURROUND_SIDE * 2);
+    const t = (z + board.H / 2 + SURROUND_SIDE) / (board.H + SURROUND_SIDE * 2);
     // 原宽 2~6，共加宽 10 倍后取半宽（全宽 10~30，最东岸仍在战场西界 -35 之外）
     return (4 + Math.sin(t * Math.PI * 2.5) * 2) * 5;
 };
@@ -100,6 +99,7 @@ export function buildGrassTexture(size = 1024) {
 // 步骤 1 · 草丛 InstancedMesh
 // ============================================================================
 export function buildGrassPatches(cap = 6000) {
+    const CAMP = campBounds();
     const group = new THREE.Group();
     // 三片交叉细长三角片的顶点（XY 平面，底面 y=0）
     const botColor = new THREE.Color('#6b7a3f');
@@ -156,8 +156,8 @@ export function buildGrassPatches(cap = 6000) {
     const gateClearY = CAMP.cy + half + 3;
 
     while (slot < cap) {
-        const gx = rng() * WORLD.W;
-        const gy = rng() * WORLD.H;
+        const gx = rng() * board.W;
+        const gy = rng() * board.H;
         // 避让营寨内
         if (gx > CAMP.cx - half && gx < CAMP.cx + half && gy > CAMP.cy - half && gy < CAMP.cy + half) continue;
         // 避让寨门前区域（门前 3 格）
@@ -167,7 +167,7 @@ export function buildGrassPatches(cap = 6000) {
         const rollY = rng() * Math.PI * 2;
         const leanX = (rng() - 0.5) * 0.1;
         const leanZ = (rng() - 0.5) * 0.1;
-        dummy.position.set(gx - WORLD.W / 2, 0, gy - WORLD.H / 2);
+        dummy.position.set(gx - board.W / 2, 0, gy - board.H / 2);
         dummy.rotation.set(leanX, rollY, leanZ);
         dummy.scale.setScalar(h / 0.32);
         dummy.updateMatrix();
@@ -183,6 +183,7 @@ export function buildGrassPatches(cap = 6000) {
 // 步骤 2 · 营寨帐篷 + 飘旗
 // ============================================================================
 export function buildCampTents(siege) {
+    const CAMP = campBounds();
     const group = new THREE.Group();
     const rng = mulberry32(77777);
     const clothMat = new THREE.MeshStandardMaterial({ color: '#c9c2ac', roughness: 1 });
@@ -217,8 +218,8 @@ export function buildCampTents(siege) {
     // 扎营布局：预备队方阵钉死在 x 30.1~39.9 × y 34.4~39.6（见 siege-defense.js
     // 的 reservePosts），地面弓手站在墙内 2 格线，因此小帐篷只能落在北半区
     // y 28~34 的净空带里：两排四列、沿中轴镜像，门（山墙）朝南正对中军。
-    const tentRows = [29.2, 32.6];
-    const westCols = [29.6, 31.7];
+    const tentRows = [CAMP.cy - 5.8, CAMP.cy - 2.4];
+    const westCols = [CAMP.cx - 5.4, CAMP.cx - 3.3];
     const tentPairs = [];
     for (const gy of tentRows) for (const gx of westCols)
         tentPairs.push({ w: { gx, gy }, e: { gx: 2 * CAMP.cx - gx, gy } });
@@ -245,7 +246,7 @@ export function buildCampTents(siege) {
         add(new THREE.ConeGeometry(1.05, 0.85, 4), eaveMat, 0, 2.485, 0, Math.PI / 4);
         add(new THREE.CylinderGeometry(0.03, 0.03, 0.5, 6), poleMat, 0, 3.03, 0);
         add(new THREE.SphereGeometry(0.08, 8, 6), eaveMat, 0, 3.31, 0);
-        tent.position.set(gx - WORLD.W / 2, 0, gy - WORLD.H / 2);
+        tent.position.set(gx - board.W / 2, 0, gy - board.H / 2);
         return tent;
     }
 
@@ -336,7 +337,7 @@ export function buildCampTents(siege) {
             mesh.castShadow = true; mesh.receiveShadow = true;
             tent.add(mesh);
         }
-        tent.position.set(gx - WORLD.W / 2, 0, gy - WORLD.H / 2);
+        tent.position.set(gx - board.W / 2, 0, gy - board.H / 2);
         tent.rotation.y = rotY;
         tent.scale.setScalar(s);
         group.add(tent);
@@ -355,14 +356,15 @@ export function buildCampTents(siege) {
 
 // 大帐飘旗（顶点正弦平移）——返回 { mesh, update } 对象
 export function createTentFlag() {
+    const CAMP = campBounds();
     const geo = new THREE.PlaneGeometry(1.0, 0.7, 12, 8);
     const mat = new THREE.MeshStandardMaterial({ color: 0x387bdd, roughness: 0.8, side: THREE.DoubleSide });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.castShadow = true;
     // 旗面沿 +Z 展开（默认相机在 +Z 侧，正对旗面），左缘贴旗杆；
     // 再向 +Z 让 0.03，遮住 walls.js 里旧的那块静态旗板（本期不允许改 walls.js）。
-    const worldX = CAMP.cx - WORLD.W / 2 + 0.5;
-    const worldZ = CAMP.cy - WORLD.H / 2 + 0.03;
+    const worldX = CAMP.cx - board.W / 2 + 0.5;
+    const worldZ = CAMP.cy - board.H / 2 + 0.03;
     mesh.position.set(worldX, 3.0, worldZ);
 
     // 缓存原始顶点
@@ -392,9 +394,9 @@ export function createTentFlag() {
 export function buildSurroundings(grassTexture) {
     const group = new THREE.Group();
     const SIDE = SURROUND_SIDE;   // 外围带宽（世界单位）
-    const HX = WORLD.W / 2;       // 战场半宽 = 35
-    const HZ = WORLD.H / 2;       // 战场半高 = 35
-    const TILE = WORLD.W / 8;     // 与战场地面 8×8 平铺同尺度：8.75 单位/瓦片
+    const HX = board.W / 2;       // 战场实际半宽
+    const HZ = board.H / 2;       // 战场实际半高
+    const TILE = board.W / 8;     // 与战场地面 8×8 平铺同尺度：随棋盘尺寸变化
 
     // 外围地面：四块与战场边界严丝合缝的边框，不与战场地面重叠。
     // 旧版是一块 230×230 的大平面压在战场平面上（同为 y=0）——深度冲突正是横向浅色条带的来源。
@@ -408,7 +410,7 @@ export function buildSurroundings(grassTexture) {
         const geo = new THREE.PlaneGeometry(x2 - x1, z2 - z1, 1, 1);
         geo.rotateX(-Math.PI / 2);
         geo.translate((x1 + x2) / 2, 0, (z1 + z2) / 2);
-        // 世界尺度 UV：与战场地面同为 8.75 单位/瓦片，接缝处纹理连续
+        // 世界尺度 UV：与战场地面使用同一瓦片尺寸，接缝处纹理连续
         const pos = geo.attributes.position, uv = geo.attributes.uv;
         for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / TILE, pos.getZ(i) / TILE);
         uv.needsUpdate = true;
@@ -432,7 +434,7 @@ export function buildSurroundings(grassTexture) {
     // 生成一条沿 Z 延伸的带状网格；offset 为相对河心的左右边界偏移
     function riverRibbon(edgeFn, y) {
         const segs = 120;
-        const z0 = -WORLD.H / 2 - SIDE, z1 = WORLD.H / 2 + SIDE;
+        const z0 = -board.H / 2 - SIDE, z1 = board.H / 2 + SIDE;
         const pos = [];
         for (let i = 0; i < segs; i++) {
             const za = z0 + (z1 - z0) * (i / segs);
@@ -600,7 +602,7 @@ export function buildSurroundings(grassTexture) {
     for (let i = 0; i < 3; i++) {
         addRidge(
             8 + i * 28 + (mountainRng() - 0.5) * 8,
-            -WORLD.H / 2 - 45 - mountainRng() * 8,
+            -board.H / 2 - 45 - mountainRng() * 8,
             62 + mountainRng() * 14, 22,
             17 + mountainRng() * 7,
             1000 + i * 131, 'x'
@@ -609,7 +611,7 @@ export function buildSurroundings(grassTexture) {
     // 东侧：两道长山脊（南北向）
     for (let i = 0; i < 2; i++) {
         addRidge(
-            WORLD.W / 2 + 44 + mountainRng() * 8,
+            board.W / 2 + 44 + mountainRng() * 8,
             (i - 0.5) * 40 + (mountainRng() - 0.5) * 8,
             22, 72 + mountainRng() * 10,
             15 + mountainRng() * 7,
@@ -618,8 +620,8 @@ export function buildSurroundings(grassTexture) {
     }
     // 远山背景带：北、东各一道超长低脊，把近处山脊连成环抱山脉，
     // 消除转角断口，同时给山脊背后补一层更淡的剪影
-    addRidge(40, -WORLD.H / 2 - 65, 150, 26, 13, 7000, 'x');
-    addRidge(WORLD.W / 2 + 65, 0, 24, 170, 11, 8000, 'z');
+    addRidge(40, -board.H / 2 - 65, 150, 26, 13, 7000, 'x');
+    addRidge(board.W / 2 + 65, 0, 24, 170, 11, 8000, 'z');
     group.add(mountainGroup);
 
     // ---- 外围小树林（南侧 + 西侧）----
@@ -663,9 +665,9 @@ function buildOutskirtsForest(maxInstances = 1500) {
     mesh.castShadow = true; mesh.frustumCulled = true;
     group.add(mesh);
 
-    // 只在战场 70×70 之外的外围带取点：距战场边 2~60，以南侧 + 西侧为主。
+    // 只在实际战场之外的外围带取点：距战场边 2~60，以南侧 + 西侧为主。
     // 旧版在 gx/gy ∈ [0,70] 的战场坐标里撒点，等于把 1500 棵树全种进了战场——本函数已彻底改为外圈采样。
-    const HX = WORLD.W / 2, HZ = WORLD.H / 2;
+    const HX = board.W / 2, HZ = board.H / 2;
     const NEAR = 2, FAR = 60;
     const SOUTH_TREES = 900, WEST_TREES = maxInstances - 900;
 
@@ -682,16 +684,16 @@ function buildOutskirtsForest(maxInstances = 1500) {
     let slot = 0;
     // 南侧带：z ∈ [HZ+2, HZ+60]，x 覆盖整个外围宽度（河流穿过的位置留空）
     for (let i = 0; i < SOUTH_TREES * 12 && slot < SOUTH_TREES; i++) {
-        const x = -HX - FAR + rng() * (WORLD.W + FAR * 2);
+        const x = -HX - FAR + rng() * (board.W + FAR * 2);
         const z = HZ + NEAR + rng() * (FAR - NEAR);
         if (inRiver(x, z)) continue;
         place(x, z);
     }
-    // 西侧带：x ∈ [-(HX+60), -(HX+2)]，z ∈ [-45, HZ+60]（避开北侧山体与河道）
+    // 西侧带：x ∈ [-(HX+60), -(HX+2)]，z ∈ [-HZ-10, HZ+60]（避开北侧山体与河道）
     const westEnd = SOUTH_TREES;
     for (let i = 0; i < WEST_TREES * 12 && slot < westEnd + WEST_TREES; i++) {
         const x = -(HX + NEAR) - rng() * (FAR - NEAR);
-        const z = -45 + rng() * (HZ + FAR + 45);
+        const z = -HZ - 10 + rng() * (2 * HZ + FAR + 10);
         if (inRiver(x, z)) continue;
         place(x, z);
     }

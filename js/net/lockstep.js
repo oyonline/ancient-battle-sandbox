@@ -41,7 +41,8 @@ export const LOCKSTEP = {
 // Free tower coordinates/IDs, axe combat and tower balance change simulation state.
 // 2026-10-26 siege-contact-stall：攻方停滞从首次攻城接触起算，混版本的撤退时刻会分歧。
 // 2026-10-26 siege-player-assault：按面放行、器械待令和整局期限扩展模拟语义。
-export const SIM_VERSION = '2026-10-26-siege-player-assault';
+// 2026-10-26 siege-scale-100v300：攻寨专用尺寸、兵数、实例射程和待令线改变轨迹。
+export const SIM_VERSION = '2026-10-26-siege-scale-100v300';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {

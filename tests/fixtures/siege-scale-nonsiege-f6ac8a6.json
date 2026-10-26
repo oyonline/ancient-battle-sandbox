@@ -1,0 +1,35 @@
+{
+  "head": "f6ac8a6eafd74618d039bea4a85a642d151773ff",
+  "config": {
+    "infantry": 12,
+    "pikeman": 4,
+    "archer": 4,
+    "cavalry": 2
+  },
+  "scenarios": {
+    "default": {
+      "terrain": "flat"
+    },
+    "territory": {
+      "terrain": "territory",
+      "territory": true,
+      "territoryAI": false
+    },
+    "coop": {
+      "terrain": "flat",
+      "coop": true,
+      "black": {
+        "infantry": 12,
+        "pikeman": 4,
+        "archer": 4,
+        "cavalry": 2
+      }
+    }
+  },
+  "steps": 120,
+  "hashes": {
+    "default": "32867ff2ee7921f260b0c2072aea16a63d28d7ef23be7d7201003409f7c51ee1",
+    "territory": "3445291a805f5b9bb42f9782b3ba02a18fc199f8e6c2649aa68d895575d37135",
+    "coop": "7d71b3a817f4222ba64dfea17f30f09a9517c539adb59c57e94d5aaf8d3fe3d6"
+  }
+}

@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { makeScene, addUnit, applyDamage } from './battle-harness.js';
 import { createSiegeLayer } from '../js/battle/siege.js';
-import { CAMP_LAYOUT as L } from '../js/siege3d/layout.js';
+import { LEGACY_LAYOUT as L } from './siege-legacy-support.js';
 import { campBounds, queueCampWalls } from '../js/siege3d/walls.js';
-import { createCampSiege, siegeDeployment, installSiegeArrows } from '../js/siege3d/deployment.js';
+import { createCampSiege, deployCampArmies, installSiegeArrows } from '../js/siege3d/deployment.js';
 
 const DT = 1 / 60;
 const distance = (a, b) => Math.hypot(a.gx - b.gx, a.gy - b.gy);
@@ -14,14 +14,8 @@ function step(s, count = 1) {
     for (let i = 0; i < count; i++) { s.simulationTime += DT * 1000; s.stepBattle(DT); }
 }
 function deploy(s = makeScene()) {
-    s.deployUnits(L.attackers, L.defenders, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: 'flat' });
-    const b = campBounds();
-    // 防守机制测试钉回旧紧凑布局（冲车 3.2、攻方前沿 6），1500 帧预算内才能破门；
-    // 梯子搬运出发点与攻方前沿齐平（6），保证开局班组招募半径内有人可抬。
-    s.siege = createCampSiege(b, { ladders: true, ramRestOffset: 3.2, ladderRestOffset: 6 });
-    const placements = siegeDeployment(s.units, b, s.siege, 6);
-    for (const { unit, gx, gy, siegeAnchor } of placements) Object.assign(unit, { gx, gy, pgx: gx, pgy: gy, siegeAnchor });
-    queueCampWalls(s); s.rebuildSpatial();
+    deployCampArmies(s, { layout: L,
+        frontClearance: 6, ramRestOffset: 3.2, ladderRestOffset: 6 });
     return s;
 }
 const roles = s => Object.fromEntries(['wall', 'reserve', 'archer', 'gate'].map(role =>

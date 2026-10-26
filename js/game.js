@@ -384,7 +384,13 @@ export class IsoBattleScene extends Phaser.Scene {
             if (!(team in this.battleOptions.cavalryOrders)) this.battleOptions.cavalryOrders[team] = 'auto';
         }
         // 棋盘尺寸：领土征服用大地图，其余模式回默认；尺寸变化时重建依赖尺寸的渲染层。
-        if (options.territory) setBoardSize(TERRITORY.W, TERRITORY.H, 5); else resetBoardSize();
+        if (options.boardSize) {
+            const { w, h, margin = 0 } = options.boardSize;
+            setBoardSize(w, h, margin);
+            // Explicit-size callers can retain units/render stubs; reset navigation before any path query.
+            Terrain.geometry(options.terrain);
+            this.navigation?.reset(options.terrain, this.battleId);
+        } else if (options.territory) setBoardSize(TERRITORY.W, TERRITORY.H, 5); else resetBoardSize();
         if (this._boardW !== board.W || this._boardH !== board.H) {
             // Bake the destination terrain once, rather than a huge temporary flat map.
             this.battleOptions.terrain = Terrain.normalize(options.terrain);
