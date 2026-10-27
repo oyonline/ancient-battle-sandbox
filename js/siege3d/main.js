@@ -21,6 +21,8 @@ import { TW, TH, OX, OY, refreshWorldMetrics } from '../render/metrics.js';
 import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
 import { ERECT_MS } from '../battle/siege.js';
 import { createLocalSiegeCommands } from './assault-commands.js';
+import { FORCE_FIELDS, FORCE_PRESETS, FORCE_LIMIT, editForceConfig, loadForceConfig, saveForceConfig, totalTroops } from './force-config.js';
+import { createForceDeployment } from './force-deployment.js';
 import {
     buildGrassTexture, buildGrassPatches, buildCampTents, createTentFlag,
     buildSurroundings
@@ -33,8 +35,8 @@ const TEAM_COLOR = { red: 0xc4553f, blue: 0x7fb0e0 };
 
 const $ = id => document.getElementById(id);
 const hud = $('hud');
-const totalTroops = army => Object.values(army).reduce((sum, count) => sum + count, 0);
-$('gate-description').textContent = `攻方 ${totalTroops(ATTACKERS)} 人围攻木栅营寨，守方 ${totalTroops(DEFENDERS)} 人据寨死守`;
+let forceConfig = loadForceConfig();
+let forceSaved = true;
 
 // ---------------- Three 基础 ----------------
 const viewport = $('viewport');
@@ -334,8 +336,9 @@ function positionArmies(attackerControl = 'auto') {
     configureCampArmies(scene, { attackerControl });
 }
 
-async function boot() {
+async function boot(config, isCurrent) {
     const { IsoBattleScene } = await import('../game.js');
+    if (!isCurrent()) return;
     scene = new IsoBattleScene();
     const stub = () => ({
         destroyed: false, x: 0, y: 0, setOrigin() { return this; }, setScrollFactor() { return this; },
@@ -406,7 +409,8 @@ async function boot() {
     };
 
     // 先部署并重排单位，再排队添加本场墙体；第一步由开战后的主循环推进。
-    deployCampArmies(scene);
+    deployCampArmies(scene, config);
+    scene.onSiegeStart = () => forceDeployment.start();
     fitBattleView();
     refreshCampVisuals();
     if (!groundBuilt) {
@@ -516,7 +520,7 @@ function syncAssaultControls() {
     $('assault-controls').hidden = !(assault?.player && scene.battleStarted && !scene.battleOver);
     for (const [face, name] of Object.entries(faceNames)) {
         const button = $(`assault-${face}`), used = assault?.player && assault.released[face];
-        button.disabled = !assault?.player || used || localCommands.pending(face);
+        button.disabled = !assault?.player || used || localCommands.pending(face) || (face === 'archers' && forceConfig.attackers.archer === 0);
         button.textContent = used ? `✓ ${name}${['ram', 'archers'].includes(face) ? '' : '面'}已下令` : button.dataset.label;
     }
 }
@@ -614,7 +618,7 @@ function sync3D(dt, now) {
             ` · 存活 <b class="red">${scene.redAlive}</b> / <b class="blue">${scene.blueAlive}</b> · 阵亡 ${scene.deadCount}` +
             (siege?.gate ? ` · ${siege.gate.broken ? '寨门已破' : `寨门 ${siege.gate.hp}/${siege.gate.maxHp}`}` : '') +
             (siege?.ladders ? ` · 登墙 ${siege.landedCount}` : '') +
-            (siege?.assault?.player ? ` · 待令：${['north', 'east', 'south', 'west'].filter(face => !siege.assault.released[face]).map(face => faceNames[face]).join(' ') || '无'} · ${siege.assault.released.archers ? '弓手压制中' : '弓手待令'}` : '') +
+            (siege?.assault?.player ? ` · 待令：${['north', 'east', 'south', 'west'].filter(face => !siege.assault.released[face]).map(face => faceNames[face]).join(' ') || '无'}${forceConfig.attackers.archer > 0 ? ` · ${siege.assault.released.archers ? '弓手压制中' : '弓手待令'}` : ''}` : '') +
             (siege?.rules ? ` · 攻方伤亡 ${(siege.rules.attackerLossRate * 100).toFixed(1)}% / ${siege.rules.config.attackerRetreatFraction * 100}%` +
                 (siege.rules.attackerLossRate + 1e-12 >= siege.rules.config.attackerRetreatFraction ?
                     ` · 攻势停滞 ${siege.rules.attackerStallSeconds.toFixed(1)}/${siege.rules.config.attackerStallSeconds}s` : '') +
@@ -665,38 +669,95 @@ window.__siege = { camera, controls, getScene: () => scene, unitMeshes, corpseMe
     get commandLog() { return localCommands.log; }, get pendingCommands() { return localCommands.pendingCount; },
     get campVisuals() { return campVisuals; },
     get bloodCursor() { return bloodCursor; }, get corpseCursor() { return corpseCursor; } };
-let deploying = false;
-async function redeploy() {
-    if (deploying) return;
-    deploying = true;
-    localCommands.reset();
-    for (const id of ['btn-start', 'btn-watch']) $(id).disabled = true;
+let deploying = true;
+const forceDeployment = createForceDeployment({
+    deploy: async (config, isCurrent) => {
+        localCommands.reset();
+        hudWinner = null; headings.clear(); lastSound = {};
+        bloodCursor = bloodPCursor = 0; bloodP.length = falling.length = 0;
+        bloodMesh.count = bloodPMesh.count = arrowMesh.count = 0;
+        for (const kind of UNIT_KINDS) { corpseCursor[kind] = 0; corpseMeshes[kind].count = unitMeshes[kind].count = 0; }
+        for (const d of dustPool) { d.life = 0; d.m.visible = false; }
+        $('btn-pause').textContent = '暂停';
+        for (const id of ['btn-s1', 'btn-s2', 'btn-s4']) $(id).style.fontWeight = id === 'btn-s1' ? '700' : '400';
+        await boot(config, isCurrent);
+    },
+    onState: ({ phase, canStart, error }) => {
+        deploying = !canStart && phase !== 'started';
+        for (const [id, label] of [['btn-start', '⚔ 我来攻城'], ['btn-watch', '👀 观战']]) {
+            $(id).disabled = !canStart;
+            $(id).textContent = canStart || phase === 'started' ? label : phase === 'error' ? '部署失败' : '部署中…';
+        }
+        $('force-retry').hidden = phase !== 'error';
+        $('force-status').textContent = phase === 'error' ? '部署失败，请重试' :
+            !forceSaved ? '当前选择已保留，但无法记住到下次' : canStart ? '部署完成，可以开战' : phase === 'started' ? '' : '部署中…';
+        if (error) console.error(error);
+        syncAssaultControls();
+    }
+});
+function renderForcePanel(editingInput = null) {
+    const attack = totalTroops(forceConfig.attackers), defend = totalTroops(forceConfig.defenders);
+    const total = attack + defend;
+    $('gate-description').textContent = `攻方 ${attack} 人围攻木栅营寨，守方 ${defend} 人据寨死守`;
+    for (const row of document.querySelectorAll('.force-row')) {
+        const { side, kind } = row.dataset, field = FORCE_FIELDS[side][kind];
+        const count = forceConfig[side][kind];
+        const input = row.querySelector('input');
+        if (input !== editingInput) input.value = count;
+        for (const button of row.querySelectorAll('button')) {
+            const next = editForceConfig(forceConfig, side, kind, count + Number(button.dataset.direction) * field.step);
+            button.disabled = next[side][kind] === count;
+        }
+    }
+    for (const button of document.querySelectorAll('[data-preset]'))
+        button.setAttribute('aria-pressed', Object.entries(FORCE_FIELDS).every(([side, fields]) =>
+            Object.keys(fields).every(kind => forceConfig[side][kind] === FORCE_PRESETS[button.dataset.preset][side][kind])));
+    $('force-info').textContent = `攻守 ${(attack / defend).toFixed(1)}:1 · 守方上墙约 ${Math.floor(forceConfig.defenders.infantry * .65)} 人 · 上塔弓手 ${Math.min(forceConfig.defenders.archer, 12)} 人`;
+    $('force-size').textContent = `全场 ${total}/${FORCE_LIMIT} 人 · ${total <= 500 ? '规模适中' : '可能变卡'}`;
+    $('force-size').style.color = total <= 500 ? '#9cf5a0' : '#ffd24a';
+    $('force-warning').hidden = forceConfig.attackers.infantry !== 0;
+}
+function selectForces(next, editingInput = null) {
+    if (scene?.battleStarted || forceDeployment.state.phase === 'started') return;
+    forceConfig = next;
+    forceSaved = saveForceConfig(forceConfig);
+    // Disable start synchronously, before the debounce or any asynchronous loading.
+    forceDeployment.request(forceConfig);
+    renderForcePanel(editingInput);
+}
+for (const [side, fields] of Object.entries(FORCE_FIELDS)) {
+    for (const [kind, field] of Object.entries(fields)) {
+        const row = document.createElement('div');
+        row.className = 'force-row'; row.dataset.side = side; row.dataset.kind = kind;
+        const label = `${side === 'attackers' ? '攻方' : '守方'}${field.label}`;
+        const inputId = `force-${side}-${kind}`;
+        row.innerHTML = `<label for="${inputId}">${field.label}</label><button type="button" data-direction="-1" aria-label="减少${label}">−</button><input id="${inputId}" type="number" min="${field.min}" max="${field.max}" step="1" aria-label="${label}人数"><button type="button" data-direction="1" aria-label="增加${label}">+</button>`;
+        const input = row.querySelector('input');
+        input.oninput = event => selectForces(editForceConfig(forceConfig, side, kind, Number(event.target.value)), input);
+        input.onchange = () => renderForcePanel();
+        for (const button of row.querySelectorAll('button')) button.onclick = () =>
+            selectForces(editForceConfig(forceConfig, side, kind, forceConfig[side][kind] + Number(button.dataset.direction) * field.step));
+        $(`force-${side}`).append(row);
+    }
+}
+for (const button of document.querySelectorAll('[data-preset]')) button.onclick = () =>
+    selectForces(structuredClone(FORCE_PRESETS[button.dataset.preset]));
+$('force-retry').onclick = () => forceDeployment.retry();
+function redeploy() {
     $('gate').hidden = false;
     if (scene) scene.battleStarted = false;
-    syncAssaultControls();
-    hudWinner = null; headings.clear(); lastSound = {};
-    bloodCursor = bloodPCursor = 0; bloodP.length = falling.length = 0;
-    bloodMesh.count = bloodPMesh.count = arrowMesh.count = 0;
-    for (const kind of UNIT_KINDS) { corpseCursor[kind] = 0; corpseMeshes[kind].count = unitMeshes[kind].count = 0; }
-    for (const d of dustPool) { d.life = 0; d.m.visible = false; }
-    $('btn-pause').textContent = '暂停';
-    for (const id of ['btn-s1', 'btn-s2', 'btn-s4']) $(id).style.fontWeight = id === 'btn-s1' ? '700' : '400';
-    try {
-        await boot();
-        for (const id of ['btn-start', 'btn-watch']) $(id).disabled = false;
-    } catch (error) {
-        console.error(error); hud.textContent = '部署失败，请查看控制台';
-        $('btn-start').textContent = '部署失败';
-    } finally { deploying = false; }
+    forceDeployment.reset(forceConfig);
 }
+renderForcePanel();
 function startBattle(mode) {
-    if (deploying || !scene) return;
+    if (deploying || !scene || scene.battleStarted) return;
     if (mode === 'player') {
         positionArmies(mode);
         campVersion = -1;
         refreshCampVisuals();
     }
     $('gate').hidden = true; Snd.play('go'); scene.battleStarted = true;
+    scene.onSiegeStart?.();
     sync3D._t = 0;
     syncAssaultControls();
 }
@@ -704,7 +765,7 @@ $('btn-start').onclick = () => startBattle('player');
 $('btn-watch').onclick = () => startBattle('auto');
 for (const face of Object.keys(faceNames)) $(`assault-${face}`).onclick = () => {
     if (deploying || !scene?.battleStarted || scene.battleOver || !scene.siege?.assault?.player) return;
-    if (scene.siege.assault.released[face] || localCommands.pending(face)) return;
+    if (scene.siege.assault.released[face] || localCommands.pending(face) || (face === 'archers' && forceConfig.attackers.archer === 0)) return;
     localCommands.enqueue(face === 'archers' ? { k: 'siegeArchers', side: 'red' } : face === 'ram' ? { k: 'siegeRam', side: 'red' } : { k: 'siegeAssault', side: 'red', face });
     syncAssaultControls();
 };

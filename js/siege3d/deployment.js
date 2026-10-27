@@ -165,7 +165,7 @@ export function siegeDeployment(units, b, siege, frontClearance = L.attackerFron
 // Generation is separate: the page's player start reuses existing units (clearUnits is a no-op there).
 export function deployCampArmies(scene, options = {}) {
     const layout = options.layout ?? L;
-    scene.deployUnits(layout.attackers, layout.defenders, 'custom', 'custom',
+    scene.deployUnits(options.attackers ?? layout.attackers, options.defenders ?? layout.defenders, 'custom', 'custom',
         { red: 'advance', blue: 'advance' }, { terrain: 'flat', boardSize: layout.boardSize });
     return configureCampArmies(scene, options);
 }

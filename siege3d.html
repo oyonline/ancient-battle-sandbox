@@ -1,9 +1,9 @@
 <!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>千人攻寨 · 3D 演示</title><style>
   html,body{margin:0;height:100%;overflow:hidden;background:#111;font-family:"PingFang SC","Microsoft YaHei",sans-serif}
   #viewport{position:fixed;inset:0}
-  #hud{max-width:calc(100vw - 380px);position:fixed;top:10px;left:12px;color:#fff;font-size:13px;text-shadow:0 1px 2px #000;pointer-events:none;line-height:1.7}
+  #hud{z-index:11;max-width:calc(100vw - 380px);position:fixed;top:10px;left:12px;color:#fff;font-size:13px;text-shadow:0 1px 2px #000;pointer-events:none;line-height:1.7}
   #hud b.red{color:#ff8b76}#hud b.blue{color:#7fb7e8}
-  #controls{position:fixed;top:10px;right:12px;display:flex;gap:6px}
+  #controls{z-index:11;position:fixed;top:10px;right:12px;display:flex;gap:6px}
   #controls button{background:rgba(20,24,18,.82);color:#e8dfc8;border:1px solid #5a5a44;border-radius:6px;padding:6px 12px;font-size:13px;cursor:pointer}
   #controls button:hover{background:rgba(50,56,40,.9)}
   #hint{position:fixed;bottom:0;left:0;right:0;text-align:center;color:rgba(255,255,255,.55);font-size:12px;text-shadow:0 1px 2px #000;pointer-events:none}
@@ -12,6 +12,26 @@
   #gate p{color:rgba(232,223,200,.6);font-size:13px;margin:0;max-width:420px;text-align:center;line-height:1.8}
   #gate button{background:#8a2f22;color:#ffe9c8;border:none;border-radius:8px;padding:14px 42px;font-size:18px;cursor:pointer;font-weight:700}
   #gate button:hover{background:#a53a2a}
+  #gate{box-sizing:border-box;padding:96px 16px 24px;overflow:auto}
+  #gate button:disabled{opacity:.35;cursor:default}
+  #force-panel{box-sizing:border-box;width:560px;max-width:100%;background:rgba(20,16,10,.85);border:1px solid #c9a24a;border-radius:10px;padding:16px;color:#e8dfc8;flex-shrink:0}
+  .force-columns{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .force-column h2{font-size:16px;font-weight:700;margin:0 0 8px}
+  #force-attackers h2{color:#e0644f}#force-defenders h2{color:#5a8fd8}
+  .force-row{display:flex;align-items:center;gap:6px;margin:6px 0;height:40px}
+  .force-row label{font-size:15px;flex:1;white-space:nowrap}
+  #gate .force-row button{box-sizing:border-box;width:40px;height:40px;padding:0;font-size:18px;border:1px solid #c9a24a;border-radius:6px;background:rgba(70,45,15,.7);flex-shrink:0}
+  .force-row input{box-sizing:border-box;width:56px;height:40px;padding:0;border:1px solid #756242;border-radius:4px;background:rgba(0,0,0,.2);color:#e8dfc8;text-align:center;font-family:inherit;font-size:20px;font-weight:700;appearance:textfield}
+  .force-row input::-webkit-inner-spin-button,.force-row input::-webkit-outer-spin-button{appearance:none;margin:0}
+  .force-presets{display:flex;justify-content:center;gap:12px;margin:14px 0 10px}
+  #gate .force-presets button{box-sizing:border-box;width:120px;height:40px;padding:0;font-size:15px;border:1px solid #756242;background:rgba(70,45,15,.7)}
+  #gate .force-presets button[aria-pressed="true"]{border-color:#ffd24a;color:#ffd24a}
+  #gate #force-info,#gate #force-size,#gate #force-warning,#gate #force-status{max-width:none;text-align:left;font-size:13px;line-height:1.6;color:rgba(232,223,200,.75)}
+  #gate #force-warning{color:#ffd24a}
+  #force-warning[hidden],#force-retry[hidden]{display:none}
+  .force-feedback{display:flex;align-items:center;gap:12px;min-height:24px;margin-top:4px}
+  #gate #force-retry{font-size:13px;padding:4px 12px}
+  @media(max-width:580px){.force-columns{gap:8px}.force-row{gap:3px}.force-row label{font-size:13px}.force-presets{gap:6px}#force-panel{padding:10px}#gate{justify-content:flex-start;padding-top:100px}.force-row input{width:44px}}
   #start-modes{display:flex;gap:16px}
   #assault-controls{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;gap:12px}
   #assault-controls[hidden]{display:none}
@@ -38,7 +58,19 @@
 </div>
 <div id="gate">
   <h1>千人攻寨 · 3D 演示</h1>
-  <p id="gate-description">攻方 600 人围攻木栅营寨，守方 300 人据寨死守</p>
+  <p id="gate-description">攻方 300 人围攻木栅营寨，守方 100 人据寨死守</p>
+  <section id="force-panel" aria-label="开局兵力调整">
+    <div class="force-columns">
+      <div id="force-attackers" class="force-column"><h2>攻方</h2></div>
+      <div id="force-defenders" class="force-column"><h2>守方</h2></div>
+    </div>
+    <div class="force-presets" aria-label="兵力预设">
+      <button type="button" data-preset="standard">标准</button><button type="button" data-preset="gentle">让孩子</button><button type="button" data-preset="grand">大军</button>
+    </div>
+    <p id="force-info"></p><p id="force-size"></p>
+    <p id="force-warning" hidden>没有剑士就没人扛梯子、推冲车</p>
+    <div class="force-feedback"><p id="force-status" role="status" aria-live="polite">部署中…</p><button id="force-retry" type="button" hidden>重试部署</button></div>
+  </section>
   <div id="start-modes"><button id="btn-start" disabled>⚔ 我来攻城</button><button id="btn-watch" disabled>👀 观战</button></div>
 </div>
 <script type="module" src="js/siege3d/main.js"></script>
