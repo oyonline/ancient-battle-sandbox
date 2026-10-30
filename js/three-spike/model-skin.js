@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-const BASE = '/prototypes/model-gallery/assets/';
+const BASE = (import.meta.env?.BASE_URL ?? '/') + 'assets/units/real/';
 const PATHS = {
     infantry: 'october/sword-standard/infantry-rigged.glb',
     pikeman: 'october/pike-standard/spear-rigged.glb',
@@ -143,45 +143,6 @@ function pose(root, clips, name = 'Idle') {
     // Let this temporary mixer be collected. stop/uncache would restore the bind pose.
     root.updateMatrixWorld(true);
 }
-function rangerCloth(map, color) {
-    if (!map?.image) throw new Error('Ranger 缺少 BaseColor 贴图');
-    const canvas = document.createElement('canvas');
-    canvas.width = map.image.width; canvas.height = map.image.height;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.drawImage(map.image, 0, 0);
-    const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height), tint = new THREE.Color(color), target = {};
-    tint.getHSL(target, THREE.SRGBColorSpace);
-    // Same green-cloth mask as battle-compare: preserve leather, skin, metal and alpha.
-    for (let i = 0; i < pixels.data.length; i += 4) {
-        const r = pixels.data[i] / 255, g = pixels.data[i + 1] / 255, b = pixels.data[i + 2] / 255;
-        const max = Math.max(r, g, b), min = Math.min(r, g, b), delta = max - min;
-        if (!pixels.data[i + 3] || !delta || delta / max < .15 || max <= .04) continue;
-        const hue = 60 * (max === r ? ((g - b) / delta + 6) % 6 : max === g ? (b - r) / delta + 2 : (r - g) / delta + 4);
-        if (hue < 65 || hue > 165) continue;
-        tint.setHSL(target.h, target.s, (max + min) / 2, THREE.SRGBColorSpace).convertLinearToSRGB();
-        pixels.data[i] = Math.round(tint.r * 255); pixels.data[i + 1] = Math.round(tint.g * 255); pixels.data[i + 2] = Math.round(tint.b * 255);
-    }
-    ctx.putImageData(pixels, 0, 0);
-    const texture = map.clone(); texture.source = new THREE.Source(canvas); texture.needsUpdate = true;
-    return texture;
-}
-function tint(root, team, colors, ranger = false) {
-    const cache = new Map();
-    root.traverse(o => {
-        if (!o.isMesh) return;
-        const convert = source => {
-            if (!(ranger ? /MI_Ranger/.test(source.name) : /team_cloth|ivory linen tabard/i.test(source.name))) return source;
-            if (!cache.has(source)) {
-                const material = source.clone();
-                if (ranger) { material.color.setHex(0xffffff); material.map = rangerCloth(source.map, colors[team]); }
-                else material.color.setHex(colors[team]);
-                cache.set(source, material);
-            }
-            return cache.get(source);
-        };
-        o.material = Array.isArray(o.material) ? o.material.map(convert) : convert(o.material);
-    });
-}
 function scaled(root, height, shoulder = false) {
     const box = bounds(root), holder = new THREE.Group();
     const reference = shoulder ? root.getObjectByName('Torso3').getWorldPosition(new THREE.Vector3()).y - box.min.y : box.max.y - box.min.y;
@@ -194,71 +155,6 @@ function scaled(root, height, shoulder = false) {
     root.position.y -= box.min.y;
     holder.updateMatrixWorld(true);
     return holder;
-}
-
-// Failure-only fallback: same Ranger / UE sitting-pose composition as battle-compare.js.
-async function rangerFallback(loader) {
-    const { FBXLoader } = await import('three/addons/loaders/FBXLoader.js');
-    const [ranger, ual2, ual1, sword, shield] = await Promise.all([
-        loader.loadAsync(BASE + 'outfits/Male_Ranger.gltf'),
-        loader.loadAsync(BASE + 'ual2/UAL2_Standard.glb'),
-        new FBXLoader().loadAsync(BASE + 'ual1/AL_Standard.fbx'),
-        loader.loadAsync(BASE + 'props/Sword_Bronze.gltf'), loader.loadAsync(BASE + 'props/Shield_Wooden.gltf')
-    ]);
-    const target = ranger.scene, bones = new Map();
-    target.traverse(o => { if (o.isBone) bones.set(o.name, o); });
-    const clips = [];
-    for (const [animations, source] of [[ual2.animations, ual2.scene], [ual1.animations, ual1]]) {
-        const pelvis = bones.get('pelvis'), ratio = pelvis.position.z / source.getObjectByName('pelvis').position.z;
-        for (const clip of animations) {
-            const tracks = [];
-            for (const original of clip.tracks) {
-                const parsed = THREE.PropertyBinding.parseTrackName(original.name), name = parsed.nodeName?.split(/[|:/]/).pop();
-                if (!bones.has(name) || name === 'root' || (parsed.propertyName !== 'quaternion' && !(name === 'pelvis' && parsed.propertyName === 'position'))) continue;
-                const track = original.clone(); track.name = `${name}.${parsed.propertyName}`;
-                if (parsed.propertyName === 'position') for (let i = 0; i < track.values.length; i += 3) {
-                    track.values[i] = pelvis.position.x; track.values[i + 1] = pelvis.position.y; track.values[i + 2] *= ratio;
-                }
-                tracks.push(track);
-            }
-            clips.push(new THREE.AnimationClip(clip.name.split('|').pop(), clip.duration, tracks));
-        }
-    }
-    const sitting = clips.find(c => c.name === 'Sitting_Idle_Loop');
-    if (!sitting) throw new Error('Ranger fallback 缺少 Sitting_Idle_Loop');
-    const upper = t => /^(spine|clavicle|upperarm|lowerarm|hand|Head|neck|index|middle|pinky|ring|thumb)/.test(trackBone(t));
-    const actions = { Idle: sitting, Walk: sitting, Charge: sitting,
-        Attack: clips.find(c => c.name === 'Sword_Regular_A'), Hit: clips.find(c => c.name === 'Hit_Knockback'), Death: clips.find(c => c.name === 'Death01') };
-    const humanHeight = bounds(target).getSize(new THREE.Vector3()).y;
-    const mounted = Object.entries(actions).map(([name, clip]) => {
-        if (!clip) throw new Error(`Ranger fallback 缺少 ${name}`);
-        return new THREE.AnimationClip(name, clip.duration, name === 'Death' ? clip.tracks : [
-            ...sitting.tracks.filter(t => !upper(t)), ...clip.tracks.filter(upper)
-        ]);
-    });
-    pose(target, mounted);
-    // Chair sitting has narrow, parallel legs. Splay both thighs to straddle the horse.
-    for (const [name, angle] of [['thigh_l', .7], ['thigh_r', -.7]]) {
-        const bone = bones.get(name);
-        const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(bone.parent.getWorldQuaternion(new THREE.Quaternion()).invert());
-        const offset = new THREE.Quaternion().setFromAxisAngle(axis, angle), q = new THREE.Quaternion();
-        for (const clip of mounted) if (clip.name !== 'Death') for (const track of clip.tracks) {
-            if (trackBone(track) !== name || !track.name.endsWith('.quaternion')) continue;
-            const adjusted = track.clone();
-            for (let i = 0; i < adjusted.values.length; i += 4) {
-                q.fromArray(adjusted.values, i).premultiply(offset).toArray(adjusted.values, i);
-            }
-            clip.tracks[clip.tracks.indexOf(track)] = adjusted;
-        }
-    }
-    for (const [asset, boneName, length] of [[sword, 'hand_r', .8], [shield, 'hand_l', .56]]) {
-        const prop = clone(asset.scene), size = bounds(prop).getSize(new THREE.Vector3());
-        prop.scale.setScalar(length / (Math.max(size.x, size.y, size.z) * (1.75 / humanHeight)));
-        if (boneName === 'hand_r') prop.rotation.z = -Math.PI / 2;
-        else prop.rotation.y = Math.PI / 2;
-        bones.get(boneName).add(prop);
-    }
-    return { root: target, humanHeight, hipName: 'pelvis', clips: mounted };
 }
 
 function mount(horse, horseClips, rider, riderClips, humanHeight, hipName, diagnostics, team) {
@@ -389,19 +285,12 @@ async function loadModelAssets() {
 }
 
 export async function prepareModelTemplates({ cap, teamColors, gpuKinds = [], assets: loadedAssets }) {
-    const loader = new GLTFLoader(), assets = loadedAssets || await loadModelAssets();
+    const assets = loadedAssets || await loadModelAssets();
     const diagnostics = { rider: null, primitives: {}, mounted: {}, heights: {}, pool: {}, resurrections: 0, skippedMixerUpdates: 0, frame: 0, active: 0, corpses: 0 };
-    let rider = clone(assets.rider.scene), riderClips, riderHeight, hipName = 'Hips';
-    try {
-        diagnostics.rider = splitRider(rider);
-        riderClips = clipsFor(assets.rider.animations, true);
-        requireClips(riderClips, ['Idle', 'Walk', 'Charge', 'Attack', 'Hit', 'Death']);
-    } catch (error) {
-        console.error('[spike-models] 骑手拆分失败，退回 Ranger 坐姿骑手', error);
-        const fallback = await rangerFallback(loader);
-        rider = fallback.root; riderClips = fallback.clips; hipName = fallback.hipName; riderHeight = fallback.humanHeight;
-        diagnostics.rider = { ...error.riderStats, fallback: 'Ranger/Sitting_Idle_Loop', error: error.message };
-    }
+    const rider = clone(assets.rider.scene), hipName = 'Hips';
+    diagnostics.rider = splitRider(rider);
+    const riderClips = clipsFor(assets.rider.animations, true);
+    requireClips(riderClips, ['Idle', 'Walk', 'Charge', 'Attack', 'Hit', 'Death']);
     const footClips = Object.fromEntries(['infantry', 'pikeman', 'archer'].map(kind => [kind, clipsFor(assets[kind].animations)]));
     for (const clips of Object.values(footClips)) requireClips(clips, ['Idle', 'Walk', 'Attack', 'Hit', 'Death']);
     pose(assets.infantry.scene, footClips.infantry);
@@ -418,9 +307,8 @@ export async function prepareModelTemplates({ cap, teamColors, gpuKinds = [], as
             horse = clone(asset.scene); horseClips = clipsFor(asset.animations);
             requireClips(horseClips, ['Idle', 'Walk', 'Gallop', 'Idle_HitReact1', 'Death']);
             diagnostics.primitives[`${team}-horse`] = mergePrimitives(horse);
-            if (diagnostics.rider.fallback) tint(character, team, teamColors, true);
-            else diagnostics.primitives[`${team}-rider`] = mergePrimitives(character, teamColors[team]);
-            root = mount(horse, horseClips, character, clips, riderHeight || humanHeight, hipName, diagnostics, team);
+            diagnostics.primitives[`${team}-rider`] = mergePrimitives(character, teamColors[team]);
+            root = mount(horse, horseClips, character, clips, humanHeight, hipName, diagnostics, team);
         } else {
             const template = prepareFootTemplate(assets[kind], teamColors[team]);
             root = template.root; clips = template.clips; character = root.getObjectByName('SpikeCharacter');
@@ -630,6 +518,8 @@ export async function createModelFacade(options) {
         };
     } catch (error) {
         for (const crowd of gpuCrowds.values()) crowd.dispose();
+        // Production boot owns the block-soldier fallback and its HUD notice.
+        if (options.fallbackToLegacy === false) throw error;
         console.error('[spike-gpu] 初始化失败，整体退回旧模型路径', error);
         return createModelSkin({ ...options, prepared, assets });
     }

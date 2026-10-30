@@ -33,6 +33,7 @@ let modelSkin = null;
 
 const $ = id => document.getElementById(id);
 const hud = $('hud');
+let modelLoadNotice = '';
 const toggleURL = new URL(location.href);
 if (MODELS) toggleURL.searchParams.delete('models');
 else toggleURL.searchParams.set('models', '1');
@@ -354,13 +355,41 @@ async function boot() {
         for (const mesh of [...Object.values(unitMeshes), ...Object.values(corpseMeshes)]) mesh.visible = false;
     } else if (MODELS) {
         hud.innerHTML = '加载真模型与动作…' + modelToggle;
-        const { createModelFacade } = await import('./model-skin.js');
-        modelSkin = await createModelFacade({ scene: scene3d, camera, renderer, gpu: GPU, units: scene.units, cap: CAP, teamColors: TEAM_COLOR, groundH, shadowsEnabled: SHADOWS });
-        for (const mesh of [...Object.values(unitMeshes), ...Object.values(corpseMeshes)]) mesh.visible = false;
+        const previousChildren = new Set(scene3d.children);
+        try {
+            const { createModelFacade } = await import('./model-skin.js');
+            modelSkin = await createModelFacade({ scene: scene3d, camera, renderer, gpu: GPU, units: scene.units, cap: CAP, teamColors: TEAM_COLOR, groundH, shadowsEnabled: SHADOWS, fallbackToLegacy: false });
+            for (const mesh of [...Object.values(unitMeshes), ...Object.values(corpseMeshes)]) mesh.visible = false;
+        } catch (error) {
+            // A rejected facade may have attached groups before returning its API.
+            const partial = new Set(scene3d.children.filter(child => !previousChildren.has(child)));
+            if (modelSkin?.group) partial.add(modelSkin.group);
+            const resources = new Set();
+            for (const group of partial) {
+                group.removeFromParent();
+                group.traverse(object => {
+                    if (object.geometry) resources.add(object.geometry);
+                    if (object.skeleton) resources.add(object.skeleton);
+                    for (const material of object.material ? [object.material].flat() : []) {
+                        resources.add(material);
+                        for (const value of Object.values(material)) if (value?.isTexture) resources.add(value);
+                    }
+                });
+            }
+            for (const resource of resources) {
+                try { resource.dispose(); } catch (cleanupError) { console.warn('[spike-models] 清理失败', cleanupError); }
+            }
+            modelSkin = null;
+            for (const mesh of [...Object.values(unitMeshes), ...Object.values(corpseMeshes)]) mesh.visible = true;
+            const notice = document.createElement('span');
+            notice.textContent = `真模型加载失败，已切换方块兵：${error?.message || String(error)}`;
+            modelLoadNotice = notice.outerHTML;
+            console.warn('[spike-models] ' + notice.textContent, error);
+        }
     }
     scene.battleStarted = true;
     buildGround(board.W, board.H);
-    hud.innerHTML = '准备完毕' + modelToggle;
+    hud.innerHTML = (modelLoadNotice || '准备完毕') + modelToggle;
 }
 
 // ---------------- 尸体 ----------------
@@ -512,6 +541,7 @@ function sync3D(dt, now) {
             ` · sim <b>${(p.simMs || 0).toFixed(1)}</b>/sync <b>${(p.syncMs || 0).toFixed(1)}</b>/draw <b>${(p.renderMs || 0).toFixed(1)}</b>ms` +
             ` · 存活 <b class="red">${scene.redAlive}</b> / <b class="blue">${scene.blueAlive}</b> · 阵亡 ${scene.deadCount}` +
             (hudWinner ? ` —— <b style="color:#ffd24a">${hudWinner}</b>` : '') + modelToggle +
+            (modelLoadNotice ? ` · ${modelLoadNotice}` : '') +
             (STATIC_PROBE ? ` · static${PROBE_BOX ? '/box' : ''}` + shadowToggle : '') +
             ` · triangles ${renderer.info.render.triangles} · vertices≈${staticProbe ? staticProbe.estimatedVertices : modelSkin ? (() => {
                     let total = 0; modelSkin.group.traverseVisible(o => { if (o.isMesh) total += o.geometry.attributes.position.count * (o.isInstancedMesh ? o.count : 1); });

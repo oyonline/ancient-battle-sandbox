@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { mergePrimitives, splitRider } from './model-skin.js';
 
-const BASE = '/prototypes/model-gallery/assets/';
+const BASE = (import.meta.env?.BASE_URL ?? '/') + 'assets/units/real/';
 const PATHS = {
     infantry: 'october/sword-standard/infantry-rigged.glb',
     pikeman: 'october/pike-standard/spear-rigged.glb',
