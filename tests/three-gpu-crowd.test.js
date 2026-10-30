@@ -8,6 +8,28 @@ import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import { prepareFootTemplate, prepareCavalryTemplate, createModelFacade } from '../js/three-spike/model-skin.js';
 import { SAMPLE_HZ, bakeAnimations, clipSample, sampleBone, createAnimationState, createGpuCrowd, createGpuCavalry, sampleMount, createCrowdMaterial } from '../js/three-spike/gpu-crowd.js';
 
+// Exercise the actual constant=false module without adding a runtime switch or
+// modifying the source under test. Its CPU sampler mirrors the generated GLSL.
+const crowdSource = await readFile(new URL('../js/three-spike/gpu-crowd.js', import.meta.url), 'utf8');
+const nearest = await import(`data:text/javascript;base64,${Buffer.from(crowdSource
+    .replace('const INTERPOLATE_FRAMES = true;', 'const INTERPOLATE_FRAMES = false;')
+    .replace("from 'three'", `from '${import.meta.resolve('three')}'`)
+    .replace("from './model-skin.js'", `from '${new URL('../js/three-spike/model-skin.js', import.meta.url)}'`)).toString('base64')}`);
+const nearestErrors = Object.fromEntries(['nonSample', 'attackPeak', 'loopSeam'].map(name => [name, { maxMm: 0, samples: 0 }]));
+function recordNearest(category, error, at) {
+    const result = nearestErrors[category]; result.samples++;
+    if (error * 1000 > result.maxMm) { result.maxMm = error * 1000; result.at = at; }
+}
+function skinMatrix(atlas, descriptor, geometry, vertex, sampler = sampleBone) {
+    const result = new THREE.Matrix4(); result.elements.fill(0);
+    for (let k = 0; k < 4; k++) {
+        const bone = sampler(atlas, descriptor, geometry.attributes.skinIndex.getComponent(vertex, k));
+        const weight = geometry.attributes.skinWeight.getComponent(vertex, k);
+        for (let i = 0; i < 16; i++) result.elements[i] += bone.elements[i] * weight;
+    }
+    return result.premultiply(atlas.bindMatrixInverse).multiply(atlas.bindMatrix);
+}
+
 const paths = { infantry: 'sword-standard/infantry', pikeman: 'pike-standard/spear', archer: 'archer-standard/archer' };
 const assets = new Map();
 for (const [kind, path] of Object.entries(paths)) {
@@ -33,6 +55,7 @@ const mixer = new THREE.AnimationMixer(reference);
 
 test('120 Hz atlas includes both endpoints, five whitelisted clips and an independent CPU copy', t => {
     assert.equal(SAMPLE_HZ, 120);
+    assert.equal(atlas.width, atlas.boneCount * 3);
     assert.equal(atlas.boneCount, kind === 'archer' ? 19 : 18);
     assert.deepEqual([...atlas.clips.keys()], ['Idle', 'Walk', 'Attack', 'Hit', 'Death']);
     for (const meta of atlas.clips.values()) {
@@ -87,7 +110,7 @@ let attackPeak;
 for (const [name, samples] of Object.entries(times)) test(`${name}: world positions < 0.01 m and native normal directions < 2 degrees`, t => {
     const meta = atlas.clips.get(name), geometry = skin.geometry;
     const position = new THREE.Vector3(), gpuPosition = new THREE.Vector3(), normal = new THREE.Vector3(), gpuNormal = new THREE.Vector3();
-    const gpuBones = [], nativeBones = [], bone = new THREE.Matrix4(), nativeSkin = new THREE.Matrix4(), gpuSkin = new THREE.Matrix4();
+    const gpuBones = [], nearestBones = [], nativeBones = [], bone = new THREE.Matrix4(), nativeSkin = new THREE.Matrix4(), gpuSkin = new THREE.Matrix4();
     let maxError = 0, errorVertex = -1, errorTime = 0, maxAngle = 0, normalVertex = -1, normalTime = 0;
     mixer.stopAllAction();
     const action = mixer.clipAction(meta.clip).reset().setLoop(THREE.LoopOnce, 1); action.clampWhenFinished = true; action.play();
@@ -99,15 +122,18 @@ for (const [name, samples] of Object.entries(times)) test(`${name}: world positi
         const descriptor = clipSample(meta, time);
         for (let i = 0; i < atlas.boneCount; i++) {
             gpuBones[i] = sampleBone(atlas, descriptor, i);
+            nearestBones[i] = nearest.sampleBone(atlas, descriptor, i);
             nativeBones[i] = new THREE.Matrix4().multiplyMatrices(skin.skeleton.bones[i].matrixWorld, skin.skeleton.boneInverses[i]);
         }
         const nativeNormalMatrix = new THREE.Matrix3().getNormalMatrix(skin.matrixWorld);
+        const nearestSkin = new THREE.Matrix4(), nearestPosition = new THREE.Vector3();
         for (let v = 0; v < geometry.attributes.position.count; v++) {
-            gpuSkin.elements.fill(0); nativeSkin.elements.fill(0);
+            gpuSkin.elements.fill(0); nativeSkin.elements.fill(0); nearestSkin.elements.fill(0);
             for (let k = 0; k < 4; k++) {
                 const index = geometry.attributes.skinIndex.getComponent(v, k), weight = geometry.attributes.skinWeight.getComponent(v, k);
                 for (let e = 0; e < 16; e++) {
                     gpuSkin.elements[e] += gpuBones[index].elements[e] * weight;
+                    nearestSkin.elements[e] += nearestBones[index].elements[e] * weight;
                     nativeSkin.elements[e] += nativeBones[index].elements[e] * weight;
                 }
             }
@@ -115,6 +141,13 @@ for (const [name, samples] of Object.entries(times)) test(`${name}: world positi
             nativeSkin.premultiply(skin.bindMatrixInverse).multiply(skin.bindMatrix);
             skin.getVertexPosition(v, position); position.applyMatrix4(skin.matrixWorld);
             gpuPosition.fromBufferAttribute(geometry.attributes.position, v).applyMatrix4(gpuSkin).applyMatrix4(instance);
+            nearestSkin.premultiply(atlas.bindMatrixInverse).multiply(atlas.bindMatrix);
+            nearestPosition.fromBufferAttribute(geometry.attributes.position, v).applyMatrix4(nearestSkin).applyMatrix4(instance);
+            const nearestError = position.distanceTo(nearestPosition), sampleIndex = samples.indexOf(time);
+            const at = { kind, name, time, vertex: v };
+            if (Math.abs(descriptor[2] - Math.round(descriptor[2])) > 1e-6) recordNearest('nonSample', nearestError, at);
+            if (name === 'Attack' && sampleIndex >= samples.length - 4) recordNearest('attackPeak', nearestError, at);
+            if (meta.loop && sampleIndex >= 5 && sampleIndex <= 9) recordNearest('loopSeam', nearestError, at);
             const error = position.distanceTo(gpuPosition);
             if (error > maxError) { maxError = error; errorVertex = v; errorTime = time; }
             bone.copy(nativeSkin);
@@ -186,12 +219,12 @@ test('one batch, lunge deduplication, pause and terminal presentation clock', ()
     crowd.kill(u, .7, 800); crowd.update(800, 60, { dt: .5, battleOver: true, paused: true });
     assert.equal(crowd.dead[0].animation.parameters(.8).b[2], 0);
     crowd.update(800, 60, { dt: 2, battleOver: true });
-    const deathSlot = crowd.live.size, deathFrame = crowd.mesh.geometry.attributes.aClipB.getZ(deathSlot);
-    assert.equal(deathFrame, crowd.atlas.clips.get('Death').frames - 1);
-    crowd.sync(u, .4, 1000); assert.equal(crowd.live.size, 1); assert.equal(crowd.mesh.count, 2);
+    assert.equal(crowd.corpseMesh.count, 1); assert.equal(crowd.dead[0].frozen, true);
+    crowd.sync(u, .4, 1000); assert.equal(crowd.live.size, 1); assert.equal(crowd.mesh.count, 1);
     assert.equal(crowd.mesh.isSkinnedMesh, undefined);
-    assert.equal(crowd.diagnostics.drawCalls, 1);
-    crowd.mesh.visible = false; crowd.update(800, 60); assert.equal(crowd.diagnostics.drawCalls, 0);
+    assert.equal(crowd.diagnostics.drawCalls, 2);
+    crowd.mesh.visible = false; crowd.update(800, 60); assert.equal(crowd.diagnostics.drawCalls, 1);
+    crowd.corpseMesh.visible = false; crowd.update(800, 60); assert.equal(crowd.diagnostics.drawCalls, 0);
     assert.equal(crowd.diagnostics.resurrections, 0); assert.equal(crowd.mesh.material.length, undefined);
 });
 
@@ -303,8 +336,9 @@ globalTest('mixed facade isolates all three rigs, routes attacks/deaths and rout
     for (const [kind, crowd] of facade.gpuCrowds) {
         assert.equal(facade.isGpuKind(kind), true);
         assert.equal(crowd.live.size, 0); assert.equal(crowd.dead.length, 2);
-        assert.equal(crowd.mesh.count, 2); assert.equal(crowd.diagnostics.drawCalls, kind === 'cavalry' ? 3 : 1);
-        assert.equal(crowd.mesh.geometry.attributes.aClipB.getZ(0), crowd.atlas.clips.get('Death').frames - 1);
+        assert.equal(crowd.mesh.count, 0); assert.equal(crowd.corpseMesh.count, 2);
+        assert.equal(crowd.diagnostics.drawCalls, kind === 'cavalry' ? 3 : 1);
+        assert.ok(crowd.dead.every(e => e.frozen));
         assert.equal(crowd.diagnostics.mixers, 0);
         assert.equal(facade.diagnostics.gpu.byKind[kind], crowd.diagnostics);
     }
@@ -383,7 +417,8 @@ globalTest('cavalry assets: 50/34 bones, rider-only tracks, three meshes and ver
     assert.equal(cavalry.diagnostics.sharedHorseAtlas, true);
     assert.equal(cavalry.horses.red.atlas, cavalry.horses.blue.atlas);
     assert.ok(cavalry.horses.red.atlas.mountData instanceof Float32Array);
-    assert.equal(cavalry.group.children.filter(o => o.isInstancedMesh && o.name !== 'SpikeContactShadows').length, 3);
+    assert.equal(cavalry.group.children.filter(o => o.isInstancedMesh && o.name !== 'SpikeContactShadows').length, 6);
+    assert.equal(cavalry.horses.red.atlas.mountData.length, (cavalry.horses.red.atlas.rows + 4) * 12);
     assert.ok(nativeRider.clips.every(c => c.tracks.every(track => !/Horse|Torso|Leg|Tail/.test(track.name))));
     t.diagnostic(JSON.stringify({ sharedHorseAtlas: cavalry.diagnostics.sharedHorseAtlas, horse: [...cavalry.horses.red.atlas.clips.values()].map(({ name, duration }) => ({ name, duration })), rider: [...cavalry.rider.atlas.clips.values()].map(({ name, duration }) => ({ name, duration })) }));
 });
@@ -423,18 +458,30 @@ for (const channel of ['horse', 'rider']) for (const meta of (channel === 'horse
                 : riderPrefix(cavalry.horses.red, hp).multiply(atlas.meshInRoot);
             const bones = Array.from({ length: atlas.boneCount }, (_, b) => sampleBone(atlas, (channel === 'horse' ? hp : rp).b, b));
             const nativeBones = skin.skeleton.bones.map((b, i) => new THREE.Matrix4().multiplyMatrices(b.matrixWorld, skin.skeleton.boneInverses[i]));
-            const gpuSkin = new THREE.Matrix4(), nativeSkin = new THREE.Matrix4();
+            const nearestDescriptor = (channel === 'horse' ? hp : rp).b;
+            const nearestBones = Array.from({ length: atlas.boneCount }, (_, b) => nearest.sampleBone(atlas, nearestDescriptor, b));
+            const nearestInstance = channel === 'horse' ? instance : mountedUnit.matrixWorld.clone().multiply(cavalry.horses.red.rootMatrix)
+                .multiply(nearest.sampleMount(cavalry.horses.red.atlas, hp)).multiply(cavalry.horses.red.saddleMatrix)
+                .multiply(cavalry.horses.red.riderMatrix).multiply(atlas.meshInRoot);
+            const gpuSkin = new THREE.Matrix4(), nativeSkin = new THREE.Matrix4(), nearestSkin = new THREE.Matrix4();
             const nm = new THREE.Matrix3().getNormalMatrix(skin.matrixWorld), gm = new THREE.Matrix3().getNormalMatrix(instance);
             for (let v = 0; v < geom.attributes.position.count; v++) {
-                gpuSkin.elements.fill(0); nativeSkin.elements.fill(0);
+                gpuSkin.elements.fill(0); nativeSkin.elements.fill(0); nearestSkin.elements.fill(0);
                 for (let k = 0; k < 4; k++) {
                     const b = geom.attributes.skinIndex.getComponent(v, k), w = geom.attributes.skinWeight.getComponent(v, k);
-                    for (let e = 0; e < 16; e++) { gpuSkin.elements[e] += bones[b].elements[e] * w; nativeSkin.elements[e] += nativeBones[b].elements[e] * w; }
+                    for (let e = 0; e < 16; e++) { gpuSkin.elements[e] += bones[b].elements[e] * w; nativeSkin.elements[e] += nativeBones[b].elements[e] * w;
+                        nearestSkin.elements[e] += nearestBones[b].elements[e] * w; }
                 }
                 gpuSkin.premultiply(atlas.bindMatrixInverse).multiply(atlas.bindMatrix);
                 nativeSkin.premultiply(skin.bindMatrixInverse).multiply(skin.bindMatrix);
                 skin.getVertexPosition(v, p).applyMatrix4(skin.matrixWorld);
                 q.fromBufferAttribute(geom.attributes.position, v).applyMatrix4(gpuSkin).applyMatrix4(instance);
+                nearestSkin.premultiply(atlas.bindMatrixInverse).multiply(atlas.bindMatrix);
+                const nearestPosition = new THREE.Vector3().fromBufferAttribute(geom.attributes.position, v).applyMatrix4(nearestSkin).applyMatrix4(nearestInstance);
+                const nearestError = p.distanceTo(nearestPosition), sampleIndex = samples.indexOf(time), at = { channel, name: meta.name, time, vertex: v };
+                if (Math.abs(nearestDescriptor[2] - Math.round(nearestDescriptor[2])) > 1e-6) recordNearest('nonSample', nearestError, at);
+                if (meta.name === 'Attack' && sampleIndex >= 9) recordNearest('attackPeak', nearestError, at);
+                if (meta.loop && sampleIndex >= 5 && sampleIndex <= 8) recordNearest('loopSeam', nearestError, at);
                 const error = p.distanceTo(q); if (error > maxError) { maxError = error; errorTime = time; }
                 n.fromBufferAttribute(geom.attributes.normal, v).applyMatrix3(new THREE.Matrix3().setFromMatrix4(nativeSkin)).applyMatrix3(nm).normalize();
                 gn.fromBufferAttribute(geom.attributes.normal, v).applyMatrix3(new THREE.Matrix3().setFromMatrix4(gpuSkin)).applyMatrix3(gm).normalize();
@@ -568,8 +615,13 @@ globalTest('mounted runtime wiring: horse batch descriptors drive rider matrices
                 // from CPU rows, without animation.parameters or sampleMount.
                 function frame(d) {
                     const i = Math.floor(d[2]), j = Math.min(i + 1, d[1] - 1), f = d[2] - i;
-                    return Array.from({ length: 16 }, (_, k) =>
-                        horse.atlas.mountData[(d[0] + i) * 16 + k] * (1 - f) + horse.atlas.mountData[(d[0] + j) * 16 + k] * f);
+                    return Array.from({ length: 16 }, (_, k) => {
+                        const row = k % 4, column = Math.floor(k / 4);
+                        if (row === 3) return column === 3 ? 1 : 0;
+                        const offset = row * 4 + column;
+                        return horse.atlas.mountData[(d[0] + i) * 12 + offset] * (1 - f)
+                            + horse.atlas.mountData[(d[0] + j) * 12 + offset] * f;
+                    });
                 }
                 const fa = frame(a), fb = frame(b);
                 const mount = new THREE.Matrix4().fromArray(fa.map((v, k) => v * (1 - blend) + fb[k] * blend));
@@ -617,8 +669,8 @@ globalTest('cavalry shared events, charge threshold, snapshots, pause and indivi
     for (const entry of crowd.dead) {
         assert.equal(entry.animation.state.name, 'Death'); assert.equal(entry.horseAnimation.state.name, 'Death');
     }
-    assert.equal(crowd.mesh.geometry.attributes.aClipB.getZ(0), crowd.atlas.clips.get('Death').frames - 1);
-    assert.equal(crowd.horses[u.team].batch.mesh.geometry.attributes.aClipB.getZ(0), crowd.horses[u.team].atlas.clips.get('Death').frames - 1);
+    assert.equal(crowd.mesh.count, 0); assert.equal(crowd.corpseMesh.count, 2);
+    assert.equal(crowd.horses[u.team].batch.mesh.count, 0); assert.equal(crowd.horses[u.team].corpses.mesh.count, 1);
     assert.equal(crowd.diagnostics.modelDrawCalls, 3); assert.equal(crowd.diagnostics.resurrections, 0);
     crowd.dispose();
 });
@@ -762,4 +814,148 @@ globalTest('perfRun samples completed frames, simulation advance and existing sp
     assert.equal(idle.fps, 0); assert.equal(idle.p95FrameMs, 0); assert.equal(idle.simAdvance, 0);
     assert.match(source, /if \(perfRuns.size\) recordPerfFrame\(performance.now\(\)\)/);
     assert.match(source, /window\.__spike = \{ perfRun,/);
+});
+
+for (const kind of [...assets.keys(), 'cavalry']) globalTest(`${kind} static corpses: endpoint continuity, clocks, team cloth and no repeated matrix writes`, t => {
+    const options = mixedFixture(); options.units = options.units.filter(u => u.type === kind);
+    options.groundH = () => 2.3; options.shadowsEnabled = true;
+    const crowd = (kind === 'cavalry' ? createGpuCavalry : createGpuCrowd)({ ...options, kind,
+        template: options.prepared.templates.get(`gpu-${kind}`) });
+    const [u, v] = options.units, trace = [];
+    const snapshot = stage => trace.push({ stage, active: crowd.diagnostics.active, corpses: crowd.diagnostics.corpses,
+        resurrections: crowd.diagnostics.resurrections, drawCalls: crowd.diagnostics.drawCalls,
+        skinned: crowd.mesh.count, static: crowd.corpseMesh.count });
+    try {
+        crowd.update(1000, 60, { dt: .2, battleOver: true }); snapshot('living');
+        crowd.kill(u, .71, 1000); crowd.kill(u, .71, 1000); // duplicate kills must not add corpses
+        const e = crowd.dead[0], limit = Math.max(.15, crowd.atlas.clips.get('Death').duration,
+            crowd.horses?.red.atlas.clips.get('Death').duration || 0);
+        crowd.update(1000, 60, { dt: limit - 1e-6, battleOver: true }); snapshot('death-playing');
+        assert.equal(crowd.corpseMesh.count, 0); assert.equal(crowd.mesh.count, 2);
+        const before = crowd.mesh.instanceMatrix.array.slice();
+        crowd.update(1000, 60, { dt: 2, battleOver: true, paused: true });
+        assert.deepEqual(crowd.mesh.instanceMatrix.array, before); assert.equal(crowd.corpseMesh.count, 0);
+        crowd.kill(v, -.43, 1000); assert.ok(crowd.dead[1].endBase > e.endBase);
+        crowd.update(1000, 60, { dt: 2e-6, battleOver: true }); snapshot('one-static-one-playing');
+        assert.equal(crowd.corpseMesh.count, 1); assert.equal(crowd.mesh.count, 1);
+        const staticMeshes = crowd.horses ? [crowd.corpseMesh, ...Object.values(crowd.horses).map(h => h.corpses.mesh)] : [crowd.corpseMesh];
+        const frozen = staticMeshes.map(mesh => ({ version: mesh.instanceMatrix.version,
+            matrix: mesh.instanceMatrix.array.slice(), teamVersion: mesh.geometry.attributes.aTeam.version }));
+        t.mock.method(e.animation, 'update', () => { throw new Error('static corpse sampled again'); });
+        if (e.horseAnimation) t.mock.method(e.horseAnimation, 'update', () => { throw new Error('static horse sampled again'); });
+        crowd.sync({ ...u, hp: 100, dead: false }, 0, 1000); assert.equal(crowd.live.size, 0);
+        for (const presentation of [{ dt: 0, battleOver: true }, { dt: 10, battleOver: true, paused: true }]) {
+            crowd.update(1000, 60, presentation);
+            staticMeshes.forEach((mesh, i) => {
+                assert.equal(mesh.instanceMatrix.version, frozen[i].version);
+                assert.equal(mesh.geometry.attributes.aTeam.version, frozen[i].teamVersion);
+                assert.deepEqual(mesh.instanceMatrix.array, frozen[i].matrix);
+            });
+        }
+        crowd.update(1000, 60, { dt: limit + .01, battleOver: true }); snapshot('all-static');
+        assert.equal(crowd.mesh.count, 0); assert.equal(crowd.corpseMesh.count, 2);
+        assert.equal(crowd.diagnostics.corpses, 2); assert.equal(crowd.diagnostics.resurrections, 0);
+        assert.equal(crowd.group.getObjectByName('SpikeContactShadows').count, 2);
+        let maxMm = 0, maxNormalDegrees = 0;
+        function compare(atlas, source, mesh, slot, expectedInstance) {
+            // Emulate the Float32 instance upload used by the skinned endpoint.
+            expectedInstance.fromArray(new Float32Array(expectedInstance.elements));
+            const actualInstance = new THREE.Matrix4(); mesh.getMatrixAt(slot, actualInstance);
+            const d = clipSample(atlas.clips.get('Death'), Infinity), position = new THREE.Vector4();
+            const staticPosition = new THREE.Vector3(), expectedNormal = new THREE.Vector3(), actualNormal = new THREE.Vector3();
+            const nm = new THREE.Matrix3().getNormalMatrix(expectedInstance), am = new THREE.Matrix3().getNormalMatrix(actualInstance);
+            for (let vertex = 0; vertex < source.attributes.position.count; vertex++) {
+                const skin = skinMatrix(atlas, d, source, vertex);
+                position.fromBufferAttribute(source.attributes.position, vertex); position.w = 1;
+                position.applyMatrix4(skin); position.w = 1; position.applyMatrix4(expectedInstance);
+                staticPosition.fromBufferAttribute(mesh.geometry.attributes.position, vertex).applyMatrix4(actualInstance);
+                maxMm = Math.max(maxMm, staticPosition.distanceTo(new THREE.Vector3(position.x, position.y, position.z)) * 1000);
+                expectedNormal.fromBufferAttribute(source.attributes.normal, vertex).applyMatrix3(new THREE.Matrix3().setFromMatrix4(skin)).applyMatrix3(nm).normalize();
+                actualNormal.fromBufferAttribute(mesh.geometry.attributes.normal, vertex).applyMatrix3(am).normalize();
+                maxNormalDegrees = Math.max(maxNormalDegrees, THREE.MathUtils.radToDeg(expectedNormal.angleTo(actualNormal)));
+            }
+            assert.equal(mesh.geometry.attributes.skinIndex, undefined); assert.equal(mesh.geometry.attributes.skinWeight, undefined);
+            const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader };
+            mesh.material.onBeforeCompile(shader);
+            assert.equal(shader.uniforms.crowdAtlas, undefined); assert.doesNotMatch(shader.vertexShader, /texelFetch|crowdBone|crowdSkin/);
+            assert.match(shader.vertexShader, /mix\(vColor.xyz, mix\(crowdRed, crowdBlue, aTeam\), clothMask\)/);
+            assert.equal(mesh.material.isMeshLambertMaterial, true); assert.equal(mesh.material.vertexColors, true);
+            assert.equal(shader.uniforms.crowdRed.value.getHex(), options.teamColors.red);
+            assert.equal(shader.uniforms.crowdBlue.value.getHex(), options.teamColors.blue);
+            assert.deepEqual(mesh.geometry.attributes.clothMask.array, source.attributes.clothMask.array);
+            assert.deepEqual(mesh.geometry.attributes.color.array, source.attributes.color.array);
+        }
+        for (const [slot, entry] of crowd.dead.entries()) {
+            const transform = new THREE.Object3D(); transform.position.set(entry.x, entry.y, entry.z); transform.rotation.y = entry.heading; transform.updateMatrix();
+            assert.equal(crowd.corpseMesh.geometry.attributes.aTeam.getX(slot), entry.team === 'blue' ? 1 : 0);
+            if (!crowd.horses) compare(crowd.atlas, crowd.atlas.geometry, crowd.corpseMesh, slot, transform.matrix.clone().multiply(crowd.atlas.modelMatrix));
+            else {
+                const horse = crowd.horses[entry.team], d = clipSample(horse.atlas.clips.get('Death'), Infinity);
+                compare(horse.atlas, horse.batch.mesh.geometry, horse.corpses.mesh, 0, transform.matrix.clone().multiply(horse.modelMatrix));
+                const prefix = transform.matrix.clone().multiply(horse.rootMatrix).multiply(sampleMount(horse.atlas, { a: d, b: d, blend: 1 }))
+                    .multiply(horse.saddleMatrix).multiply(horse.riderMatrix).multiply(crowd.atlas.meshInRoot);
+                compare(crowd.atlas, crowd.atlas.geometry, crowd.corpseMesh, slot, prefix);
+            }
+        }
+        assert.ok(maxMm <= 1, `static endpoint ${maxMm} mm`);
+        assert.ok(maxNormalDegrees < .001, `static normal ${maxNormalDegrees} degrees`);
+        t.diagnostic(JSON.stringify({ kind, maxMm, maxNormalDegrees, trace }));
+        const versions = staticMeshes.map(mesh => mesh.instanceMatrix.version);
+        crowd.update(1000, 60, { dt: 2, battleOver: true });
+        staticMeshes.forEach((mesh, i) => assert.equal(mesh.instanceMatrix.version, versions[i]));
+    } finally { crowd.dispose(); }
+});
+
+globalTest('nearest-frame experiment: actual shader has three fetches per bone; errors are report-only', t => {
+    const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader };
+    const material = nearest.createCrowdMaterial(cavalry.atlas, { red: 0xc4553f, blue: 0x7fb0e0 });
+    try {
+        material.onBeforeCompile(shader);
+        const bone = shader.vertexShader.slice(shader.vertexShader.indexOf('mat4 crowdBone'), shader.vertexShader.indexOf('mat4 crowdPose'));
+        assert.equal((bone.match(/texelFetch/g) || []).length, 3); assert.doesNotMatch(bone, /mix\(/);
+        assert.match(bone, /floor\(clip.z \+ 0.5\)/);
+        const interpolated = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader };
+        const normalMaterial = createCrowdMaterial(cavalry.atlas, { red: 0xc4553f, blue: 0x7fb0e0 });
+        normalMaterial.onBeforeCompile(interpolated); normalMaterial.dispose();
+        assert.equal((interpolated.vertexShader.match(/texelFetch/g) || []).length, 6);
+        t.diagnostic(JSON.stringify({ interpolateFrames: false, units: 'mm', worstErrors: nearestErrors }));
+    } finally { material.dispose(); }
+});
+
+for (const kind of [...assets.keys(), 'cavalry']) globalTest(`${kind} corpse FIFO keeps CAP and compacts only when recycled`, () => {
+    const options = mixedFixture(); options.units = options.units.filter(u => u.type === kind);
+    const crowd = (kind === 'cavalry' ? createGpuCavalry : createGpuCrowd)({ ...options, kind,
+        template: options.prepared.templates.get(`gpu-${kind}`) });
+    try {
+        for (const u of options.units) crowd.kill(u, .71, 0);
+        crowd.update(10000, 60);
+        const [oldest, retained] = crowd.dead, retainedMatrix = new THREE.Matrix4(); crowd.corpseMesh.getMatrixAt(1, retainedMatrix);
+        // GPU sync intentionally cannot spawn units. Inject a fresh entry into
+        // the internal fixture to exercise the otherwise unreachable overflow.
+        const u = { ...options.units[0], id: 999, gx: 50 };
+        const fresh = { ...oldest, id: u.id, frozen: false, animation: createAnimationState(crowd.atlas, crowd.atlas.rows + oldest.slot) };
+        if (crowd.horses) fresh.horseAnimation = createAnimationState(crowd.horses[u.team].atlas, crowd.horses[u.team].atlas.rows + oldest.slot);
+        crowd.live.set(u.id, fresh); crowd.kill(u, -.3, 10000);
+        assert.deepEqual(crowd.dead.map(e => e.id), [retained.id, u.id]); assert.equal(crowd.corpseMesh.count, 1);
+        const compacted = new THREE.Matrix4(); crowd.corpseMesh.getMatrixAt(0, compacted); assert.deepEqual(compacted, retainedMatrix);
+        crowd.update(20000, 60); assert.equal(crowd.corpseMesh.count, options.cap[kind]);
+        assert.equal(crowd.diagnostics.corpses, options.cap[kind]); assert.equal(crowd.diagnostics.resurrections, 0);
+        const version = crowd.corpseMesh.instanceMatrix.version;
+        crowd.update(21000, 60); assert.equal(crowd.corpseMesh.instanceMatrix.version, version);
+    } finally { crowd.dispose(); }
+});
+
+for (const kind of [...assets.keys(), 'cavalry']) globalTest(`${kind} static corpse shader failure triggers whole-facade legacy fallback`, async t => {
+    const options = mixedFixture(); options.cap = { [kind]: 2 }; options.units = options.units.filter(u => u.type === kind);
+    const renderer = { capabilities: { isWebGL2: true, maxTextureSize: 16384 },
+        getContext: () => ({ MAX_VERTEX_TEXTURE_IMAGE_UNITS: 1, NO_ERROR: 0, getParameter: () => 16, getError: () => 0 }),
+        initTexture() {}, debug: {}, compile(root) {
+            root.traverse(o => { if (o.isMesh && o.material.customProgramCacheKey() === 'spike-corpse-team') this.debug.onShaderError(); });
+        }, properties: { get: () => ({ currentProgram: { getUniforms() {} } }) } };
+    const errors = []; t.mock.method(console, 'error', (...args) => errors.push(args));
+    const fallback = await createModelFacade({ ...options, renderer });
+    assert.equal(fallback.gpuCrowds, undefined); assert.equal(fallback.live.size, 2);
+    assert.deepEqual(options.scene.children, [fallback.group]);
+    assert.equal(errors[0][1].message, `GPU ${kind} shader compilation failed`);
+    assert.equal(renderer.debug.onShaderError, undefined);
 });

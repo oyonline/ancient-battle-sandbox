@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { contactShadows } from './model-skin.js';
 
+const INTERPOLATE_FRAMES = true;
 export const SAMPLE_HZ = 120;
 export const FADE_SECONDS = .15;
 const CLIPS = ['Idle', 'Walk', 'Attack', 'Hit', 'Death'];
@@ -9,7 +10,8 @@ const ATTRIBUTES = ['aClipA', 'aClipB', 'aBlend', 'aTeam'];
 const TEAMS = ['red', 'blue'];
 const EMPTY_PRESENTATION = Object.freeze({});
 
-// One RGBA row per pose, four texels per bone. S is relative to the holder,
+// One RGBA row per pose, three vec4 rows per affine bone matrix.
+// S is relative to the holder,
 // before its normalization scale; instanceMatrix restores the full mesh world pose.
 export function bakeAnimations(template, snapshotRows = 0) {
     const { root } = template;
@@ -17,7 +19,7 @@ export function bakeAnimations(template, snapshotRows = 0) {
     let skin;
     root.traverse(o => { if (o.isSkinnedMesh && !skin) skin = o; });
     if (!skin) throw new Error('GPU template requires a SkinnedMesh');
-    const width = skin.skeleton.bones.length * 4, clips = new Map();
+    const width = skin.skeleton.bones.length * 3, clips = new Map();
     let rows = 0;
     for (const name of template.clipNames || CLIPS) {
         const clip = template.clips.find(c => c.name === name);
@@ -31,7 +33,7 @@ export function bakeAnimations(template, snapshotRows = 0) {
     const meshInRoot = rootInverse.clone().multiply(modelMatrix);
     const data = new Float32Array(width * (rows + snapshotRows) * 4);
     // Bone world transform in horse model-root space, explicitly NOT inverse-bind S.
-    const mountData = template.mountBone ? new Float32Array((rows + snapshotRows) * 16) : null;
+    const mountData = template.mountBone ? new Float32Array((rows + snapshotRows) * 12) : null;
     const mixer = new THREE.AnimationMixer(root), matrix = new THREE.Matrix4();
     for (const meta of clips.values()) {
         mixer.stopAllAction();
@@ -52,12 +54,12 @@ export function bakeAnimations(template, snapshotRows = 0) {
                         throw new Error(`GPU mount scale must be unit: ${meta.name} frame ${frame} column ${column / 4}: ${length}`);
                     }
                 }
-                matrix.toArray(mountData, (meta.start + frame) * 16);
+                writeAffine(mountData, (meta.start + frame) * 12, matrix);
             }
             for (let bone = 0; bone < skin.skeleton.bones.length; bone++) {
                 matrix.multiplyMatrices(rootInverse, skin.skeleton.bones[bone].matrixWorld)
                     .multiply(skin.skeleton.boneInverses[bone]);
-                matrix.toArray(data, ((meta.start + frame) * width + bone * 4) * 4);
+                writeAffine(data, ((meta.start + frame) * width + bone * 3) * 4, matrix);
             }
         }
     }
@@ -83,17 +85,33 @@ export function clipSample(meta, seconds, target = [0, 0, 0]) {
     return target;
 }
 
-export function sampleBone(atlas, sample, bone, target = new THREE.Matrix4()) {
-    const frame = Math.floor(sample[2]), next = Math.min(frame + 1, sample[1] - 1), alpha = sample[2] - frame;
-    const a = ((sample[0] + frame) * atlas.width + bone * 4) * 4;
-    const b = ((sample[0] + next) * atlas.width + bone * 4) * 4;
-    for (let i = 0; i < 16; i++) target.elements[i] = atlas.data[a + i] * (1 - alpha) + atlas.data[b + i] * alpha;
+// Matrix4 uses column-major storage; atlas texels hold the first three ROWS.
+function writeAffine(data, offset, matrix) {
+    for (let row = 0; row < 3; row++) for (let column = 0; column < 4; column++) {
+        data[offset + row * 4 + column] = matrix.elements[column * 4 + row];
+    }
+}
+function sampleAffine(data, a, b, alpha, target) {
+    target.identity();
+    for (let row = 0; row < 3; row++) for (let column = 0; column < 4; column++) {
+        const i = row * 4 + column;
+        target.elements[column * 4 + row] = data[a + i] * (1 - alpha) + data[b + i] * alpha;
+    }
     return target;
+}
+function framePair(sample) {
+    const frame = INTERPOLATE_FRAMES ? Math.floor(sample[2]) : Math.round(sample[2]);
+    return [frame, Math.min(frame + 1, sample[1] - 1), INTERPOLATE_FRAMES ? sample[2] - frame : 0];
+}
+export function sampleBone(atlas, sample, bone, target = new THREE.Matrix4()) {
+    const [frame, next, alpha] = framePair(sample);
+    return sampleAffine(atlas.data, ((sample[0] + frame) * atlas.width + bone * 3) * 4,
+        ((sample[0] + next) * atlas.width + bone * 3) * 4, alpha, target);
 }
 
 export function createCrowdMaterial(atlas, teamColors) {
     const material = new THREE.MeshLambertMaterial({ vertexColors: true });
-    material.customProgramCacheKey = () => 'spike-gpu-crowd-v1';
+    material.customProgramCacheKey = () => `spike-gpu-crowd-affine-${INTERPOLATE_FRAMES}`;
     material.onBeforeCompile = shader => {
         Object.assign(shader.uniforms, {
             crowdAtlas: { value: atlas.texture }, crowdBind: { value: atlas.bindMatrix },
@@ -115,16 +133,21 @@ uniform mat4 crowdBindInverse;
 uniform vec3 crowdRed;
 uniform vec3 crowdBlue;
 mat4 crowdBone(float bone, vec3 clip) {
-    int x = int(bone) * 4;
+    int x = int(bone) * 3;
+    ${INTERPOLATE_FRAMES ? `
     int f = int(floor(clip.z));
     int rowA = int(clip.x) + f;
     int rowB = int(clip.x) + min(f + 1, int(clip.y) - 1);
     float t = fract(clip.z);
-    return mat4(
-        mix(texelFetch(crowdAtlas, ivec2(x, rowA), 0), texelFetch(crowdAtlas, ivec2(x, rowB), 0), t),
-        mix(texelFetch(crowdAtlas, ivec2(x+1, rowA), 0), texelFetch(crowdAtlas, ivec2(x+1, rowB), 0), t),
-        mix(texelFetch(crowdAtlas, ivec2(x+2, rowA), 0), texelFetch(crowdAtlas, ivec2(x+2, rowB), 0), t),
-        mix(texelFetch(crowdAtlas, ivec2(x+3, rowA), 0), texelFetch(crowdAtlas, ivec2(x+3, rowB), 0), t));
+    vec4 r0 = mix(texelFetch(crowdAtlas, ivec2(x, rowA), 0), texelFetch(crowdAtlas, ivec2(x, rowB), 0), t);
+    vec4 r1 = mix(texelFetch(crowdAtlas, ivec2(x+1, rowA), 0), texelFetch(crowdAtlas, ivec2(x+1, rowB), 0), t);
+    vec4 r2 = mix(texelFetch(crowdAtlas, ivec2(x+2, rowA), 0), texelFetch(crowdAtlas, ivec2(x+2, rowB), 0), t);` : `
+    int row = int(clip.x) + int(floor(clip.z + 0.5));
+    vec4 r0 = texelFetch(crowdAtlas, ivec2(x, row), 0);
+    vec4 r1 = texelFetch(crowdAtlas, ivec2(x+1, row), 0);
+    vec4 r2 = texelFetch(crowdAtlas, ivec2(x+2, row), 0);`}
+    return mat4(vec4(r0.x, r1.x, r2.x, 0.0), vec4(r0.y, r1.y, r2.y, 0.0),
+                vec4(r0.z, r1.z, r2.z, 0.0), vec4(r0.w, r1.w, r2.w, 1.0));
 }
 mat4 crowdPose(vec3 clip) {
     return skinWeight.x * crowdBone(skinIndex.x, clip)
@@ -173,11 +196,11 @@ export function createAnimationState(atlas, snapshotRow, time = 0, phase = 0, ph
         } else if (state.previous && p.blend < 1) {
             for (let bone = 0; bone < atlas.boneCount; bone++) {
                 sampleBone(atlas, p.a, bone, a); sampleBone(atlas, p.b, bone, b);
-                const offset = (snapshotRow * atlas.width + bone * 4) * 4;
-                for (let i = 0; i < 16; i++) atlas.data[offset + i] = a.elements[i] * (1 - p.blend) + b.elements[i] * p.blend;
+                for (let i = 0; i < 16; i++) a.elements[i] = a.elements[i] * (1 - p.blend) + b.elements[i] * p.blend;
+                writeAffine(atlas.data, (snapshotRow * atlas.width + bone * 3) * 4, a);
             }
             if (atlas.mountData) {
-                sampleMount(atlas, p, a, false).toArray(atlas.mountData, snapshotRow * 16);
+                writeAffine(atlas.mountData, snapshotRow * 12, sampleMount(atlas, p, a, false));
             }
             const start = snapshotRow * atlas.width * 4, end = start + atlas.width * 4;
             atlas.texture.image.data.set(atlas.data.subarray(start, end), start);
@@ -206,10 +229,74 @@ export function createAnimationState(atlas, snapshotRow, time = 0, phase = 0, ph
     };
 }
 
+// Match the shader's Death endpoint in mesh space, once during initialization.
+export function bakeDeathGeometry(atlas, source = atlas.geometry) {
+    const geometry = source.clone(), sample = clipSample(atlas.clips.get('Death'), Infinity);
+    const bones = Array.from({ length: atlas.boneCount }, (_, bone) => sampleBone(atlas, sample, bone));
+    const skin = new THREE.Matrix4(), vertex = new THREE.Vector4(), normal = new THREE.Vector3();
+    const positions = geometry.attributes.position, normals = geometry.attributes.normal;
+    for (let v = 0; v < positions.count; v++) {
+        skin.elements.fill(0);
+        for (let k = 0; k < 4; k++) {
+            const bone = source.attributes.skinIndex.getComponent(v, k), weight = source.attributes.skinWeight.getComponent(v, k);
+            for (let i = 0; i < 16; i++) skin.elements[i] += bones[bone].elements[i] * weight;
+        }
+        skin.premultiply(atlas.bindMatrixInverse).multiply(atlas.bindMatrix);
+        vertex.set(positions.getX(v), positions.getY(v), positions.getZ(v), 1).applyMatrix4(skin);
+        positions.setXYZ(v, vertex.x, vertex.y, vertex.z);
+        normal.fromBufferAttribute(normals, v).transformDirection(skin);
+        normals.setXYZ(v, normal.x, normal.y, normal.z);
+    }
+    geometry.deleteAttribute('skinIndex'); geometry.deleteAttribute('skinWeight');
+    geometry.computeBoundingBox(); geometry.computeBoundingSphere();
+    return geometry;
+}
+
+function corpseBatch(atlas, source, capacity, teamColors, name) {
+    const geometry = bakeDeathGeometry(atlas, source);
+    const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+    material.customProgramCacheKey = () => 'spike-corpse-team';
+    material.onBeforeCompile = shader => {
+        Object.assign(shader.uniforms, { crowdRed: { value: new THREE.Color(teamColors.red) },
+            crowdBlue: { value: new THREE.Color(teamColors.blue) } });
+        shader.vertexShader = shader.vertexShader.replace('#include <common>', `#include <common>
+attribute float clothMask;
+attribute float aTeam;
+uniform vec3 crowdRed;
+uniform vec3 crowdBlue;`)
+            .replace('#include <color_vertex>', `#include <color_vertex>
+    vColor.xyz = mix(vColor.xyz, mix(crowdRed, crowdBlue, aTeam), clothMask);`);
+    };
+    geometry.setAttribute('aTeam', new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(THREE.DynamicDrawUsage));
+    const mesh = new THREE.InstancedMesh(geometry, material, capacity), entries = [];
+    mesh.name = name; mesh.count = 0; mesh.frustumCulled = false;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    function dirty() { mesh.instanceMatrix.needsUpdate = true; geometry.attributes.aTeam.needsUpdate = true; mesh.count = entries.length; }
+    return { mesh,
+        add(entry, matrix) {
+            const slot = entries.length;
+            if (slot >= capacity) throw new Error(`${name} exceeds corpse CAP`);
+            entries.push(entry); mesh.setMatrixAt(slot, matrix);
+            geometry.attributes.aTeam.setX(slot, entry.team === 'blue' ? 1 : 0); dirty();
+        },
+        remove(entry) {
+            const slot = entries.indexOf(entry); if (slot < 0) return;
+            entries.splice(slot, 1);
+            mesh.instanceMatrix.array.copyWithin(slot * 16, (slot + 1) * 16, (entries.length + 1) * 16);
+            geometry.attributes.aTeam.array.copyWithin(slot, slot + 1, entries.length + 1); dirty();
+        },
+        dispose() { geometry.dispose(); material.dispose(); mesh.dispose(); }
+    };
+}
+
+function deathFinished(animation, atlas, now) {
+    return now - animation.state.start >= Math.max(atlas.clips.get('Death').duration, FADE_SECONDS);
+}
+
 export function createGpuCrowd({ kind = 'infantry', template, scene, units, cap, teamColors, groundH, shadowsEnabled = true, renderer, camera }) {
     const capacity = cap[kind];
     if (!Number.isInteger(capacity) || capacity < 0 || units.length > capacity) throw new Error(`GPU ${kind} exceeds CAP`);
-    let atlas, mesh, shadows, material, geometry;
+    let atlas, mesh, shadows, material, geometry, corpses;
     const label = kind[0].toUpperCase() + kind.slice(1);
     const group = new THREE.Group(); group.name = `SpikeGpu${label}`;
     try {
@@ -222,10 +309,12 @@ export function createGpuCrowd({ kind = 'infantry', template, scene, units, cap,
         mesh.name = `SpikeGpu${label}Batch`; mesh.count = 0; mesh.frustumCulled = false;
         mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); group.add(mesh);
         shadows = contactShadows(shadowsEnabled ? capacity : 0);
-        shadows.visible = shadowsEnabled; group.add(shadows); scene.add(group);
+        shadows.visible = shadowsEnabled; group.add(shadows);
+        corpses = corpseBatch(atlas, atlas.geometry, capacity, teamColors, `SpikeGpu${label}Corpses`); group.add(corpses.mesh);
+        scene.add(group);
         validateGpuBatch(atlas, mesh, { renderer, camera, scene }, kind, group);
     } catch (error) {
-        group.removeFromParent(); atlas?.texture.dispose(); geometry?.dispose(); material?.dispose(); mesh?.dispose();
+        group.removeFromParent(); atlas?.texture.dispose(); geometry?.dispose(); material?.dispose(); mesh?.dispose(); corpses?.dispose();
         if (shadows) { shadows.geometry.dispose(); shadows.material.map.dispose(); shadows.material.dispose(); shadows.dispose(); }
         throw error;
     }
@@ -240,22 +329,32 @@ export function createGpuCrowd({ kind = 'infantry', template, scene, units, cap,
     const transform = new THREE.Object3D(), matrix = new THREE.Matrix4();
     let endOffset = 0, cursor = 0, frameTime = 0;
     function write(e, corpse) {
+        if (corpse && deathFinished(e.animation, atlas, frameTime + endOffset - e.endBase)) {
+            if (!e.frozen) {
+                transform.position.set(e.x, e.y, e.z); transform.rotation.set(0, e.heading, 0); transform.scale.setScalar(1); transform.updateMatrix();
+                matrix.multiplyMatrices(transform.matrix, atlas.modelMatrix); corpses.add(e, matrix); e.frozen = true;
+            }
+            writeShadow(e); return;
+        }
         const p = e.animation.update(frameTime + endOffset - (corpse ? e.endBase : 0), e.moving);
         geometry.attributes.aClipA.setXYZ(cursor, p.a[0], p.a[1], p.a[2]); geometry.attributes.aClipB.setXYZ(cursor, p.b[0], p.b[1], p.b[2]);
         geometry.attributes.aBlend.setX(cursor, p.blend); geometry.attributes.aTeam.setX(cursor, e.team === 'blue' ? 1 : 0);
         transform.position.set(e.x, e.y, e.z); transform.rotation.set(0, e.heading, 0); transform.scale.setScalar(1); transform.updateMatrix();
         matrix.multiplyMatrices(transform.matrix, atlas.modelMatrix); mesh.setMatrixAt(cursor, matrix);
-        if (shadowsEnabled) {
-            transform.position.y += .02; transform.scale.set(.42, 1, .42); transform.updateMatrix();
-            shadows.setMatrixAt(cursor, transform.matrix);
-        }
-        cursor++;
+        writeShadow(e); cursor++;
+    }
+    let shadowCursor = 0;
+    function writeShadow(e) {
+        if (!shadowsEnabled) return;
+        transform.position.set(e.x, e.y + .02, e.z); transform.rotation.set(0, e.heading, 0);
+        transform.scale.set(.42, 1, .42); transform.updateMatrix();
+        shadows.setMatrixAt(shadowCursor++, transform.matrix);
     }
     const countDrawCall = o => { if (o.isMesh && o.count > 0) diagnostics.drawCalls++; };
     return {
-        kind, atlas, mesh, group, live, dead, diagnostics,
+        kind, atlas, mesh, corpseMesh: corpses.mesh, group, live, dead, diagnostics,
         dispose() {
-            group.removeFromParent(); atlas.texture.dispose(); geometry.dispose(); material.dispose(); mesh.dispose();
+            group.removeFromParent(); atlas.texture.dispose(); geometry.dispose(); material.dispose(); mesh.dispose(); corpses.dispose();
             shadows.geometry.dispose(); shadows.material.map.dispose(); shadows.material.dispose(); shadows.dispose();
         },
         sync(u, heading, simulationTime) {
@@ -274,15 +373,16 @@ export function createGpuCrowd({ kind = 'infantry', template, scene, units, cap,
             live.delete(u.id); e.endBase = endOffset;
             e.x = u.gx - 35; e.y = groundH(u.gx, u.gy); e.z = u.gy - 35; e.heading = heading;
             e.animation.event('Death', simulationTime / 1000); dead.push(e);
+            if (dead.length > capacity) corpses.remove(dead.shift());
         },
         update(simulationTime, fps, { dt = 0, paused = false, battleOver = false } = EMPTY_PRESENTATION) {
             if (battleOver && !paused) endOffset += dt;
-            cursor = 0; frameTime = simulationTime / 1000;
+            cursor = shadowCursor = 0; frameTime = simulationTime / 1000;
             for (const e of live.values()) write(e, false);
             for (const e of dead) write(e, true);
             mesh.count = cursor; mesh.instanceMatrix.needsUpdate = true;
             for (const name of ATTRIBUTES) geometry.attributes[name].needsUpdate = true;
-            shadows.count = shadowsEnabled ? cursor : 0; if (shadowsEnabled) shadows.instanceMatrix.needsUpdate = true;
+            shadows.count = shadowsEnabled ? shadowCursor : 0; if (shadowsEnabled) shadows.instanceMatrix.needsUpdate = true;
             diagnostics.drawCalls = 0;
             group.traverseVisible(countDrawCall);
             diagnostics.active = live.size; diagnostics.corpses = dead.length; diagnostics.frame++;
@@ -293,10 +393,8 @@ export function createGpuCrowd({ kind = 'infantry', template, scene, units, cap,
 const mountA = new THREE.Matrix4(), mountB = new THREE.Matrix4();
 const mountX = new THREE.Vector3(), mountY = new THREE.Vector3(), mountZ = new THREE.Vector3();
 function mountFrame(atlas, descriptor, target) {
-    const frame = Math.floor(descriptor[2]), next = Math.min(frame + 1, descriptor[1] - 1), alpha = descriptor[2] - frame;
-    const a = (descriptor[0] + frame) * 16, b = (descriptor[0] + next) * 16;
-    for (let i = 0; i < 16; i++) target.elements[i] = atlas.mountData[a + i] * (1 - alpha) + atlas.mountData[b + i] * alpha;
-    return target;
+    const [frame, next, alpha] = framePair(descriptor);
+    return sampleAffine(atlas.mountData, (descriptor[0] + frame) * 12, (descriptor[0] + next) * 12, alpha, target);
 }
 // Use the exact descriptors/blend sent to the horse shader, including snapshots.
 // Rigid Torso2 has unit scale in these assets. Gram-Schmidt removes the shrink/shear
@@ -315,14 +413,14 @@ export function sampleMount(atlas, parameters, target = new THREE.Matrix4(), ort
 }
 
 // Keep capability, upload and deferred shader-link checks identical for every batch.
-function validateGpuBatch(atlas, mesh, { renderer, camera, scene }, label, root = mesh) {
+function validateGpuBatch(atlas, mesh, { renderer, camera, scene }, label, root = mesh, upload = true) {
     if (!renderer) return;
     const gl = renderer.getContext();
     if (!renderer.capabilities.isWebGL2 || !gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS) ||
         Math.max(atlas.width, atlas.texture.image.height) > renderer.capabilities.maxTextureSize) {
         throw new Error(`GPU ${label} float vertex atlas is unavailable`);
     }
-    renderer.initTexture(atlas.texture);
+    if (upload) renderer.initTexture(atlas.texture);
     if (gl.getError() !== gl.NO_ERROR) throw new Error(`GPU ${label} float atlas upload failed`);
     let shaderError;
     const original = renderer.debug.onShaderError;
@@ -330,7 +428,9 @@ function validateGpuBatch(atlas, mesh, { renderer, camera, scene }, label, root 
     try {
         renderer.compile(root, camera, scene);
         // r180 defers link validation until first uniform/attribute access.
-        renderer.properties.get(mesh.material).currentProgram.getUniforms();
+        root.traverse(o => {
+            if (o.isMesh) renderer.properties.get(o.material).currentProgram.getUniforms();
+        });
     } finally { renderer.debug.onShaderError = original; }
     if (shaderError) throw shaderError;
 }
@@ -364,7 +464,8 @@ function cavalryBatch(atlas, source, capacity, options, name) {
 // inverse binds, tracks and normalization. Verify baked poses before sharing:
 // an asset change automatically keeps separate atlases instead of assuming parity.
 function sameHorseAtlas(a, b) {
-    return a.boneCount === b.boneCount && a.rows === b.rows &&
+    return a.width === b.width && a.boneCount === b.boneCount && a.rows === b.rows &&
+        a.data.length === b.data.length && a.mountData.length === b.mountData.length &&
         a.boneNames.every((name, i) => name === b.boneNames[i] && a.boneInverses[i].equals(b.boneInverses[i])) &&
         a.bindMatrix.equals(b.bindMatrix) && a.bindMatrixInverse.equals(b.bindMatrixInverse) &&
         [...a.clips.values()].every((meta, i) => {
@@ -396,11 +497,22 @@ export function createGpuCavalry(options) {
             }
             const batch = cavalryBatch(atlas, geometry, capacity, options, `SpikeGpuHorse-${team}`);
             batches.push(batch); group.add(batch.mesh);
-            horses[team] = { atlas, batch, modelMatrix, rootMatrix, saddleMatrix: source.saddleMatrix, riderMatrix: source.riderMatrix };
+            const corpses = corpseBatch(atlas, geometry, capacity, options.teamColors, `SpikeGpuHorseCorpses-${team}`);
+            batches.push(corpses); group.add(corpses.mesh);
+            horses[team] = { atlas, batch, corpses, modelMatrix, rootMatrix, saddleMatrix: source.saddleMatrix, riderMatrix: source.riderMatrix };
+            validateGpuBatch(atlas, corpses.mesh, options, 'cavalry', corpses.mesh, false);
         }
         const atlas = bakeAnimations(template.rider, capacity); atlases.add(atlas);
         const batch = cavalryBatch(atlas, atlas.geometry, capacity, options, 'SpikeGpuRider');
-        batches.push(batch); group.add(batch.mesh); rider = { atlas, batch };
+        batches.push(batch); group.add(batch.mesh);
+        const corpses = corpseBatch(atlas, atlas.geometry, capacity, options.teamColors, 'SpikeGpuRiderCorpses');
+        batches.push(corpses); group.add(corpses.mesh); rider = { atlas, batch, corpses };
+        validateGpuBatch(atlas, corpses.mesh, options, 'cavalry', corpses.mesh, false);
+        for (const horse of Object.values(horses)) {
+            const b = clipSample(horse.atlas.clips.get('Death'), Infinity);
+            horse.corpseRiderMatrix = horse.rootMatrix.clone().multiply(sampleMount(horse.atlas, { a: b, b, blend: 1 }))
+                .multiply(horse.saddleMatrix).multiply(horse.riderMatrix).multiply(atlas.meshInRoot);
+        }
         shadows = contactShadows(shadowsEnabled ? capacity : 0); shadows.visible = shadowsEnabled; group.add(shadows);
         scene.add(group);
     } catch (error) { dispose(); throw error; }
@@ -419,10 +531,18 @@ export function createGpuCavalry(options) {
         atlasBytes: [...atlases].reduce((n, a) => n + a.data.byteLength + (a.mountData?.byteLength || 0), 0) };
     const gait = e => e.moving ? e.charge ? 'Charge' : 'Walk' : 'Idle';
     const horseGait = e => e.moving ? e.charge ? 'Gallop' : 'Walk' : 'Idle';
-    let cursor = 0, frameTime = 0;
+    let cursor = 0, shadowCursor = 0, frameTime = 0;
     const horseCounts = { red: 0, blue: 0 };
     function write(e, corpse) {
         const now = frameTime + endOffset - (corpse ? e.endBase : 0), horse = horses[e.team];
+        if (corpse && deathFinished(e.animation, rider.atlas, now) && deathFinished(e.horseAnimation, horse.atlas, now)) {
+            if (!e.frozen) {
+                transform.position.set(e.x, e.y, e.z); transform.rotation.set(0, e.heading, 0); transform.scale.setScalar(1); transform.updateMatrix();
+                matrix.multiplyMatrices(transform.matrix, horse.modelMatrix); horse.corpses.add(e, matrix);
+                matrix.multiplyMatrices(transform.matrix, horse.corpseRiderMatrix); rider.corpses.add(e, matrix); e.frozen = true;
+            }
+            writeShadow(e); return;
+        }
         // This ONE computation supplies both horse attributes and the CPU mount.
         const hp = e.horseAnimation.update(now, horseGait(e)), rp = e.animation.update(now, gait(e));
         transform.position.set(e.x, e.y, e.z); transform.rotation.set(0, e.heading, 0); transform.scale.setScalar(1); transform.updateMatrix();
@@ -432,16 +552,18 @@ export function createGpuCavalry(options) {
         matrix.copy(transform.matrix).multiply(horse.rootMatrix).multiply(mount).multiply(horse.saddleMatrix)
             .multiply(horse.riderMatrix).multiply(rider.atlas.meshInRoot);
         rider.batch.write(cursor, rp, e.team, matrix);
-        if (shadowsEnabled) {
-            transform.position.y += .02; transform.scale.set(.65, 1, 1); transform.updateMatrix(); shadows.setMatrixAt(cursor, transform.matrix);
-        }
-        cursor++;
+        writeShadow(e); cursor++;
+    }
+    function writeShadow(e) {
+        if (!shadowsEnabled) return;
+        transform.position.set(e.x, e.y + .02, e.z); transform.rotation.set(0, e.heading, 0);
+        transform.scale.set(.65, 1, 1); transform.updateMatrix(); shadows.setMatrixAt(shadowCursor++, transform.matrix);
     }
     const countDrawCall = o => {
         if (o.isMesh && o.count > 0) { diagnostics.drawCalls++; if (o !== shadows) diagnostics.modelDrawCalls++; }
     };
     return {
-        kind: 'cavalry', group, live, dead, horses, rider, atlas: rider.atlas, mesh: rider.batch.mesh, diagnostics, dispose,
+        kind: 'cavalry', group, live, dead, horses, rider, atlas: rider.atlas, mesh: rider.batch.mesh, corpseMesh: rider.corpses.mesh, diagnostics, dispose,
         sync(u, heading, simulationTime) {
             const e = live.get(u.id); if (!e || u.dead || u.hp <= 0) return;
             const now = simulationTime / 1000;
@@ -458,15 +580,18 @@ export function createGpuCavalry(options) {
             live.delete(u.id); e.endBase = endOffset;
             e.x = u.gx - 35; e.y = groundH(u.gx, u.gy); e.z = u.gy - 35; e.heading = heading;
             e.animation.event('Death', simulationTime / 1000); e.horseAnimation.event('Death', simulationTime / 1000); dead.push(e);
+            if (dead.length > capacity) {
+                const oldest = dead.shift(); rider.corpses.remove(oldest); horses[oldest.team].corpses.remove(oldest);
+            }
         },
         update(simulationTime, fps, { dt = 0, paused = false, battleOver = false } = EMPTY_PRESENTATION) {
             if (battleOver && !paused) endOffset += dt;
-            cursor = 0; frameTime = simulationTime / 1000; horseCounts.red = horseCounts.blue = 0;
+            cursor = shadowCursor = 0; frameTime = simulationTime / 1000; horseCounts.red = horseCounts.blue = 0;
             for (const e of live.values()) write(e, false);
             for (const e of dead) write(e, true);
             rider.batch.finish(cursor);
             for (const team of TEAMS) horses[team].batch.finish(horseCounts[team]);
-            shadows.count = shadowsEnabled ? cursor : 0; if (shadowsEnabled) shadows.instanceMatrix.needsUpdate = true;
+            shadows.count = shadowsEnabled ? shadowCursor : 0; if (shadowsEnabled) shadows.instanceMatrix.needsUpdate = true;
             diagnostics.drawCalls = diagnostics.modelDrawCalls = 0;
             group.traverseVisible(countDrawCall);
             diagnostics.active = live.size; diagnostics.corpses = dead.length; diagnostics.frame++;
