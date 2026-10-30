@@ -8,6 +8,7 @@ globalThis.UI = { onBattleEnd() {} };
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { createProbeStats } from './static-probe.js';
 import { Snd } from '../snd.js';
 import { Terrain } from '../terrain.js';
 import { UNIT_TYPES, CavalryAI, unitRand } from '../units.js';
@@ -21,16 +22,33 @@ const TERRAIN_KEY = 'red_pass';      // 自带坡地，3D 里高差可读
 const H_WORLD = 2.0;                 // 1 个 2D 高度单位 ≈ 2 世界格：坡地 readable 优先
 const CLASSIC = { infantry: 300, pikeman: 60, archer: 80, cavalry: 60 };   // 500 v 500
 const TEAM_COLOR = { red: 0xc4553f, blue: 0x7fb0e0 };
+const MODELS = new URLSearchParams(location.search).get('models') === '1';
+const GPU = new URLSearchParams(location.search).get('gpu') === '1';
+const SHADOWS = new URLSearchParams(location.search).get('shadows') !== '0';
+const STATIC_PROBE = new URLSearchParams(location.search).get('probe') === 'static';
+const PROBE_BOX = new URLSearchParams(location.search).get('lod') === 'box';
+const probeMetrics = createProbeStats();
+let staticProbe = null;
+let modelSkin = null;
 
 const $ = id => document.getElementById(id);
 const hud = $('hud');
+const toggleURL = new URL(location.href);
+if (MODELS) toggleURL.searchParams.delete('models');
+else toggleURL.searchParams.set('models', '1');
+const modelToggle = ` · <a id="model-toggle" style="pointer-events:auto;color:#ffe3a0" href="${toggleURL.pathname + toggleURL.search}">${MODELS ? '切换方块兵' : '切换真模型'}</a>`;
+const shadowToggleURL = new URL(location.href);
+if (SHADOWS) shadowToggleURL.searchParams.set('shadows', '0');
+else shadowToggleURL.searchParams.delete('shadows');
+const shadowToggle = ` · <a id="shadow-toggle" style="pointer-events:auto;color:#ffe3a0" href="${shadowToggleURL.pathname + shadowToggleURL.search}">阴影：${SHADOWS ? '开' : '关'}</a>`;
+hud.innerHTML += modelToggle + shadowToggle;
 
 // ---------------- Three 基础 ----------------
 const viewport = $('viewport');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = SHADOWS;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 viewport.append(renderer.domElement);
 const scene3d = new THREE.Scene();
@@ -49,7 +67,7 @@ function resize() {
 new ResizeObserver(resize).observe(viewport); resize();
 scene3d.add(new THREE.HemisphereLight('#fff5da', '#556547', 1.5));
 const sun = new THREE.DirectionalLight('#fff0cb', 1.9);
-sun.position.set(-30, 55, 25); sun.castShadow = true;
+sun.position.set(-30, 55, 25); sun.castShadow = SHADOWS;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, far: 160 });
 sun.shadow.normalBias = .05;
@@ -137,7 +155,7 @@ for (const kind of UNIT_KINDS) {
     const geo = soldierGeo(kind);
     const mesh = new THREE.InstancedMesh(geo, unitMat, CAP[kind]);
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    mesh.castShadow = true; mesh.count = 0; mesh.frustumCulled = false;
+    mesh.castShadow = SHADOWS && !MODELS; mesh.count = 0; mesh.frustumCulled = false;
     scene3d.add(mesh); unitMeshes[kind] = mesh;
     const corpses = new THREE.InstancedMesh(geo, unitMat, CAP[kind]);
     corpses.count = 0; corpses.frustumCulled = false;
@@ -328,9 +346,21 @@ async function boot() {
 
     // ---- 经典 500 v 500 部署（与 2D 经典版同一入口） ----
     scene.deployUnits(CLASSIC, CLASSIC, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: TERRAIN_KEY });
+    if (STATIC_PROBE) {
+        hud.innerHTML = '加载静态实例探针…' + shadowToggle;
+        const { createStaticProbe } = await import('./static-probe.js');
+        staticProbe = await createStaticProbe({ scene: scene3d, units: scene.units, teamColors: TEAM_COLOR, groundH,
+            shadowsEnabled: SHADOWS, box: PROBE_BOX, soldierGeo });
+        for (const mesh of [...Object.values(unitMeshes), ...Object.values(corpseMeshes)]) mesh.visible = false;
+    } else if (MODELS) {
+        hud.innerHTML = '加载真模型与动作…' + modelToggle;
+        const { createModelFacade } = await import('./model-skin.js');
+        modelSkin = await createModelFacade({ scene: scene3d, camera, renderer, gpu: GPU, units: scene.units, cap: CAP, teamColors: TEAM_COLOR, groundH, shadowsEnabled: SHADOWS });
+        for (const mesh of [...Object.values(unitMeshes), ...Object.values(corpseMeshes)]) mesh.visible = false;
+    }
     scene.battleStarted = true;
     buildGround(board.W, board.H);
-    hud.textContent = '准备完毕';
+    hud.innerHTML = '准备完毕' + modelToggle;
 }
 
 // ---------------- 尸体 ----------------
@@ -356,6 +386,12 @@ function writeFall(f, p) {
 }
 function recordCorpse(u, from) {
     if (!UNIT_KINDS.includes(u.type)) return;
+    if (STATIC_PROBE) return; // Probe deaths disappear; simulation killUnit still runs.
+    if (modelSkin) {
+        modelSkin.kill(u, headings.get(u.id)?.a ?? (u.team === 'red' ? Math.PI / 2 : -Math.PI / 2), scene.simulationTime);
+        addBlood(u.gx, u.gy, u.type === 'cavalry' ? .8 : .5);
+        return;
+    }
     const kind = u.type, i = corpseCursor[kind]++ % CAP[kind];
     corpseMeshes[kind].count = Math.min(corpseCursor[kind], CAP[kind]);
     // 尸体槽也挂队伍色：死亡瞬间不掉色（活体槽随单位移除即复用）
@@ -391,8 +427,12 @@ function recordCorpse(u, from) {
 
 // ---------------- 每帧同步：模拟状态 → 实例矩阵 ----------------
 let hudWinner = null;
+let lastHeadingSimTime = 0;
 function sync3D(dt, now) {
+    const headingDt = Math.max(0, (scene.simulationTime - lastHeadingSimTime) / 1000);
+    lastHeadingSimTime = scene.simulationTime;
     let cursor = { infantry: 0, pikeman: 0, archer: 0, cavalry: 0 };
+    staticProbe?.begin();
     for (const u of scene.units) {
         const kind = u.type, mesh = unitMeshes[kind], slot = cursor[kind]++;
         if (slot >= CAP[kind]) continue;
@@ -404,10 +444,12 @@ function sync3D(dt, now) {
             if ((u.velX ?? 0) ** 2 + (u.velY ?? 0) ** 2 > 1e-6) {
                 let d = target - st.a;
                 d = Math.atan2(Math.sin(d), Math.cos(d));
-                st.a += d * Math.min(1, dt * 10);
+                st.a += d * Math.min(1, (modelSkin?.isGpuKind?.(kind) ? headingDt : dt) * 10);
             }
         }
         headings.set(u.id, st);
+        if (staticProbe) { staticProbe.sync(u, st.a); continue; }
+        if (modelSkin) { modelSkin.sync(u, st.a, now, scene.simulationTime); continue; }
         const bob = u.moving ? Math.abs(Math.sin(now * .012 + st.bob)) * .09 : 0;
         const lunge = u._lungeUntil > now ? .18 * Math.sin(Math.min(1, (u._lungeUntil - now) / 220) * Math.PI) : 0;
         const y = groundH(u.gx, u.gy);
@@ -417,7 +459,9 @@ function sync3D(dt, now) {
         mesh.setMatrixAt(slot, dummy.matrix);
         setTeamColor(u, slot);        // 颜色跟单位走（阵亡移除会改变槽位分配）
     }
-    for (const kind of UNIT_KINDS) {
+    if (staticProbe) staticProbe.end();
+    else if (modelSkin) modelSkin.update(scene.simulationTime, sync3D._fps, { dt, paused: scene.paused, battleOver: scene.battleOver });
+    else for (const kind of UNIT_KINDS) {
         const mesh = unitMeshes[kind];
         for (let i = cursor[kind]; i < mesh.count; i++) { dummy.position.set(0, -50, 0); dummy.scale.setScalar(1e-4); dummy.rotation.set(0, 0, 0); dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix); }
         mesh.count = cursor[kind];
@@ -467,7 +511,42 @@ function sync3D(dt, now) {
         hud.innerHTML = `<span style="color:${fps >= 55 ? '#9cf5a0' : fps >= 30 ? '#ffd24a' : '#ff6b6b'}">${fps} FPS</span>` +
             ` · sim <b>${(p.simMs || 0).toFixed(1)}</b>/sync <b>${(p.syncMs || 0).toFixed(1)}</b>/draw <b>${(p.renderMs || 0).toFixed(1)}</b>ms` +
             ` · 存活 <b class="red">${scene.redAlive}</b> / <b class="blue">${scene.blueAlive}</b> · 阵亡 ${scene.deadCount}` +
-            (hudWinner ? ` —— <b style="color:#ffd24a">${hudWinner}</b>` : '');
+            (hudWinner ? ` —— <b style="color:#ffd24a">${hudWinner}</b>` : '') + modelToggle +
+            (STATIC_PROBE ? ` · static${PROBE_BOX ? '/box' : ''}` + shadowToggle : '') +
+            ` · triangles ${renderer.info.render.triangles} · vertices≈${staticProbe ? staticProbe.estimatedVertices : modelSkin ? (() => {
+                    let total = 0; modelSkin.group.traverseVisible(o => { if (o.isMesh) total += o.geometry.attributes.position.count * (o.isInstancedMesh ? o.count : 1); });
+                    return total;
+                })() : Object.values(unitMeshes).concat(Object.values(corpseMeshes)).reduce((sum, mesh) => sum + (mesh.visible ? mesh.geometry.attributes.position.count * mesh.count : 0), 0)}` +
+            ` · draw calls ${renderer.info.render.calls}`;
+    }
+}
+
+// Opt-in measurement only: observe completed frames without scheduling extra renders.
+const perfRuns = new Set();
+function perfRun({ seconds = 5, speed } = {}) {
+    if (!Number.isFinite(seconds) || seconds <= 0) return Promise.reject(new RangeError('seconds must be positive'));
+    if (speed !== undefined) {
+        if (![1, 2, 4].includes(speed)) return Promise.reject(new RangeError('speed must be 1, 2 or 4'));
+        if (!scene) return Promise.reject(new Error('Start the scene before setting speed'));
+        $(`btn-s${speed}`).click();
+    }
+    const start = performance.now(), simStart = scene?.simulationTime || 0;
+    const run = { start, previous: start, frames: [] };
+    perfRuns.add(run);
+    return new Promise(resolve => setTimeout(() => {
+        perfRuns.delete(run);
+        const wallSeconds = (performance.now() - start) / 1000;
+        const simAdvance = ((scene?.simulationTime || 0) - simStart) / 1000;
+        const sorted = run.frames.sort((a, b) => a - b);
+        const percentile = fraction => sorted[Math.max(0, Math.ceil(sorted.length * fraction) - 1)] || 0;
+        resolve({ fps: sorted.length / wallSeconds, p50FrameMs: percentile(.5), p95FrameMs: percentile(.95),
+            longFrames: sorted.filter(ms => ms > 50).length, simAdvance, wallSeconds, ratio: simAdvance / wallSeconds,
+            calls: renderer.info.render.calls, alive: { red: scene?.redAlive || 0, blue: scene?.blueAlive || 0 } });
+    }, seconds * 1000));
+}
+function recordPerfFrame(now) {
+    for (const run of perfRuns) {
+        run.frames.push(now - run.previous); run.previous = now;
     }
 }
 
@@ -496,19 +575,31 @@ renderer.setAnimationLoop(now => {
     if (!sync3D._perf) sync3D._perf = { simMs: 0, syncMs: 0, renderMs: 0 };
     sync3D._perf.simMs = performance.now() - _t0;
     const _t1 = performance.now();
-    if (scene) sync3D(delta / 1000, now);
+    if (scene?.battleStarted) sync3D(delta / 1000, now);
     sync3D._perf.syncMs = performance.now() - _t1;
     controls.update();
     const _t2 = performance.now();
     renderer.render(scene3d, camera);
     sync3D._perf.renderMs = performance.now() - _t2;
+    probeMetrics.record(now, realGap, sync3D._perf);
+    if (perfRuns.size) recordPerfFrame(performance.now());
 });
 
 // ---------------- 控件 ----------------
-window.__spike = { camera, controls, getScene: () => scene, unitMeshes, corpseMeshes, bloodMesh, puff, renderer, scene3d, falling, bloodP,
+window.__spike = { perfRun, camera, controls, getScene: () => scene, unitMeshes, corpseMeshes, bloodMesh, puff, renderer, scene3d, falling, bloodP,
+    probeStats: () => probeMetrics.read(scene, renderer),
+    get staticProbe() { return staticProbe; },
+    get models() { return modelSkin; }, get fps() { return sync3D._fps || 0; },
     get bloodCursor() { return bloodCursor; }, get corpseCursor() { return corpseCursor; } };
 let started = false;
-$('btn-start').onclick = () => { $('gate').hidden = true; Snd.play('go'); started = true; boot(); };
+$('btn-start').onclick = () => {
+    if (started) return;
+    $('gate').hidden = true; Snd.play('go'); started = true;
+    boot().catch(error => {
+        console.error('[spike] 启动失败', error);
+        hud.textContent = `启动失败：${error.message}`; hud.insertAdjacentHTML('beforeend', modelToggle);
+    });
+};
 $('btn-pause').onclick = e => { if (!scene) return; scene.paused = !scene.paused; e.target.textContent = scene.paused ? '继续' : '暂停'; };
 for (const [id, v] of [['btn-s1', 1], ['btn-s2', 2], ['btn-s4', 4]]) {
     $(id).onclick = () => { if (!scene) return; scene.gameSpeed = v;
