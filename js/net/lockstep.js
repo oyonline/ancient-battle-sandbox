@@ -43,7 +43,9 @@ export const LOCKSTEP = {
 // 2026-10-26 siege-player-assault：按面放行、器械待令和整局期限扩展模拟语义。
 // 2026-10-26 siege-scale-100v300：攻寨专用尺寸、兵数、实例射程和待令线改变轨迹。
 // 2026-10-26 siege-archer-line：player 待令弓手独立编队并复用正常远程链。
-export const SIM_VERSION = '2026-10-26-siege-archer-order';
+// 2026-10-30 field3d-lan：扩展非领土投影格式与对冲联机协议，混玩法/版本必须拒绝。
+// 周期 hash 包统一增加 side，接收端忽略自身回环后再比较对端哈希。
+export const SIM_VERSION = '2026-10-30-field3d-lan';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {
@@ -135,9 +137,11 @@ export function battleProjection(scene) {
                 unit.healSiteId ?? '', unit.healingAt ?? '', Math.round(unit.healingSince || 0));
         }
     }
-    parts.push('f');
-    for (const flag of scene.flags) {
-        parts.push(flag.owner ? teamChar(flag.owner) : 'n', Math.round(flag.progress * 1e4));
+    if (scene.flags) {
+        parts.push('f');
+        for (const flag of scene.flags) {
+            parts.push(flag.owner ? teamChar(flag.owner) : 'n', Math.round(flag.progress * 1e4));
+        }
     }
     // 营队状态入投影（F3）：营决定领土模式下所有单位的行为（集结/回撤/驻守/交还），
     // 此处分叉可能暂不改变坐标（用户探针：一侧单骑出发、一侧继续集结，哈希仍一致）
@@ -159,6 +163,27 @@ export function battleProjection(scene) {
             ...roster.map(t => scene.battalions.cavPool[t]?.id ?? ''));
     }
     const territory = scene.territory;
+    if (!territory) {
+        // 对冲独立段：不改变 territory/coop 的既有字节序列。
+        const q = value => Number.isFinite(value) ? Math.round(value * 1e4) : '';
+        parts.push('field', scene.battleOver ? 1 : 0, scene.endReason ?? '',
+            scene.resolvingOutcome ? 1 : 0, scene.deadCount ?? 0);
+        for (const team of roster) {
+            const units = scene.units.filter(u => u.team === team);
+            parts.push(team, scene.aliveByTeam?.[team] ?? units.filter(u => !u.dead && !u.withdrawn).length,
+                scene[team + 'Alive'] ?? '', scene.battleStats?.[team]?.lost ?? units.filter(u => u.dead).length,
+                q(scene.collapseSince?.[team]));
+        }
+        for (const u of scene.units) {
+            if (u.dead || u.withdrawn) continue;
+            parts.push('morale', u.id, q(u.morale));
+        }
+        if (scene.arrows) parts.push('arrows', JSON.stringify(scene.arrows.map(a => [
+            a.source?.id ?? '', a.team, a.buildingId || '',
+            ...[a.sx, a.sy, a.tx, a.ty, a.t, a.dur, a.dmg, a.firedAt, a.sourceHeight].map(q)
+        ])));
+        return parts.join(',');
+    }
     parts.push('e',
         ...roster.map(t => Math.round(territory.econ.treasury[t] * 1e3)),
         ...roster.map(t => Math.round(territory.tickets.tickets[t] * 1e3)),
@@ -191,7 +216,7 @@ export function hashProjection(projection) {
 // ---------------- 网络对局控制器：粘合 场景 ⇄ 锁步 ⇄ 房间客户端 ----------------
 // 场景钩子：advanceNet 每执行完一回合调用 onTurnDone()；哈希不一致经 onDesync 上报。
 export class NetBattle {
-    constructor(scene, client, { onDesync } = {}) {
+    constructor(scene, client, { onDesync, configDigest } = {}) {
         this.scene = scene;
         this.client = client;                 // { send(packet) }（arena-client 或测试用命令泵）
         this.lockstep = new Lockstep(scene.netMySide);
@@ -201,6 +226,10 @@ export class NetBattle {
         this.peerHashes = new Map();          // turn -> hash
         this.desynced = false;
         this.primed = false;
+        this.configDigest = configDigest;
+        this.peerConfigDigest = null;
+        this.myResult = null;
+        this.peerResult = null;
         this.stalls = 0;          // 停等次数（诊断：持续增长=网络抖动超余量）
         this.peerLead = 0;        // 对端包领先的本端执行回合数（缓冲深度）
         this.waiting = false;
@@ -238,6 +267,10 @@ export class NetBattle {
     start() {
         if (this.primed) return;
         this.primed = true;
+        if (typeof this.configDigest === 'string') {
+            this.client.send({ t: 'cfg-hash', side: this.lockstep.side, hash: this.configDigest });
+            this.checkConfigDigest();
+        }
         for (const packet of this.lockstep.prime()) this.client.send(packet);
     }
 
@@ -248,7 +281,7 @@ export class NetBattle {
         if (turn > 0 && turn % LOCKSTEP.HASH_EVERY === 0) {
             const hash = hashProjection(battleProjection(this.scene));
             this.myHashes.set(turn, hash);
-            this.client.send({ t: 'hash', turn, hash });
+            this.client.send({ t: 'hash', side: this.lockstep.side, turn, hash });
             this.checkHashes();
         }
     }
@@ -256,19 +289,51 @@ export class NetBattle {
     handle(packet) {
         if (packet?.t === 'turn') this.lockstep.receive(packet);
         else if (packet?.t === 'hash') {
+            if (packet.side === this.lockstep.side) return;
             this.peerHashes.set(packet.turn, String(packet.hash));
             this.checkHashes();
+        } else if (packet?.t === 'cfg-hash' && typeof this.configDigest === 'string' && packet.side !== this.lockstep.side) {
+            this.peerConfigDigest = String(packet.hash);
+            this.checkConfigDigest();
+        } else if (packet?.t === 'result' && packet.side !== this.lockstep.side) {
+            this.peerResult = { turn: packet.turn, winner: packet.winner, hash: String(packet.hash) };
+            this.checkResult();
         }
+    }
+
+    checkConfigDigest() {
+        if (typeof this.configDigest === 'string' && this.peerConfigDigest !== null &&
+            this.configDigest !== this.peerConfigDigest) {
+            this.signalDesync(-1, this.configDigest, this.peerConfigDigest);
+        }
+    }
+
+    // 调用方在最终模拟步完成后报告；即使对端先报告，也保留到本端终局才比较。
+    reportResult({ turn, winner }) {
+        if (this.myResult) return;
+        this.myResult = { turn, winner, hash: hashProjection(battleProjection(this.scene)) };
+        this.client.send({ t: 'result', side: this.lockstep.side, ...this.myResult });
+        this.checkResult();
+    }
+
+    checkResult() {
+        if (!this.myResult || !this.peerResult) return;
+        if (['turn', 'winner', 'hash'].some(key => this.myResult[key] !== this.peerResult[key])) {
+            this.signalDesync(this.myResult.turn, JSON.stringify(this.myResult), JSON.stringify(this.peerResult));
+        }
+    }
+
+    signalDesync(turn, mine, theirs) {
+        if (this.desynced) return;
+        this.desynced = true;
+        this.onDesync(turn, mine, theirs);
     }
 
     checkHashes() {
         for (const [turn, mine] of this.myHashes) {
             const theirs = this.peerHashes.get(turn);
             if (theirs == null) continue;
-            if (theirs !== mine && !this.desynced) {
-                this.desynced = true;
-                this.onDesync(turn, mine, theirs);
-            }
+            if (theirs !== mine) this.signalDesync(turn, mine, theirs);
             this.myHashes.delete(turn);
             this.peerHashes.delete(turn);
         }

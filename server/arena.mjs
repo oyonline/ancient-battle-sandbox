@@ -15,6 +15,7 @@ import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { SIM_VERSION } from '../js/net/lockstep.js';
+import { validateField3dConfig, resolveArmies } from '../js/net/field3d-config.js';
 
 const PORT = Number(process.env.PORT || 5300);
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist');
@@ -67,6 +68,42 @@ function newCode() {
     }
 }
 
+function reviseConfig(room) {
+    room.rev++;
+    room.ready = [false, false];
+    room.started = false;
+    for (const player of room.players) send(player, { t: 'config', rev: room.rev, configs: room.configs });
+}
+
+function leaveField3d(ws) {
+    const code = codeOf(ws), room = rooms.get(code);
+    if (room?.mode !== 'field3d') return false;
+    if (room.players[ws.__side] === ws) {
+        send(peerOf(ws), { t: 'peer-left' });
+        room.players[ws.__side] = null;
+        reviseConfig(room); // 按座位保留配置，但所有旧 ready 都失效
+    }
+    delete ws.__room;
+    delete ws.__side;
+    cleanupRoom(code);
+    return true;
+}
+
+function leaveRoom(ws) {
+    if (leaveField3d(ws)) return;
+    const code = codeOf(ws), room = rooms.get(code);
+    if (room && room.players[ws.__side] === ws) {
+        send(peerOf(ws), { t: 'peer-left' });
+        room.players[ws.__side] = null;
+    }
+    delete ws.__room;
+    delete ws.__side;
+    cleanupRoom(code);
+}
+
+const seatsPresent = (room, code) => room.players.every((player, seat) =>
+    player?.readyState === 1 && player.__room === code && player.__side === seat);
+
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', ws => {
@@ -74,38 +111,73 @@ wss.on('connection', ws => {
     ws.on('message', raw => {
         let message;
         try { message = JSON.parse(raw); } catch (_) { return; }
+        if (!message || typeof message !== 'object') return;
         switch (message.t) {
             case 'create': {
+                if (ws.__room) leaveRoom(ws);
                 const code = newCode();
+                const mode = ['territory', 'coop', 'field3d'].includes(message.mode) ? message.mode : 'territory';
                 rooms.set(code, { players: [ws, null], ready: [false, false],
-                    mode: message.mode === 'coop' ? 'coop' : 'territory' });
+                    mode, ...(mode === 'field3d' ? { rev: 0, configs: { red: null, blue: null }, started: false } : {}) });
                 ws.__room = code;
                 ws.__side = 0;
                 ws.__sim = message.v ?? null;
-                send(ws, { t: 'room', code, side: 'red', mode: message.mode === 'coop' ? 'coop' : 'territory' });
+                send(ws, { t: 'room', code, side: 'red', mode });
                 send(ws, { t: 'info', text: '房间已创建。对方在同一局域网浏览器打开本地址，输入房间码即可加入。' });
                 break;
             }
             case 'join': {
+                if (ws.__room) leaveRoom(ws);
                 const room = rooms.get(String(message.code || '').toUpperCase().trim());
+                if (room && (Object.hasOwn(message, 'mode') ? message.mode !== room.mode : room.mode === 'field3d')) {
+                    send(ws, { t: 'error', text: '房间玩法不匹配，请选择相同玩法后加入。' });
+                    break;
+                }
                 const slot = room?.players.findIndex(p => !p || p.readyState > 1);
-                if (!room || slot !== 1) { send(ws, { t: 'error', text: '房间不存在或已满，请核对房间码。' }); break; }
-                room.players[1] = ws;
+                if (!room || (room.mode === 'field3d' ? slot < 0 : slot !== 1)) { send(ws, { t: 'error', text: '房间不存在或已满，请核对房间码。' }); break; }
+                room.players[slot] = ws;
                 room.ready = [false, false];
                 ws.__room = String(message.code).toUpperCase().trim();
-                ws.__side = 1;
+                ws.__side = slot;
                 ws.__sim = message.v ?? null;
                 // 玩法以房主创建时为准，透传给加入方——两端必须跑同一套规则，否则锁步必分歧。
-                send(ws, { t: 'room', code: ws.__room, side: 'blue', mode: room.mode });
-                send(room.players[0], { t: 'peer', side: 'blue' });
+                send(ws, { t: 'room', code: ws.__room, side: slot === 0 ? 'red' : 'blue', mode: room.mode });
+                send(peerOf(ws), { t: 'peer', side: slot === 0 ? 'red' : 'blue' });
+                if (room.mode === 'field3d') reviseConfig(room);
+                break;
+            }
+            case 'config': {
+                const room = rooms.get(codeOf(ws));
+                if (room?.mode !== 'field3d' || room.players[ws.__side] !== ws) break;
+                if (room.started) { send(ws, { t: 'error', text: '本局已开战，配置已冻结。' }); break; }
+                const checked = validateField3dConfig(message.config);
+                if (!checked.ok) { send(ws, { t: 'error', text: checked.error }); break; }
+                const configs = { ...room.configs, [ws.__side === 0 ? 'red' : 'blue']: checked.value };
+                if (configs.red && configs.blue) {
+                    try { resolveArmies(configs); }
+                    catch (error) { send(ws, { t: 'error', text: error.message }); break; }
+                }
+                room.configs = configs;
+                reviseConfig(room);
                 break;
             }
             case 'ready': {
                 const room = rooms.get(codeOf(ws));
                 if (!room) break;
+                if (room.mode === 'field3d') {
+                    if (room.players[ws.__side] !== ws || room.started || message.rev !== room.rev ||
+                        !room.configs.red || !room.configs.blue || !seatsPresent(room, codeOf(ws))) {
+                        send(ws, { t: 'error', text: '配置已更新或对方尚未完成配置，请刷新配置并等待双方到齐。' });
+                        break;
+                    }
+                }
                 room.ready[ws.__side] = true;
                 send(peerOf(ws), { t: 'peer-ready', side: ws.__side === 0 ? 'red' : 'blue' });
                 if (room.ready.every(Boolean)) {
+                    if (!seatsPresent(room, codeOf(ws))) {
+                        room.ready = [false, false];
+                        break;
+                    }
                     // 版本准入：混版本（或旧标签页缺版本）锁步必分歧，拒绝开战。
                     if (room.players.some(p => p?.__sim !== SIM_VERSION)) {
                         room.ready = [false, false];
@@ -116,11 +188,15 @@ wss.on('connection', ws => {
                         break;
                     }
                     room.ready = [false, false];      // 消费掉，重开（rematch）可重新就绪
-                    for (const player of room.players) send(player, { t: 'start' });
+                    if (room.mode === 'field3d') room.started = true;
+                    for (const player of room.players) send(player,
+                        room.mode === 'field3d' ? { t: 'start', rev: room.rev } : { t: 'start' });
                 }
                 break;
             }
             case 'turn':
+            case 'cfg-hash':
+            case 'result':
             case 'hash': {
                 // 战斗消息双发（含发送方）：两端看到的同回合命令序 = 服务器处理序，锁步一致
                 const room = rooms.get(codeOf(ws));
@@ -129,6 +205,7 @@ wss.on('connection', ws => {
                 break;
             }
             case 'bye': {
+                if (leaveField3d(ws)) break;
                 send(peerOf(ws), { t: 'peer-left' });
                 break;
             }
@@ -136,15 +213,7 @@ wss.on('connection', ws => {
         }
     });
 
-    ws.on('close', () => {
-        const code = codeOf(ws);
-        send(peerOf(ws), { t: 'peer-left' });
-        if (code) {
-            const room = rooms.get(code);
-            if (room) room.players[ws.__side] = null;
-            cleanupRoom(code);
-        }
-    });
+    ws.on('close', () => leaveRoom(ws));
 });
 
 function cleanupRoom(code) {
