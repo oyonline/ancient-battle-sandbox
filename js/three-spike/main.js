@@ -11,7 +11,11 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createProbeStats } from './static-probe.js';
 import { Snd } from '../snd.js';
 import { Terrain } from '../terrain.js';
-import { UNIT_TYPES, CavalryAI, unitRand } from '../units.js';
+import { UNIT_TYPES, CavalryAI } from '../units.js';
+import { ArenaClient } from '../net/arena-client.js';
+import { resolveArmies } from '../net/field3d-config.js';
+import { LanSession } from './lan-session.js';
+import { createLanUI } from './lan-ui.js';
 import { board } from '../board.js';
 import { TW, TH, OX, OY } from '../render/metrics.js';
 import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
@@ -22,10 +26,12 @@ const TERRAIN_KEY = 'red_pass';      // 自带坡地，3D 里高差可读
 const H_WORLD = 2.0;                 // 1 个 2D 高度单位 ≈ 2 世界格：坡地 readable 优先
 const CLASSIC = { infantry: 300, pikeman: 60, archer: 80, cavalry: 60 };   // 500 v 500
 const TEAM_COLOR = { red: 0xc4553f, blue: 0x7fb0e0 };
+const LAN = new URLSearchParams(location.search).get('lan') === '1';
+let lanSession = null;
 const MODELS = new URLSearchParams(location.search).get('models') === '1';
 const GPU = new URLSearchParams(location.search).get('gpu') === '1';
 const SHADOWS = new URLSearchParams(location.search).get('shadows') !== '0';
-const STATIC_PROBE = new URLSearchParams(location.search).get('probe') === 'static';
+const STATIC_PROBE = !LAN && new URLSearchParams(location.search).get('probe') === 'static';
 const PROBE_BOX = new URLSearchParams(location.search).get('lod') === 'box';
 const probeMetrics = createProbeStats();
 let staticProbe = null;
@@ -37,11 +43,11 @@ let modelLoadNotice = '';
 const toggleURL = new URL(location.href);
 if (MODELS) toggleURL.searchParams.delete('models');
 else toggleURL.searchParams.set('models', '1');
-const modelToggle = ` · <a id="model-toggle" style="pointer-events:auto;color:#ffe3a0" href="${toggleURL.pathname + toggleURL.search}">${MODELS ? '切换方块兵' : '切换真模型'}</a>`;
+const modelToggle = LAN ? '' : ` · <a id="model-toggle" style="pointer-events:auto;color:#ffe3a0" href="${toggleURL.pathname + toggleURL.search}">${MODELS ? '切换方块兵' : '切换真模型'}</a>`;
 const shadowToggleURL = new URL(location.href);
 if (SHADOWS) shadowToggleURL.searchParams.set('shadows', '0');
 else shadowToggleURL.searchParams.delete('shadows');
-const shadowToggle = ` · <a id="shadow-toggle" style="pointer-events:auto;color:#ffe3a0" href="${shadowToggleURL.pathname + shadowToggleURL.search}">阴影：${SHADOWS ? '开' : '关'}</a>`;
+const shadowToggle = LAN ? '' : ` · <a id="shadow-toggle" style="pointer-events:auto;color:#ffe3a0" href="${shadowToggleURL.pathname + shadowToggleURL.search}">阴影：${SHADOWS ? '开' : '关'}</a>`;
 hud.innerHTML += modelToggle + shadowToggle;
 
 // ---------------- Three 基础 ----------------
@@ -275,8 +281,9 @@ const headings = new Map();      // unitId → 朝向（弧度，平滑跟随移
 let lastSound = {};
 function throttled(key, gap = 60) { const t = performance.now(); if (t - (lastSound[key] || 0) < gap) return false; lastSound[key] = t; return true; }
 
-async function boot() {
+async function boot(configs, { mySide, signal } = {}) {
     const { IsoBattleScene } = await import('../game.js');
+    signal?.throwIfAborted();
     scene = new IsoBattleScene();
     const stub = () => ({
         destroyed: false, x: 0, y: 0, setOrigin() { return this; }, setScrollFactor() { return this; },
@@ -304,7 +311,10 @@ async function boot() {
         textures: { exists: () => false },
         time: { delayedCall(d, cb) { return { remove() {} }; } },
         fpsHud: null, groundImage: null, terrainLoading: false, lowFX: false,
-        showVictory(winner) { hudWinner = winner === 'red' ? '红方胜' : winner === 'blue' ? '蓝方胜' : '结束'; }
+        showVictory(winner) {
+            hudWinner = winner === 'red' ? '红方胜' : winner === 'blue' ? '蓝方胜' : '结束';
+            if (LAN) lanSession.recordWinner(winner);
+        }
     });
     scene.resetBattleData();                  // 桩就位后重放初始化（士气/战报/时钟），与测试 harness 同套路
     Object.assign(scene.render.world, { drawSpawnZones() {} });
@@ -314,6 +324,7 @@ async function boot() {
     scene.applyBoardSize = function () { this._boardW = board.W; this._boardH = board.H; };
 
     // ---- 视觉钩子 → 3D 实现（覆盖原型上的 2D 委托） ----
+    // _lungeUntil 是表现字段，不进任何哈希投影；两端各写本端墙钟不影响一致性。
     scene.playAttackAnim = u => { u._lungeUntil = performance.now() + 220; };
     scene.meleeImpact = (attacker, target, kind) => {
         if (throttled(kind || 'hit')) Snd.play(kind === 'thrust' ? 'stab' : kind === 'charge' ? 'charge' : 'hit');
@@ -346,7 +357,11 @@ async function boot() {
     };
 
     // ---- 经典 500 v 500 部署（与 2D 经典版同一入口） ----
-    scene.deployUnits(CLASSIC, CLASSIC, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: TERRAIN_KEY });
+    if (LAN) {
+        const armies = resolveArmies(configs);
+        scene.deployUnits(armies.red, armies.blue, configs.red.formation, configs.blue.formation,
+            { red: configs.red.tactic, blue: configs.blue.tactic }, { terrain: TERRAIN_KEY, net: true, mySide });
+    } else scene.deployUnits(CLASSIC, CLASSIC, 'custom', 'custom', { red: 'advance', blue: 'advance' }, { terrain: TERRAIN_KEY });
     if (STATIC_PROBE) {
         hud.innerHTML = '加载静态实例探针…' + shadowToggle;
         const { createStaticProbe } = await import('./static-probe.js');
@@ -413,6 +428,12 @@ function writeFall(f, p) {
     corpseMeshes[f.kind].setMatrixAt(f.slot, dummy.matrix);
     corpseMeshes[f.kind].instanceMatrix.needsUpdate = true;
 }
+// 纯 id 哈希：尸体倒向不消耗 unitRand，也不懒写 randSeed。
+function corpseRandom(id) {
+    let value = Math.imul((id | 0) ^ 0x9e3779b9, 0x85ebca6b);
+    value = Math.imul(value ^ (value >>> 16), 0xc2b2ae35);
+    return ((value ^ (value >>> 13)) >>> 0) / 4294967296;
+}
 function recordCorpse(u, from) {
     if (!UNIT_KINDS.includes(u.type)) return;
     if (STATIC_PROBE) return; // Probe deaths disappear; simulation killUnit still runs.
@@ -434,13 +455,13 @@ function recordCorpse(u, from) {
         const vx = u.velX || 0, vz = u.velY || 0, sp = Math.hypot(vx, vz);
         if (sp > .3) { const s = Math.min(1.4, sp * .1); slideX = vx / sp * s; slideZ = vz / sp * s; }
         fx = Math.cos(yaw); fz = -Math.sin(yaw);
-        if (unitRand(u) < .5) { fx = -fx; fz = -fz; }
+        if (corpseRandom(u.id) < .5) { fx = -fx; fz = -fz; }
     } else if (from && from.gx !== undefined && !from.isBuilding) {
         // 步兵：倒离攻击者
         const dx = u.gx - from.gx, dz = u.gy - from.gy, d = Math.hypot(dx, dz);
         if (d > 1e-3) { fx = dx / d; fz = dz / d; }
     }
-    if (fx === undefined) { const a = unitRand(u) * Math.PI * 2; fx = Math.sin(a); fz = Math.cos(a); }
+    if (fx === undefined) { const a = corpseRandom(u.id) * Math.PI * 2; fx = Math.sin(a); fz = Math.cos(a); }
     // 尸体躺平后跨 ~1.5 格：高度取身体跨度内最高点，避免上坡侧被地形吞掉
     const span = kind === 'cavalry' ? 1.5 : 1.1;
     let cy = groundH(u.gx, u.gy);
@@ -480,7 +501,8 @@ function sync3D(dt, now) {
         if (staticProbe) { staticProbe.sync(u, st.a); continue; }
         if (modelSkin) { modelSkin.sync(u, st.a, now, scene.simulationTime); continue; }
         const bob = u.moving ? Math.abs(Math.sin(now * .012 + st.bob)) * .09 : 0;
-        const lunge = u._lungeUntil > now ? .18 * Math.sin(Math.min(1, (u._lungeUntil - now) / 220) * Math.PI) : 0;
+        const until = u._lungeUntil || 0;
+        const lunge = until > now ? .18 * Math.sin(Math.min(1, (until - now) / 220) * Math.PI) : 0;
         const y = groundH(u.gx, u.gy);
         dummy.position.set(u.gx - 35 + Math.sin(st.a) * lunge, y + bob, u.gy - 35 + Math.cos(st.a) * lunge);
         dummy.rotation.set(u.moving && u.type === 'cavalry' ? .12 : 0, st.a, 0);
@@ -547,7 +569,8 @@ function sync3D(dt, now) {
                     let total = 0; modelSkin.group.traverseVisible(o => { if (o.isMesh) total += o.geometry.attributes.position.count * (o.isInstancedMesh ? o.count : 1); });
                     return total;
                 })() : Object.values(unitMeshes).concat(Object.values(corpseMeshes)).reduce((sum, mesh) => sum + (mesh.visible ? mesh.geometry.attributes.position.count * mesh.count : 0), 0)}` +
-            ` · draw calls ${renderer.info.render.calls}`;
+            ` · draw calls ${renderer.info.render.calls}` +
+            (LAN && lanSession?.room ? `<span class="lan-hud"> · 联机 ${lanSession.room.side === 'red' ? '红方' : '蓝方'} · 停等 ${lanSession.diagnostics().stallEvents || 0} 次 · 缓冲 ${lanSession.diagnostics().peerLead || 0} 回合</span>` : '');
     }
 }
 
@@ -587,7 +610,9 @@ renderer.setAnimationLoop(now => {
     const delta = Math.min(realGap, 50);
     fpsAcc += realGap; fpsN++; if (fpsAcc > 400) { sync3D._fps = 1000 * fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; }
     const _t0 = performance.now();
-    if (scene && scene.battleStarted && !scene.paused && !scene.battleOver) {
+    if (LAN) {
+        lanSession?.advance(delta);
+    } else if (scene && scene.battleStarted && !scene.paused && !scene.battleOver) {
         // 同一套确定性推进（stepBattle 与 2D 完全一致，箭矢弹道与命中在步内推进）。
         // 接战期每步 ~13.6ms，无上限追帧会死亡螺旋（欠账→补 3 步→更慢→锁死 ~17fps）；
         // 每帧最多 2 步，落后时丢账让模拟节奏稍放慢（与 net 路径 catchUp 同思路），
@@ -623,17 +648,59 @@ window.__spike = { perfRun, camera, controls, getScene: () => scene, unitMeshes,
     get bloodCursor() { return bloodCursor; }, get corpseCursor() { return corpseCursor; } };
 let started = false;
 $('btn-start').onclick = () => {
-    if (started) return;
+    if (LAN || started) return;
     $('gate').hidden = true; Snd.play('go'); started = true;
     boot().catch(error => {
         console.error('[spike] 启动失败', error);
         hud.textContent = `启动失败：${error.message}`; hud.insertAdjacentHTML('beforeend', modelToggle);
     });
 };
-$('btn-pause').onclick = e => { if (!scene) return; scene.paused = !scene.paused; e.target.textContent = scene.paused ? '继续' : '暂停'; };
+$('btn-pause').onclick = e => { if (LAN || !scene) return; scene.paused = !scene.paused; e.target.textContent = scene.paused ? '继续' : '暂停'; };
 for (const [id, v] of [['btn-s1', 1], ['btn-s2', 2], ['btn-s4', 4]]) {
-    $(id).onclick = () => { if (!scene) return; scene.gameSpeed = v;
+    $(id).onclick = () => { if (LAN || !scene) return; scene.gameSpeed = v;
         for (const b of [$('btn-s1'), $('btn-s2'), $('btn-s4')]) b.style.fontWeight = '400';
         $(id).style.fontWeight = '700'; };
 }
-$('btn-reset').onclick = () => location.reload();
+$('btn-reset').onclick = () => { if (!LAN) location.reload(); };
+
+// 取消边界放在联机部署适配器；boot 的单机/模型失败兜底分支保持独立。
+async function deployLan(configs, context) {
+    const previousChildren = new Set(scene3d.children);
+    try {
+        await boot(configs, context);
+    } finally {
+        if (context.signal.aborted) {
+            if (scene) scene.battleStarted = false;
+            for (const crowd of modelSkin?.gpuCrowds?.values() || []) crowd.dispose();
+            const resources = new Set();
+            for (const group of scene3d.children.filter(child => !previousChildren.has(child))) {
+                group.removeFromParent();
+                group.traverse(object => {
+                    if (object.geometry) resources.add(object.geometry);
+                    if (object.skeleton) resources.add(object.skeleton);
+                    for (const material of object.material ? [object.material].flat() : []) {
+                        resources.add(material);
+                        for (const value of Object.values(material)) if (value?.isTexture) resources.add(value);
+                    }
+                });
+            }
+            for (const resource of resources) {
+                try { resource.dispose(); } catch (error) { console.warn('[lan3d] 清理取消的加载失败', error); }
+            }
+            modelSkin = null;
+        }
+    }
+    context.signal.throwIfAborted();
+    return scene;
+}
+
+if (LAN) {
+    const exit = () => { lanSession.dispose(); location.href = location.href; };
+    const ui = createLanUI({ gate: $('gate'), exit });
+    lanSession = new LanSession({ client: new ArenaClient(), deploy: deployLan, stepBattle,
+        stepMs: SIMULATION_STEP_MS, onChange: session => ui.render(session) });
+    ui.bind(lanSession, () => Snd.play('go'));
+    window.__spike.lan = lanSession;
+    window.addEventListener('pagehide', () => lanSession.dispose(), { once: true });
+    void lanSession.connect();
+}
