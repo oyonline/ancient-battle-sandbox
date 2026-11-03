@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>山河观战 · 坐标基准</title>
+    <title>山河观战 · 静态陆地</title>
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; height: 100dvh; display: flex; flex-direction: column; background: #101a23; color: #e4ecec; font: 14px/1.5 system-ui, sans-serif; }
@@ -12,17 +12,25 @@
         button { margin-left: auto; padding: 7px 14px; border: 1px solid #728a91; border-radius: 4px; background: #29434d; color: inherit; cursor: pointer; }
         #viewport { flex: 1; min-height: 0; touch-action: none; }
         canvas { display: block; }
-        footer { padding: 8px 18px; color: #adbec4; }
+        footer { padding: 8px 18px; color: #adbec4; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+        .legend { display: inline-flex; align-items: center; gap: 5px; }
+        .swatch { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
     </style>
 </head>
 <body>
     <header>
-        <h1>山河观战 · 坐标基准</h1>
+        <h1>山河观战 · 静态陆地</h1>
         <span>260 × 180 格 · 1 格 = 1 世界单位</span>
         <button id="reset" type="button">全图复位</button>
     </header>
-    <main id="viewport" aria-label="260×180 平面地图，标注中心、边界与坐标方向"></main>
-    <footer>拖动平移 · 滚轮 / 双指缩放 · 橙色为中心，粉色为首格格心 · 当前仅坐标平面</footer>
+    <main id="viewport" aria-label="260×180 静态陆地，标注中心、边界与坐标方向"></main>
+    <footer>
+        <span>拖动平移 · 滚轮/双指缩放</span>
+        <span class="legend"><i class="swatch" style="background: #6f8f4e"></i>草地</span>
+        <span class="legend"><i class="swatch" style="background: #2f5d34"></i>林地</span>
+        <span class="legend"><i class="swatch" style="background: #8b8478"></i>岩地</span>
+        <span class="legend"><i class="swatch" style="background: #7a7f86"></i>河·桥·浅滩（未接入）</span>
+    </footer>
     <script type="module" src="/js/territory3d/main.js"></script>
 </body>
 </html>
