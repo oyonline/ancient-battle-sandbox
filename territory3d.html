@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>山河观战 · 坐标基准</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; height: 100dvh; display: flex; flex-direction: column; background: #101a23; color: #e4ecec; font: 14px/1.5 system-ui, sans-serif; }
+        header { padding: 12px 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+        h1 { margin: 0; font-size: 18px; }
+        button { margin-left: auto; padding: 7px 14px; border: 1px solid #728a91; border-radius: 4px; background: #29434d; color: inherit; cursor: pointer; }
+        #viewport { flex: 1; min-height: 0; touch-action: none; }
+        canvas { display: block; }
+        footer { padding: 8px 18px; color: #adbec4; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>山河观战 · 坐标基准</h1>
+        <span>260 × 180 格 · 1 格 = 1 世界单位</span>
+        <button id="reset" type="button">全图复位</button>
+    </header>
+    <main id="viewport" aria-label="260×180 平面地图，标注中心、边界与坐标方向"></main>
+    <footer>拖动平移 · 滚轮 / 双指缩放 · 橙色为中心，粉色为首格格心 · 当前仅坐标平面</footer>
+    <script type="module" src="/js/territory3d/main.js"></script>
+</body>
+</html>

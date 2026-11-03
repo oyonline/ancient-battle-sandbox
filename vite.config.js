@@ -10,6 +10,6 @@ export default defineConfig({
     },
     build: {
         outDir: 'dist',
-        rollupOptions: { input: { home: 'index.html', classic: 'classic.html', battle3d: 'battle3d.html', siege3d: 'siege3d.html', camp3d: 'camp3d.html', battle3dSpike: 'battle3d-spike.html' } }
+        rollupOptions: { input: { home: 'index.html', classic: 'classic.html', battle3d: 'battle3d.html', siege3d: 'siege3d.html', camp3d: 'camp3d.html', battle3dSpike: 'battle3d-spike.html', territory3d: 'territory3d.html' } }
     }
 });
