@@ -570,7 +570,7 @@ function sync3D(dt, now) {
                     return total;
                 })() : Object.values(unitMeshes).concat(Object.values(corpseMeshes)).reduce((sum, mesh) => sum + (mesh.visible ? mesh.geometry.attributes.position.count * mesh.count : 0), 0)}` +
             ` · draw calls ${renderer.info.render.calls}` +
-            (LAN && lanSession?.room ? `<span class="lan-hud"> · 联机 ${lanSession.room.side === 'red' ? '红方' : '蓝方'} · 停等 ${lanSession.diagnostics().stallEvents || 0} 次 · 缓冲 ${lanSession.diagnostics().peerLead || 0} 回合</span>` : '');
+            (LAN && lanSession?.room ? `<span class="lan-hud"> · 联机 ${lanSession.room.side === 'red' ? '红方' : '蓝方'} · 停等 ${lanSession.diagnostics().stallEvents || 0} 次 · 缓冲 ${lanSession.diagnostics().peerLead || 0} 回合 · 全军：${lanSession.fieldOrder === 'advance' ? '推进' : lanSession.fieldOrder === 'hold' ? '原地防守' : '开局战术'}</span>` : '');
     }
 }
 
@@ -701,6 +701,7 @@ if (LAN) {
         stepMs: SIMULATION_STEP_MS, onChange: session => ui.render(session) });
     ui.bind(lanSession, () => Snd.play('go'));
     window.__spike.lan = lanSession;
+    window.__spike.fieldOrder = order => lanSession.requestFieldOrder(order);
     window.addEventListener('pagehide', () => lanSession.dispose(), { once: true });
     void lanSession.connect();
 }

@@ -5,23 +5,31 @@ import { readdir, access } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { LOCKSTEP } from '../js/net/lockstep.js';
 
 const args = process.argv.slice(2);
 const flags = new Map();
 for (let i = 0; i < args.length; i++) {
     const key = args[i];
     if (key === '--mixed' || key === '--help') flags.set(key, true);
-    else if (['--url', '--models', '--seconds', '--delay-ms', '--preset-a', '--preset-b'].includes(key) && args[i + 1] && !args[i + 1].startsWith('--')) flags.set(key, args[++i]);
+    else if (['--url', '--models', '--seconds', '--delay-ms', '--preset-a', '--preset-b', '--orders'].includes(key) && args[i + 1] && !args[i + 1].startsWith('--')) flags.set(key, args[++i]);
     else throw new Error(`未知参数或缺少参数值：${key}`);
 }
 if (flags.has('--help')) {
-    console.log('node tools/lan3d-smoke.mjs --url http://localhost:5300 --models box|real --seconds 120 [--mixed] [--delay-ms 200] [--preset-a small|standard|large] [--preset-b small|standard|large]');
+    console.log('node tools/lan3d-smoke.mjs --url http://localhost:5300 --models box|real --seconds 120 [--mixed] [--delay-ms 200] [--preset-a small|standard|large] [--preset-b small|standard|large] [--orders "300:red:hold,900:blue:advance,1500:red:advance"]');
     process.exit(0);
 }
 const base = new URL(flags.get('--url') || 'http://localhost:5300');
 const models = flags.get('--models') || 'box', seconds = Number(flags.get('--seconds') || 120);
 const delayMs = Number(flags.get('--delay-ms') || 0);
 const presets = [flags.get('--preset-a') || 'standard', flags.get('--preset-b') || 'standard'];
+const orders = flags.has('--orders') ? flags.get('--orders').split(',').map(value => {
+    const match = /^(\d+):(red|blue):(advance|hold)$/.exec(value.trim());
+    if (!match || !Number.isSafeInteger(Number(match[1])) || Number(match[1]) < LOCKSTEP.LOOKAHEAD) {
+        throw new Error(`非法命令 ${value}；回合必须 ≥ ${LOCKSTEP.LOOKAHEAD}`);
+    }
+    return { turn: Number(match[1]), side: match[2], order: match[3] };
+}).sort((a, b) => a.turn - b.turn) : [];
 if (!['box', 'real'].includes(models) || !Number.isFinite(seconds) || seconds <= 0 ||
     !Number.isFinite(delayMs) || delayMs < 0 || presets.some(p => !['small', 'standard', 'large'].includes(p))) throw new Error('参数值非法，请使用 --help');
 
@@ -45,6 +53,7 @@ const pendingDelays = new Set(), errors = [[], []], pages = [];
 let failure = null, report;
 const read = page => page.evaluate(() => ({ ...window.__spike.lan.diagnostics(),
     hashComparisons: window.__lanSmoke.hashComparisons, hashMismatches: window.__lanSmoke.hashMismatches,
+    orderInjections: window.__lanSmoke.orderInjections,
     actualModels: !!window.__spike.models, simulationTime: window.__spike.getScene()?.simulationTime || 0,
     gameSpeed: window.__spike.getScene()?.gameSpeed, paused: window.__spike.getScene()?.paused }));
 try {
@@ -67,11 +76,21 @@ try {
         const real = flags.has('--mixed') ? i === 0 : models === 'real';
         await page.goto(urlFor(real), { waitUntil: 'domcontentloaded' });
         await page.waitForFunction(() => window.__spike?.lan?.arena, null, { timeout: 15000 + delayMs * 2 });
-        await page.evaluate(() => {
+        await page.evaluate(({ orders, lookahead }) => {
             const session = window.__spike.lan, original = session.makeNet;
-            window.__lanSmoke = { hashComparisons: 0, hashMismatches: [] };
+            window.__lanSmoke = { hashComparisons: 0, hashMismatches: [], orderInjections: [] };
             session.makeNet = (...parameters) => {
                 const net = original(...parameters), check = net.checkHashes.bind(net);
+                const take = net.lockstep.takeCommands.bind(net.lockstep);
+                // 每个模拟回合前注入，避免轮询/一帧三步错过发包槽；act 经 commitTurn 调度到 T。
+                net.lockstep.takeCommands = () => {
+                    for (const command of orders) {
+                        if (command.side !== session.room.side || net.lockstep.execTurn !== command.turn - lookahead) continue;
+                        const accepted = window.__spike.fieldOrder(command.order);
+                        window.__lanSmoke.orderInjections.push({ ...command, at: net.lockstep.execTurn, accepted });
+                    }
+                    return take();
+                };
                 net.checkHashes = () => {
                     for (const [turn, mine] of net.myHashes) {
                         const theirs = net.peerHashes.get(turn);
@@ -83,7 +102,7 @@ try {
                 };
                 return net;
             };
-        });
+        }, { orders, lookahead: LOCKSTEP.LOOKAHEAD });
     }
     await pages[0].locator('#lan-create').click();
     await pages[0].waitForFunction(() => !!window.__spike.lan.room);
@@ -108,7 +127,13 @@ try {
     const completed = snapshots.every(s => s.myResult && s.peerResult);
     const sameResult = completed ? snapshots.every(s =>
         ['turn', 'winner', 'hash'].every(key => s.myResult[key] === s.peerResult[key] && s.myResult[key] === snapshots[0].myResult[key])) : null;
-    report = { url: base.href, requestedModels: models, mixed: flags.has('--mixed'), delayMs, presets,
+    const orderComparisons = orders.map(command => {
+        const executions = snapshots.map(s => s.appliedOrders.filter(o => o.turn === command.turn && o.side === command.side && o.order === command.order));
+        const reached = snapshots.every(s => s.execTurn > command.turn);
+        const matched = executions.every(list => list.length === 1) && executions[0][0].hash === executions[1][0].hash;
+        return { requested: command, executions, reached, matched: reached ? matched : null };
+    });
+    report = { url: base.href, requestedModels: models, mixed: flags.has('--mixed'), delayMs, presets, orderComparisons,
         elapsedSeconds: (Date.now() - start) / 1000, completed, winnerResultConsistent: sameResult,
         scope: completed ? '完整终局' : '限时采样，未证明完整终局一致性', sides: snapshots, pageErrors: errors };
     if (snapshots.some(s => s.desync || s.state === 'stopped' || !s.execTurn || s.hashMismatches.length || s.gameSpeed !== 1 || s.paused !== false) ||
@@ -118,6 +143,9 @@ try {
     }
     if (snapshots.some((s, i) => (flags.has('--mixed') ? i === 0 : models === 'real') && s.actualModels === false)) {
         failure = [failure, '真模型未生效（已降级方块）'].filter(Boolean).join('；');
+    }
+    if (orderComparisons.some(o => o.matched === false) || snapshots.some(s => s.orderInjections.some(o => !o.accepted))) {
+        failure = [failure, '命令未在指定回合双端生效或哈希不一致，见 orderComparisons/orderInjections'].filter(Boolean).join('；');
     }
 } catch (error) {
     failure = error.stack || String(error);

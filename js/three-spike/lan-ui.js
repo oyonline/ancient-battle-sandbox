@@ -33,10 +33,25 @@ export function createLanUI({ gate, exit }) {
     const message = document.createElement('span'), quit = document.createElement('button');
     quit.textContent = '退出'; quit.onclick = exit;
     banner.append(message, quit); document.body.append(banner);
+    const orders = document.createElement('div');
+    orders.id = 'lan-orders'; orders.hidden = true;
+    const orderButtons = ['advance', 'hold'].map(order => {
+        const button = document.createElement('button');
+        button.id = 'lan-order-' + order;
+        button.textContent = order === 'advance' ? '全军推进' : '全军原地防守';
+        orders.append(button);
+        return button;
+    });
+    const notice = document.createElement('div');
+    notice.id = 'lan-order-notice'; notice.setAttribute('aria-live', 'polite');
+    document.body.append(orders, notice);
     $('lan-exit').onclick = exit;
     $('lan-code').oninput = () => { $('lan-code').value = $('lan-code').value.toUpperCase(); };
     return {
         bind(session, unlockSound) {
+            orderButtons.forEach((button, i) => {
+                button.onclick = () => session.requestFieldOrder(i === 0 ? 'advance' : 'hold');
+            });
             $('lan-create').onclick = () => { unlockSound(); session.requestRoom(); };
             const join = () => {
                 if ($('lan-code').value.trim().length !== 4) return;
@@ -75,6 +90,15 @@ export function createLanUI({ gate, exit }) {
             banner.style.background = finished ? 'rgba(20,24,18,.88)' : '';
             banner.style.color = finished ? '#ffe3a0' : '';
             message.textContent = finished ? session.finishMessage : session.banner;
+            orders.hidden = !session.running || session.stopped || !!session.scene?.battleOver;
+            orderButtons.forEach((button, i) => {
+                const active = session.fieldOrder === (i === 0 ? 'advance' : 'hold');
+                button.classList.toggle('active', active);
+                button.setAttribute('aria-pressed', String(active));
+                button.disabled = session.orderCooling || orders.hidden;
+            });
+            if (session.orderNotice) notice.textContent = session.orderNotice;
+            notice.classList.toggle('visible', !orders.hidden && !!session.orderNotice);
         }
     };
 }

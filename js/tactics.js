@@ -12,13 +12,15 @@ import { RallyMethods } from './tactics/rally.js';
 import { StepsMethods } from './tactics/steps.js';
 
 export class TacticsSystem {
-    constructor(scene, orders) {
+    constructor(scene, orders, { deploy = true } = {}) {
         this.scene = scene;
         this.orders = { red: orders.red || 'advance', blue: orders.blue || 'advance' };
         this.formations = {};
         this.groups = {};
         this.groundGuards = {};
         this.metrics = { thrusts: 0, blocked: 0, deflections: 0, replacements: 0 };
+        // 首次全军 hold 可只启用相持检查，不重布阵或重走部署坐标合法化。
+        if (!deploy) return;
         // 先布置防阵，再按真实边界规划进攻路线。
         for (const team of ['red', 'blue']) {
             if (this.orders[team] === 'hold') this.deployGuards(team);
@@ -45,6 +47,29 @@ export class TacticsSystem {
     enemies(team) { return team === 'red' ? 'blue' : 'red'; }
 
     forward(team) { return team === 'red' ? 1 : -1; }
+
+    // 全军改令仅释放本方；删除步首编组，避免下一步补位/预备队重新接管。
+    releaseSide(team) {
+        delete this.formations[team];
+        delete this.groups[team];
+        delete this.groundGuards[team];
+        this.orders[team] = 'advance';
+        for (const unit of this.scene.units) {
+            if (unit.team !== team || unit.dead || unit.withdrawn) continue;
+            for (const key of ['tacticalRole', 'formationSlot', 'guardAnchor', 'guardRadius',
+                'guardFacingX', 'guardFacingY', 'groundGuardTarget', 'groundGuardReturning',
+                'guardIntercept', 'guardPursueTarget', 'guardPursueFor', 'counterRaid', 'raidRecall',
+                'protectArchers', 'guardLocalRadius', 'route', 'routeIndex', 'tacticalRow', 'tacticalLane',
+                'tacticalContact', 'tacticalRejoined', 'reserveSlot', 'receptionSlot', 'reserveCommitted',
+                'slopeApproach']) delete unit[key];
+            unit.target = null;
+            unit.rallyWaiting = false;
+            if (unit.moralePhase === 'forming') unit.moralePhase = 'returning';
+            Object.assign(unit, { guardReady: false, guardStableTime: 0, guardSupport: 0,
+                braceReady: false, braceHold: false, braceTime: 0, braceSupport: 0, braceDepth: 0,
+                braceFacingX: this.forward(team), braceFacingY: 0 });
+        }
+    }
 
     summary() {
         const result = {};

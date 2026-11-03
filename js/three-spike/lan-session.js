@@ -1,5 +1,6 @@
 // 页面级联机生命周期；无 DOM/THREE，部署器、时钟和模拟步均可替换测试。
-import { NetBattle } from '../net/lockstep.js';
+import { NetBattle, battleProjection, hashProjection } from '../net/lockstep.js';
+import { applyFieldOrder } from '../battle/field-orders.js';
 import { configDigest, resolveArmies, validateField3dConfig } from '../net/field3d-config.js';
 
 const BATTLE_PACKETS = new Set(['turn', 'hash', 'cfg-hash', 'result']);
@@ -45,6 +46,9 @@ export class LanSession {
         this.timer = null;
         this.identityTimer = null;
         this.finalStats = {};
+        this.appliedOrders = [];
+        this.orderCooling = false;
+        this.orderNotice = '';
         this.client.onEvent = packet => this.handle(packet);
     }
 
@@ -219,6 +223,18 @@ export class LanSession {
 
     recordWinner(winner) { this.winner = winner; }
 
+    get fieldOrder() { return this.scene?.fieldOrders?.[this.room?.side] ?? null; }
+
+    requestFieldOrder(order) {
+        if (!this.running || this.stopped || this.scene?.battleOver || !this.net || !this.room ||
+            !['advance', 'hold'].includes(order) || this.fieldOrder === order || this.orderCooling) return false;
+        this.net.lockstep.act({ k: 'fieldOrder', side: this.room.side, order });
+        this.orderCooling = true;
+        this.orderTimer = this.schedule(() => { this.orderCooling = false; this.emit(); }, 1000);
+        this.emit();
+        return true;
+    }
+
     advance(delta) {
         const scene = this.scene, net = this.net;
         if (!this.running || this.stopped || !net || scene.battleOver) return;
@@ -228,13 +244,29 @@ export class LanSession {
         while (scene.simulationAccumulator + 1e-7 >= this.stepMs && !scene.battleOver && !this.stopped && steps < 3) {
             try {
                 if (!net.lockstep.canStep()) { net.noteStall(delta); break; }
-                const commands = net.lockstep.takeCommands();
+                const turn = net.lockstep.execTurn;
+                const commands = net.lockstep.takeCommands(), applied = [];
                 for (const command of commands) {
-                    if (!this.warnedCommand) { this.warn('[lan3d] 忽略未知战中命令：' + JSON.stringify(command)); this.warnedCommand = true; }
+                    if (command?.k === 'fieldOrder') {
+                        if (applyFieldOrder(scene, command)) applied.push({ turn, side: command.side, order: command.order });
+                    } else if (!this.warnedCommand) {
+                        this.warn('[lan3d] 忽略未知战中命令：' + JSON.stringify(command)); this.warnedCommand = true;
+                    }
                 }
                 scene.simulationAccumulator = Math.max(0, scene.simulationAccumulator - this.stepMs);
                 scene.simulationTime += this.stepMs;
                 this.stepBattle(scene, this.stepMs / 1000);
+                if (applied.length) {
+                    const hash = hashProjection(battleProjection(scene));
+                    this.appliedOrders.push(...applied.map(order => ({ ...order, hash })));
+                    this.orderNotice = applied.map(({ side, order }) => {
+                        const label = order === 'advance' ? '全军推进' : '全军原地防守';
+                        return side === this.room.side ? label + '！' : '对方：' + label;
+                    }).join(' · ');
+                    this.cancel(this.noticeTimer);
+                    this.noticeTimer = this.schedule(() => { this.orderNotice = ''; this.emit(); }, 1500);
+                    this.emit();
+                }
                 net.onTurnDone();
                 net.noteProgress();
                 net.noteBuffer();
@@ -269,6 +301,7 @@ export class LanSession {
         const net = this.net;
         return { ...this.finalStats, state: this.state, readyRev: this.readyRev, rev: this.rev,
             winner: this.winner, desync: this.desync, banner: this.banner,
+            appliedOrders: this.appliedOrders,
             ...(net ? { execTurn: net.lockstep.execTurn, stallEvents: net.stallEvents, peerLead: net.peerLead,
                 myResult: net.myResult, peerResult: net.peerResult } : {}) };
     }
@@ -284,6 +317,9 @@ export class LanSession {
         this.countdown = '';
         this.cancel(this.timer);
         this.cancel(this.identityTimer);
+        this.cancel(this.orderTimer);
+        this.cancel(this.noticeTimer);
+        this.orderNotice = '';
         this.abort.abort();
         this.packets.length = 0;
         this.net = null;

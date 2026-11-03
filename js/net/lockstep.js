@@ -45,7 +45,8 @@ export const LOCKSTEP = {
 // 2026-10-26 siege-archer-line：player 待令弓手独立编队并复用正常远程链。
 // 2026-10-30 field3d-lan：扩展非领土投影格式与对冲联机协议，混玩法/版本必须拒绝。
 // 周期 hash 包统一增加 side，接收端忽略自身回环后再比较对端哈希。
-export const SIM_VERSION = '2026-10-30-field3d-lan';
+// 2026-10-31 field3d-orders：新增全军命令。
+export const SIM_VERSION = '2026-10-31-field3d-orders';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {
@@ -182,6 +183,15 @@ export function battleProjection(scene) {
             a.source?.id ?? '', a.team, a.buildingId || '',
             ...[a.sx, a.sy, a.tx, a.ty, a.t, a.dur, a.dmg, a.firedAt, a.sourceHeight].map(q)
         ])));
+        // 从未下令时不追加任何字节；领土/合作段保持原样。
+        if (scene.fieldOrders) {
+            parts.push('fieldOrders', scene.fieldOrders.red ?? '', scene.fieldOrders.blue ?? '');
+            for (const unit of scene.units) {
+                if (!unit.dead && !unit.withdrawn && unit.fieldOrderAnchor) {
+                    parts.push('anchor', unit.id, q(unit.fieldOrderAnchor.gx), q(unit.fieldOrderAnchor.gy));
+                }
+            }
+        }
         return parts.join(',');
     }
     parts.push('e',

@@ -9,6 +9,7 @@ import { Terrain } from '../terrain.js';
 import { CombatRules } from '../combat.js';
 import { updatePikeBrace, applyDamage, resolveAttack, moveToward } from '../units.js';
 import { board } from '../board.js';
+import { updateFieldOrder, boundFieldOrders } from './field-orders.js';
 
 export const SIMULATION_STEP_MS = 1000 / 60;
 
@@ -127,6 +128,7 @@ export function stepBattle(scene, dt) {
         }
         if (scene.territory?.camps?.updateUnit(unit, now, dt)) continue;
         if (unit.moraleState === 'routing') { scene.updateRoutedUnit(unit, dt); continue; }
+        if (updateFieldOrder(scene, unit, now, dt)) continue;
         if (scene.updateFallingBackUnit(unit, now, dt)) continue;
         if (scene.siege?.defense?.act(scene, unit, now, dt)) continue;
         if (scene.siege?.assault?.act(scene, unit, now, dt)) continue;
@@ -172,6 +174,7 @@ export function stepBattle(scene, dt) {
     }
     scene.rebuildSpatial();
     scene.separate(dt);
+    boundFieldOrders(scene);
     scene.siege?.rules?.constrainRouts(scene);
     scene.rebuildSpatial();
     scene.updateArrows(dt, now);

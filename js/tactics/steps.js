@@ -215,7 +215,8 @@ export const StepsMethods = {
         const active = this.scene.units.filter(unit => this.active(unit));
         const damage = this.scene.battleStats.red.damage + this.scene.battleStats.blue.damage;
         const waiting = active.some(u => u.team === 'red') && active.some(u => u.team === 'blue') &&
-            active.every(u => (u.tacticalRole === 'guard' || this.isGroundGuard(u)) && !u.moving) &&
+            active.every(u => (u.tacticalRole === 'guard' || this.isGroundGuard(u) ||
+                (this.scene.fieldOrders?.[u.team] === 'hold' && u.fieldOrderAnchor)) && !u.moving) &&
             !this.scene.arrows.length && !this.scene.battleQueue.length && damage === this.lastDamage;
         this.lastDamage = damage;
         if (!waiting) this.stalemateSince = null;

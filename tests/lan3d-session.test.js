@@ -182,6 +182,50 @@ test('固定 1×、250ms 累积与每帧三步；顺序正确；停等不丢累�
     assert.deepEqual(h.events.at(-1), { t: 'turn', arrivedWhileStalled: true });
 });
 
+test('fieldOrder 按锁步回合交模拟层；点击只 act、1秒冷却、生效后才改变高亮/提示，重复不重拍', async () => {
+    const h = await started(), queued = [];
+    const u = { id: 1, team: 'red', type: 'infantry', gx: 10.123456, gy: 12, hp: 100, morale: 100, moraleState: 'steady' };
+    h.scene.units.push(u);
+    h.net.lockstep.act = cmd => queued.push(cmd);
+    h.net.lockstep.takeCommands = () => queued.splice(0);
+    const before = JSON.stringify(h.scene);
+    assert.equal(h.session.fieldOrder, null);
+    assert.equal(h.session.requestFieldOrder('hold'), true);
+    assert.deepEqual(queued, [{ k: 'fieldOrder', side: 'red', order: 'hold' }]);
+    assert.equal(JSON.stringify(h.scene), before, '按钮入口不写模拟');
+    assert.equal(h.session.fieldOrder, null);
+    assert.equal(h.session.orderNotice, '');
+    assert.equal(h.session.requestFieldOrder('advance'), false);
+    h.advanceClock(999); assert.equal(h.session.orderCooling, true);
+    h.advanceClock(1); assert.equal(h.session.orderCooling, false);
+    h.session.stepBattle = () => {
+        assert.equal(h.scene.fieldOrders.red, 'hold', 'stepBattle 前执行');
+        assert.deepEqual(u.fieldOrderAnchor, { gx: 10.1235, gy: 12 });
+    };
+    h.session.advance(17);
+    assert.equal(h.session.fieldOrder, 'hold');
+    assert.equal(h.session.orderNotice, '全军原地防守！');
+    assert.equal(h.session.appliedOrders[0].turn, 0);
+    assert.equal(typeof h.session.appliedOrders[0].hash, 'string');
+    assert.equal(h.session.requestFieldOrder('hold'), false, '当前令不发包');
+    h.session.stepBattle = () => {};
+    u.gx++;
+    queued.push({ k: 'fieldOrder', side: 'red', order: 'hold' },
+        { k: 'fieldOrder', side: 'black', order: 'hold' }, { k: 'fieldOrder', side: 'blue', order: 'invalid' });
+    h.session.advance(17);
+    assert.deepEqual(u.fieldOrderAnchor, { gx: 10.1235, gy: 12 });
+    assert.equal(h.session.appliedOrders.length, 1);
+    assert.equal(h.warnings.length, 0);
+    h.advanceClock(1500); assert.equal(h.session.orderNotice, '');
+    queued.push({ k: 'fieldOrder', side: 'blue', order: 'advance' });
+    h.session.advance(17);
+    assert.equal(h.session.orderNotice, '对方：全军推进');
+    assert.equal(h.session.appliedOrders.at(-1).turn, 2);
+    h.session.stop('不同步');
+    assert.equal(h.session.requestFieldOrder('advance'), false);
+    assert.equal(h.session.orderNotice, '');
+});
+
 test('胜负钩子捕获 winner；最后 onTurnDone 之后上报 execTurn-1，仅一次，终局仍接收 result', async () => {
     const h = await started();
     h.session.stepBattle = () => { h.scene.battleOver = true; h.session.recordWinner('blue'); h.events.push('victory'); };
@@ -284,8 +328,11 @@ test('终局等待对端结果、一致后刷新结束条；离开/断开保留�
 test('结束条复用退出按钮和横幅布局，正常终局使用非红色样式', async t => {
     const { createLanUI } = await import('../js/three-spike/lan-ui.js');
     const elements = new Map();
-    const element = () => ({ style: {}, classList: { add() {}, toggle() {} },
-        setAttribute() {}, append(...children) { this.children = children; } });
+    const element = () => {
+        const classes = new Set();
+        return { style: {}, classList: { add(c) { classes.add(c); }, toggle(c, on) { if (on) classes.add(c); else classes.delete(c); }, contains(c) { return classes.has(c); } },
+            setAttribute() {}, append(...children) { this.children = [...(this.children || []), ...children]; } };
+    };
     const body = element(), created = [];
     const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
     t.after(() => { if (previous) Object.defineProperty(globalThis, 'document', previous); else delete globalThis.document; });
@@ -296,9 +343,27 @@ test('结束条复用退出按钮和横幅布局，正常终局使用非红色�
     let exits = 0;
     const ui = createLanUI({ gate: element(), exit() { exits++; } });
     const h = await started();
+    ui.bind(h.session, () => {});
+    const orders = created.find(el => el.id === 'lan-orders');
+    const buttons = ['advance', 'hold'].map(order => created.find(el => el.id === 'lan-order-' + order));
+    const queued = [];
+    h.net.lockstep.act = cmd => queued.push(cmd);
+    ui.render(h.session);
+    assert.equal(orders.hidden, false);
+    buttons[1].onclick(); ui.render(h.session);
+    assert.deepEqual(queued, [{ k: 'fieldOrder', side: 'red', order: 'hold' }]);
+    assert.equal(h.scene.fieldOrders, undefined);
+    assert.ok(buttons.every(b => b.disabled && !b.classList.contains('active')));
+    h.advanceClock(1000); ui.render(h.session);
+    assert.ok(buttons.every(b => !b.disabled));
+    h.net.lockstep.takeCommands = () => queued.splice(0);
+    h.session.advance(17); ui.render(h.session);
+    assert.equal(buttons[1].classList.contains('active'), true);
+    assert.equal(buttons[0].classList.contains('active'), false);
     h.session.stepBattle = () => { h.scene.battleOver = true; h.session.recordWinner('blue'); };
     h.session.advance(50);
     ui.render(h.session);
+    assert.equal(orders.hidden, true);
     const banner = created.find(el => el.id === 'lan-banner');
     assert.equal(banner.hidden, false);
     assert.equal(banner.style.background, 'rgba(20,24,18,.88)');
@@ -306,6 +371,7 @@ test('结束条复用退出按钮和横幅布局，正常终局使用非红色�
     assert.equal(banner.children[0].textContent, '本局结束：蓝方胜 · 等待对方结果…');
     banner.children[1].onclick(); assert.equal(exits, 1);
     h.session.stop('不同步'); ui.render(h.session);
+    assert.equal(orders.hidden, true);
     assert.equal(banner.style.background, '');
     assert.equal(banner.children[0].textContent, '不同步');
 });
