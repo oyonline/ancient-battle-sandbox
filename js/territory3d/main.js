@@ -237,17 +237,56 @@ controls.minDistance = 60;
 controls.maxDistance = 520;
 controls.enableDamping = true;
 controls.dampingFactor = 0.12;
+// OrbitControls 在 pointerdown 时自动将 Ctrl/⌘ + PAN 切换为旋转。
 controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
 controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
 controls.touches.ONE = THREE.TOUCH.PAN;
 controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
+
+const rotationKeys = new Set();
+const rotationAxis = new THREE.Vector3(0, 1, 0);
+const rotationOffset = new THREE.Vector3();
+let rotationTween = null;
+function clearViewMotion() {
+    rotationTween = null;
+    // 消耗拖动的阻尼余量，避免按钮或键盘旋转改变距离、俯仰角。
+    controls.enableDamping = false;
+    controls.update();
+    controls.enableDamping = true;
+}
+function rotateView(angle) {
+    rotationOffset.copy(camera.position).sub(controls.target).applyAxisAngle(rotationAxis, angle);
+    camera.position.copy(controls.target).add(rotationOffset);
+}
+function turnView(angle) {
+    const remaining = rotationTween ? rotationTween.angle - rotationTween.applied : 0;
+    clearViewMotion();
+    rotationTween = { angle: remaining + angle, applied: 0, start: performance.now() };
+}
+document.querySelector('#rotate-left').addEventListener('click', () => turnView(Math.PI / 4));
+document.querySelector('#rotate-right').addEventListener('click', () => turnView(-Math.PI / 4));
+window.addEventListener('keydown', event => {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const key = event.key.toLowerCase();
+    if (key !== 'q' && key !== 'e') return;
+    if (!rotationKeys.has(key)) clearViewMotion();
+    rotationKeys.add(key);
+});
+window.addEventListener('keyup', event => {
+    const key = event.key.toLowerCase();
+    if (key === 'meta' || key === 'control' || key === 'alt') rotationKeys.clear();
+    else rotationKeys.delete(key);
+});
+window.addEventListener('blur', () => rotationKeys.clear());
+controls.addEventListener('start', () => { rotationTween = null; });
 
 let battle, battleView;
 let lastFrame = performance.now();
 let visualTime = 0;
 function render(now) {
     requestAnimationFrame(render);
-    const delta = Math.max(0, Math.min(now - lastFrame, 50));
+    const frameDelta = Math.max(0, now - lastFrame);
+    const delta = Math.min(frameDelta, 50);
     lastFrame = now;
     if (battle.battleStarted && !battle.paused && !battle.battleOver) {
         battle.simulationAccumulator += delta * battle.gameSpeed;
@@ -262,14 +301,25 @@ function render(now) {
     }
     if (!battle.paused) visualTime += delta;
     battleView.sync(battle, visualTime, battle.paused ? 0 : delta / 1000);
+    const turnDirection = Number(rotationKeys.has('q')) - Number(rotationKeys.has('e'));
+    if (turnDirection) {
+        rotationTween = null;
+        rotateView(turnDirection * Math.PI / 2 * frameDelta / 1000);
+    } else if (rotationTween) {
+        const t = Math.min((now - rotationTween.start) / 300, 1);
+        const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+        const applied = rotationTween.angle * eased;
+        rotateView(applied - rotationTween.applied);
+        rotationTween.applied = applied;
+        if (t === 1) rotationTween = null;
+    }
     controls.update();
     renderer.render(scene, camera);
 }
 
 function resetView() {
     // 清除阻尼余量，再固定复位姿态；zoom 只负责按窗口适配全图。
-    controls.enableDamping = false;
-    controls.update();
+    clearViewMotion();
     controls.target.set(0, 0, 10);
     camera.position.set(0, 190, 230);
     camera.zoom = 1;
@@ -295,6 +345,11 @@ function resetView() {
     }
     camera.zoom = 0.96 / extent;
     camera.updateProjectionMatrix();
+    scalePlaceLabels();
+}
+
+function scalePlaceLabels() {
+    const { width, height } = renderer.domElement.getBoundingClientRect();
     for (const sprite of placeLabels) {
         // Three 的非衰减 Sprite 仍经过投影矩阵；抵消 FOV 与 zoom，保持 CSS 像素高度。
         const scaleY = sprite.userData.pixelHeight * 2 / (Math.max(height, 1) * camera.projectionMatrix.elements[5]);
@@ -306,9 +361,10 @@ function resetView() {
 function resize() {
     const width = viewport.clientWidth, height = viewport.clientHeight;
     camera.aspect = width / Math.max(height, 1);
+    camera.updateProjectionMatrix();
     renderer.setSize(width, height);
     for (const material of roadMaterials) material.resolution.set(width, height);
-    resetView();
+    scalePlaceLabels();
 }
 
 function displayObject() {
@@ -374,7 +430,16 @@ function startBattle() {
         'custom', 'custom', {}, { territory: true, territoryAI: true, terrain: 'territory' });
     simulation.battleStarted = true;
     battle = simulation;
-    window.__territory3d = { scene: simulation };
+    window.__territory3d = {
+        scene: simulation,
+        get view() {
+            return {
+                azimuthDeg: THREE.MathUtils.radToDeg(controls.getAzimuthalAngle()),
+                polarDeg: THREE.MathUtils.radToDeg(controls.getPolarAngle()),
+                distance: controls.getDistance()
+            };
+        }
+    };
     document.querySelector('#pause').textContent = '暂停';
     lastFrame = performance.now();
     view.sync(simulation, visualTime, 0);
@@ -392,6 +457,7 @@ document.querySelector('#debug-toggle').addEventListener('change', event => {
 document.querySelector('#reset').addEventListener('click', resetView);
 window.addEventListener('resize', resize);
 resize();
+resetView();
 startBattle();
 requestAnimationFrame(render);
 
