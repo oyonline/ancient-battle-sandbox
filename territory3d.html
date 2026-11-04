@@ -11,6 +11,21 @@
         h1 { margin: 0; font-size: 18px; }
         button { margin-left: 0; padding: 7px 14px; border: 1px solid #728a91; border-radius: 4px; background: #29434d; color: inherit; cursor: pointer; }
         .actions { margin-left: auto; display: flex; gap: 8px; }
+        #battle-hud { order: 1; width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 20px; }
+        .team-hud { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+        .team-hud.blue { justify-content: flex-end; text-align: right; }
+        .battle-time, .ticket-group { white-space: nowrap; }
+        .ticket-group { display: inline-flex; align-items: center; gap: 8px; }
+        .ticket-track { display: inline-block; width: 180px; height: 10px; border-radius: 5px; background: rgba(255,255,255,0.15); overflow: hidden; }
+        .ticket-track i { display: block; height: 100%; border-radius: 5px; background: #c0392b; }
+        .blue .ticket-track i { background: #2e6fd0; }
+        #site-detail { position: absolute; z-index: 20; left: 24px; bottom: 56px; width: 300px; background: rgba(16,24,30,0.92); border-radius: 10px; padding: 14px 16px; font-size: 14px; line-height: 1.6; }
+        .site-detail-heading { display: flex; align-items: center; gap: 10px; padding-right: 16px; margin-bottom: 8px; }
+        #site-detail-title { font-size: 18px; font-weight: bold; }
+        #site-detail-owner { margin-left: auto; white-space: nowrap; font-size: 12px; }
+        #site-detail-close { position: absolute; top: 2px; right: 4px; padding: 0 5px; border: 0; background: transparent; font-size: 20px; }
+        #capture-notices { position: absolute; z-index: 30; top: 72px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+        .capture-notice { background: rgba(0,0,0,0.6); border-radius: 8px; padding: 6px 14px; font-size: 16px; font-weight: bold; white-space: nowrap; }
         .red { color: #c0392b; }
         .blue { color: #2e6fd0; }
         #victory { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 48px; font-weight: bold; background: rgba(0,0,0,0.55); border-radius: 12px; padding: 16px 32px; pointer-events: none; white-space: nowrap; }
@@ -27,7 +42,7 @@
 <body>
     <header>
         <h1>山河观战 · 地图</h1>
-        <span id="battle-hud" aria-live="off">开战 00:00</span>
+        <div id="battle-hud" aria-live="off">开战 00:00</div>
         <label><input id="debug-toggle" type="checkbox">显示坐标调试</label>
         <div class="actions">
             <button id="pause" type="button">暂停</button>
@@ -36,6 +51,12 @@
         </div>
     </header>
     <main id="viewport" aria-label="红蓝两军领土地图" oncontextmenu="event.preventDefault()">
+        <div id="capture-notices" role="status"></div>
+        <section id="site-detail" aria-label="据点详情" hidden>
+            <button id="site-detail-close" type="button" aria-label="关闭据点详情">×</button>
+            <div class="site-detail-heading"><strong id="site-detail-title"></strong><span id="site-detail-owner"></span></div>
+            <div id="site-detail-lines"></div>
+        </section>
         <div class="view-rotation">
             <button id="rotate-left" type="button" aria-label="向左旋转视角">⟲</button>
             <button id="rotate-right" type="button" aria-label="向右旋转视角">⟳</button>

@@ -8,6 +8,7 @@ import { setBoardSize } from '../board.js';
 import { Terrain } from '../terrain.js';
 import { CavalryAI } from '../units.js';
 import { TERRITORY } from '../battle/economy.js';
+import { SITE_TRAITS } from '../battle/site-traits.js';
 import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
 import { BattleView } from './battle-view.js';
 
@@ -83,12 +84,24 @@ for (const route of routes) {
     scene.add(road);
 }
 
+// 只压缩展示文案；完整奖励、条件仍直接取 SITE_TRAITS。
+const SITE_PHRASES = {
+    ranch: '解锁骑兵', forest: '修建加快', bridge: '工事减伤',
+    hill: '稳固军心', ford: '涉水加快', crossroad: '多收伤兵'
+};
 const placeLabels = [];
-function placeLabel(text, gx, gy, owner, pixelHeight, offset, home = false) {
+function placeLabel(text, gx, gy, owner, pixelHeight, offset, home = false, role = null) {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
-    canvas.height = 128;
+    canvas.height = home ? 128 : 144;
     const ctx = canvas.getContext('2d');
+    const phrase = home ? null : `${SITE_TRAITS[role].icon} ${SITE_PHRASES[role]}`;
+    if (!home) {
+        ctx.font = 'bold 60px system-ui, sans-serif';
+        const titleWidth = ctx.measureText(text).width;
+        ctx.font = 'bold 50px system-ui, sans-serif';
+        canvas.width = Math.ceil(Math.max(titleWidth, ctx.measureText(phrase).width) + 48);
+    }
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
     function redraw(nextOwner) {
@@ -96,16 +109,21 @@ function placeLabel(text, gx, gy, owner, pixelHeight, offset, home = false) {
         ctx.fillStyle = nextOwner === 'red' ? `rgba(150,40,30,${home ? 0.95 : 0.85})`
             : nextOwner === 'blue' ? `rgba(30,70,150,${home ? 0.95 : 0.85})` : 'rgba(20,28,32,0.78)';
         ctx.beginPath();
-        ctx.roundRect(0, 0, 512, 128, 16);
+        ctx.roundRect(0, 0, canvas.width, canvas.height, 16);
         ctx.fill();
-        ctx.font = 'bold 56px system-ui, sans-serif';
+        ctx.font = `bold ${home ? 56 : 60}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 2;
-        ctx.strokeText(text, 256, 64);
+        ctx.strokeText(text, canvas.width / 2, home ? 64 : 39);
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(text, 256, 64);
+        ctx.fillText(text, canvas.width / 2, home ? 64 : 39);
+        if (!home) {
+            ctx.font = 'bold 50px system-ui, sans-serif';
+            ctx.fillStyle = '#ffe3a0';
+            ctx.fillText(phrase, canvas.width / 2, 105);
+        }
         texture.needsUpdate = true;
     }
     redraw(owner);
@@ -113,6 +131,7 @@ function placeLabel(text, gx, gy, owner, pixelHeight, offset, home = false) {
     sprite.name = text;
     sprite.renderOrder = 10;
     sprite.userData.pixelHeight = pixelHeight;
+    sprite.userData.aspect = canvas.width / canvas.height;
     sprite.userData.owner = owner;
     sprite.userData.redraw = redraw;
     sprite.position.copy(groundPosition(gx, gy, offset));
@@ -120,10 +139,12 @@ function placeLabel(text, gx, gy, owner, pixelHeight, offset, home = false) {
     placeLabels.push(sprite);
     return sprite;
 }
-for (const site of sites) {
-    const sprite = placeLabel(site.name, site.gx, site.gy, site.owner, 22, site.name === '中央高地' ? 10 : 7);
-    if (site.name === '西渡口') sprite.position.x -= 14;
-    if (site.name === '东渡口') sprite.position.x += 14;
+for (const [index, site] of sites.entries()) {
+    const labelOffset = site.name === '西桥头' ? 27 : site.name === '中央高地' ? 10 : 7;
+    const sprite = placeLabel(site.name, site.gx, site.gy, site.owner, 52, labelOffset, false, site.role);
+    sprite.userData.siteIndex = index;
+    if (site.name === '西渡口') sprite.position.x -= 20;
+    if (site.name === '东渡口') sprite.position.x += 20;
     const dot = new THREE.Mesh(new THREE.CircleGeometry(1.6, 24), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
     dot.rotation.x = -Math.PI / 2;
     dot.position.copy(groundPosition(site.gx, site.gy, 0.2));
@@ -339,7 +360,7 @@ function resetView() {
         projected.copy(sprite.position).project(camera);
         // 固定像素标签的半宽/半高转为 NDC，复位时预留屏幕边距。
         const halfHeight = sprite.userData.pixelHeight / Math.max(height, 1);
-        const halfWidth = sprite.userData.pixelHeight * 4 / Math.max(width, 1);
+        const halfWidth = sprite.userData.pixelHeight * sprite.userData.aspect / Math.max(width, 1);
         extent = Math.max(extent, Math.abs(projected.x) * 0.96 / Math.max(0.96 - halfWidth, 0.01),
             Math.abs(projected.y) * 0.96 / Math.max(0.96 - halfHeight, 0.01));
     }
@@ -353,7 +374,7 @@ function scalePlaceLabels() {
     for (const sprite of placeLabels) {
         // Three 的非衰减 Sprite 仍经过投影矩阵；抵消 FOV 与 zoom，保持 CSS 像素高度。
         const scaleY = sprite.userData.pixelHeight * 2 / (Math.max(height, 1) * camera.projectionMatrix.elements[5]);
-        const scaleX = sprite.userData.pixelHeight * 4 * 2 / (Math.max(width, 1) * camera.projectionMatrix.elements[0]);
+        const scaleX = sprite.userData.pixelHeight * sprite.userData.aspect * 2 / (Math.max(width, 1) * camera.projectionMatrix.elements[0]);
         sprite.scale.set(scaleX, scaleY, 1);
     }
 }
@@ -382,17 +403,127 @@ function displayObject() {
     };
 }
 
+const detailCard = document.querySelector('#site-detail');
+const detailTitle = document.querySelector('#site-detail-title');
+const detailOwner = document.querySelector('#site-detail-owner');
+const detailLines = document.querySelector('#site-detail-lines');
+const captureNotices = document.querySelector('#capture-notices');
+let selectedSite = null;
+let ownersInitialized = false;
+const captureEffects = [];
+const notices = [];
+function closeDetail() {
+    selectedSite = null;
+    detailCard.hidden = true;
+}
+function showDetail() {
+    const flag = battle?.flags[selectedSite];
+    if (!flag) return;
+    const trait = SITE_TRAITS[flag.role];
+    detailTitle.textContent = `${trait.icon} ${flag.name}`;
+    detailOwner.textContent = flag.owner === 'red' ? '红方' : flag.owner === 'blue' ? '蓝方' : '无主';
+    detailOwner.style.color = ownerColor(flag.owner);
+    detailLines.replaceChildren(...[
+        `地形：${trait.terrain}`, `占领奖励：${trait.reward}`, `条件：${trait.condition}`,
+        `另外：每秒 +${TERRITORY.FLAG_INCOME} 军费，并让对方票数下降`
+    ].map(text => {
+        const line = document.createElement('div');
+        line.textContent = text;
+        return line;
+    }));
+    detailCard.hidden = false;
+}
+document.querySelector('#site-detail-close').addEventListener('click', closeDetail);
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let pointerStart = null;
+renderer.domElement.addEventListener('pointerdown', event => {
+    pointerStart = event.button === 0 && !event.ctrlKey && !event.metaKey
+        ? { x: event.clientX, y: event.clientY, id: event.pointerId } : null;
+});
+renderer.domElement.addEventListener('pointercancel', () => { pointerStart = null; });
+renderer.domElement.addEventListener('pointerup', event => {
+    const start = pointerStart;
+    pointerStart = null;
+    if (!start || start.id !== event.pointerId || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 5) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.set((event.clientX - rect.left) / rect.width * 2 - 1, 1 - (event.clientY - rect.top) / rect.height * 2);
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects(placeLabels.filter(label => label.userData.siteIndex != null))[0];
+    if (!hit) { closeDetail(); return; }
+    selectedSite = hit.object.userData.siteIndex;
+    showDetail();
+});
+function ownerColor(owner) {
+    return owner === 'red' ? '#c0392b' : owner === 'blue' ? '#2e6fd0' : '#dddddd';
+}
+function removeHalo(effect) {
+    scene.remove(effect.mesh);
+    effect.mesh.geometry.dispose();
+    effect.mesh.material.dispose();
+}
+function captureFeedback(flag, now) {
+    const notice = document.createElement('div');
+    notice.className = 'capture-notice';
+    notice.style.color = ownerColor(flag.owner);
+    notice.textContent = flag.owner == null ? `${flag.name} 失守，变为无主`
+        : `${flag.owner === 'red' ? '红方' : '蓝方'}夺下${flag.name} → ${SITE_PHRASES[flag.role]}`;
+    captureNotices.prepend(notice);
+    notices.unshift({ element: notice, start: now });
+    if (notices.length > 3) notices.pop().element.remove();
+    const geometry = new THREE.RingGeometry(0.94, 1, 64);
+    geometry.rotateX(-Math.PI / 2);
+    const unitPositions = geometry.getAttribute('position').array.slice();
+    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+        color: ownerColor(flag.owner), transparent: true, opacity: 0.9,
+        side: THREE.DoubleSide, depthWrite: false
+    }));
+    mesh.position.set(flag.gx - W / 2, 0, flag.gy - H / 2);
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+    captureEffects.push({ mesh, unitPositions, gx: flag.gx, gy: flag.gy, start: now });
+}
+function updateCaptureEffects(now) {
+    for (let i = notices.length - 1; i >= 0; i--) {
+        const age = now - notices[i].start;
+        if (age >= 3400) { notices[i].element.remove(); notices.splice(i, 1); }
+        else notices[i].element.style.opacity = String(Math.min(1, (3400 - age) / 400));
+    }
+    for (let i = captureEffects.length - 1; i >= 0; i--) {
+        const effect = captureEffects[i], t = (now - effect.start) / 1200;
+        if (t >= 1) { removeHalo(effect); captureEffects.splice(i, 1); continue; }
+        const radius = 2 + 8 * t;
+        const points = effect.mesh.geometry.getAttribute('position');
+        for (let j = 0; j < points.count; j++) {
+            const x = effect.unitPositions[j * 3] * radius, z = effect.unitPositions[j * 3 + 2] * radius;
+            points.setXYZ(j, x, groundHeight(effect.gx + x, effect.gy + z) + 0.3, z);
+        }
+        points.needsUpdate = true;
+        effect.mesh.material.opacity = 0.9 * (1 - t);
+    }
+}
 function updateOwners(flags) {
+    const now = performance.now();
     flags.forEach((flag, i) => {
         const label = placeLabels[i];
         if (label.userData.owner !== flag.owner) {
             label.userData.redraw(flag.owner);
             label.userData.owner = flag.owner;
+            if (ownersInitialized) captureFeedback(flag, now);
+            if (selectedSite === i) showDetail();
         }
     });
+    ownersInitialized = true;
+    updateCaptureEffects(now);
 }
 
 function startBattle() {
+    closeDetail();
+    ownersInitialized = false;
+    for (const effect of captureEffects) removeHalo(effect);
+    captureEffects.length = 0;
+    notices.length = 0;
+    captureNotices.replaceChildren();
     battleView?.dispose();
     battleView = new BattleView(scene, groundHeight, updateOwners);
     visualTime = 0;

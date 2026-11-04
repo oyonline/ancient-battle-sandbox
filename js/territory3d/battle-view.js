@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { TERRITORY } from '../battle/economy.js';
 
 const TEAM = { red: '#c0392b', blue: '#2e6fd0' };
 
@@ -23,6 +24,7 @@ export class BattleView {
         this.arrows.frustumCulled = false;
         this.root.add(this.arrows);
         this.hud = document.querySelector('#battle-hud');
+        this.lastHudUpdate = -Infinity;
         this.banner = document.querySelector('#victory');
         this.banner.hidden = true;
     }
@@ -149,11 +151,24 @@ export class BattleView {
         this.syncArrows(scene.arrows);
         this.syncBuildings(scene.territory?.camps.buildings || []);
         this.updateOwners(scene.flags);
-        const seconds = Math.floor(scene.simulationTime / 1000);
-        const time = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-        const owned = team => scene.flags.filter(flag => flag.owner === team).length;
-        const hud = `开战 ${time} · <span class="red">红方 ${scene.redAlive} 人</span> · 占 ${owned('red')} 处 · <span class="blue">蓝方 ${scene.blueAlive} 人</span> · 占 ${owned('blue')} 处`;
-        if (this.hud.innerHTML !== hud) this.hud.innerHTML = hud;
+        const wallTime = performance.now();
+        if (wallTime - this.lastHudUpdate >= 250) {
+            this.lastHudUpdate = wallTime;
+            const seconds = Math.floor(scene.simulationTime / 1000);
+            const time = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+            const teamHud = team => {
+                const owned = scene.flags.filter(flag => flag.owner === team).length;
+                const treasury = Math.floor(scene.territory.econ.treasury[team]);
+                const income = scene.territory.econ.incomeRate(owned);
+                const tickets = scene.territory.tickets.tickets[team];
+                const percent = THREE.MathUtils.clamp(tickets / TERRITORY.TICKETS, 0, 1) * 100;
+                const name = team === 'red' ? '红方' : '蓝方';
+                return `<div class="team-hud ${team}"><span>${name} 军费 ${treasury}（+${income}/秒）</span>`
+                    + `<span class="ticket-group"><span class="ticket-track" role="progressbar" aria-label="${name}票数" aria-valuemin="0" aria-valuemax="${TERRITORY.TICKETS}" aria-valuenow="${Math.floor(tickets)}"><i style="width:${percent}%"></i></span><span>票 ${Math.floor(tickets)}</span></span>`
+                    + `<span>${scene[`${team}Alive`]} 人 · 占 ${owned} 处</span></div>`;
+            };
+            this.hud.innerHTML = `${teamHud('red')}<span class="battle-time">开战 ${time}</span>${teamHud('blue')}`;
+        }
     }
 
     syncArrows(arrows) {
