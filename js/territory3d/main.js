@@ -141,10 +141,10 @@ function placeLabel(text, gx, gy, owner, pixelHeight, offset, home = false, role
 }
 for (const [index, site] of sites.entries()) {
     const labelOffset = site.name === '西桥头' ? 27 : site.name === '中央高地' ? 10 : 7;
-    const sprite = placeLabel(site.name, site.gx, site.gy, site.owner, 52, labelOffset, false, site.role);
+    const sprite = placeLabel(site.name, site.gx, site.gy, site.owner, 38, labelOffset, false, site.role);
     sprite.userData.siteIndex = index;
-    if (site.name === '西渡口') sprite.position.x -= 20;
-    if (site.name === '东渡口') sprite.position.x += 20;
+    if (site.name === '西渡口') sprite.position.x -= 16;
+    if (site.name === '东渡口') sprite.position.x += 16;
     const dot = new THREE.Mesh(new THREE.CircleGeometry(1.6, 24), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
     dot.rotation.x = -Math.PI / 2;
     dot.position.copy(groundPosition(site.gx, site.gy, 0.2));
