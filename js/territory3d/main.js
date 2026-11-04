@@ -6,6 +6,16 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { territoryLayout, homePosition } from '../territory-map.js';
 import { setBoardSize } from '../board.js';
 import { Terrain } from '../terrain.js';
+import { CavalryAI } from '../units.js';
+import { TERRITORY } from '../battle/economy.js';
+import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
+import { BattleView } from './battle-view.js';
+
+// game.js needs Phaser only for its base class; all 2D drawing is stubbed below.
+globalThis.Phaser = { Scene: class {} };
+globalThis.Snd = null;
+globalThis.UI = { onBattleEnd() {} };
+const { IsoBattleScene } = await import('../game.js');
 
 // 与规则侧 TERRITORY.W/H 一致；连续坐标不额外加半格。
 const W = 260, H = 180;
@@ -79,25 +89,32 @@ function placeLabel(text, gx, gy, owner, pixelHeight, offset, home = false) {
     canvas.width = 512;
     canvas.height = 128;
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = owner === 'red' ? `rgba(150,40,30,${home ? 0.95 : 0.85})`
-        : owner === 'blue' ? `rgba(30,70,150,${home ? 0.95 : 0.85})` : 'rgba(20,28,32,0.78)';
-    ctx.beginPath();
-    ctx.roundRect(0, 0, 512, 128, 16);
-    ctx.fill();
-    ctx.font = 'bold 56px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 2;
-    ctx.strokeText(text, 256, 64);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(text, 256, 64);
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
+    function redraw(nextOwner) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = nextOwner === 'red' ? `rgba(150,40,30,${home ? 0.95 : 0.85})`
+            : nextOwner === 'blue' ? `rgba(30,70,150,${home ? 0.95 : 0.85})` : 'rgba(20,28,32,0.78)';
+        ctx.beginPath();
+        ctx.roundRect(0, 0, 512, 128, 16);
+        ctx.fill();
+        ctx.font = 'bold 56px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.strokeText(text, 256, 64);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(text, 256, 64);
+        texture.needsUpdate = true;
+    }
+    redraw(owner);
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, sizeAttenuation: false }));
     sprite.name = text;
     sprite.renderOrder = 10;
     sprite.userData.pixelHeight = pixelHeight;
+    sprite.userData.owner = owner;
+    sprite.userData.redraw = redraw;
     sprite.position.copy(groundPosition(gx, gy, offset));
     scene.add(sprite);
     placeLabels.push(sprite);
@@ -225,8 +242,26 @@ controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
 controls.touches.ONE = THREE.TOUCH.PAN;
 controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
 
-function render() {
+let battle, battleView;
+let lastFrame = performance.now();
+let visualTime = 0;
+function render(now) {
     requestAnimationFrame(render);
+    const delta = Math.max(0, Math.min(now - lastFrame, 50));
+    lastFrame = now;
+    if (battle.battleStarted && !battle.paused && !battle.battleOver) {
+        battle.simulationAccumulator += delta * battle.gameSpeed;
+        let steps = 0;
+        while (battle.simulationAccumulator + 1e-7 >= SIMULATION_STEP_MS && !battle.battleOver && steps < 2) {
+            battle.simulationAccumulator = Math.max(0, battle.simulationAccumulator - SIMULATION_STEP_MS);
+            battle.simulationTime += SIMULATION_STEP_MS;
+            stepBattle(battle, SIMULATION_STEP_MS / 1000);
+            steps++;
+        }
+        if (steps === 2 && battle.simulationAccumulator > SIMULATION_STEP_MS) battle.simulationAccumulator = SIMULATION_STEP_MS;
+    }
+    if (!battle.paused) visualTime += delta;
+    battleView.sync(battle, visualTime, battle.paused ? 0 : delta / 1000);
     controls.update();
     renderer.render(scene, camera);
 }
@@ -276,12 +311,88 @@ function resize() {
     resetView();
 }
 
+function displayObject() {
+    return {
+        destroyed: false, x: 0, y: 0,
+        setOrigin() { return this; }, setScrollFactor() { return this; },
+        setDepth() { return this; }, setVisible() { return this; }, setScale() { return this; },
+        setFlipX() { return this; }, setTexture() { return this; }, setFrame() { return this; },
+        setPosition() { return this; }, setAngle() { return this; }, setAlpha() { return this; },
+        setText() { return this; }, setColor() { return this; }, setTint() { return this; },
+        clearTint() { return this; }, anims: { stop() {} }, destroy() { this.destroyed = true; },
+        clear() {}, lineStyle() {}, lineBetween() {}, fillStyle() {}, fillCircle() {}, fillRect() {},
+        fillTriangle() {}, strokeTriangle() {}, fillPoints() {}, strokePoints() {}, fillEllipse() {}, strokeEllipse() {},
+        beginPath() {}, arc() {}, strokePath() {}, strokeCircle() {}, generateTexture() {}
+    };
+}
+
+function updateOwners(flags) {
+    flags.forEach((flag, i) => {
+        const label = placeLabels[i];
+        if (label.userData.owner !== flag.owner) {
+            label.userData.redraw(flag.owner);
+            label.userData.owner = flag.owner;
+        }
+    });
+}
+
+function startBattle() {
+    battleView?.dispose();
+    battleView = new BattleView(scene, groundHeight, updateOwners);
+    visualTime = 0;
+    const view = battleView;
+    const simulation = new IsoBattleScene();
+    Object.assign(simulation, {
+        units: [], arrows: [], bloods: [], bloodQueue: [], sgrid: new Map(), _aliveArr: [], nextId: 1,
+        redAlive: 0, blueAlive: 0, blackAlive: 0, deadCount: 0,
+        battleStarted: false, battleOver: false, paused: false, gameSpeed: 1,
+        countdownTimers: [], countdownTexts: [], dyingUnits: new Set(),
+        centroid: { red: { x: 0, y: 0 }, blue: { x: 0, y: 0 } },
+        arrowGfx: displayObject(), spawnZoneGfx: displayObject(),
+        cameras: { main: { width: 960, height: 720 } },
+        cavalryAI: new CavalryAI(),
+        add: { text: displayObject, image: displayObject, sprite: displayObject, graphics: displayObject },
+        tweens: { killTweensOf() {}, add() {} }, anims: { globalTimeScale: 1 },
+        textures: { exists: () => false },
+        time: { delayedCall() { return { remove() {} }; } },
+        showVictory(winner) { view.victory(winner); }
+    });
+    simulation.resetBattleData();
+    simulation.render.world.drawSpawnZones = () => {};
+    simulation.render.camps.update = () => {};
+    // Preserve fireArrow/updateArrows: they create and resolve real simulation arrows.
+    for (const name of ['meleeImpact', 'bloodBurst', 'addGroundBlood', 'addBloodPool', 'flushBloodQueue',
+        'chargeDust', 'impactPuff', 'sparkBurst', 'slashArc', 'spawnOrderText', 'orderFlash',
+        'drawTactics', 'drawFlags', 'stampCorpse', 'updateBloods']) simulation[name] = () => {};
+    simulation.playAttackAnim = unit => view.attack(unit, visualTime);
+    const realKill = simulation.killUnit;
+    simulation.killUnit = function (unit, from) {
+        view.recordCorpse(unit, visualTime);
+        return realKill.call(this, unit, from);
+    };
+    simulation.deployUnits({ ...TERRITORY.OPENING }, { ...TERRITORY.OPENING },
+        'custom', 'custom', {}, { territory: true, territoryAI: true, terrain: 'territory' });
+    simulation.battleStarted = true;
+    battle = simulation;
+    window.__territory3d = { scene: simulation };
+    document.querySelector('#pause').textContent = '暂停';
+    lastFrame = performance.now();
+    view.sync(simulation, visualTime, 0);
+}
+
+document.querySelector('#pause').addEventListener('click', event => {
+    battle.paused = !battle.paused;
+    event.currentTarget.textContent = battle.paused ? '继续' : '暂停';
+});
+document.querySelector('#restart').addEventListener('click', startBattle);
+
 document.querySelector('#debug-toggle').addEventListener('change', event => {
     debugGroup.visible = event.target.checked;
 });
 document.querySelector('#reset').addEventListener('click', resetView);
 window.addEventListener('resize', resize);
 resize();
-render();
+startBattle();
+requestAnimationFrame(render);
 
 export { scene, camera, controls, land };
