@@ -141,7 +141,7 @@ function placeLabel(text, gx, gy, owner, pixelHeight, offset, home = false, role
 }
 for (const [index, site] of sites.entries()) {
     const labelOffset = site.name === '西桥头' ? 27 : site.name === '中央高地' ? 10 : 7;
-    const sprite = placeLabel(site.name, site.gx, site.gy, site.owner, 38, labelOffset, false, site.role);
+    const sprite = placeLabel(site.name, site.gx, site.gy, site.owner, 28, labelOffset, false, site.role);
     sprite.userData.siteIndex = index;
     if (site.name === '西渡口') sprite.position.x -= 16;
     if (site.name === '东渡口') sprite.position.x += 16;
@@ -155,7 +155,7 @@ for (const [index, site] of sites.entries()) {
 }
 for (const owner of ['red', 'blue']) {
     const { gx, gy } = homePosition(owner, W, H);
-    placeLabel(owner === 'red' ? '红方大本营' : '蓝方大本营', gx, gy, owner, 30, 20, true);
+    placeLabel(owner === 'red' ? '红方大本营' : '蓝方大本营', gx, gy, owner, 24, 20, true);
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 12, 12), new THREE.MeshLambertMaterial({ color: '#dddddd' }));
     pole.position.copy(groundPosition(gx, gy, 6));
     const flag = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), new THREE.MeshLambertMaterial({
