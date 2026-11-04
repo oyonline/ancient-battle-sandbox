@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>山河观战 · 静态陆地</title>
+    <title>山河观战 · 地图</title>
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; height: 100dvh; display: flex; flex-direction: column; background: #101a23; color: #e4ecec; font: 14px/1.5 system-ui, sans-serif; }
@@ -19,17 +19,21 @@
 </head>
 <body>
     <header>
-        <h1>山河观战 · 静态陆地</h1>
-        <span>260 × 180 格 · 1 格 = 1 世界单位</span>
+        <h1>山河观战 · 地图</h1>
+        <span>红蓝两军争夺的领土大地图（静态预览，暂无士兵）</span>
+        <label><input id="debug-toggle" type="checkbox">显示坐标调试</label>
         <button id="reset" type="button">全图复位</button>
     </header>
-    <main id="viewport" aria-label="260×180 静态陆地，标注中心、边界与坐标方向"></main>
+    <main id="viewport" aria-label="红蓝两军领土地图" oncontextmenu="event.preventDefault()"></main>
     <footer>
-        <span>拖动平移 · 滚轮/双指缩放</span>
+        <span>左键拖动平移 · 右键拖动旋转 · 滚轮缩放</span>
         <span class="legend"><i class="swatch" style="background: #6f8f4e"></i>草地</span>
         <span class="legend"><i class="swatch" style="background: #2f5d34"></i>林地</span>
         <span class="legend"><i class="swatch" style="background: #8b8478"></i>岩地</span>
-        <span class="legend"><i class="swatch" style="background: #7a7f86"></i>河·桥·浅滩（未接入）</span>
+        <span class="legend"><i class="swatch" style="background: #3f78a8"></i>河</span>
+        <span class="legend"><i class="swatch" style="background: #7fb0c4"></i>浅滩</span>
+        <span class="legend"><i class="swatch" style="background: #8a6a46"></i>桥</span>
+        <span class="legend"><i class="swatch" style="background: #e2cf9a"></i>道路</span>
     </footer>
     <script type="module" src="/js/territory3d/main.js"></script>
 </body>
