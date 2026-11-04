@@ -554,7 +554,7 @@ function startBattle() {
     simulation.playAttackAnim = unit => view.attack(unit, visualTime);
     const realKill = simulation.killUnit;
     simulation.killUnit = function (unit, from) {
-        view.recordCorpse(unit, visualTime);
+        view.recordCorpse(unit, visualTime, simulation.simulationTime);
         return realKill.call(this, unit, from);
     };
     simulation.deployUnits({ ...TERRITORY.OPENING }, { ...TERRITORY.OPENING },
@@ -574,6 +574,7 @@ function startBattle() {
     document.querySelector('#pause').textContent = '暂停';
     lastFrame = performance.now();
     view.sync(simulation, visualTime, 0);
+    void view.loadModels(camera, renderer, simulation);
 }
 
 document.querySelector('#pause').addEventListener('click', event => {

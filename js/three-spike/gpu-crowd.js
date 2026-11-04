@@ -293,7 +293,7 @@ function deathFinished(animation, atlas, now) {
     return now - animation.state.start >= Math.max(atlas.clips.get('Death').duration, FADE_SECONDS);
 }
 
-export function createGpuCrowd({ kind = 'infantry', template, scene, units, cap, teamColors, groundH, shadowsEnabled = true, renderer, camera }) {
+export function createGpuCrowd({ kind = 'infantry', template, scene, units, cap, teamColors, groundH, shadowsEnabled = true, renderer, camera, origin = { x: 35, z: 35 } }) {
     const capacity = cap[kind];
     if (!Number.isInteger(capacity) || capacity < 0 || units.length > capacity) throw new Error(`GPU ${kind} exceeds CAP`);
     let atlas, mesh, shadows, material, geometry, corpses;
@@ -320,11 +320,30 @@ export function createGpuCrowd({ kind = 'infantry', template, scene, units, cap,
     }
     const live = new Map(), dead = [];
     const diagnostics = { active: 0, corpses: 0, resurrections: 0, drawCalls: 0,
-        bakedRows: atlas.rows, atlasBytes: atlas.data.byteLength, frame: 0 };
-    for (const [slot, u] of units.entries()) {
-        live.set(u.id, { id: u.id, slot, team: u.team, hp: u.hp, lastLunge: u._lungeUntil || 0, moving: false,
-            x: u.gx - 35, y: groundH(u.gx, u.gy), z: u.gy - 35, heading: u.team === 'red' ? Math.PI / 2 : -Math.PI / 2,
-            animation: createAnimationState(atlas, atlas.rows + slot, 0, Math.random() * atlas.clips.get('Idle').duration) });
+        bakedRows: atlas.rows, atlasBytes: atlas.data.byteLength, frame: 0, slotOverflows: 0 };
+    function register(u, slot, now = 0, lunge = u._lungeUntil || 0) {
+        live.set(u.id, { id: u.id, slot, team: u.team, hp: u.hp, lastLunge: lunge, moving: false,
+            x: u.gx - origin.x, y: groundH(u.gx, u.gy), z: u.gy - origin.z, heading: u.team === 'red' ? Math.PI / 2 : -Math.PI / 2,
+            animation: createAnimationState(atlas, atlas.rows + slot, now, Math.random() * atlas.clips.get('Idle').duration) });
+        return live.get(u.id);
+    }
+    for (const [slot, u] of units.entries()) register(u, slot);
+    const freeSlots = new Set(Array.from({ length: capacity - units.length }, (_, i) => units.length + i));
+    function release(id) {
+        const e = live.get(id) || dead.find(e => e.id === id);
+        if (!e) return;
+        live.delete(id);
+        const index = dead.indexOf(e);
+        if (index >= 0) { dead.splice(index, 1); corpses.remove(e); }
+        freeSlots.add(e.slot);
+    }
+    function acquire(u, now) {
+        if (dead.some(e => e.id === u.id)) return null;
+        if (!freeSlots.size && dead.length) release(dead[0].id);
+        const slot = freeSlots.values().next().value;
+        if (slot === undefined) { diagnostics.slotOverflows++; return null; }
+        freeSlots.delete(slot);
+        return register(u, slot, now, 0);
     }
     const transform = new THREE.Object3D(), matrix = new THREE.Matrix4();
     let endOffset = 0, cursor = 0, frameTime = 0;
@@ -357,12 +376,14 @@ export function createGpuCrowd({ kind = 'infantry', template, scene, units, cap,
             group.removeFromParent(); atlas.texture.dispose(); geometry.dispose(); material.dispose(); mesh.dispose(); corpses.dispose();
             shadows.geometry.dispose(); shadows.material.map.dispose(); shadows.material.dispose(); shadows.dispose();
         },
-        sync(u, heading, simulationTime) {
-            const e = live.get(u.id);
-            if (!e || u.dead || u.hp <= 0) return;
+        release,
+        sync(u, heading, simulationTime, lungeAt = u._lungeUntil) {
+            if (u.dead || u.hp <= 0 || u.withdrawn) return;
             const now = simulationTime / 1000;
-            e.x = u.gx - 35; e.y = groundH(u.gx, u.gy); e.z = u.gy - 35; e.heading = heading; e.moving = !!u.moving;
-            const hit = u.hp < e.hp, lunge = u._lungeUntil || 0, attack = lunge !== e.lastLunge && lunge !== 0;
+            const e = live.get(u.id) || acquire(u, now);
+            if (!e) return;
+            e.x = u.gx - origin.x; e.y = groundH(u.gx, u.gy); e.z = u.gy - origin.z; e.heading = heading; e.moving = !!u.moving;
+            const hit = u.hp < e.hp, lunge = lungeAt || 0, attack = lunge !== e.lastLunge && lunge !== 0;
             e.hp = u.hp; e.lastLunge = lunge;
             if (hit) e.animation.event('Hit', now, e.moving);
             else if (attack) e.animation.event('Attack', now, e.moving);
@@ -371,7 +392,7 @@ export function createGpuCrowd({ kind = 'infantry', template, scene, units, cap,
             const e = live.get(u.id);
             if (!e) return;
             live.delete(u.id); e.endBase = endOffset;
-            e.x = u.gx - 35; e.y = groundH(u.gx, u.gy); e.z = u.gy - 35; e.heading = heading;
+            e.x = u.gx - origin.x; e.y = groundH(u.gx, u.gy); e.z = u.gy - origin.z; e.heading = heading;
             e.animation.event('Death', simulationTime / 1000); dead.push(e);
             if (dead.length > capacity) corpses.remove(dead.shift());
         },
@@ -475,7 +496,7 @@ function sameHorseAtlas(a, b) {
 }
 
 export function createGpuCavalry(options) {
-    const { template, units, cap, groundH, scene, shadowsEnabled = true } = options, capacity = cap.cavalry;
+    const { template, units, cap, groundH, scene, shadowsEnabled = true, origin = { x: 35, z: 35 } } = options, capacity = cap.cavalry;
     if (!Number.isInteger(capacity) || capacity < units.length || capacity < 0) throw new Error('GPU cavalry exceeds CAP');
     const group = new THREE.Group(); group.name = 'SpikeGpuCavalry';
     const atlases = new Set(), batches = [], horses = {};
@@ -518,16 +539,37 @@ export function createGpuCavalry(options) {
     } catch (error) { dispose(); throw error; }
     const live = new Map(), dead = [], transform = new THREE.Object3D(), matrix = new THREE.Matrix4(), mount = new THREE.Matrix4();
     let endOffset = 0;
-    for (const [slot, u] of units.entries()) {
+    function register(u, slot, now = 0, lunge = u._lungeUntil || 0) {
         const phase = Math.random(), horse = horses[u.team];
-        live.set(u.id, { id: u.id, slot, team: u.team, hp: u.hp, lastLunge: u._lungeUntil || 0,
-            x: u.gx - 35, y: groundH(u.gx, u.gy), z: u.gy - 35, heading: u.team === 'red' ? Math.PI / 2 : -Math.PI / 2,
+        live.set(u.id, { id: u.id, slot, team: u.team, hp: u.hp, lastLunge: lunge,
+            x: u.gx - origin.x, y: groundH(u.gx, u.gy), z: u.gy - origin.z, heading: u.team === 'red' ? Math.PI / 2 : -Math.PI / 2,
             moving: false, charge: false,
-            animation: createAnimationState(rider.atlas, rider.atlas.rows + slot, 0, phase, true),
-            horseAnimation: createAnimationState(horse.atlas, horse.atlas.rows + slot, 0, phase, true) });
+            animation: createAnimationState(rider.atlas, rider.atlas.rows + slot, now, phase, true),
+            horseAnimation: createAnimationState(horse.atlas, horse.atlas.rows + slot, now, phase, true) });
+        return live.get(u.id);
+    }
+    for (const [slot, u] of units.entries()) register(u, slot);
+    const freeSlots = new Set(Array.from({ length: capacity - units.length }, (_, i) => units.length + i));
+    function release(id) {
+        const e = live.get(id) || dead.find(e => e.id === id);
+        if (!e) return;
+        live.delete(id);
+        const index = dead.indexOf(e);
+        if (index >= 0) {
+            dead.splice(index, 1); rider.corpses.remove(e); horses[e.team].corpses.remove(e);
+        }
+        freeSlots.add(e.slot);
+    }
+    function acquire(u, now) {
+        if (dead.some(e => e.id === u.id)) return null;
+        if (!freeSlots.size && dead.length) release(dead[0].id);
+        const slot = freeSlots.values().next().value;
+        if (slot === undefined) { diagnostics.slotOverflows++; return null; }
+        freeSlots.delete(slot);
+        return register(u, slot, now, 0);
     }
     const diagnostics = { active: 0, corpses: 0, resurrections: 0, drawCalls: 0, modelDrawCalls: 0, frame: 0,
-        sharedHorseAtlas, mountOrthogonalized: true, bakedRows: [...atlases].reduce((n, a) => n + a.rows, 0),
+        slotOverflows: 0, sharedHorseAtlas, mountOrthogonalized: true, bakedRows: [...atlases].reduce((n, a) => n + a.rows, 0),
         atlasBytes: [...atlases].reduce((n, a) => n + a.data.byteLength + (a.mountData?.byteLength || 0), 0) };
     const gait = e => e.moving ? e.charge ? 'Charge' : 'Walk' : 'Idle';
     const horseGait = e => e.moving ? e.charge ? 'Gallop' : 'Walk' : 'Idle';
@@ -564,12 +606,15 @@ export function createGpuCavalry(options) {
     };
     return {
         kind: 'cavalry', group, live, dead, horses, rider, atlas: rider.atlas, mesh: rider.batch.mesh, corpseMesh: rider.corpses.mesh, diagnostics, dispose,
-        sync(u, heading, simulationTime) {
-            const e = live.get(u.id); if (!e || u.dead || u.hp <= 0) return;
+        release,
+        sync(u, heading, simulationTime, lungeAt = u._lungeUntil) {
+            if (u.dead || u.hp <= 0 || u.withdrawn) return;
             const now = simulationTime / 1000;
-            e.x = u.gx - 35; e.y = groundH(u.gx, u.gy); e.z = u.gy - 35; e.heading = heading; e.moving = !!u.moving;
+            const e = live.get(u.id) || acquire(u, now);
+            if (!e) return;
+            e.x = u.gx - origin.x; e.y = groundH(u.gx, u.gy); e.z = u.gy - origin.z; e.heading = heading; e.moving = !!u.moving;
             e.charge = e.moving && (u.state === 'charge' || u.state === 'pierce' || Math.hypot(u.velX || 0, u.velY || 0) > 4.5);
-            const hit = u.hp < e.hp, lunge = u._lungeUntil || 0, attack = lunge !== 0 && lunge !== e.lastLunge;
+            const hit = u.hp < e.hp, lunge = lungeAt || 0, attack = lunge !== 0 && lunge !== e.lastLunge;
             e.hp = u.hp; e.lastLunge = lunge;
             if (hit) {
                 e.animation.event('Hit', now, gait(e)); e.horseAnimation.event('Idle_HitReact1', now, horseGait(e));
@@ -578,7 +623,7 @@ export function createGpuCavalry(options) {
         kill(u, heading, simulationTime) {
             const e = live.get(u.id); if (!e) return;
             live.delete(u.id); e.endBase = endOffset;
-            e.x = u.gx - 35; e.y = groundH(u.gx, u.gy); e.z = u.gy - 35; e.heading = heading;
+            e.x = u.gx - origin.x; e.y = groundH(u.gx, u.gy); e.z = u.gy - origin.z; e.heading = heading;
             e.animation.event('Death', simulationTime / 1000); e.horseAnimation.event('Death', simulationTime / 1000); dead.push(e);
             if (dead.length > capacity) {
                 const oldest = dead.shift(); rider.corpses.remove(oldest); horses[oldest.team].corpses.remove(oldest);

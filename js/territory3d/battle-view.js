@@ -1,12 +1,17 @@
 import * as THREE from 'three';
 import { TERRITORY } from '../battle/economy.js';
 
+const MODEL_KIND = { axe: 'infantry', worker: 'infantry', medic: 'archer' };
+const modelUnit = unit => ({ ...unit, type: MODEL_KIND[unit.type] || unit.type });
 const TEAM = { red: '#c0392b', blue: '#2e6fd0' };
 
 // All animation state belongs to the view, never to simulation units.
 export class BattleView {
     constructor(world, groundHeight, updateOwners) {
         this.world = world;
+        this.disposed = false;
+        this.models = null;
+        this.modelIds = new Set();
         this.groundHeight = groundHeight;
         this.updateOwners = updateOwners;
         this.root = new THREE.Group();
@@ -27,6 +32,53 @@ export class BattleView {
         this.lastHudUpdate = -Infinity;
         this.banner = document.querySelector('#victory');
         this.banner.hidden = true;
+    }
+
+    async loadModels(camera, renderer, scene) {
+        const notice = document.querySelector('#model-status');
+        notice.textContent = '方块兵开局 · 正在加载真模型…';
+        // Isolate partial resources from arrows/buildings created during the download.
+        const loadingRoot = new THREE.Group();
+        this.root.add(loadingRoot);
+        try {
+            const { createModelFacade } = await import('../three-spike/model-skin.js');
+            if (this.disposed) return;
+            const models = await createModelFacade({
+                scene: loadingRoot, camera, renderer, gpu: true, units: [],
+                cap: { infantry: 300, pikeman: 300, archer: 300, cavalry: 300 },
+                teamColors: TEAM, groundH: this.groundHeight, shadowsEnabled: true,
+                origin: { x: 130, z: 90 }, fallbackToLegacy: false, disposeOnFailure: true
+            });
+            if (this.disposed) { models.dispose(); return; }
+            this.models = models;
+            for (const batch of this.batches.values()) for (const mesh of batch.meshes) mesh.visible = false;
+            for (const corpse of this.corpses) this.removeCorpse(corpse);
+            this.corpses.length = 0;
+            // Register the current population, including recruits spawned while loading.
+            this.sync(scene, this.lastVisualTime || 0, 0);
+            notice.textContent = '真模型 · GPU 骨骼动画';
+        } catch (error) {
+            // A rejected facade can leave attached resources before returning its API.
+            this.models?.dispose(); this.models = null; this.modelIds.clear();
+            const resources = new Set();
+            loadingRoot.removeFromParent();
+            loadingRoot.traverse(object => {
+                if (object.isInstancedMesh) resources.add(object);
+                if (object.geometry) resources.add(object.geometry);
+                if (object.skeleton) resources.add(object.skeleton);
+                for (const material of object.material ? [object.material].flat() : []) {
+                    resources.add(material);
+                    for (const value of Object.values(material)) if (value?.isTexture) resources.add(value);
+                }
+            });
+            for (const resource of resources) {
+                try { resource.dispose(); } catch (cleanupError) { console.warn('[territory-models] 清理失败', cleanupError); }
+            }
+            if (this.disposed) return;
+            for (const batch of this.batches.values()) for (const mesh of batch.meshes) mesh.visible = true;
+            notice.textContent = `真模型加载失败，已使用方块兵：${error?.message || String(error)}`;
+            console.warn('[territory-models] ' + notice.textContent, error);
+        }
     }
 
     parts(type, team) {
@@ -60,8 +112,13 @@ export class BattleView {
 
     attack(unit, now) { this.attacks.set(unit.id, now); }
 
-    recordCorpse(unit, now) {
+    recordCorpse(unit, now, simulationTime) {
         const pose = this.poses.get(unit.id);
+        if (this.models) {
+            this.models.kill(modelUnit(unit), pose?.heading ?? (unit.team === 'red' ? Math.PI / 2 : -Math.PI / 2), simulationTime);
+            this.modelIds.delete(unit.id);
+            return;
+        }
         const group = new THREE.Group();
         group.position.set(unit.gx - 130, this.groundHeight(unit.gx, unit.gy) + 0.4, unit.gy - 90);
         group.rotation.y = pose?.heading ?? (unit.team === 'red' ? Math.PI / 2 : -Math.PI / 2);
@@ -91,6 +148,7 @@ export class BattleView {
     }
 
     sync(scene, now, dt) {
+        this.lastVisualTime = now;
         const groups = new Map(), present = new Set();
         for (const unit of scene.units) {
             if (unit.dead || unit.withdrawn) continue;
@@ -111,6 +169,11 @@ export class BattleView {
             const progress = attack === undefined ? 1 : (now - attack) / 220;
             const lunge = progress >= 0 && progress < 1 ? Math.sin(progress * Math.PI) * 0.4 : 0;
             if (progress >= 1) this.attacks.delete(unit.id);
+            if (this.models) {
+                this.models.sync(modelUnit(unit), pose.heading, now, scene.simulationTime,
+                    attack === undefined ? 0 : attack + 220);
+                continue;
+            }
             this.dummy.position.set(unit.gx - 130 + Math.sin(pose.heading) * lunge,
                 this.groundHeight(unit.gx, unit.gy), unit.gy - 90 + Math.cos(pose.heading) * lunge);
             this.dummy.rotation.set(0, pose.heading, 0);
@@ -118,6 +181,11 @@ export class BattleView {
             const key = `${unit.type}:${unit.team}`;
             if (!groups.has(key)) groups.set(key, { type: unit.type, team: unit.team, matrices: [] });
             groups.get(key).matrices.push(this.dummy.matrix.clone());
+        }
+        if (this.models) {
+            for (const id of this.modelIds) if (!present.has(id)) this.models.release(id);
+            this.modelIds = present;
+            this.models.update(scene.simulationTime, 60, { dt, paused: scene.paused, battleOver: scene.battleOver });
         }
         for (const id of this.poses.keys()) if (!present.has(id)) { this.poses.delete(id); this.attacks.delete(id); }
         for (const batch of this.batches.values()) for (const mesh of batch.meshes) mesh.count = 0;
@@ -212,6 +280,8 @@ export class BattleView {
     }
 
     dispose() {
+        this.disposed = true;
+        this.models?.dispose(); this.models = null; this.modelIds.clear();
         this.world.remove(this.root);
         this.root.traverse(object => {
             object.material?.dispose();

@@ -279,9 +279,15 @@ export function prepareCavalryTemplate(assets, diagnostics = { mounted: {} }) {
     return { horses, rider: riderTemplate };
 }
 
-async function loadModelAssets() {
+async function loadModelAssets(disposeOnFailure = false) {
     const loader = new GLTFLoader();
-    return Object.fromEntries(await Promise.all(Object.entries(PATHS).map(async ([key, path]) => [key, await loader.loadAsync(BASE + path)])));
+    if (!disposeOnFailure) return Object.fromEntries(await Promise.all(Object.entries(PATHS).map(async ([key, path]) => [key, await loader.loadAsync(BASE + path)])));
+    const loaded = [], results = await Promise.allSettled(Object.entries(PATHS).map(async ([key, path]) => {
+        const asset = await loader.loadAsync(BASE + path); loaded.push(asset.scene); return [key, asset];
+    }));
+    const failure = results.find(result => result.status === 'rejected');
+    if (failure) { disposeObjects(loaded); throw failure.reason; }
+    return Object.fromEntries(results.map(result => result.value));
 }
 
 export async function prepareModelTemplates({ cap, teamColors, gpuKinds = [], assets: loadedAssets }) {
@@ -321,81 +327,140 @@ export async function prepareModelTemplates({ cap, teamColors, gpuKinds = [], as
     return { templates, diagnostics, assets };
 }
 
-export async function createModelSkin({ scene, camera, units, cap, teamColors, groundH, shadowsEnabled = true, prepared, assets }) {
+export async function createModelSkin({ scene, camera, units, cap, teamColors, groundH, shadowsEnabled = true, prepared, assets, origin = { x: 35, z: 35 } }) {
     // GPU preparation deliberately omits legacy templates. Rebuild only when needed,
     // from the parsed assets retained by that preparation, without another download.
     if (prepared?.assets && units.some(u => !prepared.templates.has(`${u.team}-${u.type}`))) {
         prepared = await prepareModelTemplates({ cap, teamColors, assets: prepared.assets });
     }
-    const { templates, diagnostics } = prepared || await prepareModelTemplates({ cap, teamColors, assets });
+    const ownsPreparation = !prepared;
+    const preparation = prepared || await prepareModelTemplates({ cap, teamColors, assets });
+    const { templates, diagnostics } = preparation;
     const group = new THREE.Group(); group.name = 'SpikeModelSkins';
     const pools = new Map(), live = new Map(), dead = [], counts = {};
     for (const u of units) counts[`${u.team}-${u.type}`] = (counts[`${u.team}-${u.type}`] || 0) + 1;
+    function makeEntry(template, kind, team) {
+        const root = clone(template.root), meshes = [], skeletons = new Map();
+        root.visible = false;
+        // GLTF primitives share a rig. SkeletonUtils clones each primitive's Skeleton;
+        // collapse identical joint palettes back to one per character/horse per unit.
+        root.traverse(o => {
+            if (!o.isMesh) return;
+            if (o.isSkinnedMesh) {
+                const key = o.skeleton.bones.map(b => b.uuid).join(',');
+                if (skeletons.has(key)) o.skeleton = skeletons.get(key);
+                else skeletons.set(key, o.skeleton);
+            }
+            o.castShadow = false; o.receiveShadow = false;
+            // Fixed conservative local bounds: animation/death must not be culled by bind-pose bounds.
+            if (o.isSkinnedMesh) { o.computeBoundingSphere(); o.boundingSphere.radius *= 3; }
+            meshes.push(o);
+        });
+        const visual = channel(root.getObjectByName('SpikeCharacter'), template.clips);
+        const horseRoot = root.getObjectByName('SpikeHorse');
+        const equine = horseRoot ? channel(horseRoot, template.horseClips) : null;
+        return { root, meshes, visual, equine, kind, team, phase: Math.random(), pending: 0, dead: false, lastLunge: 0 };
+    }
     for (const [key, count] of Object.entries(counts)) {
         const kind = key.slice(key.indexOf('-') + 1), template = templates.get(key), pool = [];
         const otherTeam = key.startsWith('red-') ? 'blue' : 'red';
         if (count + (counts[`${otherTeam}-${kind}`] || 0) > cap[kind]) throw new Error(`${kind} 模型对象池超过 CAP`);
         for (let i = 0; i < count; i++) {
-            const root = clone(template.root), meshes = [], skeletons = new Map();
-            root.visible = false;
-            // GLTF primitives share a rig. SkeletonUtils clones each primitive's Skeleton;
-            // collapse identical joint palettes back to one per character/horse per unit.
-            root.traverse(o => {
-                if (!o.isMesh) return;
-                if (o.isSkinnedMesh) {
-                    const key = o.skeleton.bones.map(b => b.uuid).join(',');
-                    if (skeletons.has(key)) o.skeleton = skeletons.get(key);
-                    else skeletons.set(key, o.skeleton);
-                }
-                o.castShadow = false; o.receiveShadow = false;
-                // Fixed conservative local bounds: animation/death must not be culled by bind-pose bounds.
-                if (o.isSkinnedMesh) { o.computeBoundingSphere(); o.boundingSphere.radius *= 3; }
-                meshes.push(o);
-            });
-            const visual = channel(root.getObjectByName('SpikeCharacter'), template.clips);
-            const horseRoot = root.getObjectByName('SpikeHorse');
-            const equine = horseRoot ? channel(horseRoot, template.horseClips) : null;
-            pool.push({ root, meshes, visual, equine, kind, team: key.split('-')[0], phase: Math.random(), pending: 0, dead: false, lastLunge: 0 });
-            group.add(root);
+            const entry = makeEntry(template, kind, key.split('-')[0]);
+            pool.push(entry); group.add(entry.root);
         }
         pools.set(key, pool); diagnostics.pool[key] = count;
     }
-    const shadows = contactShadows(shadowsEnabled ? units.length : 0), shadowTransform = new THREE.Object3D();
+    let shadows = contactShadows(shadowsEnabled ? units.length : 0);
+    const shadowTransform = new THREE.Object3D();
     shadows.visible = shadowsEnabled;
     group.add(shadows); scene.add(group);
-    let poolExhaustionReported = false;
+    diagnostics.slotOverflows = 0;
     function acquire(u) {
-        const key = `${u.team}-${u.type}`, pool = pools.get(key);
-        const entry = pool?.pop();
-        if (!entry) {
-            if (!poolExhaustionReported) {
-                console.error(`[spike-models] 模型对象池耗尽：${key}`);
-                poolExhaustionReported = true;
+        const key = `${u.team}-${u.type}`;
+        let pool = pools.get(key);
+        if (!pool?.length) {
+            const kind = u.type, template = templates.get(key);
+            if (!template || !cap[kind] || dead.some(e => e.id === u.id)) return null;
+            const allocated = () => (counts[`red-${kind}`] || 0) + (counts[`blue-${kind}`] || 0);
+            if (allocated() >= cap[kind]) {
+                const corpse = dead.find(e => e.kind === kind);
+                if (corpse) releaseEntry(corpse);
             }
-            return null;
+            pool = pools.get(key);
+            if (!pool?.length && allocated() >= cap[kind]) {
+                // Reuse a free slot from the other team with its own tinted template.
+                const otherKey = `${u.team === 'red' ? 'blue' : 'red'}-${kind}`;
+                const spare = pools.get(otherKey)?.pop();
+                if (spare) {
+                    stopEntry(spare); spare.root.removeFromParent();
+                    const skeletons = new Set();
+                    spare.root.traverse(o => { if (o.skeleton) skeletons.add(o.skeleton); });
+                    for (const skeleton of skeletons) skeleton.dispose();
+                    counts[otherKey]--;
+                }
+            }
+            if (!pool?.length && allocated() < cap[kind]) {
+                const entry = makeEntry(template, kind, u.team);
+                group.add(entry.root);
+                if (!pool) { pool = []; pools.set(key, pool); }
+                pool.push(entry); counts[key] = (counts[key] || 0) + 1;
+                diagnostics.pool[key] = counts[key];
+            }
+        }
+        const entry = pool?.pop();
+        if (!entry) { diagnostics.slotOverflows++; return null; }
+        if (shadowsEnabled && live.size + dead.length + 1 > shadows.instanceMatrix.count) {
+            const previous = shadows;
+            shadows = contactShadows(live.size + dead.length + 1); group.add(shadows);
+            previous.removeFromParent(); disposeObjects([previous]);
         }
         if (entry.dead) diagnostics.resurrections++;
         entry.dead = false; entry.pending = 0; entry.hp = u.hp; entry.lastLunge = 0;
-        entry.root.visible = true; entry.root.position.set(u.gx - 35, groundH(u.gx, u.gy), u.gy - 35);
+        entry.root.visible = true; entry.root.position.set(u.gx - origin.x, groundH(u.gx, u.gy), u.gy - origin.z);
         for (const c of [entry.visual, entry.equine]) if (c) {
             c.mixer.stopAllAction(); c.name = ''; c.action = null; c.locked = false; c.fading = [];
             play(c, 'Idle', false, entry.phase);
         }
         live.set(u.id, entry); return entry;
     }
+    function stopEntry(entry) {
+        for (const c of [entry.visual, entry.equine]) if (c) {
+            c.mixer.stopAllAction(); c.mixer.uncacheRoot(c.mixer.getRoot());
+        }
+    }
+    function releaseEntry(entry) {
+        const index = dead.indexOf(entry);
+        if (index >= 0) dead.splice(index, 1);
+        entry.dead = false; entry.root.visible = false;
+        stopEntry(entry);
+        pools.get(`${entry.team}-${entry.kind}`).push(entry);
+    }
+    function release(id) {
+        const entry = live.get(id) || dead.find(e => e.id === id);
+        if (!entry) return;
+        live.delete(id); releaseEntry(entry);
+    }
     // Pre-bind while the simulation is still at deployment: no clones/loads during battle.
     for (const u of units) acquire(u);
     let lastSimulationTime = null, endOffset = 0;
     const api = {
-        diagnostics, pools, live, dead, group, shadows,
-        sync(u, heading, now) {
-            if (u.dead || u.hp <= 0) return;
+        diagnostics, pools, live, dead, group, get shadows() { return shadows; }, release,
+        dispose() {
+            for (const entry of new Set([...live.values(), ...dead, ...[...pools.values()].flat()])) stopEntry(entry);
+            group.removeFromParent();
+            disposeObjects([group, ...(ownsPreparation ? templateRoots(preparation) : []),
+                ...(ownsPreparation && !assets ? Object.values(preparation.assets).map(asset => asset.scene) : [])]);
+            live.clear(); dead.length = 0; pools.clear();
+        },
+        sync(u, heading, now, lungeAt = u._lungeUntil) {
+            if (u.dead || u.hp <= 0 || u.withdrawn) return;
             const entry = live.get(u.id) || acquire(u);
             if (!entry) return;
-            entry.root.position.set(u.gx - 35, groundH(u.gx, u.gy), u.gy - 35);
+            entry.root.position.set(u.gx - origin.x, groundH(u.gx, u.gy), u.gy - origin.z);
             entry.root.rotation.set(0, heading, 0); // both selected assets face +Z
-            const hit = u.hp < entry.hp, attack = u._lungeUntil > now && u._lungeUntil > entry.lastLunge;
-            entry.hp = u.hp; entry.lastLunge = u._lungeUntil || 0;
+            const hit = u.hp < entry.hp, attack = lungeAt > now && lungeAt > entry.lastLunge;
+            entry.hp = u.hp; entry.lastLunge = lungeAt || 0;
             entry.moving = !!u.moving;
             entry.charge = u.moving && (u.state === 'charge' || u.state === 'pierce' || Math.hypot(u.velX || 0, u.velY || 0) > 4.5);
             if (hit || (attack && !entry.visual.locked)) {
@@ -406,7 +471,7 @@ export async function createModelSkin({ scene, camera, units, cap, teamColors, g
         kill(u, heading) {
             const entry = live.get(u.id);
             if (!entry) return;
-            entry.root.position.set(u.gx - 35, groundH(u.gx, u.gy), u.gy - 35);
+            entry.root.position.set(u.gx - origin.x, groundH(u.gx, u.gy), u.gy - origin.z);
             entry.root.rotation.set(0, heading, 0);
             live.delete(u.id); entry.dead = true; entry.pending = 0;
             play(entry.visual, 'Death', true, entry.phase, true);
@@ -430,7 +495,7 @@ export async function createModelSkin({ scene, camera, units, cap, teamColors, g
                 const distanceSq = entry.root.position.distanceToSquared(camera.position);
                 if (shadowsEnabled) {
                     const { x, z } = entry.root.position;
-                    shadowTransform.position.set(x, groundH(x + 35, z + 35) + .02, z);
+                    shadowTransform.position.set(x, groundH(x + origin.x, z + origin.z) + .02, z);
                     shadowTransform.rotation.set(0, entry.root.rotation.y, 0);
                     shadowTransform.scale.set(entry.equine ? .65 : .42, 1, entry.equine ? 1 : .42);
                     shadowTransform.updateMatrix(); shadows.setMatrixAt(shadowCount++, shadowTransform.matrix);
@@ -458,12 +523,32 @@ export async function createModelSkin({ scene, camera, units, cap, teamColors, g
     return api;
 }
 
+function templateRoots(prepared) {
+    return [...(prepared?.templates.values() || [])].flatMap(template => template.horses
+        ? [template.rider.root, ...Object.values(template.horses).map(horse => horse.assembly)] : [template.root]);
+}
+
+function disposeObjects(roots) {
+    const resources = new Set();
+    for (const root of roots) root?.traverse(object => {
+        if (object.isInstancedMesh) resources.add(object);
+        if (object.geometry) resources.add(object.geometry);
+        if (object.skeleton) resources.add(object.skeleton);
+        for (const material of object.material ? [object.material].flat() : []) {
+            resources.add(material);
+            for (const value of Object.values(material)) if (value?.isTexture) resources.add(value);
+        }
+    });
+    for (const resource of resources) resource.dispose();
+}
+
 // main owns only this facade. GPU kinds never enter the legacy pools/channels.
 export async function createModelFacade(options) {
     if (!options.gpu) return createModelSkin(options);
     const gpuCrowds = new Map();
     let prepared = options.prepared;
-    const assets = prepared?.assets || options.assets || (!prepared ? await loadModelAssets() : undefined);
+    let legacy;
+    const assets = prepared?.assets || options.assets || (!prepared ? await loadModelAssets(options.disposeOnFailure) : undefined);
     try {
         const gpuKinds = GPU_KINDS.filter(kind => options.cap[kind] > 0);
         prepared ||= await prepareModelTemplates({ ...options, gpuKinds, assets });
@@ -473,7 +558,7 @@ export async function createModelFacade(options) {
                 units: options.units.filter(u => u.type === kind) }));
         }
         const legacyCap = Object.fromEntries(Object.entries(options.cap).filter(([kind]) => !gpuCrowds.has(kind)));
-        const legacy = await createModelSkin({ ...options, prepared, cap: legacyCap,
+        legacy = await createModelSkin({ ...options, prepared, cap: legacyCap,
             units: options.units.filter(u => !gpuCrowds.has(u.type)) });
         const group = new THREE.Group(); group.name = 'SpikeMixedModelSkins';
         group.add(legacy.group, ...[...gpuCrowds.values()].map(crowd => crowd.group)); options.scene.add(group);
@@ -489,7 +574,7 @@ export async function createModelFacade(options) {
             }
         });
         const gpuDiagnostics = { byKind: Object.fromEntries([...gpuCrowds].map(([kind, crowd]) => [kind, crowd.diagnostics])) };
-        for (const key of ['active', 'corpses', 'resurrections', 'drawCalls', 'mixers', 'bakedRows', 'atlasBytes']) {
+        for (const key of ['active', 'corpses', 'resurrections', 'drawCalls', 'mixers', 'bakedRows', 'atlasBytes', 'slotOverflows']) {
             Object.defineProperty(gpuDiagnostics, key, { enumerable: true,
                 get: () => [...gpuCrowds.values()].reduce((sum, crowd) => sum + crowd.diagnostics[key], 0) });
         }
@@ -498,10 +583,21 @@ export async function createModelFacade(options) {
         return {
             group, gpuCrowds, gpu: gpuCrowds.get('infantry'), legacy, diagnostics,
             isGpuKind: kind => gpuCrowds.has(kind),
-            sync(u, heading, wallTime, simTime) {
+            release(id) {
+                legacy.release(id);
+                for (const crowd of gpuCrowds.values()) crowd.release(id);
+            },
+            dispose() {
+                for (const crowd of gpuCrowds.values()) crowd.dispose();
+                legacy.dispose(); group.removeFromParent();
+                // Parsed sources are owned by the page when no prepared/assets were supplied.
+                disposeObjects([...(options.prepared ? [] : templateRoots(prepared)),
+                    ...(!options.prepared && !options.assets ? Object.values(assets).map(asset => asset.scene) : [])]);
+            },
+            sync(u, heading, wallTime, simTime, lungeAt = u._lungeUntil) {
                 const crowd = gpuCrowds.get(u.type);
-                if (crowd) crowd.sync(u, heading, simTime);
-                else legacy.sync(u, heading, wallTime);
+                if (crowd) crowd.sync(u, heading, simTime, lungeAt);
+                else legacy.sync(u, heading, wallTime, lungeAt);
             },
             kill(u, heading, simTime) {
                 const crowd = gpuCrowds.get(u.type);
@@ -518,7 +614,10 @@ export async function createModelFacade(options) {
         };
     } catch (error) {
         for (const crowd of gpuCrowds.values()) crowd.dispose();
+        legacy?.dispose();
         // Production boot owns the block-soldier fallback and its HUD notice.
+        if (options.fallbackToLegacy === false) disposeObjects([...(options.prepared ? [] : templateRoots(prepared)),
+            ...(!options.prepared && !options.assets ? Object.values(assets).map(asset => asset.scene) : [])]);
         if (options.fallbackToLegacy === false) throw error;
         console.error('[spike-gpu] 初始化失败，整体退回旧模型路径', error);
         return createModelSkin({ ...options, prepared, assets });
