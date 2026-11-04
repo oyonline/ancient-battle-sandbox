@@ -117,7 +117,8 @@ test('AI 夺场：无马场的营优先争夺中立马场', () => {
     battalion.refreshPace();
     s.battalions.aiAssign();
     const ranchIndex = s.flags.findIndex(f => f.role === 'ranch');
-    assert.equal(battalion.orderFlag, ranchIndex, '没马场时营被派往马场（加分压过其它中立点）');
+    assert.equal(s.battalions.army.red.target, ranchIndex, '没马场时军团主攻马场（加分压过其它中立点）');
+    assert.ok(battalion.stagePoint, '集合阶段全营先开赴集合点，不单独直扑旗');
     resetBoardSize();
 });
 

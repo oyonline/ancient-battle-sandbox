@@ -46,7 +46,9 @@ export const LOCKSTEP = {
 // 2026-10-30 field3d-lan：扩展非领土投影格式与对冲联机协议，混玩法/版本必须拒绝。
 // 周期 hash 包统一增加 side，接收端忽略自身回环后再比较对端哈希。
 // 2026-10-31 field3d-orders：新增全军命令。
-export const SIM_VERSION = '2026-10-31-field3d-orders';
+// 2026-11-04 territory-army：领土营级 AI 改为每方一个军团（主攻旗/集合/突击两阶段），
+// 营新增 stagePoint、BattalionSystem 新增 army 状态；投影格式与行为同时改变。
+export const SIM_VERSION = '2026-11-04-territory-army';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {
@@ -156,12 +158,21 @@ export function battleProjection(scene) {
         for (const b of scene.battalions.battalions) {
             parts.push(b.id, teamChar(b.team), b.gathering ? 1 : 0, b.cavalry ? 1 : 0,
                 b.orderFlag ?? '', b.orderPoint ? Math.round(b.orderPoint.gx * 1e4) + ':' + Math.round(b.orderPoint.gy * 1e4) : '',
+                // 军团集合点：AI 行军目标，改动即改变轨迹，坐标按 1e4 取整入哈希。
+                b.stagePoint ? Math.round(b.stagePoint.gx * 1e4) + ':' + Math.round(b.stagePoint.gy * 1e4) : '',
                 b.retreat ? 1 : 0, b.stance, Math.round(b.chargeUntil || 0), Math.round(b.createdAt || 0),
                 b.members.map(u => u.id).join('.'));
         }
         parts.push('pool',
             ...roster.map(t => scene.battalions.pool[t]?.id ?? ''),
             ...roster.map(t => scene.battalions.cavPool[t]?.id ?? ''));
+        // 每方军团状态（主攻旗/阶段/进入集合的模拟时刻）：决定全营下一步目标，
+        // 必须直接入哈希；时间按 ms 取整，与营 createdAt 同纪律。
+        parts.push('army');
+        for (const team of roster) {
+            const army = scene.battalions.army?.[team];
+            parts.push(teamChar(team), army?.target ?? '', army?.phase ?? '', Math.round(army?.stageSince || 0));
+        }
     }
     const territory = scene.territory;
     if (!territory) {

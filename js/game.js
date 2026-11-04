@@ -1027,6 +1027,10 @@ export class IsoBattleScene extends Phaser.Scene {
         else if (battalion.orderPoint) {
             target = battalion.orderPoint;
         }
+        // 军团集合阶段：先去集合点（在贴脸敌情检查之后，遇敌照常接战）。
+        else if (!battalion.playerOrdered && battalion.stagePoint) {
+            target = battalion.stagePoint;
+        }
         else if (battalion.orderFlag != null && this.flags[battalion.orderFlag]) {
             const flag = this.flags[battalion.orderFlag];
             if (Math.hypot(flag.gx - unit.gx, flag.gy - unit.gy) <= 4.5) {

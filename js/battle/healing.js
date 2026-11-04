@@ -233,6 +233,7 @@ export function updateMedic(scene, unit, now, dt) {
     if (battalion?.gathering) target = battalion.gatherPoint;
     else if (battalion?.retreat) target = scene.battalions?.homeRally(unit.team);
     else if (battalion?.orderPoint) target = battalion.orderPoint;
+    else if (!battalion?.playerOrdered && battalion?.stagePoint) target = battalion.stagePoint;
     else if (battalion?.orderFlag != null && scene.flags?.[battalion.orderFlag] &&
         (scene.flags[battalion.orderFlag].owner == null || !sameSide(scene, scene.flags[battalion.orderFlag].owner, unit.team))) target = scene.flags[battalion.orderFlag];
     else {

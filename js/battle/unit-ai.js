@@ -9,6 +9,7 @@ import { Terrain } from '../terrain.js';
 import { CombatRules } from '../combat.js';
 import { BATTALION } from './battalion.js';
 import { updateMedic } from './healing.js';
+import { quantizeDecision } from './determinism.js';
 import { dist, clamp, unitRand, moveToward } from '../units.js';
 import { isHostile, ownsFlag } from '../factions.js';
 
@@ -172,6 +173,20 @@ export function updateNormalUnit(scene, unit, now, dt, guardAnchor = null) {
                 return;
             }
             // 敌近且在缰绳内：落入正常接敌分支（好战营追得更远才回位）
+        }
+        // 军团集合点：敌尚在 6 格外时全营先去集合点（与骑兵接管同一"贴脸才接战"口径）；
+        // 敌已贴脸则不拦截，落入下方正常接敌分支。距离阈值先量化再比较：
+        // 镜像坐标下 1.6000000000000014 / 1.5999999999999943 这类表示噪声
+        // 不能翻转"走/停"决策（docs/DETERMINISM.md）。
+        if (battalion && !battalion.gathering && !battalion.playerOrdered && battalion.stagePoint &&
+            !guardAnchor && quantizeDecision(minD) > 6) {
+            const stage = battalion.stagePoint;
+            unit.target = nearest;
+            if (quantizeDecision(Math.hypot(stage.gx - unit.gx, stage.gy - unit.gy)) > 1.6) {
+                moveToward(unit, stage.gx, stage.gy, unit.type === 'cavalry'
+                    ? unit.typeData.speed : battalion.pace * BATTALION.PACE_SLACK, dt);
+            }
+            return;
         }
         const flagMarch = scene.battleOptions.control || scene.battleOptions.territory;
         if (flagMarch && !guardAnchor && minD > engageRange && foeCount > 3 &&

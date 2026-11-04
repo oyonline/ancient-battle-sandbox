@@ -45,6 +45,7 @@ test('旗边敌情优先：目标旗旁敌兵贴近时交还接敌，不再被�
     flag.owner = null; flag.progress = 0;
     const troop = cavalryTroop(scene, [[flag.gx - 4, flag.gy - 1], [flag.gx - 4.5, flag.gy + 1], [flag.gx - 5, flag.gy]]);
     troop.orderFlag = 2;
+    troop.playerOrdered = true;   // 显式下令的骑队不参与军团 AI（本用例只测接敌优先）
     const defenders = [
         addUnit(scene, 'blue', 'infantry', flag.gx + 0.5, flag.gy),
         addUnit(scene, 'blue', 'infantry', flag.gx - 0.5, flag.gy + 1)
