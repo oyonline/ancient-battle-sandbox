@@ -191,43 +191,42 @@ function campSceneFlags() {
     return scene.flags;
 }
 
-test('中央高地：归属方 + 明确驻守令 + 8 格内，士气损失 −10%', () => {
+test('中央高地：归属方 + 8 格内，士气损失 −20%', () => {
     const a = moraleFixture();
-    const plain = a.add('red', a.hill.gx, a.hill.gy, { orderPoint: { gx: a.hill.gx, gy: a.hill.gy } });
+    const plain = a.add('red', a.hill.gx, a.hill.gy);
     a.hill.owner = 'blue';                     // 高地不在自己手里
     a.step(0.1, () => a.morale.queueDamage(plain, 30));
     const baseline = 100 - plain.morale;
 
     const b = moraleFixture();
-    const guarded = b.add('red', b.hill.gx, b.hill.gy, { orderPoint: { gx: b.hill.gx, gy: b.hill.gy } });
+    const guarded = b.add('red', b.hill.gx, b.hill.gy);
     b.hill.owner = 'red';
     b.step(0.1, () => b.morale.queueDamage(guarded, 30));
     const reduced = 100 - guarded.morale;
     assert.ok(Math.abs(baseline - 7.2) < 1e-9, `无高地时损失 7.2（实际 ${baseline}）`);
-    assert.ok(Math.abs(reduced - baseline * 0.9) < 1e-9, '有高地时损失 ×0.9');
+    assert.ok(Math.abs(reduced - baseline * 0.8) < 1e-9, '有高地时损失 ×0.8');
 });
 
-test('中央高地：离开范围 / 解除驻守 / 失去高地立即失效，且只减损失不加恢复', () => {
+test('中央高地：离开范围 / 失去高地立即失效，无驻守令也生效，且只减损失不加恢复', () => {
     const hill = { gx: 0, gy: 0 };
     const cases = [
         ['超出 8 格', unit => { unit.gx = 20; }, null],
-        ['没有驻守令', unit => { unit.gx = 0; unit.battalion.orderPoint = null; }, null],
         ['高地属敌方', () => {}, 'blue'],
-        ['只有移动令不算驻守', unit => { unit.gx = 0; unit.battalion.orderPoint = null; unit.battalion.orderFlag = 0; }, null]
+        ['高地中立', () => {}, null, true]
     ];
-    for (const [name, mutate, owner] of cases) {
+    for (const [name, mutate, owner, neutral] of cases) {
         const f = moraleFixture();
-        const unit = f.add('red', 0, 0, { orderPoint: { gx: 0, gy: 0 } });
-        f.hill.owner = owner ?? 'red';
+        const unit = f.add('red', 0, 0);
+        f.hill.owner = neutral ? null : owner ?? 'red';
         mutate(unit);
         if (unit.gx === 0 && unit.gy === 0) unit.gx = f.hill.gx, unit.gy = f.hill.gy;
         const scale = moraleLossScale(f.scene, unit);
         assert.equal(scale, 1, `${name}：不生效`);
     }
     const ok = moraleFixture();
-    const unit = ok.add('red', ok.hill.gx, ok.hill.gy, { orderPoint: { gx: 0, gy: 0 } });
+    const unit = ok.add('red', ok.hill.gx, ok.hill.gy);   // 没有驻守令也生效
     ok.hill.owner = 'red';
-    assert.equal(moraleLossScale(ok.scene, unit), 0.9);
+    assert.equal(moraleLossScale(ok.scene, unit), 0.8);
     const trait = SITE_TRAITS.hill;
     assert.equal(trait.radius, 8);
     assert.ok(!('hp' in trait) && !('atk' in trait) && !('range' in trait), '高地不直接加生命/攻击/射程');

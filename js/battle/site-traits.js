@@ -6,6 +6,7 @@
 // - 占领型奖励一律按"当前归属"判定：易主即刻失效，不残留、不追溯、不重复领取。
 // - 局部效果只作用于该据点及其合法受益对象；大本营（siteId === 'home'）永不套用。
 // - 全局解锁 / 通行效果取"是否拥有"（ranch / ford），不按据点数量叠加。
+// - 分量（weight）是收入 / 票数 / AI 主攻加分的整数口径，东西同类据点共用。
 // - 派生状态（哪一方拥有哪类角色）只在归属变化时刷新，不做逐兵 × 全部据点扫描。
 //
 // 确定性：本模块无随机数；距离阈值比较先量化（见 docs/DETERMINISM.md）。
@@ -18,14 +19,14 @@ export const DEFAULT_SHALLOW_SPEED = 0.7;
 
 export const SITE_TRAITS = {
     ranch: {
-        name: '马场', icon: '🐎', scope: 'global',
+        name: '马场', icon: '🐎', scope: 'global', weight: 2,
         terrain: '北岭缓坡草场（地形本身无战斗加成）',
         reward: '骑兵征募权',
         condition: '拥有任一马场即可征募骑兵；两座马场不叠加',
         detail: '丢光马场只是断补充：已在场 / 已在队列的骑兵照常作战'
     },
     forest: {
-        name: '林口', icon: '🌲', scope: 'local',
+        name: '林口', icon: '🌲', scope: 'local', weight: 1,
         terrain: '林内移速：骑兵 55% · 其他 85%',
         reward: '营建加速：本点施工时间 −20%',
         condition: '该据点当前归属己方时生效（施工速度 ×1.25）',
@@ -33,7 +34,7 @@ export const SITE_TRAITS = {
         buildSpeed: 1.25
     },
     bridge: {
-        name: '桥头', icon: '🌉', scope: 'local',
+        name: '桥头', icon: '🌉', scope: 'local', weight: 2,
         terrain: '跨河通道与桥面地形（不可通行水域照旧）',
         reward: '工事：本点建筑受到伤害 −10%',
         condition: '该据点当前归属己方时，本点己方建筑生效',
@@ -41,15 +42,15 @@ export const SITE_TRAITS = {
         damageTaken: 0.9
     },
     hill: {
-        name: '中央高地', icon: '⛰️', scope: 'local',
+        name: '中央高地', icon: '⛰️', scope: 'local', weight: 3,
         terrain: '高差：居高射程加成 + 俯攻加成（对双方都生效）',
-        reward: '稳固军心：驻守营队士气损失 −10%',
-        condition: '高地归属己方 + 该营有明确驻守令 + 在旗点 8 格内',
+        reward: '稳固军心：高地 8 格内己方士气损失 −20%',
+        condition: '高地归属己方，旗点 8 格内的己方单位',
         detail: '只减少负向士气损失，不加生命 / 攻击 / 射程，也不加快士气恢复',
-        moraleLoss: 0.9, radius: 8
+        moraleLoss: 0.8, radius: 8
     },
     ford: {
-        name: '渡口', icon: '🌊', scope: 'global',
+        name: '渡口', icon: '🌊', scope: 'global', weight: 1,
         terrain: '中央浅滩可通行，但蹚水移速 70%',
         reward: '通行：浅滩移速 70% → 85%',
         condition: '拥有任一渡口；两座渡口不叠加',
@@ -57,7 +58,7 @@ export const SITE_TRAITS = {
         shallowSpeed: 0.85
     },
     crossroad: {
-        name: '路口', icon: '🛤️', scope: 'local',
+        name: '路口', icon: '🛤️', scope: 'local', weight: 1,
         terrain: '下翼迂回岔路地形（无战斗修正）',
         reward: '补给：本点伤兵收容 +4 人（8→12 / 医帐 16→20）',
         condition: '该据点当前归属己方时生效',
@@ -80,6 +81,9 @@ export const SITE_AI = {
 };
 
 export function traitOf(role) { return SITE_TRAITS[role] ?? null; }
+
+// 据点分量：加权旗分（整数）与 AI 主攻加分的唯一来源；未知角色按 1 分兜底。
+export function siteWeight(role) { return SITE_TRAITS[role]?.weight ?? 1; }
 
 // 派生归属缓存：只在归属串变化时重建。11 面旗的签名是纯整数运算，
 // 单帧开销可忽略；即便测试直接改写 flag.owner 也不会读到陈旧结果。
@@ -212,15 +216,14 @@ function hillFlag(scene) {
     return index >= 0 ? flags[index] : null;
 }
 
-// 中央高地：驻守营队成员在旗点 8 格内的士气损失系数。
-// 只影响负向损失；离开范围 / 解除驻守 / 失去高地立刻回到 1。
+// 中央高地：高地归属己方时，旗点 8 格内己方单位的士气损失系数。
+// 只影响负向损失；离开范围 / 失去高地立刻回到 1。
 export function moraleLossScale(scene, unit) {
     if (!scene?.battleOptions?.territory) return 1;      // 非领土模式没有旗点，直接短路
     const trait = SITE_TRAITS.hill;
     const flag = hillFlag(scene);
     if (!flag) return 1;
     if (flag.owner == null || !sameSide(scene, unit.team, flag.owner)) return 1;
-    if (!unit.battalion?.orderPoint) return 1;
     if (q(Math.hypot(flag.gx - unit.gx, flag.gy - unit.gy)) > trait.radius) return 1;
     return trait.moraleLoss;
 }

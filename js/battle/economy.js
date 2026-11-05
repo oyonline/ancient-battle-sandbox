@@ -14,10 +14,10 @@ import { TEAMS } from '../factions.js';
 export const TERRITORY = {
     W: 260, H: 180,                   // 领土面积为原版四倍；常规模式仍为 70×70
     BASE_INCOME: 5,                   // 基础军费收入（军费/秒，无旗也有）
-    FLAG_INCOME: 4,                   // 每面归属旗额外收入（军费/秒）
+    FLAG_INCOME: 4,                   // 每点据点分量额外收入（军费/秒）
     START_TREASURY: 150,              // 开局军费
     TICKETS: 900,                     // 双方开局票数
-    TICKET_DRAIN: 1.6,                // 票数流失速率 = 旗数差 × 此值（票/秒）
+    TICKET_DRAIN: 1.6,                // 票数流失速率 = 加权旗分差 × 此值（票/秒）
     COST_MULT: 6,                     // 兵种造价系数（剑士30/枪36/弓48/骑72）
     TRAIN_MS: { infantry: 3000, axe: 4500, pikeman: 4000, archer: 5000, cavalry: 8000, worker: 3500, medic: 4500 },
     ALIVE_CAP: 220,                   // 单方在场兵力上限（性能与规模护栏；队列出兵到顶暂停）
@@ -41,13 +41,14 @@ export class TerritoryEconomy {
         this.spent = { red: 0, blue: 0, black: 0 };
     }
 
-    incomeRate(ownedFlags) {
-        return TERRITORY.BASE_INCOME + ownedFlags * TERRITORY.FLAG_INCOME;
+    // 参数是加权旗分（本方归属旗的 weight 之和，含同盟），不是旗数。
+    incomeRate(flagScore) {
+        return TERRITORY.BASE_INCOME + flagScore * TERRITORY.FLAG_INCOME;
     }
 
-    tick(dt, owned) {
+    tick(dt, flagScore) {
         for (const team of TEAMS) {
-            const amount = this.incomeRate(owned?.[team] ?? 0) * dt;
+            const amount = this.incomeRate(flagScore?.[team] ?? 0) * dt;
             this.treasury[team] += amount;
             this.earned[team] += amount;
         }
@@ -62,15 +63,15 @@ export class TerritoryEconomy {
     }
 }
 
-// 票数流失：占多数旗的一方让对方流失，速率 = 旗数差 × TICKET_DRAIN。
-// 5 面旗下 3:2 → 1.6/秒（约 9 分钟耗尽 900 票）；4:1 / 5:0 递增压制。
+// 票数流失：加权旗分占优的一方让对方流失，速率 = 加权旗分差 × TICKET_DRAIN。
+// 例如 3:2 差 1 → 1.6/秒（约 9 分钟耗尽 900 票）；分量差越大压制越强。
 export class TicketSystem {
     constructor() {
         this.tickets = { red: TERRITORY.TICKETS, blue: TERRITORY.TICKETS, black: TERRITORY.TICKETS };
     }
 
-    tick(dt, owned) {
-        const margin = owned.red - owned.blue;
+    tick(dt, flagScore) {
+        const margin = flagScore.red - flagScore.blue;
         if (margin > 0) {
             this.tickets.blue = Math.max(0, this.tickets.blue - margin * TERRITORY.TICKET_DRAIN * dt);
         } else if (margin < 0) {

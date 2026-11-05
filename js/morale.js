@@ -266,7 +266,7 @@ export class MoraleSystem {
             const pressure = record.pressure * Math.max(0, pressureSeconds);
             const impactLoss = casualty + charge;
             const realLoss = impactLoss + pressure;
-            // 中央高地稳固军心：归属方 + 明确驻守令的营队成员 + 旗点 8 格内 → 士气损失 −10%。
+            // 中央高地稳固军心：高地归属己方，旗点 8 格内的己方单位 → 士气损失 −20%。
             // 只缩放负向损失，不加生命 / 攻击 / 射程，也不影响恢复速度。
             const lossScale = moraleLossScale(this.scene, unit);
             let totalLoss = lossScale === 1 ? realLoss + contagion : (realLoss + contagion) * lossScale;

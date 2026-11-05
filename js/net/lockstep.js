@@ -48,7 +48,9 @@ export const LOCKSTEP = {
 // 2026-10-31 field3d-orders：新增全军命令。
 // 2026-11-04 territory-army：领土营级 AI 改为每方一个军团（主攻旗/集合/突击两阶段），
 // 营新增 stagePoint、BattalionSystem 新增 army 状态；投影格式与行为同时改变。
-export const SIM_VERSION = '2026-11-04-territory-army';
+// 2026-11-04 site-weight：据点分量分档，收入/票数/AI 主攻打分与高地奖励语义改变；
+// 本卡不新增投影字段，但行为与旧版本不兼容，混版本必须拒绝。
+export const SIM_VERSION = '2026-11-04-site-weight';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {

@@ -4,7 +4,7 @@ import { Terrain } from '../terrain.js';
 import { clamp, dist } from '../units.js';
 import { TW, TH, OX, OY, gridToScreen, sampleGroundRing, lerpColor } from './metrics.js';
 import { TERRITORY } from '../battle/economy.js';
-import { traitOf } from '../battle/site-traits.js';
+import { traitOf, siteWeight } from '../battle/site-traits.js';
 import { ownerMark, ownerDisplayColor, sideLabel, teamColor, canonicalOf, RELATIONS_MUTUAL } from '../factions.js';
 
 // Match the compact economic strip without measuring DOM layout every frame.
@@ -43,7 +43,7 @@ export function flagSiteSignature(flag) {
 // 旗标三行：①归属 + 军费 ②占领后归谁、拿到什么 ③地形原本就有的效果。
 export function flagLabelText(scene, flag) {
     if (!flag) return '';
-    const lines = [`${siteOwnerMark(scene, flag.owner)} ${flag.name} · 军费 +${TERRITORY.FLAG_INCOME}/秒`];
+    const lines = [`${siteOwnerMark(scene, flag.owner)} ${flag.name} · 军费 +${TERRITORY.FLAG_INCOME * siteWeight(flag.role)}/秒`];
     const trait = siteTraitOf(flag);
     if (!trait) return lines[0];
     const owned = flag.owner ?? null;

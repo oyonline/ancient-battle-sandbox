@@ -8,6 +8,7 @@ import { TERRITORY } from '../js/battle/economy.js';
 import { buildBankField } from '../js/render/terrain-naturalness.js';
 import { riverFlowMark } from '../js/render/territory-map.js';
 import { OverlayRenderer } from '../js/render/overlay.js';
+import { siteWeight } from '../js/battle/site-traits.js';
 
 const radius = 0.36;
 const CX = () => TERRITORY.W / 2, CY = () => TERRITORY.H / 2;
@@ -116,7 +117,8 @@ test('territory benefits appear once and clear on redeploy or switching to score
     const overlay = new OverlayRenderer(scene);
     overlay.updateFlagLabels(); overlay.updateFlagLabels();
     assert.equal(labels.length, 11, 'no per-frame label creation');
-    assert.ok(labels.every(l => l.text.includes('军费 +4/秒')));
+    assert.ok(labels.every((label, i) => label.text.includes(
+        `军费 +${TERRITORY.FLAG_INCOME * siteWeight(scene.flags[i].role)}/秒`)));
     // 本轮起旗标分「地形原有 / 占领奖励」两段：高地地形效果仍然上屏，文案取自 site-traits.js。
     assert.ok(labels.some(l => l.text.includes('地形：') && l.text.includes('居高射程加成')));
     assert.ok(labels.some(l => l.text.includes('占领：')), '占领奖励单独成段');

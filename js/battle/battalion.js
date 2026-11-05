@@ -12,7 +12,7 @@ import { homePosition } from '../territory-map.js';
 import { BATTALION_POWER } from './economy.js';
 import { UNIT_TYPES } from '../units.js';
 import { board } from '../board.js';
-import { SITE_AI, traitState } from './site-traits.js';
+import { SITE_AI, traitState, siteWeight } from './site-traits.js';
 import { quantizeDecision } from './determinism.js';
 import { TEAMS, activeTeams, isHostile, sameSide, enemiesOf, groupOf, canonicalOf } from '../factions.js';
 
@@ -31,6 +31,7 @@ export const BATTALION = {
     ARMY_STAGE_RADIUS: 6,      // 集合点判定半径：半径内战力够比例即转突击
     ARMY_ASSAULT_SHARE: 0.7,   // 转突击所需集合战力占军团总战力的比例
     ARMY_STAGE_TIMEOUT_MS: 20000, // 集合超时（模拟时钟）：未集齐也按时压上，不 endless 蹲点
+    ARMY_WEIGHT_BONUS: 18,     // 主攻目标按据点分量加分：每多 1 分量 +18（只用于主攻打分）
     TIE_EPS: 1e-6              // 主攻目标平局决胜键的容差：原始浮点差 > 1e-6 才分胜负，
                                // 以内视为同一距离/偏移（只吸收 ~1e-14 级浮点表示噪声）
 };
@@ -436,6 +437,8 @@ export class BattalionSystem {
                     let score = 50 + (neutral ? 8 : 0) + (mine - theirs) * 0.4
                         - quantizeDecision(Math.hypot(flag.gx - center.gx, flag.gy - center.gy)) * 0.35;
                     if (weight) score += (held ? weight.contestHeld : weight.contest) * need;
+                    // 据点分量：只加在主攻目标打分上，分量越高越值得全军压上。
+                    score += (siteWeight(flag.role) - 1) * BATTALION.ARMY_WEIGHT_BONUS;
                     const quantized = quantizeDecision(score);
                     // 量化主分相同（差 ≤1e-9）才用原始浮点几何键决胜；三键都容差内
                     // 相等时保持固定旗序。绝不能把距离/平方再量化——那会造出人为

@@ -187,45 +187,45 @@ test('建筑面板受益说明覆盖全部归属组合：己方/敌方/中立/�
 
 // ==================== 复审剩余问题（第二轮）：高地面板的奖励对象和条件 ====================
 // 复现：高地建筑面板说"奖励对此建筑生效"——错误。高地特色实际作用于
-// "高地归属方的、有明确驻守令且位于旗点 8 格内的营队成员"（士气损失 −10%），
-// 与建筑无关；面板不得据此宣称附近营队已经满足条件。
-test('高地面板：奖励对象是营队而非建筑，写明必要条件且不宣称已满足', t => {
+// "高地归属方、位于旗点 8 格内的单位"（士气损失 −20%），
+// 与建筑无关；面板不得据此宣称附近单位已经满足条件。
+test('高地面板：奖励对象是单位而非建筑，写明范围且不宣称已满足', t => {
     const { scene, camps, open } = buildingPanelFixture(t);
     const hill = scene.flags.findIndex(f => f.role === 'hill');
 
-    // 己方高地上有己方建筑：写明受益对象（营队）与两个必要条件，不作用于建筑。
+    // 己方高地上有己方建筑：写明受益对象（单位）与范围，不作用于建筑。
     scene.flags[hill].owner = 'red';
     const mine = camps.createBuilding('red', 'camp', hill, true);
     const markup = open(mine);
     assert.match(markup, /⛰️中央高地/, '高地特色上屏');
-    assert.match(markup, /营队/, '受益对象是营队');
-    assert.match(markup, /驻守令/, '必要条件之一：明确驻守令');
-    assert.match(markup, /8 格内/, '必要条件之二：旗点 8 格内');
-    assert.match(markup, /士气损失 −10%/, '效果数值来自特色表');
+    assert.match(markup, /单位/, '受益对象是单位');
+    assert.doesNotMatch(markup, /驻守令/, '不再要求驻守令');
+    assert.match(markup, /8 格内/, '范围：旗点 8 格内');
+    assert.match(markup, /士气损失 −20%/, '效果数值来自特色表');
     assert.doesNotMatch(markup, /此建筑生效/, '不得再说"奖励对此建筑生效"');
-    assert.doesNotMatch(markup, /已满足|已经满足/, '不得宣称附近营队已满足条件');
+    assert.doesNotMatch(markup, /已满足|已经满足/, '不得宣称附近单位已满足条件');
     assert.match(markup, /生命 \d+\/\d+/, '建筑自身状态保留');
 
     // 据点失守但旧建筑仍存在：说明减损跟着高地新主人走，本建筑无关。
     scene.flags[hill].owner = 'blue';
     const lost = open(mine);
     assert.match(lost, /高地已归蓝方/, '失守后说明高地的当前归属');
-    assert.match(lost, /营队/, '受益对象仍是营队');
+    assert.match(lost, /单位/, '受益对象仍是单位');
     assert.doesNotMatch(lost, /此建筑生效|此建筑不再受益/, '高地奖励与建筑无关，不用建筑口径表述');
 
     // 中立高地。
     scene.flags[hill].owner = null;
     assert.match(open(mine), /该点中立/, '中立高地说占领后生效');
-    assert.match(open(mine), /营队/);
+    assert.match(open(mine), /单位/);
 
-    // 敌方高地上有敌方建筑：客观说明奖励归蓝方营队。
+    // 敌方高地上有敌方建筑：客观说明奖励归蓝方单位。
     scene.flags[hill].owner = 'blue';
     const theirs = camps.createBuilding('blue', 'camp', hill, true);
-    assert.match(open(theirs), /蓝方.*营队/);
+    assert.match(open(theirs), /蓝方.*单位/);
     assert.doesNotMatch(open(theirs), /此建筑生效/);
 });
 
-test('面板按特色区分受益类别：建筑（林口/桥头）、营队（高地）、据点收容（路口）', t => {
+test('面板按特色区分受益类别：建筑（林口/桥头）、单位（高地）、据点收容（路口）', t => {
     const { scene, camps, open } = buildingPanelFixture(t);
     const forest = scene.flags.findIndex(f => f.role === 'forest');
     const bridge = scene.flags.findIndex(f => f.role === 'bridge');

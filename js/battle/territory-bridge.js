@@ -2,7 +2,7 @@
 import { homePosition } from '../territory-map.js';
 import { board } from '../board.js';
 import { TERRITORY } from './economy.js';
-import { traitOf, traitState, ownsRole } from './site-traits.js';
+import { traitOf, traitState, ownsRole, siteWeight } from './site-traits.js';
 import { TEAMS, RELATIONS_MUTUAL, groupOf, canonicalOf, sameSide, sideLabel } from '../factions.js';
 
 export function updateFlags(scene, dt) {
@@ -103,14 +103,16 @@ export function updateFlags(scene, dt) {
 
 export function updateTerritory(scene, dt) {
     scene.updateFlags(dt);
-    // 归属计数对盟友共享：红蓝联军下任一盟友的据点同时计入双方（既有二元模式结果不变）。
-    const owned = { red: 0, blue: 0, black: 0 };
+    // 加权旗分：盟友共享归属（红蓝联军下任一盟友的据点同时计入双方），
+    // 每面旗按 SITE_TRAITS 的整数 weight 计入，全程整数、无新增浮点阈值。
+    const flagScore = { red: 0, blue: 0, black: 0 };
     for (const flag of scene.flags) {
         if (!flag.owner) continue;
-        for (const team of TEAMS) if (sameSide(scene, team, flag.owner)) owned[team]++;
+        const weight = siteWeight(flag.role);
+        for (const team of TEAMS) if (sameSide(scene, team, flag.owner)) flagScore[team] += weight;
     }
     const state = scene.territory;
-    state.econ.tick(dt, owned);
+    state.econ.tick(dt, flagScore);
     state.recruit.update();
     state.camps?.update(dt);
     state.healing?.update(dt);
@@ -120,7 +122,7 @@ export function updateTerritory(scene, dt) {
     }
     const before = {};
     for (const team of TEAMS) before[team] = state.tickets.tickets[team];
-    state.tickets.tick(dt, owned);
+    state.tickets.tick(dt, flagScore);
     for (const team of TEAMS) {
         if (before[team] > TERRITORY.TICKETS / 2 && state.tickets.tickets[team] <= TERRITORY.TICKETS / 2) {
             scene.addBattleEvent(`tickets-half-${team}`,

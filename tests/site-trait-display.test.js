@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { TERRITORY } from '../js/battle/economy.js';
-import { SITE_TRAITS, traitOf } from '../js/battle/site-traits.js';
+import { SITE_TRAITS, traitOf, siteWeight } from '../js/battle/site-traits.js';
 import { OverlayRenderer, flagLabelText, traitSiteRow } from '../js/render/overlay.js';
 import { UI } from '../js/ui.js';
 import { makeScene } from './battle-harness.js';
@@ -40,7 +40,7 @@ test('旗标三行：归属+军费 / 占领奖励 / 地形本有效果，奖励�
     renderer.updateFlagLabels();
     const lines = objects[0].text.split('\n');
     assert.equal(lines.length, 3, '三行：归属 / 占领奖励 / 地形');
-    assert.equal(lines[0], `🔴 西桥头 · 军费 +${TERRITORY.FLAG_INCOME}/秒`);
+    assert.equal(lines[0], `🔴 西桥头 · 军费 +${TERRITORY.FLAG_INCOME * siteWeight('bridge')}/秒`);
     assert.match(lines[1], /^占领：红方/);
     assert.match(lines[1], /工事/, '占领奖励取自特色表');
     assert.match(lines[1], /本点建筑受到伤害 −10%/);
@@ -56,7 +56,7 @@ test('旗标按归属换标记：中立显示 ⚪ 并提示占领归属，长奖
     const { renderer, objects } = labelScene([bridge, crossroad, neutralCrossroad]);
     renderer.updateFlagLabels();
     const neutral = objects[0].text.split('\n');
-    assert.match(neutral[0], /^⚪ 西桥头 · 军费 \+4\/秒$/);
+    assert.match(neutral[0], new RegExp(`^⚪ 西桥头 · 军费 \\+${TERRITORY.FLAG_INCOME * siteWeight('bridge')}\\/秒$`));
     assert.match(neutral[1], /^占领：工事/);
     assert.match(neutral[1], /中立，占领后归占领方/);
     const blue = objects[1].text.split('\n');
@@ -81,7 +81,7 @@ test('归属/角色变化只重写文字：复用同一批 Text 对象，归属�
     renderer.updateFlagLabels();
     assert.equal(textCalls(), created, '易主也复用同一个 Text 对象');
     assert.equal(label.textWrites, 1);
-    assert.match(label.text, /^🔵 西桥头 · 军费 \+4\/秒/);
+    assert.match(label.text, new RegExp(`^🔵 西桥头 · 军费 \\+${TERRITORY.FLAG_INCOME * siteWeight('bridge')}\\/秒`));
     assert.match(label.text, /占领：蓝方工事/);
     const afterOwner = label.textWrites;
     renderer.updateFlagLabels();
@@ -311,14 +311,14 @@ test('真打一次夺旗：模拟写出的据点特色战报正好播报一次�
 });
 
 // ---------- 一次性提示：新规则可发现 ----------
-test('据点特色提示一次性：高地讲清驻守与生效条件，重复调用不再写 DOM', t => {
+test('据点特色提示一次性：高地讲清范围与生效条件，重复调用不再写 DOM', t => {
     const { ui, dom } = uiFixture(t, []);
     assert.equal(ui.showTerritoryTip('hill'), true);
     const text = dom.node('territory-tip-text');
     assert.match(text.textContent, /中央高地/);
-    assert.match(text.textContent, /移动并驻守/);
+    assert.match(text.textContent, /占下它/);
     assert.match(text.textContent, new RegExp(traitOf('hill').reward.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'u'));
-    assert.match(text.textContent, /生效条件：高地归属己方 \+ 该营有明确驻守令 \+ 在旗点 8 格内/);
+    assert.match(text.textContent, new RegExp(`生效条件：${traitOf('hill').condition}`, 'u'));
     assert.equal(dom.node('territory-tip').hidden, false);
     const writes = text.writes;
     assert.equal(ui.showTerritoryTip('hill'), false, '同一种提示只讲一次');

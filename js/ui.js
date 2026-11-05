@@ -10,7 +10,7 @@ import { setBoardSize, resetBoardSize } from './board.js';
 import { ArenaClient } from './net/arena-client.js';
 import { NetBattle } from './net/lockstep.js';
 import { CampControls } from './camp-controls.js';
-import { traitOf } from './battle/site-traits.js';
+import { traitOf, siteWeight } from './battle/site-traits.js';
 import { flagSiteSignature, traitSiteRow } from './render/overlay.js';
 import { ownsFlag, ownerDisplayCss } from './factions.js';
 
@@ -46,7 +46,7 @@ export const UI_CAVALRY_OPTIONS = {
 const SITE_TIP_ACTIONS = {
     forest: '占下它，',
     bridge: '占下它，',
-    hill: '占下它，再给营队下「移动并驻守」，',
+    hill: '占下它，',
     ford: '占下任一渡口，',
     crossroad: '占下它，'
 };
@@ -670,14 +670,16 @@ export const UI = {
         if (ticketRow) ticketRow.hidden = !!this.battleOptions.coop;
         const mine = this.mySide || 'red';
         const owned = { red: 0, blue: 0 };
+        const flagScore = { red: 0, blue: 0 };
         // 归属按同盟共享：红蓝联军下盟友占下的据点同时计入双方（既有二元模式结果不变）。
         for (const flag of this.scene.flags || []) {
-            if (ownsFlag(this.scene, 'red', flag)) owned.red++;
-            if (ownsFlag(this.scene, 'blue', flag)) owned.blue++;
+            const weight = siteWeight(flag.role);
+            if (ownsFlag(this.scene, 'red', flag)) { owned.red++; flagScore.red += weight; }
+            if (ownsFlag(this.scene, 'blue', flag)) { owned.blue++; flagScore.blue += weight; }
         }
         const readouts = {
             'territory-treasury': Math.floor(territory.econ.treasury[mine]),
-            'territory-income': '+' + territory.econ.incomeRate(owned[mine]) + '/秒',
+            'territory-income': '+' + territory.econ.incomeRate(flagScore[mine]) + '/秒',
             'territory-tickets-red': Math.ceil(territory.tickets.tickets.red),
             'territory-tickets-blue': Math.ceil(territory.tickets.tickets.blue),
             'territory-flags-red': owned.red, 'territory-flags-blue': owned.blue,
@@ -692,9 +694,9 @@ export const UI = {
             : '训练队列空闲';
         textIfChanged(document.getElementById('territory-queue'), queueText + (pending ? ` · ${pending}道征兵令待执行` : ''));
         const enemy = mine === 'red' ? 'blue' : 'red';
-        const difference = owned[mine] - owned[enemy];
+        const difference = flagScore[mine] - flagScore[enemy];
         textIfChanged(document.getElementById('territory-ticket-status'), this.battleOptions.coop ? `攻城目标：电脑主基地 ${Math.ceil(territory.camps?.getBuilding('camp:black:home')?.hp || 0)} 生命` : difference < 0
-            ? `少控${-difference}处据点 · 我方持续失分` : difference > 0 ? `多控${difference}处据点 · 敌方持续失分` : '控点相同 · 暂无控点失分');
+            ? `少 ${-difference} 旗分 · 我方持续失分` : difference > 0 ? `多 ${difference} 旗分 · 敌方持续失分` : '旗分相同 · 暂无控点失分');
         const rallyBtn = document.getElementById('btn-rally');
         rallyBtn.classList.toggle('active', !!this.rallyTargeting);
         rallyBtn.hidden = !active;

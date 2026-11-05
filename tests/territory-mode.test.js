@@ -6,6 +6,7 @@ import { board } from '../js/board.js';
 import {
     TERRITORY, TerritoryEconomy, TicketSystem, makeTerritoryFlags
 } from '../js/battle/economy.js';
+import { siteWeight } from '../js/battle/site-traits.js';
 
 const STEP = 1000 / 60;
 
@@ -22,7 +23,7 @@ function run(scene, seconds) {
 
 // ---------- 纯模块 ----------
 
-test('经济：基础+旗点收入按归属旗数累加', () => {
+test('经济：基础+加权旗分收入按据点分量累加', () => {
     const econ = new TerritoryEconomy();
     econ.tick(1, { red: 3, blue: 2 });
     assert.ok(Math.abs(econ.treasury.red - (TERRITORY.START_TREASURY + TERRITORY.BASE_INCOME + 3 * TERRITORY.FLAG_INCOME)) < 1e-9);
@@ -31,7 +32,7 @@ test('经济：基础+旗点收入按归属旗数累加', () => {
     assert.equal(econ.costOf('cavalry'), 72);
 });
 
-test('票数：多数旗方按旗数差抽对方票，归零判胜', () => {
+test('票数：加权旗分多的一方抽对方票，归零判胜', () => {
     const tickets = new TicketSystem();
     tickets.tick(1, { red: 3, blue: 2 });          // 差 1 → 蓝每秒 -1.6
     assert.ok(Math.abs(tickets.tickets.blue - (TERRITORY.TICKETS - TERRITORY.TICKET_DRAIN)) < 1e-9);
@@ -74,10 +75,12 @@ test('开局：大地图生效、五旗就位、双方常备军与启动军费',
     assert.equal(scene.blueAlive, opening);
 });
 
-test('收入随时间流入：无人交战 5 秒后军费 = 启动 + (基础+2旗)×5', () => {
+test('收入随时间流入：无人交战 5 秒后军费 = 启动 + (基础+开局加权旗分)×5', () => {
     const scene = territoryScene({ territoryAI: false }, {}, {});   // 双方停手，隔离经济变量
+    const openingScore = scene.flags.reduce((sum, flag) =>
+        flag.owner === 'red' ? sum + siteWeight(flag.role) : sum, 0);
     run(scene, 5);
-    const expected = TERRITORY.START_TREASURY + (TERRITORY.BASE_INCOME + 2 * TERRITORY.FLAG_INCOME) * 5;
+    const expected = TERRITORY.START_TREASURY + (TERRITORY.BASE_INCOME + openingScore * TERRITORY.FLAG_INCOME) * 5;
     assert.ok(Math.abs(scene.territory.econ.treasury.red - expected) < 1e-6);
     assert.ok(Math.abs(scene.territory.econ.treasury.blue - expected) < 1e-6);
 });

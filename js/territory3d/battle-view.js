@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { TERRITORY } from '../battle/economy.js';
+import { siteWeight } from '../battle/site-traits.js';
+import { sameSide } from '../factions.js';
 
 const MODEL_KIND = { axe: 'infantry', worker: 'infantry', medic: 'archer' };
 const modelUnit = unit => ({ ...unit, type: MODEL_KIND[unit.type] || unit.type });
@@ -225,9 +227,14 @@ export class BattleView {
             const seconds = Math.floor(scene.simulationTime / 1000);
             const time = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
             const teamHud = team => {
-                const owned = scene.flags.filter(flag => flag.owner === team).length;
+                let owned = 0, flagScore = 0;
+                for (const flag of scene.flags) {
+                    if (flag.owner == null || !sameSide(scene, team, flag.owner)) continue;
+                    owned++;
+                    flagScore += siteWeight(flag.role);
+                }
                 const treasury = Math.floor(scene.territory.econ.treasury[team]);
-                const income = scene.territory.econ.incomeRate(owned);
+                const income = scene.territory.econ.incomeRate(flagScore);
                 const tickets = scene.territory.tickets.tickets[team];
                 const percent = THREE.MathUtils.clamp(tickets / TERRITORY.TICKETS, 0, 1) * 100;
                 const name = team === 'red' ? '红方' : '蓝方';

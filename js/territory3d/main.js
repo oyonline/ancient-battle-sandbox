@@ -8,7 +8,7 @@ import { setBoardSize } from '../board.js';
 import { Terrain } from '../terrain.js';
 import { CavalryAI } from '../units.js';
 import { TERRITORY } from '../battle/economy.js';
-import { SITE_TRAITS } from '../battle/site-traits.js';
+import { SITE_TRAITS, siteWeight } from '../battle/site-traits.js';
 import { stepBattle, SIMULATION_STEP_MS } from '../battle/core.js';
 import { BattleView } from './battle-view.js';
 
@@ -425,7 +425,7 @@ function showDetail() {
     detailOwner.style.color = ownerColor(flag.owner);
     detailLines.replaceChildren(...[
         `地形：${trait.terrain}`, `占领奖励：${trait.reward}`, `条件：${trait.condition}`,
-        `另外：每秒 +${TERRITORY.FLAG_INCOME} 军费，并让对方票数下降`
+        `另外：每秒 +${TERRITORY.FLAG_INCOME * siteWeight(flag.role)} 军费；分量越高，让对方票数掉得越快`
     ].map(text => {
         const line = document.createElement('div');
         line.textContent = text;
