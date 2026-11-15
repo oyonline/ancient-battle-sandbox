@@ -323,6 +323,7 @@ export class CampSystem {
         if (!accepted.length) return false;
         for (const u of accepted) {
             u.orderBuildingId = null;
+            u.aiHomeOrder = false;
             u.garrisonOrderId = towerId;
             u.meleeTarget = null;
             u.target = null;
@@ -335,6 +336,7 @@ export class CampSystem {
             const u = this.unit(id);
             if (!alive(u) || u.team !== team) continue;
             u.orderBuildingId = null;
+            u.aiHomeOrder = false;
             u.garrisonOrderId = null;
         }
     }
@@ -349,6 +351,7 @@ export class CampSystem {
                 u.type === 'medic' || u.garrisonTowerId) continue;
             u.garrisonOrderId = null;
             u.orderBuildingId = buildingId;
+            u.aiHomeOrder = false;
             accepted = true;
         }
         return accepted;

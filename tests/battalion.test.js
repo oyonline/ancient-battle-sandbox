@@ -195,7 +195,6 @@ test('镜像确定性：营队系统参与下同构两局逐位一致', () => {
         run(scene, 40);
         return JSON.stringify({
             red: scene.redAlive, blue: scene.blueAlive,
-            tickets: [Math.round(scene.territory.tickets.tickets.red), Math.round(scene.territory.tickets.tickets.blue)],
             battalions: scene.battalions.battalions.map(b => [b.team, b.members.length, b.orderFlag, b.gathering ? 1 : 0]),
             spawned: scene.territory.recruit.spawned,
             endReason: scene.endReason, over: scene.battleOver

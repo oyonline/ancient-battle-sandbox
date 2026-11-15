@@ -173,7 +173,7 @@ export const UI = {
         document.getElementById('territory-hud-rule').hidden = !fighting || !this.battleOptions.territory;
         document.getElementById('territory-hud-rule').textContent = this.battleOptions.coop
             ? '🤝 各自发展、联军攻城：摧毁电脑主基地即胜；双方主基地均毁则败。民夫采集运回军费，军医自动救治盟友。'
-            : '🚩 据点产军费，民夫采集运输与建设，军医自动救治；耗尽敌方票数或摧毁大本营获胜。';
+            : '🚩 据点产军费，民夫采集运输与建设，军医自动救治；攻破敌方大本营获胜。';
         this.updateTerritoryHUD();
         this.updateMorale();
         this.updateTactics();
@@ -666,8 +666,8 @@ export const UI = {
         if (!active) { this.campControls?.update(); return; }
         if (!document.getElementById('recruit-infantry')) this.buildRecruitBar();
         const territory = this.scene.territory;
-        const ticketRow = document.getElementById('territory-tickets-red')?.parentElement;
-        if (ticketRow) ticketRow.hidden = !!this.battleOptions.coop;
+        const homeRow = document.getElementById('territory-home-red')?.parentElement;
+        if (homeRow) homeRow.hidden = !!this.battleOptions.coop;
         const mine = this.mySide || 'red';
         const owned = { red: 0, blue: 0 };
         const flagScore = { red: 0, blue: 0 };
@@ -680,8 +680,8 @@ export const UI = {
         const readouts = {
             'territory-treasury': Math.floor(territory.econ.treasury[mine]),
             'territory-income': '+' + territory.econ.incomeRate(flagScore[mine]) + '/秒',
-            'territory-tickets-red': Math.ceil(territory.tickets.tickets.red),
-            'territory-tickets-blue': Math.ceil(territory.tickets.tickets.blue),
+            'territory-home-red': Math.ceil(territory.camps?.getBuilding('camp:red:home')?.hp || 0),
+            'territory-home-blue': Math.ceil(territory.camps?.getBuilding('camp:blue:home')?.hp || 0),
             'territory-flags-red': owned.red, 'territory-flags-blue': owned.blue,
             'territory-army-red': this.scene.redAlive, 'territory-army-blue': this.scene.blueAlive
         };
@@ -693,10 +693,7 @@ export const UI = {
         const queueText = first ? `${UNIT_TYPES[first.type].name} · ${remaining > 0 ? remaining.toFixed(1) + '秒' : '等待出营空位'} · 共${queue.length}人`
             : '训练队列空闲';
         textIfChanged(document.getElementById('territory-queue'), queueText + (pending ? ` · ${pending}道征兵令待执行` : ''));
-        const enemy = mine === 'red' ? 'blue' : 'red';
-        const difference = flagScore[mine] - flagScore[enemy];
-        textIfChanged(document.getElementById('territory-ticket-status'), this.battleOptions.coop ? `攻城目标：电脑主基地 ${Math.ceil(territory.camps?.getBuilding('camp:black:home')?.hp || 0)} 生命` : difference < 0
-            ? `少 ${-difference} 旗分 · 我方持续失分` : difference > 0 ? `多 ${difference} 旗分 · 敌方持续失分` : '旗分相同 · 暂无控点失分');
+        textIfChanged(document.getElementById('territory-ticket-status'), this.battleOptions.coop ? `攻城目标：电脑主基地 ${Math.ceil(territory.camps?.getBuilding('camp:black:home')?.hp || 0)} 生命` : '攻破敌方大本营获胜');
         const rallyBtn = document.getElementById('btn-rally');
         rallyBtn.classList.toggle('active', !!this.rallyTargeting);
         rallyBtn.hidden = !active;

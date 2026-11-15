@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { TERRITORY } from '../battle/economy.js';
 import { siteWeight } from '../battle/site-traits.js';
 import { sameSide } from '../factions.js';
 
@@ -235,11 +234,13 @@ export class BattleView {
                 }
                 const treasury = Math.floor(scene.territory.econ.treasury[team]);
                 const income = scene.territory.econ.incomeRate(flagScore);
-                const tickets = scene.territory.tickets.tickets[team];
-                const percent = THREE.MathUtils.clamp(tickets / TERRITORY.TICKETS, 0, 1) * 100;
+                const home = scene.territory.camps.getBuilding(`camp:${team}:home`);
+                const hp = Math.max(0, home?.hp || 0);
+                const maxHp = home?.maxHp || 1;
+                const percent = THREE.MathUtils.clamp(hp / maxHp, 0, 1) * 100;
                 const name = team === 'red' ? '红方' : '蓝方';
                 return `<div class="team-hud ${team}"><span>${name} 军费 ${treasury}（+${income}/秒）</span>`
-                    + `<span class="ticket-group"><span class="ticket-track" role="progressbar" aria-label="${name}票数" aria-valuemin="0" aria-valuemax="${TERRITORY.TICKETS}" aria-valuenow="${Math.floor(tickets)}"><i style="width:${percent}%"></i></span><span>票 ${Math.floor(tickets)}</span></span>`
+                    + `<span class="ticket-group"><span class="ticket-track" role="progressbar" aria-label="${name}大本营血量" aria-valuemin="0" aria-valuemax="${maxHp}" aria-valuenow="${Math.ceil(hp)}"><i style="width:${percent}%"></i></span><span>大本营 ${Math.ceil(hp)}</span></span>`
                     + `<span>${scene[`${team}Alive`]} 人 · 占 ${owned} 处</span></div>`;
             };
             this.hud.innerHTML = `${teamHud('red')}<span class="battle-time">开战 ${time}</span>${teamHud('blue')}`;

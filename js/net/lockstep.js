@@ -50,7 +50,8 @@ export const LOCKSTEP = {
 // 营新增 stagePoint、BattalionSystem 新增 army 状态；投影格式与行为同时改变。
 // 2026-11-04 site-weight：据点分量分档，收入/票数/AI 主攻打分与高地奖励语义改变；
 // 本卡不新增投影字段，但行为与旧版本不兼容，混版本必须拒绝。
-export const SIM_VERSION = '2026-11-04-site-weight';
+// 死斗移除票数判胜，新增电脑攻大本营状态及投影字段，与旧模拟不兼容。
+export const SIM_VERSION = '2026-11-15-deathmatch';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {
@@ -130,7 +131,7 @@ export function battleProjection(scene) {
         }
         if (scene.territory?.camps) {
             parts.push('camp-unit', unit.garrisonTowerId || '', unit.garrisonOrderId || '',
-                unit.orderBuildingId || '', Math.round((unit.garrisonHeight || 0) * 1e3),
+                unit.orderBuildingId || '', unit.aiHomeOrder ? 1 : 0, Math.round((unit.garrisonHeight || 0) * 1e3),
                 // 营寨守军：驻守的寨子与岗位决定站位/倍率，必须进哈希
                 unit.wallGuardId || '', unit.guardSlot ?? '', Math.round((unit.guardCoverScale ?? 1) * 1e3),
                 Math.round(unit.lastAttack * 1e3), JSON.stringify(unit.workerTask || null), Math.round((unit.cargo || 0) * 1e6),
@@ -173,7 +174,7 @@ export function battleProjection(scene) {
         parts.push('army');
         for (const team of roster) {
             const army = scene.battalions.army?.[team];
-            parts.push(teamChar(team), army?.target ?? '', army?.phase ?? '', Math.round(army?.stageSince || 0));
+            parts.push(teamChar(team), army?.target ?? '', army?.phase ?? '', army?.homeAssault ? 1 : 0, Math.round(army?.stageSince || 0));
         }
     }
     const territory = scene.territory;
@@ -209,7 +210,6 @@ export function battleProjection(scene) {
     }
     parts.push('e',
         ...roster.map(t => Math.round(territory.econ.treasury[t] * 1e3)),
-        ...roster.map(t => Math.round(territory.tickets.tickets[t] * 1e3)),
         ...roster.map(t => territory.recruit.spawned[t]),
         ...roster.map(t => territory.recruit.queues[t].length));
     if (territory.camps) {

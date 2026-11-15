@@ -35,7 +35,7 @@
         <div id="territory-hud" class="territory-hud" aria-label="领土征服经济与征兵">
             <div class="territory-econ">
                 <span>我方军费 <b id="territory-treasury">150</b><small id="territory-income">+13/秒</small></span>
-                <span>🎫 票数 <b class="red-c" id="territory-tickets-red">900</b> : <b class="blue-c" id="territory-tickets-blue">900</b></span>
+                <span>🏰 大本营血量 <b class="red-c" id="territory-home-red">—</b> : <b class="blue-c" id="territory-home-blue">—</b></span>
                 <span>🚩 归属旗 <b class="red-c" id="territory-flags-red">2</b> : <b class="blue-c" id="territory-flags-blue">2</b></span>
                 <span>🪖 在场 <b class="red-c" id="territory-army-red">0</b> : <b class="blue-c" id="territory-army-blue">0</b></span>
                 <button class="rally-btn" id="btn-rally" title="设置本方集结点（快捷键 R）：新兵与集结营在此聚兵">📍 集结点</button>
@@ -43,7 +43,7 @@
             <div id="territory-ctl"></div>
         </div>
         <small id="territory-ticket-status"></small>
-        <div id="territory-hud-rule" class="deathmatch-rule hud-info" hidden>🚩 十一据点产军费，民夫筑寨、弓手驻塔、军医医帐收溃兵；控点耗尽敌方票数，或摧毁敌方大本营获胜</div>
+        <div id="territory-hud-rule" class="deathmatch-rule hud-info" hidden>🚩 十一据点产军费，民夫筑寨、弓手驻塔、军医医帐收溃兵；攻破敌方大本营获胜</div>
     </div>
 
     <div id="recruit-dock" aria-label="征兵与建设入口" hidden>
@@ -134,7 +134,7 @@
                             <h3>🚩 领土征服 · 山河会战</h3>
                             <p class="hero-hook">夺旗 <i>→</i> 生财 <i>→</i> 出兵 <i>→</i> 点营下令</p>
                             <details class="hero-details"><summary>玩法详情（给队长看）▾</summary>
-                                <p>四倍面积、十一据点：夺旗获得军费，派民夫筑起前线营寨，弓手驻入箭塔守路。控点耗尽敌方票数，或率军攻破敌方大本营。上翼争桥、中央夺高地、下翼迂回；拖动看战线，小地图点击跳转。红方手动指挥，蓝方 AI 自动运营。</p>
+                                <p>四倍面积、十一据点：夺旗获得军费，派民夫筑起前线营寨，弓手驻入箭塔守路。攻破敌方大本营获胜。上翼争桥、中央夺高地、下翼迂回；拖动看战线，小地图点击跳转。红方手动指挥，蓝方 AI 自动运营。</p>
                             </details>
                             <div class="hero-actions">
                                 <button class="hero-btn" data-territory-entry>开赴战场（对战AI）→</button>
@@ -235,7 +235,7 @@
                         <div id="net-lobby" hidden>
                             <div class="net-side-line">本端 <b id="net-my-side">🔴 红方</b> · 房间码 <b id="net-room-code">----</b></div>
                             <div class="net-side-line">对手 <b id="net-peer-state">等待加入…</b></div>
-                            <p class="net-tip">双方都点「就绪」自动开战：十一据点 · 民夫筑寨 · 弓手驻塔 · 控点或攻破主寨获胜，各操一端。<b>没有暂停与倍速</b>；不同步或掉线时友好重开。</p>
+                            <p class="net-tip">双方都点「就绪」自动开战：十一据点 · 民夫筑寨 · 弓手驻塔 · 攻破敌方大本营获胜，各操一端。<b>没有暂停与倍速</b>；不同步或掉线时友好重开。</p>
                             <div class="net-row">
                                 <button class="big-btn" id="btn-net-ready">✅ 就绪开战</button>
                                 <button class="secondary-btn" id="btn-net-quit">退出房间</button>

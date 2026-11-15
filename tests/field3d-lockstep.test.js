@@ -93,11 +93,12 @@ test('R6 configDigest 仅字符串启用，null/undefined/其他类型不发不�
 
 // 在改动前 HEAD 1b7b619 上从同一 fixture 采集；长度 + SHA256 锁住整个字符串。
 // 2026-11-04 territory-army：投影新增营 stagePoint 与每方军团状态，golden 随批次刷新。
+// 2026-11-15 deathmatch：投影删票数、加攻城状态，golden 随批次刷新。
 test('territory / 营队池 / coop 营寨投影与旧版逐字一致', () => {
     const golden = {
-        territory: [2157, '54a2b40ebc7bda82bfc2d46edcd875950ae42efc485b5bca637b66c5d97016e9'],
-        battalion: [2283, 'd9d315b95a427e203ddc300beec877ac754cae58e301d29b424485e1c3e36883'],
-        coop: [2854, 'd5516393936029791b3d039f67d4350b8547e125d11472ff026a1a1627938f35']
+        territory: [2167, 'b10fc3e72cfff5810e4497f2e9d345da6706b3351817b0cf26dff89abf2cc63b'],
+        battalion: [2295, '61833c9e3fd66dcaaee12e8623e6c064ea66d9dde80052323f38ba9407589dd6'],
+        coop: [2863, 'e818071494fc5477aa08e26cb76dcf247a419c296ee40c91fbbd2d286e6ca56d']
     };
     for (const kind of Object.keys(golden)) {
         const s = makeScene();

@@ -120,15 +120,6 @@ export function updateTerritory(scene, dt) {
     for (const team of TEAMS) {
         if (state.autoBuy[team]) state.ai[team].update(scene.simulationTime);
     }
-    const before = {};
-    for (const team of TEAMS) before[team] = state.tickets.tickets[team];
-    state.tickets.tick(dt, flagScore);
-    for (const team of TEAMS) {
-        if (before[team] > TERRITORY.TICKETS / 2 && state.tickets.tickets[team] <= TERRITORY.TICKETS / 2) {
-            scene.addBattleEvent(`tickets-half-${team}`,
-                `${sideLabel(scene, team)}票数已流失过半，领土告急`, team);
-        }
-    }
 }
 
 export function aliveCount(scene, team, type) {

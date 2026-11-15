@@ -1,10 +1,10 @@
-// 领土征服模式：经济 tick / 五旗初始归属 / 票数流失判胜 / 征兵出兵 / 战略 AI / 歼灭语义 / 确定性
+// 领土征服模式：经济 tick / 五旗初始归属 / 征兵出兵 / 战略 AI / 歼灭语义 / 确定性
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { makeScene, addUnit } from './battle-harness.js';
 import { board } from '../js/board.js';
 import {
-    TERRITORY, TerritoryEconomy, TicketSystem, makeTerritoryFlags
+    TERRITORY, TerritoryEconomy, makeTerritoryFlags
 } from '../js/battle/economy.js';
 import { siteWeight } from '../js/battle/site-traits.js';
 
@@ -32,20 +32,7 @@ test('经济：基础+加权旗分收入按据点分量累加', () => {
     assert.equal(econ.costOf('cavalry'), 72);
 });
 
-test('票数：加权旗分多的一方抽对方票，归零判胜', () => {
-    const tickets = new TicketSystem();
-    tickets.tick(1, { red: 3, blue: 2 });          // 差 1 → 蓝每秒 -1.6
-    assert.ok(Math.abs(tickets.tickets.blue - (TERRITORY.TICKETS - TERRITORY.TICKET_DRAIN)) < 1e-9);
-    assert.equal(tickets.winner(), null);
-    tickets.tickets.blue = 0.5;
-    tickets.tick(1, { red: 3, blue: 2 });
-    assert.equal(tickets.tickets.blue, 0, '票数不为负');
-    assert.equal(tickets.winner(), 'red');
-    // 平票不抽票
-    const even = new TicketSystem();
-    even.tick(10, { red: 2, blue: 2 });
-    assert.equal(even.tickets.red, TERRITORY.TICKETS);
-});
+
 
 test('五旗布局：双方半场各两面起始归属 + 中场中立，换座镜像对称', () => {
     board.W = TERRITORY.W; board.H = TERRITORY.H;   // makeTerritoryFlags 读当前棋盘
@@ -112,19 +99,7 @@ test('战略 AI：自动征兵按兵种配比补缺口（蓝方默认自动、�
     assert.equal(manual.territory.recruit.spawned.red, 0, '红方手动模式不自动买兵');
 });
 
-test('票数判胜：多数旗抽干对方票 → endReason=tickets', () => {
-    const scene = territoryScene({}, {}, {});
-    // 隔离变量：手摆 3:2 归属，蓝方只剩 1 票，约 0.7 秒后判胜
-    scene.flags[0].owner = 'red'; scene.flags[1].owner = 'red'; scene.flags[2].owner = 'red';
-    scene.flags[3].owner = 'blue'; scene.flags[4].owner = 'blue';
-    scene.territory.tickets.tickets.blue = 1;
-    run(scene, 5);
-    assert.ok(scene.battleOver);
-    assert.equal(scene.winner, 'red');
-    assert.equal(scene.endReason, 'tickets');
-    assert.ok(scene.getBattleReport().events.some(e => e.text.includes('票数耗尽')), '战报含票数获胜事件');
-    assert.ok(scene.getBattleReport().territory, '战报含领土经济摘要');
-});
+
 
 test('歼灭语义：暂时全员阵亡但还能补兵的一方不判负', () => {
     const scene = territoryScene({}, {}, {});       // 无部队
@@ -149,7 +124,6 @@ test('镜像确定性：同构开局两局逐帧推进结果一致', () => {
         run(scene, 30);
         return JSON.stringify({
             red: scene.redAlive, blue: scene.blueAlive,
-            tickets: scene.territory.tickets.tickets,
             treasury: { red: Math.round(scene.territory.econ.treasury.red), blue: Math.round(scene.territory.econ.treasury.blue) },
             spawned: scene.territory.recruit.spawned,
             endReason: scene.endReason, over: scene.battleOver,

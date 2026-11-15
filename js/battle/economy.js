@@ -1,8 +1,8 @@
 // ==================== 领土征服经济（纯模拟，不碰渲染） ====================
 // 英雄连式循环：占旗 → 军费流入 → 征兵出兵 → 抢旗。数值均为 v0 实施默认
-// （KB 立项稿 20260929-122504 §边界：收入/造价/票数需试玩校正）。
+// （KB 立项稿 20260929-122504 §边界：收入/造价需试玩校正）。
 //
-// 确定性：收入与票数按固定步长 dt 累加，红蓝各自独立计算、无跨方交互顺序，
+// 确定性：收入按固定步长 dt 累加，红蓝各自独立计算、无跨方交互顺序，
 // 与 docs/DETERMINISM.md 的换座镜像 / 将来锁步联网约定兼容。
 // 造价 = UNIT_TYPES.cost × COST_MULT（沿用既有兵种金币基准 5/6/8/12）。
 
@@ -16,8 +16,6 @@ export const TERRITORY = {
     BASE_INCOME: 5,                   // 基础军费收入（军费/秒，无旗也有）
     FLAG_INCOME: 4,                   // 每点据点分量额外收入（军费/秒）
     START_TREASURY: 150,              // 开局军费
-    TICKETS: 900,                     // 双方开局票数
-    TICKET_DRAIN: 1.6,                // 票数流失速率 = 加权旗分差 × 此值（票/秒）
     COST_MULT: 6,                     // 兵种造价系数（剑士30/枪36/弓48/骑72）
     TRAIN_MS: { infantry: 3000, axe: 4500, pikeman: 4000, archer: 5000, cavalry: 8000, worker: 3500, medic: 4500 },
     ALIVE_CAP: 220,                   // 单方在场兵力上限（性能与规模护栏；队列出兵到顶暂停）
@@ -60,29 +58,5 @@ export class TerritoryEconomy {
 
     canAfford(team, type) {
         return this.treasury[team] >= this.costOf(type);
-    }
-}
-
-// 票数流失：加权旗分占优的一方让对方流失，速率 = 加权旗分差 × TICKET_DRAIN。
-// 例如 3:2 差 1 → 1.6/秒（约 9 分钟耗尽 900 票）；分量差越大压制越强。
-export class TicketSystem {
-    constructor() {
-        this.tickets = { red: TERRITORY.TICKETS, blue: TERRITORY.TICKETS, black: TERRITORY.TICKETS };
-    }
-
-    tick(dt, flagScore) {
-        const margin = flagScore.red - flagScore.blue;
-        if (margin > 0) {
-            this.tickets.blue = Math.max(0, this.tickets.blue - margin * TERRITORY.TICKET_DRAIN * dt);
-        } else if (margin < 0) {
-            this.tickets.red = Math.max(0, this.tickets.red + margin * TERRITORY.TICKET_DRAIN * dt);
-        }
-    }
-
-    // 票数归零且对方仍有票 → 对方获胜；同时归零视为未定（继续打到歼灭/再分差）。
-    winner() {
-        if (this.tickets.blue <= 0 && this.tickets.red > 0) return 'red';
-        if (this.tickets.red <= 0 && this.tickets.blue > 0) return 'blue';
-        return null;
     }
 }

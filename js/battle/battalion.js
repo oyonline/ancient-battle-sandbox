@@ -32,6 +32,8 @@ export const BATTALION = {
     ARMY_ASSAULT_SHARE: 0.7,   // 转突击所需集合战力占军团总战力的比例
     ARMY_STAGE_TIMEOUT_MS: 20000, // 集合超时（模拟时钟）：未集齐也按时压上，不 endless 蹲点
     ARMY_WEIGHT_BONUS: 18,     // 主攻目标按据点分量加分：每多 1 分量 +18（只用于主攻打分）
+    HOME_ASSAULT_ON: 12,       // 加权旗分达到此值，集结后攻打敌方大本营
+    HOME_ASSAULT_OFF: 9,       // 旗分低于此值，退出攻城重新抢旗
     TIE_EPS: 1e-6              // 主攻目标平局决胜键的容差：原始浮点差 > 1e-6 才分胜负，
                                // 以内视为同一距离/偏移（只吸收 ~1e-14 级浮点表示噪声）
 };
@@ -99,9 +101,9 @@ export class BattalionSystem {
         // 每方一个军团：全军合成一路，先集合再突击一个主攻旗。
         // target = 主攻旗 index（null = 无可攻目标）；phase = 集合/突击；stageSince = 进入集合的模拟时刻。
         this.army = {
-            red: { target: null, phase: 'stage', stageSince: 0 },
-            blue: { target: null, phase: 'stage', stageSince: 0 },
-            black: { target: null, phase: 'stage', stageSince: 0 }
+            red: { target: null, phase: 'stage', stageSince: 0, homeAssault: false },
+            blue: { target: null, phase: 'stage', stageSince: 0, homeAssault: false },
+            black: { target: null, phase: 'stage', stageSince: 0, homeAssault: false }
         };
     }
 
@@ -269,13 +271,15 @@ export class BattalionSystem {
                 // 增援并入：军团已选主攻旗时，新营先去当前军团重心（集合/突击都先跟上），
                 // 不单独直扑前线；并入判定在下一拍 aiAssign（距重心 ≤6 格才领主攻旗令）。
                 const army = this.army[battalion.team];
-                const flag = army?.target != null ? flags[army.target] : null;
-                if (!battalion.playerOrdered && flag && !(flag.owner != null && sameSide(this.scene, flag.owner, battalion.team))) {
+                const flag = army?.homeAssault
+                    ? this.scene.territory.camps.getBuilding(`camp:${battalion.team === 'red' ? 'blue' : 'red'}:home`)
+                    : army?.target != null ? flags[army.target] : null;
+                if (!battalion.playerOrdered && flag && (army.homeAssault || !(flag.owner != null && sameSide(this.scene, flag.owner, battalion.team)))) {
                     // 集合阶段以已领集合点的营为军团；突击阶段只以主力（旗令）为重心，
                     // 正在追赶的增援营不把重心拖回后方。
                     const mates = this.battalions.filter(b => b !== battalion && b.team === battalion.team &&
                         !b.gathering && !b.playerOrdered && b.power() > 0 &&
-                        (army.phase === 'stage' ? !!b.stagePoint : b.orderFlag === army.target));
+                        (army.phase === 'stage' ? !!b.stagePoint : army.homeAssault ? b.members.some(u => u.aiHomeOrder) : b.orderFlag === army.target));
                     const center = this.armyCenter(mates);
                     if (center) {
                         const stage = army.phase === 'assault' ? center : this.stagePointFor(center, flag);
@@ -360,7 +364,25 @@ export class BattalionSystem {
         for (const team of activeTeams(scene)) {
             const active = this.battalions.filter(b => b.team === team && !b.gathering && b.members.length);
             if (!active.length) continue;
-            const army = this.army[team] ?? (this.army[team] = { target: null, phase: 'stage', stageSince: 0 });
+            const army = this.army[team] ?? (this.army[team] = { target: null, phase: 'stage', stageSince: 0, homeAssault: false });
+            const camps = scene.territory?.camps;
+            const home = activeTeams(scene).length === 2 && !scene.battleOptions?.coop
+                ? camps?.getBuilding(`camp:${team === 'red' ? 'blue' : 'red'}:home`) : null;
+            const score = flags.reduce((sum, flag) => sum + (flag.owner === team ? siteWeight(flag.role) : 0), 0);
+            const wasHomeAssault = army.homeAssault;
+            army.homeAssault = !!(home && !home.dead && (army.homeAssault
+                ? score >= BATTALION.HOME_ASSAULT_OFF : score >= BATTALION.HOME_ASSAULT_ON));
+            if (wasHomeAssault !== army.homeAssault) {
+                army.target = null; army.phase = 'stage'; army.stageSince = now;
+                for (const b of active) if (!b.playerOrdered) { b.orderFlag = null; b.stagePoint = null; }
+            }
+            // 退出攻城、玩家接管或转为驻军：仅撤电脑令，玩家自己的攻建筑令保持原样。
+            for (const b of active) {
+                for (const u of b.members) if (u.aiHomeOrder &&
+                    (!army.homeAssault || b.playerOrdered || u.wallGuardId || u.garrisonTowerId || u.garrisonOrderId)) {
+                    u.orderBuildingId = null; u.aiHomeOrder = false;
+                }
+            }
             // 需求系数：每方每拍算一次；富余营多时高地驻守价值才拉满。
             const needs = this.siteNeeds(team);
             const free = active.filter(b => !b.playerOrdered && b.power() > 0);
@@ -397,6 +419,7 @@ export class BattalionSystem {
                 }
                 if (pick) {
                     pick.orderFlag = i; pick.stagePoint = null; pick.retreat = false;
+                    for (const u of pick.members) if (u.aiHomeOrder) { u.orderBuildingId = null; u.aiHomeOrder = false; }
                     responders.add(pick);
                     playerAssigned[i]++;
                 }
@@ -418,7 +441,9 @@ export class BattalionSystem {
 
             let target = null;
             // 目标黏性：未攻下且仍打得过就不换（攻下/变为同盟后下一拍重选）。
-            if (army.target != null && flags[army.target] && !owns(army.target) && winnable(army.target)) {
+            if (army.homeAssault) {
+                // 大本营独立于旗序号；target 保持 null。
+            } else if (army.target != null && flags[army.target] && !owns(army.target) && winnable(army.target)) {
                 target = army.target;
             } else {
                 let best = -1, bestScore = -Infinity, bestTie = null;
@@ -453,7 +478,7 @@ export class BattalionSystem {
                 if (best >= 0 && bestScore > 10) target = best;
             }
 
-            if (target == null) {
+            if (target == null && !army.homeAssault) {
                 // 无仗可打：收缩到最近己方旗驻防（保持存在感，不站桩空地）
                 army.target = null; army.phase = 'stage'; army.stageSince = now;
                 for (const b of pool) {
@@ -474,7 +499,7 @@ export class BattalionSystem {
 
             if (army.phase === 'stage') {
                 // 集合点相对本方军团重心与目标旗计算（不写死红方坐标）。
-                const stage = this.stagePointFor(center, flags[target]);
+                const stage = this.stagePointFor(center, army.homeAssault ? home : flags[target]);
                 for (const b of pool) {
                     b.orderFlag = null;
                     b.stagePoint = stage ? { gx: stage.gx, gy: stage.gy } : null;
@@ -515,6 +540,14 @@ export class BattalionSystem {
                     }
                     b.retreat = false;
                 }
+            }
+            if (army.homeAssault && army.phase === 'assault') {
+                // 每个战略节拍补发；现有 API 以单位 id 排序，不碰驻军或玩家攻建筑令。
+                const eligible = pool.flatMap(b => b.aliveMembers()).filter(u =>
+                    !u.wallGuardId && !u.garrisonOrderId && !u.garrisonTowerId && (!u.orderBuildingId || u.aiHomeOrder) &&
+                    (!u.aiHomeOrder || u.orderBuildingId !== home.id) && !['worker', 'medic', 'wagon'].includes(u.type) && u.moraleState !== 'routing');
+                camps.orderAttackBuilding(team, eligible.map(u => u.id), home.id);
+                for (const u of eligible) if (u.orderBuildingId === home.id) u.aiHomeOrder = true;
             }
         }
     }

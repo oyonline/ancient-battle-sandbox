@@ -1,6 +1,6 @@
 // ==================== 胜负结算（纯模拟判定；表现经场景钩子） ====================
 // 从 game.js IsoBattleScene 抽出（第 0 批后续拆分：checkWin）。
-// 汇总歼灭/溃散/相持/占点积分/领土票数/护送送达等口径判定终局；
+// 汇总歼灭/溃散/相持/占点积分/护送送达等口径判定终局；
 // 领土模式下经济未枯竭不算败（增援随时抵达）。表现经 scene 钩子
 // （addBattleEvent / showVictory）与全局 UI.onBattleEnd。
 import { UI } from '../ui.js';
@@ -8,7 +8,7 @@ import { RELATIONS_COOP } from '../factions.js';
 
 // 合作模式判定：红蓝联军（两名真人）对黑方 AI，采用基地攻城制——
 // 胜利 = 电脑主基地摧毁；
-// 失败 = 两座玩家主基地均毁；票数和残余野兵不影响基地目标。
+// 失败 = 两座玩家主基地均毁；残余野兵不影响基地目标。
 export function isCoopBattle(scene) {
     return scene?.relationGroups === RELATIONS_COOP
         || (Array.isArray(scene?.activeTeams) && scene.activeTeams.includes('black'));
@@ -70,7 +70,6 @@ export function checkWin(scene) {
         const stalemate = standingOff && !scene.battleOptions.deathmatch;
         const controlWon = scene.battleOptions.control
             ? ['red', 'blue'].find(team => scene.controlScore[team] >= 60) : null;
-        const ticketsWon = scene.battleOptions.territory ? scene.territory.tickets.winner() : null;
         const campWon = scene.battleOptions.territory ? scene.territory.camps?.winner() : null;
         const convoyWon = scene.battleOptions.convoy ? scene.convoyOutcome() : null;
         // 护送模式下劫掠方已全灭但车队还在路上：胜利只是时间问题，
@@ -80,9 +79,9 @@ export function checkWin(scene) {
             const pending = c.wagons.filter(w => !w.dead && !w.withdrawn).length;
             if (pending + c.delivered >= c.need && scene.simulationTime - (c.lastFoeAt ?? scene.simulationTime) < 40000) return;
         }
-        if (!campWon && !ticketsWon && !controlWon && !convoyWon && !defeated.red && !defeated.blue && !stalemate) return;
+        if (!campWon && !controlWon && !convoyWon && !defeated.red && !defeated.blue && !stalemate) return;
         // 已发出的箭继续落地：最后一名射手阵亡后仍可能双方同归于尽。
-        if (!campWon && !ticketsWon && !controlWon && !convoyWon && scene.arrows.length > 0) {
+        if (!campWon && !controlWon && !convoyWon && scene.arrows.length > 0) {
             // 只等待已经离弦的箭；停止生成新攻击，避免密集箭雨无限延后溃败结算。
             scene.resolvingOutcome = true;
             scene.battleQueue = [];
@@ -90,14 +89,9 @@ export function checkWin(scene) {
         }
         scene.battleOver = true;
         scene.battleQueue = [];
-        const winner = campWon || ticketsWon || controlWon || convoyWon || (stalemate || (defeated.red && defeated.blue) ? 'draw' : defeated.red ? 'blue' : 'red');
-        scene.endReason = campWon ? 'camp' : ticketsWon ? 'tickets' : controlWon ? 'control' : convoyWon ? 'convoy' : stalemate ? 'stalemate' : winner === 'draw' ? 'draw' :
+        const winner = campWon || controlWon || convoyWon || (stalemate || (defeated.red && defeated.blue) ? 'draw' : defeated.red ? 'blue' : 'red');
+        scene.endReason = campWon ? 'camp' : controlWon ? 'control' : convoyWon ? 'convoy' : stalemate ? 'stalemate' : winner === 'draw' ? 'draw' :
             (defeated.red && red > 0) || (defeated.blue && blue > 0) ? 'rout' : 'elimination';
-        if (scene.endReason === 'tickets') {
-            const loser = winner === 'red' ? 'blue' : 'red';
-            scene.addBattleEvent(`tickets-${winner}`,
-                `${winner === 'red' ? '红方' : '蓝方'}掌控多数领土，${loser === 'red' ? '红方' : '蓝方'}票数耗尽，领土征服获胜`, loser);
-        }
         if (scene.endReason === 'camp') scene.addBattleEvent(`camp-win-${winner}`,
             winner === 'draw' ? '双方大本营同时被摧毁' : `${winner === 'red' ? '红方' : '蓝方'}攻破敌方大本营，夺得胜利`, winner === 'draw' ? null : winner);
         if (scene.endReason === 'rout') {

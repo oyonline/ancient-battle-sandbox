@@ -425,7 +425,7 @@ function showDetail() {
     detailOwner.style.color = ownerColor(flag.owner);
     detailLines.replaceChildren(...[
         `地形：${trait.terrain}`, `占领奖励：${trait.reward}`, `条件：${trait.condition}`,
-        `另外：每秒 +${TERRITORY.FLAG_INCOME * siteWeight(flag.role)} 军费；分量越高，让对方票数掉得越快`
+        `另外：每秒 +${TERRITORY.FLAG_INCOME * siteWeight(flag.role)} 军费`
     ].map(text => {
         const line = document.createElement('div');
         line.textContent = text;

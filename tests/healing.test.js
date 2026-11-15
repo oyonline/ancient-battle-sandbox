@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HealingSystem, HEALING_RULES, updateMedic } from '../js/battle/healing.js';
 import { CampSystem, CAMP_RULES } from '../js/battle/camps.js';
-import { TerritoryEconomy, TicketSystem, TERRITORY } from '../js/battle/economy.js';
+import { TerritoryEconomy, TERRITORY } from '../js/battle/economy.js';
 import { RecruitSystem, TerritoryAI } from '../js/battle/recruit.js';
 import { BattleSpatialIndex } from '../js/battle/spatial.js';
 import { BattalionSystem } from '../js/battle/battalion.js';
@@ -29,7 +29,7 @@ function fixture({ ai = false } = {}) {
         simulationTime: 0, battleOver: false, planningStep: true,
         arrows: [], queue: [], events: [], controlScore: { red: 0, blue: 0 },
         _rallyAnchors: [], _rallyRefresh: -Infinity,
-        territory: { econ: new TerritoryEconomy(), tickets: new TicketSystem(),
+        territory: { econ: new TerritoryEconomy(),
             rally: { red: null, blue: null }, autoBuy: { red: ai, blue: ai } },
         forEachNear(...args) { spatial.forEachNear(...args); },
         nearestEnemy(unit) { return targeting.nearestEnemy(spatial, unit); },

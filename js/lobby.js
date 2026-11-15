@@ -654,9 +654,9 @@ export const lobbyMethods = {
             : this.battleOptions.coop
             ? '🤝 合作攻城 · 各自发展、互援进攻；摧毁电脑主基地即获胜'
             : this.battleOptions.net
-            ? '🌐 局域网对战 · 夺旗、筑寨、驻塔；耗尽敌方票数或攻破大本营获胜'
+            ? '🌐 局域网对战 · 夺旗、筑寨、驻塔；攻破敌方大本营获胜'
             : this.battleOptions.territory
-            ? '🚩 领土征服 · 十一据点、民夫筑寨、弓手驻塔；耗尽敌方票数或攻破大本营获胜'
+            ? '🚩 领土征服 · 十一据点、民夫筑寨、弓手驻塔；攻破敌方大本营获胜'
             : (this.challenge ? this.challenge.title + ' · ' : this.mode === 'tactics' ? '战阵演练 · ' : '') + '拖动看战况 · 点击士兵看地形';
         this.openSheet(false);
         this.scene.startCountdown(() => { this.countdown = false; this.syncControls(); });
@@ -726,7 +726,6 @@ export const lobbyMethods = {
             : report.deathmatch && winner !== 'draw'
             ? (winner === 'red' ? '蓝方' : '红方') + '已全灭，死斗结束。 '
             : report.endReason === 'control' ? (winner === 'red' ? '红方' : '蓝方') + '掌控旗帜积分达标，占点获胜。 '
-            : report.endReason === 'tickets' ? (winner === 'red' ? '红方' : '蓝方') + '掌控多数领土，对方票数耗尽，领土征服获胜。 '
             : report.endReason === 'camp' ? (winner === 'draw' ? '双方大本营同时被摧毁。 ' : (winner === 'red' ? '红方' : '蓝方') + '摧毁敌方大本营，攻寨获胜。 ')
             : report.endReason === 'convoy' ? (winner === 'red' ? '红方辎重车队突破封锁，护送获胜。' : '蓝方劫掠得手，辎重车队尽数被劫。')
             : report.endReason === 'stalemate' ? '双方持续固守、无人推进，本局相持结束。试着让一方改为进攻。 ' : report.endReason === 'rout' && winner !== 'draw'
@@ -735,7 +734,7 @@ export const lobbyMethods = {
                 report.morale.red.steady + report.morale.red.wavering + report.morale.blue.steady + report.morale.blue.wavering === 0
                 ? '双方均已失去继续作战能力。 ' : '';
         const territoryLine = report.territory
-            ? ` 终局票数 ${report.territory.tickets.red}:${report.territory.tickets.blue} · 征兵 红${report.territory.recruited.red}/蓝${report.territory.recruited.blue} · 军费入账 红${report.territory.earned.red}/蓝${report.territory.earned.blue}`
+            ? ` 征兵 红${report.territory.recruited.red}/蓝${report.territory.recruited.blue} · 军费入账 红${report.territory.earned.red}/蓝${report.territory.earned.blue}`
             : '';
         document.getElementById('result-detail').textContent = endReason + '在场兵力：红方 ' + report.red + ' 人 · 蓝方 ' + report.blue + ' 人' + territoryLine;
         const leaders = Object.entries(report.teams.red.byType).filter(([, s]) => s.initial > 0).sort((a, b) => b[1].kills - a[1].kills);

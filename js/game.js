@@ -22,7 +22,7 @@ import * as targeting from './battle/targeting.js';
 import { BattleLedger } from './battle/report.js';
 import * as core from './battle/core.js';
 import { BraceQueue } from './battle/core.js';
-import { TERRITORY, makeTerritoryFlags, TerritoryEconomy, TicketSystem } from './battle/economy.js';
+import { TERRITORY, makeTerritoryFlags, TerritoryEconomy } from './battle/economy.js';
 import { RecruitSystem, TerritoryAI } from './battle/recruit.js';
 import { CampSystem } from './battle/camps.js';
 import { HealingSystem } from './battle/healing.js';
@@ -320,7 +320,6 @@ export class IsoBattleScene extends Phaser.Scene {
             morale: this.getMoraleSummary(),
             deathmatch: this.battleOptions.deathmatch,
             territory: this.battleOptions.territory && this.territory ? {
-                tickets: Object.fromEntries(roster.map(t => [t, Math.round(this.territory.tickets.tickets[t])])),
                 flags: this.flags.map(f => ({ name: f.name, owner: f.owner })),
                 earned: Object.fromEntries(roster.map(t => [t, Math.round(this.territory.econ.earned[t])])),
                 spent: Object.fromEntries(roster.map(t => [t, Math.round(this.territory.econ.spent[t])])),
@@ -459,15 +458,14 @@ export class IsoBattleScene extends Phaser.Scene {
                 { gx: 35, gy: board.H * 0.76, name: '下翼' }
             ].map(f => ({ ...f, owner: null, progress: 0, contested: false })) : null;
         this.controlScore = Object.fromEntries((this.activeTeams || DEFAULT_TEAMS).map(t => [t, 0]));
-        // 领土征服运行态：经济 / 征兵队列 / 票数 / 建造与驻守 / 战略 AI。
+        // 领土征服运行态：经济 / 征兵队列 / 建造与驻守 / 战略 AI。
         // 蓝方默认自动征兵（红方玩家手动大按钮）；territoryAI:true 双方自动（观战/测试），
-        // territoryAI:false 双方停手（隔离变量测经济/票数）；联机对战双方都是真人（AI 只调度无令营）；
+        // territoryAI:false 双方停手（隔离变量测经济）；联机对战双方都是真人（AI 只调度无令营）；
         // 合作模式下黑方恒为 AI（autoBuy=true），红蓝由两名真人操作。
         const activeRoster = this.activeTeams || DEFAULT_TEAMS;
         this.territory = this.battleOptions.territory ? {
             econ: new TerritoryEconomy(),
             recruit: new RecruitSystem(this),
-            tickets: new TicketSystem(),
             rally: Object.fromEntries(activeRoster.map(t => [t, null])),   // 玩家集结旗（null=老家集结）
             ai: Object.fromEntries(activeRoster.map(t => [t, new TerritoryAI(this, t)])),
             autoBuy: Object.fromEntries(activeRoster.map(t => [t,

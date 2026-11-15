@@ -50,7 +50,6 @@ const INSTALL_RECORDER = `(() => {
     for (const f of s.flags || []) parts.push(f.owner ? f.owner[0] : 'n', (f.progress || 0).toFixed(4));
     if (s.territory) parts.push('e',
       Math.round(s.territory.econ.treasury.red * 10) / 10, Math.round(s.territory.econ.treasury.blue * 10) / 10,
-      s.territory.tickets.tickets.red, s.territory.tickets.tickets.blue,
       s.territory.recruit.spawned.red, s.territory.recruit.spawned.blue);
     window.__qaFps.set(turn, parts.join('|'));
   };
