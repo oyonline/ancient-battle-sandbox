@@ -71,7 +71,9 @@ test('单机 1x 与 2x：固定步长下结果逐位一致（含据点特色与�
         traitState(scene).refresh();
         const camps = scene.territory.camps;
         scene.territory.econ.treasury.red = 2000;
+        scene.territory.econ.wood.red = 2000;
         scene.territory.econ.treasury.blue = 2000;
+        scene.territory.econ.wood.blue = 2000;
         const redWorker = scene.units.find(u => u.team === 'red' && u.type === 'worker');
         const site = scene.flags.findIndex(f => f.owner === 'red' && f.role === 'forest');
         camps.requestBuild('red', redWorker.id, 'camp', site);
@@ -106,7 +108,9 @@ test('双端锁步：据点特色与民夫自卫下仍逐位一致，且两端�
     const workerB = b.units.find(u => u.team === 'blue' && u.type === 'worker');
     const site = 0;
     a.territory.econ.treasury.red = 900; b.territory.econ.treasury.red = 900;
+    a.territory.econ.wood.red = 900; b.territory.econ.wood.red = 900;
     a.territory.econ.treasury.blue = 900; b.territory.econ.treasury.blue = 900;
+    a.territory.econ.wood.blue = 900; b.territory.econ.wood.blue = 900;
     let checkpoints = 0;
     let probeA = null, probeB = null;   // 持有被贴身敌军攻击的那名民夫（阵亡压实后数组里换人）
     for (let turn = 0; turn < 60 * 12; turn++) {
@@ -157,7 +161,7 @@ test('双端锁步：据点特色与民夫自卫下仍逐位一致，且两端�
 
 test('模拟版本随本轮行为变化更新，旧页面无法混用', () => {
     // 首次攻城接触改变撤退时刻，旧页面不能混用。
-    assert.equal(SIM_VERSION, '2026-11-15-deathmatch');
+    assert.equal(SIM_VERSION, '2026-11-15-wood');
     assert.notEqual(SIM_VERSION, '2026-10-19-ranged-damage-seeded-variance', '首次攻城接触改变撤退时刻，必须拒绝混版本');
     assert.notEqual(SIM_VERSION, '2026-10-19-cavalry-charge-cd-brace-bail', '相对骑兵冲锋批次必须更新');
     assert.notEqual(SIM_VERSION, '2026-10-03-rework-r2c', '相对上一批次必须递增');

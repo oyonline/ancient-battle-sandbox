@@ -112,7 +112,9 @@ export function updateTerritory(scene, dt) {
         for (const team of TEAMS) if (sameSide(scene, team, flag.owner)) flagScore[team] += weight;
     }
     const state = scene.territory;
-    state.econ.tick(dt, flagScore);
+    const forestCounts = scene.battleOptions?.territory && !scene.battleOptions.coop
+        ? Object.fromEntries(TEAMS.map(team => [team, traitState(scene).ownsRoleCount(team, 'forest')])) : null;
+    state.econ.tick(dt, flagScore, forestCounts);
     state.recruit.update();
     state.camps?.update(dt);
     state.healing?.update(dt);

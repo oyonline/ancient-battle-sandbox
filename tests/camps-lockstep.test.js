@@ -13,7 +13,9 @@ function sceneFor(side) {
     });
     scene.battleStarted = true;
     scene.territory.econ.treasury.red = 1000;
+    scene.territory.econ.wood.red = 1000;
     scene.territory.econ.treasury.blue = 1000;
+    scene.territory.econ.wood.blue = 1000;
     return scene;
 }
 
@@ -94,8 +96,8 @@ test('营寨指令经真实双端命令泵执行，施工、驻守射击与攻�
         '蓝方民夫移动命令必须走到目标处');
     assert.equal(a.scene.territory.camps.getBuilding(`camp:red:${a.site}`).complete, true);
     assert.equal(a.scene.territory.camps.getBuilding(`tower:red:${a.site}`).complete, true);
-    assert.equal(a.scene.territory.econ.spent.red, CAMP_RULES.camp.cost + CAMP_RULES.tower.cost,
-        '两阶段施工各扣一次军费');
+    assert.ok(Math.abs(a.scene.territory.econ.wood.red - (1000 + a.scene.simulationTime / 1000 * 4 - CAMP_RULES.camp.woodCost - CAMP_RULES.tower.woodCost)) < 1e-7,
+        '两阶段施工各扣一次木料');
     assert.ok(checkpoints >= 16);
     assert.equal(a.scene.net.desynced, false);
     assert.equal(b.scene.net.desynced, false);

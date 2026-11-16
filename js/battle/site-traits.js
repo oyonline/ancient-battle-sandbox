@@ -31,6 +31,7 @@ export const SITE_TRAITS = {
         reward: '营建加速：本点施工时间 −20%',
         condition: '该据点当前归属己方时生效（施工速度 ×1.25）',
         detail: '只加快施工，不降费用、不提高建筑属性；续建保留已有进度',
+        woodIncome: 3,
         buildSpeed: 1.25
     },
     bridge: {

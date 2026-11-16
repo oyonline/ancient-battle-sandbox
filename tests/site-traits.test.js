@@ -73,6 +73,7 @@ test('林口：本点施工速度 ×1.25（有效施工时间 −20%），只作
     const scene = campScene();
     const camps = scene.territory.camps;
     scene.territory.econ.treasury.red = 5000;
+    scene.territory.econ.wood.red = 5000;
     const forest = siteIndexOf(scene, 'forest');
     const bridge = siteIndexOf(scene, 'bridge');
     const workerA = addWorker(scene, 'red', scene.flags[forest].gx, scene.flags[forest].gy);
@@ -97,6 +98,7 @@ test('林口：易主即停、续建保留进度、重复派工不重复领加�
     const scene = campScene();
     const camps = scene.territory.camps;
     scene.territory.econ.treasury.red = 5000;
+    scene.territory.econ.wood.red = 5000;
     const forest = siteIndexOf(scene, 'forest');
     const worker = addWorker(scene, 'red', scene.flags[forest].gx, scene.flags[forest].gy);
     assert.equal(camps.requestBuild('red', worker.id, 'camp', forest), true);
@@ -415,6 +417,7 @@ test('AI 选点偏好：同等距离时把建筑放进有奖励的据点（林�
     const scene = campScene();
     const camps = scene.territory.camps;
     scene.territory.econ.treasury.red = 5000;
+    scene.territory.econ.wood.red = 5000;
     // 合成两个等距己方据点：0=桥头（无营建奖励）、1=林口（施工加速）。
     scene.flags = [
         { gx: 100, gy: 100, name: '甲点', role: 'bridge', owner: 'red', progress: 1 },
@@ -437,6 +440,7 @@ test('AI 选点偏好参数克制：折扣不超过 6 格，不会舍近求远',
     const scene = campScene();
     const camps = scene.territory.camps;
     scene.territory.econ.treasury.red = 5000;
+    scene.territory.econ.wood.red = 5000;
     scene.flags = [
         { gx: 100, gy: 100, name: '近点', role: 'plain', owner: 'red', progress: 1 },
         { gx: 130, gy: 100, name: '远林口', role: 'forest', owner: 'red', progress: 1 }
@@ -485,6 +489,7 @@ test('AI 选点折扣有明确边界：折后打平不抢近点，差价够大�
     const scene = campScene();
     const camps = scene.territory.camps;
     scene.territory.econ.treasury.red = 5000;
+    scene.territory.econ.wood.red = 5000;
     scene.flags = [
         { gx: 100, gy: 100, name: '近点', role: 'plain', owner: 'red', progress: 1 },
         { gx: 115, gy: 100, name: '远林口', role: 'forest', owner: 'red', progress: 1 }

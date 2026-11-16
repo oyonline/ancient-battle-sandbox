@@ -11,9 +11,9 @@ import { buildSpeedScale, buildingDamageScale, buildSiteBonus } from './site-tra
 import { RELATIONS_MUTUAL, activeTeams, isHostile, sameSide, canonicalOf, teamName, TEAMS } from '../factions.js';
 
 export const CAMP_RULES = {
-    camp: { cost: 160, seconds: 18, hp: 850, def: 10, radius: 2.2 },
-    tower: { cost: 120, seconds: 14, hp: 1200, def: 6, radius: 0.9 },
-    tent: { cost: 140, seconds: 15, hp: 550, def: 4, radius: 1.5 },   // 医帐：据点疗伤提速扩容
+    camp: { cost: 160, woodCost: 80, seconds: 18, hp: 850, def: 10, radius: 2.2 },
+    tower: { cost: 120, woodCost: 60, seconds: 14, hp: 1200, def: 6, radius: 0.9 },
+    tent: { cost: 140, woodCost: 70, seconds: 15, hp: 550, def: 4, radius: 1.5 },   // 医帐：据点疗伤提速扩容
     HOME_HP: 1800, FIELD_TOWER_CAP: 8, ENEMY_HOME_CLEARANCE: 12, TOWER_ATTACK: 1.20, CAPACITY: 4, TOWER_RANGE: 14, GARRISON_HEIGHT_PX: 82,
     TENT_GARRISON_HEIGHT_PX: 14,   // 医帐无高台：驻帐军医站在帐篷门口地面，不上 82px 平台
     BUILD_REACH: 1.6, ENTER_REACH: 1.15, AI_INTERVAL_MS: 1800,
@@ -209,10 +209,13 @@ export class CampSystem {
             if (!Terrain.segmentClear(terrain, w.gx, w.gy, p.gx, p.gy, radius) &&
                 !this.scene.ensureNavigation().plan(w, p, radius).length) return false;
             const econ = this.scene.territory.econ, rule = CAMP_RULES.tower;
-            if (Math.floor((econ.treasury[team] + 1e-7) * 20) / 20 < rule.cost) return false;
+            const woodMode = this.scene.battleOptions?.territory && !this.scene.battleOptions.coop;
+            const balance = woodMode ? econ.wood : econ.treasury;
+            const cost = woodMode ? rule.woodCost : rule.cost;
+            if (Math.floor((balance[team] + 1e-7) * 20) / 20 < cost) return false;
             b = this.createBuilding(team, 'tower', null, false, { gx: p.gx, gy: p.gy });
-            econ.treasury[team] -= rule.cost;
-            econ.spent[team] += rule.cost;
+            balance[team] -= cost;
+            if (!woodMode) econ.spent[team] += cost;
         }
         this.releaseWorker(w);
         b.workerId = w.id;
@@ -235,9 +238,12 @@ export class CampSystem {
         if (!b || b.dead) {
             if (kind === 'tower' && this.buildings.filter(b => !b.dead && b.type === 'tower' && b.team === team && b.siteId !== 'home').length >= CAMP_RULES.FIELD_TOWER_CAP) return false;
             const econ = this.scene.territory.econ;
-            if (Math.floor((econ.treasury[team] + 1e-7) * 20) / 20 < rule.cost) return false;
-            econ.treasury[team] -= rule.cost;
-            econ.spent[team] += rule.cost;
+            const woodMode = this.scene.battleOptions?.territory && !this.scene.battleOptions.coop;
+            const balance = woodMode ? econ.wood : econ.treasury;
+            const cost = woodMode ? rule.woodCost : rule.cost;
+            if (Math.floor((balance[team] + 1e-7) * 20) / 20 < cost) return false;
+            balance[team] -= cost;
+            if (!woodMode) econ.spent[team] += cost;
             b = this.createBuilding(team, kind, siteId);
         }
         this.releaseWorker(w);
@@ -712,6 +718,7 @@ export class CampSystem {
     }
 
     aiSavingsBudget(team) {
+        if (this.scene.battleOptions?.territory && !this.scene.battleOptions.coop) return 0;
         if (!this.scene.units.some(u => ready(u) && u.team === team && u.type === 'worker' && !u.workerTask)) return 0;
         for (let i = 0; i < (this.scene.flags?.length ?? 0); i++) {
             if (!this.ownsSite(team, i) || this.buildings.some(b => !b.dead && b.siteId === i && b.team !== team)) continue;

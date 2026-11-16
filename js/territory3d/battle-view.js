@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { siteWeight } from '../battle/site-traits.js';
+import { siteWeight, traitState } from '../battle/site-traits.js';
 import { sameSide } from '../factions.js';
 
 const MODEL_KIND = { axe: 'infantry', worker: 'infantry', medic: 'archer' };
@@ -234,12 +234,14 @@ export class BattleView {
                 }
                 const treasury = Math.floor(scene.territory.econ.treasury[team]);
                 const income = scene.territory.econ.incomeRate(flagScore);
+                const wood = Math.floor(scene.territory.econ.wood[team]);
+                const woodIncome = scene.territory.econ.woodIncomeRate(traitState(scene).ownsRoleCount(team, 'forest'));
                 const home = scene.territory.camps.getBuilding(`camp:${team}:home`);
                 const hp = Math.max(0, home?.hp || 0);
                 const maxHp = home?.maxHp || 1;
                 const percent = THREE.MathUtils.clamp(hp / maxHp, 0, 1) * 100;
                 const name = team === 'red' ? '红方' : '蓝方';
-                return `<div class="team-hud ${team}"><span>${name} 军费 ${treasury}（+${income}/秒）</span>`
+                return `<div class="team-hud ${team}"><span>${name} 军费 ${treasury}（+${income}/秒） · 木料 ${wood}（+${woodIncome}/秒）</span>`
                     + `<span class="ticket-group"><span class="ticket-track" role="progressbar" aria-label="${name}大本营血量" aria-valuemin="0" aria-valuemax="${maxHp}" aria-valuenow="${Math.ceil(hp)}"><i style="width:${percent}%"></i></span><span>大本营 ${Math.ceil(hp)}</span></span>`
                     + `<span>${scene[`${team}Alive`]} 人 · 占 ${owned} 处</span></div>`;
             };

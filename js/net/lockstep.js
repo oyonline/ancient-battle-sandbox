@@ -51,7 +51,8 @@ export const LOCKSTEP = {
 // 2026-11-04 site-weight：据点分量分档，收入/票数/AI 主攻打分与高地奖励语义改变；
 // 本卡不新增投影字段，但行为与旧版本不兼容，混版本必须拒绝。
 // 死斗移除票数判胜，新增电脑攻大本营状态及投影字段，与旧模拟不兼容。
-export const SIM_VERSION = '2026-11-15-deathmatch';
+// 木料收入、建筑扣费货币及非合作领土投影新增木料账，混版本会分歧。
+export const SIM_VERSION = '2026-11-15-wood';
 
 export class Lockstep {
     constructor(side, lookahead = LOCKSTEP.LOOKAHEAD) {
@@ -212,6 +213,9 @@ export function battleProjection(scene) {
         ...roster.map(t => Math.round(territory.econ.treasury[t] * 1e3)),
         ...roster.map(t => territory.recruit.spawned[t]),
         ...roster.map(t => territory.recruit.queues[t].length));
+    if (scene.battleOptions?.territory && !scene.battleOptions.coop) {
+        parts.push('wood', ...roster.map(t => Math.round(territory.econ.wood[t] * 1e3)));
+    }
     if (territory.camps) {
         parts.push('camps', JSON.stringify(territory.camps.projection()));
         parts.push('resources', JSON.stringify(territory.resources?.projection() || []));

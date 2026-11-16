@@ -86,7 +86,7 @@ for (const route of routes) {
 
 // 只压缩展示文案；完整奖励、条件仍直接取 SITE_TRAITS。
 const SITE_PHRASES = {
-    ranch: '解锁骑兵', forest: '修建加快', bridge: '工事减伤',
+    ranch: '解锁骑兵', forest: '产木料·修建加快', bridge: '工事减伤',
     hill: '稳固军心', ford: '涉水加快', crossroad: '多收伤兵'
 };
 const placeLabels = [];

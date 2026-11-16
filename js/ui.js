@@ -10,7 +10,7 @@ import { setBoardSize, resetBoardSize } from './board.js';
 import { ArenaClient } from './net/arena-client.js';
 import { NetBattle } from './net/lockstep.js';
 import { CampControls } from './camp-controls.js';
-import { traitOf, siteWeight } from './battle/site-traits.js';
+import { traitOf, siteWeight, traitState } from './battle/site-traits.js';
 import { flagSiteSignature, traitSiteRow } from './render/overlay.js';
 import { ownsFlag, ownerDisplayCss } from './factions.js';
 
@@ -50,10 +50,11 @@ const SITE_TIP_ACTIONS = {
     ford: '占下任一渡口，',
     crossroad: '占下它，'
 };
-function siteTraitTip(role) {
+function siteTraitTip(role, woodMode = false) {
     const trait = traitOf(role);
     if (!trait) return '';
-    return `${trait.icon}${trait.name}：${SITE_TIP_ACTIONS[role] ?? ''}${trait.reward}。生效条件：${trait.condition}。`;
+    return `${trait.icon}${trait.name}：${SITE_TIP_ACTIONS[role] ?? ''}${trait.reward}。生效条件：${trait.condition}。` +
+        (role === 'forest' && woodMode ? `领土模式另产木料：每秒 ${trait.woodIncome}。` : '');
 }
 
 // ==================== 战役、配兵与战报 ====================
@@ -668,6 +669,9 @@ export const UI = {
         const territory = this.scene.territory;
         const homeRow = document.getElementById('territory-home-red')?.parentElement;
         if (homeRow) homeRow.hidden = !!this.battleOptions.coop;
+        const woodMode = !this.battleOptions.coop;
+        const woodReadout = document.getElementById('territory-wood');
+        if (woodReadout?.parentElement) woodReadout.parentElement.hidden = !woodMode;
         const mine = this.mySide || 'red';
         const owned = { red: 0, blue: 0 };
         const flagScore = { red: 0, blue: 0 };
@@ -685,6 +689,10 @@ export const UI = {
             'territory-flags-red': owned.red, 'territory-flags-blue': owned.blue,
             'territory-army-red': this.scene.redAlive, 'territory-army-blue': this.scene.blueAlive
         };
+        if (woodMode) {
+            readouts['territory-wood'] = Math.floor(territory.econ.wood[mine]);
+            readouts['territory-wood-income'] = '+' + territory.econ.woodIncomeRate(traitState(this.scene).ownsRoleCount(mine, 'forest')) + '/秒';
+        }
         for (const [id, value] of Object.entries(readouts)) textIfChanged(document.getElementById(id), value);
         const queue = territory.recruit.queues[mine];
         const pending = this.pendingRecruitOrders().length;
@@ -727,7 +735,7 @@ export const UI = {
             ford: siteTraitTip('ford'),
             crossroad: siteTraitTip('crossroad'),
             bridge: siteTraitTip('bridge'),
-            forest: siteTraitTip('forest')
+            forest: siteTraitTip('forest', !this.battleOptions.coop)
         };
         const panel = document.getElementById('territory-tip');
         if (!panel || !tips[kind]) return false;

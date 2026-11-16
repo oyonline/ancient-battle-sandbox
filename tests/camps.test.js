@@ -23,7 +23,7 @@ function fixture({ ai = false, terrain = 'flat' } = {}) {
         battleOptions: { territory: true, terrain }, battleId: 1,
         simulationTime: 0, battleOver: false, planningStep: true,
         arrows: [], queue: [], events: [], controlScore: { red: 0, blue: 0 },
-        territory: { econ: new TerritoryEconomy(), autoBuy: { red: ai, blue: ai } },
+        territory: { econ: Object.assign(new TerritoryEconomy(), { wood: { red: 1000, blue: 1000, black: 1000 } }), autoBuy: { red: ai, blue: ai } },
         forEachNear(...args) { spatial.forEachNear(...args); },
         rebuildSpatial() { spatial.rebuild(this.units); this._aliveArr = spatial.alive; },
         aliveCount(team, type) { return this.units.filter(u => !u.dead && u.team === team && (!type || u.type === type)).length; },
@@ -103,19 +103,19 @@ test('开局营寨与箭塔成对预建，空塔从不自行射击', () => {
     assert.equal(camps.winner(), null);
 });
 
-test('施工：先扣军费，到位才推进；营寨与塔重复和越权均拒绝', () => {
+test('施工：先扣木料，到位才推进；营寨与塔重复和越权均拒绝', () => {
     const s = fixture(), c = s.territory.camps, w = add(s, 'red', 'worker', 45, 63.5);
     s.territory.econ.treasury.red = 1000;
     assert.equal(c.requestBuild('blue', w.id, 'camp', 1), false);
     assert.equal(c.requestBuild('red', w.id, 'camp', 2), false);
     assert.equal(c.requestBuild('red', w.id, 'camp', 'home'), false);
     assert.equal(c.requestBuild('red', w.id, 'constructor', 0), false);
-    s.territory.econ.treasury.red = CAMP_RULES.camp.cost - 0.01;
-    assert.equal(c.requestBuild('red', w.id, 'camp', 0), false, '不足造价时不透支军费');
-    s.territory.econ.treasury.red = 1000;
+    s.territory.econ.wood.red = CAMP_RULES.camp.woodCost - 0.01;
+    assert.equal(c.requestBuild('red', w.id, 'camp', 0), false, '不足造价时不透支木料');
+    s.territory.econ.wood.red = 1000;
     assert.equal(c.requestBuild('red', w.id, 'camp', 0), true);
     const camp = c.getBuilding('camp:red:0');
-    assert.equal(s.territory.econ.treasury.red, 840);
+    assert.equal(s.territory.econ.wood.red, 920);
     run(s, 1);
     assert.equal(camp.progress, 0, '未到施工圈不可远程盖房');
     run(s, 22);
@@ -124,20 +124,20 @@ test('施工：先扣军费，到位才推进；营寨与塔重复和越权均�
     assert.equal(c.requestBuild('red', w.id, 'tower', 0), true);
     run(s, 19);
     assert.equal(c.getBuilding('tower:red:0').complete, true);
-    assert.equal(s.territory.econ.spent.red, CAMP_RULES.camp.cost + CAMP_RULES.tower.cost);
+    assert.equal(s.territory.econ.wood.red, 1000 - CAMP_RULES.camp.woodCost - CAMP_RULES.tower.woodCost);
 });
 
 test('施工暂停：民夫阵亡可接续，失旗暂停，夺回后续建不重复扣钱', () => {
     const s = fixture(), c = s.territory.camps, p = c.placement('red', 'camp', 0);
     const w = add(s, 'red', 'worker', p.gx, p.gy);
-    s.territory.econ.treasury.red = 500;
+    s.territory.econ.wood.red = 500;
     c.requestBuild('red', w.id, 'camp', 0); run(s, 4);
     const b = c.getBuilding('camp:red:0'), progress = b.progress;
     w.dead = true; run(s, 2);
     assert.equal(b.progress, progress);
     const replacement = add(s, 'red', 'worker', p.gx, p.gy);
     assert.equal(c.requestBuild('red', replacement.id, 'camp', 0), true);
-    assert.equal(s.territory.econ.treasury.red, 340);
+    assert.equal(s.territory.econ.wood.red, 420);
     s.flags[0].owner = 'blue'; run(s, 2);
     assert.equal(b.progress, progress);
     s.flags[0].owner = 'red'; run(s, 15);

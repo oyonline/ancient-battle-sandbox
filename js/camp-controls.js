@@ -350,8 +350,11 @@ export class CampControls {
                 const resumable = this.camps.buildings.some(b => b.team === this.side && b.type === kind &&
                     !b.dead && !b.complete && (kind === 'tower' || this.camps.ownsSite(this.side, b.siteId)) &&
                     (b.workerId === worker.id || !workers.some(w => w.id === b.workerId && w.moraleState !== 'routing')));
-                actions += button(kind, `${kind === 'camp' ? '筑/续营寨' : kind === 'tower' ? '建/续箭塔' : '筑/续医帐'} ${info.cost}军费 · 续建免费`,
-                    this.ui.countdown || (!resumable && this.scene.territory.econ.treasury[this.side] < info.cost));
+                const woodMode = this.scene.battleOptions?.territory && !this.scene.battleOptions.coop;
+                const price = woodMode ? CAMP_RULES[kind].woodCost : info.cost;
+                const balance = woodMode ? this.scene.territory.econ.wood : this.scene.territory.econ.treasury;
+                actions += button(kind, `${kind === 'camp' ? '筑/续营寨' : kind === 'tower' ? '建/续箭塔' : '筑/续医帐'} ${price}${woodMode ? '木' : '军费'} · 续建免费`,
+                    this.ui.countdown || (!resumable && balance[this.side] < price));
             }
             actions += button('gather', '采集并自动运输') + button('deliver', `交付物资 ${Math.floor(worker.cargo || 0)}`, !(worker.cargo > 0)) + button('move', '移动民夫') + button('locate', '定位');
         } else if (building && !building.dead) {

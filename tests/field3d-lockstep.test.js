@@ -96,8 +96,8 @@ test('R6 configDigest 仅字符串启用，null/undefined/其他类型不发不�
 // 2026-11-15 deathmatch：投影删票数、加攻城状态，golden 随批次刷新。
 test('territory / 营队池 / coop 营寨投影与旧版逐字一致', () => {
     const golden = {
-        territory: [2167, 'b10fc3e72cfff5810e4497f2e9d345da6706b3351817b0cf26dff89abf2cc63b'],
-        battalion: [2295, '61833c9e3fd66dcaaee12e8623e6c064ea66d9dde80052323f38ba9407589dd6'],
+        territory: [2184, 'fa48f54d14dbafda723f3ab8ea3a4db6f7f480d8c3f5b604f75874837fc9fe06'],
+        battalion: [2312, '92daf4aa6199dde01730dae96d189b284f22ef73c548375a92c08d6a85e1a9e8'],
         coop: [2863, 'e818071494fc5477aa08e26cb76dcf247a419c296ee40c91fbbd2d286e6ca56d']
     };
     for (const kind of Object.keys(golden)) {

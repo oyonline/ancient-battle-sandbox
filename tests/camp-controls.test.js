@@ -32,16 +32,16 @@ function actionDisabled(panel, action) {
     return /\bdisabled\b/.test(tag[0]);
 }
 
-test('军费不足且无可续建营寨时，民夫筑寨按钮不可用', t => {
+test('木料不足且无可续建营寨时，民夫筑寨按钮不可用', t => {
     const { scene, worker, controls, panel } = fixture(t);
-    scene.territory.econ.treasury.red = CAMP_RULES.camp.cost - 1;
+    scene.territory.econ.wood.red = CAMP_RULES.camp.woodCost - 1;
     controls.selectWorker(worker.id);
     assert.equal(actionDisabled(panel, 'camp'), true);
 });
 
-test('原民夫阵亡后，零军费仍能通过选点界面免费续建未完工营寨', t => {
+test('原民夫阵亡后，零木料仍能通过选点界面免费续建未完工营寨', t => {
     const { scene, camps, site, worker, controls, panel } = fixture(t);
-    scene.territory.econ.treasury.red = CAMP_RULES.camp.cost;
+    scene.territory.econ.wood.red = CAMP_RULES.camp.woodCost;
     assert.equal(camps.requestBuild('red', worker.id, 'camp', site), true);
     const unfinished = camps.getBuilding(`camp:red:${site}`);
     worker.dead = true;
@@ -54,13 +54,13 @@ test('原民夫阵亡后，零军费仍能通过选点界面免费续建未完�
     assert.equal(controls.targeting, null, '成功续建应结束选点');
     assert.equal(unfinished.workerId, replacement.id);
     assert.equal(replacement.workerTask.buildingId, unfinished.id);
-    assert.equal(scene.territory.econ.treasury.red, 0);
-    assert.equal(scene.territory.econ.spent.red, CAMP_RULES.camp.cost);
+    assert.equal(scene.territory.econ.wood.red, 0);
+    assert.equal(scene.territory.econ.spent.red, 0);
 });
 
-test('已被摧毁的营寨不能当免费续建，零军费时重建按钮不可用', t => {
+test('已被摧毁的营寨不能当免费续建，零木料时重建按钮不可用', t => {
     const { scene, camps, site, worker, controls, panel } = fixture(t);
-    scene.territory.econ.treasury.red = CAMP_RULES.camp.cost;
+    scene.territory.econ.wood.red = CAMP_RULES.camp.woodCost;
     camps.requestBuild('red', worker.id, 'camp', site);
     const camp = camps.getBuilding(`camp:red:${site}`);
     const enemy = addUnit(scene, 'blue', 'infantry', camp.gx + 1, camp.gy);
@@ -72,9 +72,9 @@ test('已被摧毁的营寨不能当免费续建，零军费时重建按钮不�
     assert.equal(actionDisabled(panel, 'camp'), true);
 });
 
-test('原施工者溃逃后，替代民夫也能零军费免费接续', t => {
+test('原施工者溃逃后，替代民夫也能零木料免费接续', t => {
     const { scene, camps, site, worker, controls, panel } = fixture(t);
-    scene.territory.econ.treasury.red = CAMP_RULES.camp.cost;
+    scene.territory.econ.wood.red = CAMP_RULES.camp.woodCost;
     camps.requestBuild('red', worker.id, 'camp', site);
     worker.moraleState = 'routing';
     const unfinished = camps.getBuilding(`camp:red:${site}`);
@@ -84,19 +84,19 @@ test('原施工者溃逃后，替代民夫也能零军费免费接续', t => {
     controls.begin('camp');
     controls.handleGroundClick({ x: scene.flags[site].gx, y: scene.flags[site].gy }, null);
     assert.equal(unfinished.workerId, replacement.id);
-    assert.equal(scene.territory.econ.treasury.red, 0);
-    assert.equal(scene.territory.econ.spent.red, CAMP_RULES.camp.cost);
+    assert.equal(scene.territory.econ.wood.red, 0);
+    assert.equal(scene.territory.econ.spent.red, 0);
 });
 
-test('军费补足后，通过选点界面重建废墟会再次扣除一次造价', t => {
+test('木料补足后，通过选点界面重建废墟会再次扣除一次造价', t => {
     const { scene, camps, site, worker, controls, panel } = fixture(t);
-    scene.territory.econ.treasury.red = CAMP_RULES.camp.cost;
+    scene.territory.econ.wood.red = CAMP_RULES.camp.woodCost;
     camps.requestBuild('red', worker.id, 'camp', site);
     const old = camps.getBuilding(`camp:red:${site}`);
     const enemy = addUnit(scene, 'blue', 'infantry', old.gx + 1, old.gy);
     camps.damageBuilding(old, old.hp * 2, enemy);   // 桥头工事减伤后需超额伤害才能拆除
     assert.equal(old.dead, true);
-    scene.territory.econ.treasury.red = CAMP_RULES.camp.cost;
+    scene.territory.econ.wood.red = CAMP_RULES.camp.woodCost;
     controls.selectWorker(worker.id);
     assert.equal(actionDisabled(panel, 'camp'), false);
     controls.begin('camp');
@@ -107,8 +107,8 @@ test('军费补足后，通过选点界面重建废墟会再次扣除一次造�
     assert.equal(rebuilt.dead, false);
     assert.equal(rebuilt.progress, 0);
     assert.equal(rebuilt.workerId, worker.id);
-    assert.equal(scene.territory.econ.treasury.red, 0);
-    assert.equal(scene.territory.econ.spent.red, CAMP_RULES.camp.cost * 2);
+    assert.equal(scene.territory.econ.wood.red, 0);
+    assert.equal(scene.territory.econ.spent.red, 0);
 });
 
 // Review P2-3 复现：特色/归属/生效状态刚追加进 details，就被后续 details = state 覆盖。
@@ -247,12 +247,12 @@ test('自由选址箭塔：选中自己的民夫，点击陆地下令一次并�
     controls.selectWorker(worker.id);
     controls.begin('tower');
     assert.equal(controls.targeting.worker, worker.id);
-    const before = scene.territory.econ.treasury.red;
+    const before = scene.territory.econ.wood.red;
     controls.handleGroundClick({ x: worker.gx + 5, y: worker.gy + 5 }, null);
     const field = scene.territory.camps.buildings.find(b => b.siteId === null);
     assert.ok(field);
     assert.equal(field.workerId, worker.id);
-    assert.equal(scene.territory.econ.treasury.red, before - CAMP_RULES.tower.cost);
+    assert.equal(scene.territory.econ.wood.red, before - CAMP_RULES.tower.woodCost);
     assert.equal(controls.targeting, null);
 });
 
@@ -269,19 +269,19 @@ test('非法塔选址保留选点与原民夫，展示统一拒绝理由且不�
     controls.cancel();assert.equal(controls.targeting, null);
 });
 
-test('自由塔续建按建筑ID受理，零军费且原工人阵亡时不重复扣费', t => {
+test('自由塔续建按建筑ID受理，零木料且原工人阵亡时不重复扣费', t => {
     const { scene, worker, controls } = fixture(t);
     const camps = scene.territory.camps;
     assert.equal(camps.requestBuildAt('red', worker.id, 'tower', worker.gx + 5, worker.gy + 5), true);
     const tower = camps.buildings.find(b => b.siteId === null);
     worker.dead = true;
     const replacement = addUnit(scene,'red','worker',tower.gx,tower.gy);
-    scene.territory.econ.treasury.red = 0;
+    scene.territory.econ.wood.red = 0;
     scene.render.camps.pick = () => tower;
     controls.selectWorker(replacement.id);controls.begin('tower');
     controls.handleGroundClick({x:tower.gx,y:tower.gy},null);
     assert.equal(tower.workerId,replacement.id);
-    assert.equal(scene.territory.econ.treasury.red,0);
+    assert.equal(scene.territory.econ.wood.red,0);
     assert.equal(controls.targeting,null);
 });
 

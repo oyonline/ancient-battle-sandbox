@@ -139,11 +139,12 @@ test('医帐：需先有完工营寨，费率 140/15s，容量扩到 16、速度
     const s = fixture(), c = s.territory.camps, h = s.territory.healing;
     const w = add(s, 'red', 'worker', 55, 63.5);
     s.territory.econ.treasury.red = 1000;
+    s.territory.econ.wood.red = 1000;
     assert.deepEqual(c.buildInfo('tent'), { cost: 140, buildMs: 15000, maxHp: 550, capacity: HEALING_RULES.TENT_MEDIC_SLOTS });
     assert.equal(c.requestBuild('red', w.id, 'tent', 0), false, '无营寨不可建医帐');
     c.createBuilding('red', 'camp', 0, true);
     assert.equal(c.requestBuild('red', w.id, 'tent', 0), true);
-    assert.equal(s.territory.econ.treasury.red, 860, '扣 140 军费');
+    assert.equal(s.territory.econ.wood.red, 930, '扣 70 木料');
     assert.equal(h.capacity('red', 0), HEALING_RULES.BASE_CAPACITY, '未完工不生效');
     run(s, 22);
     const tent = c.getBuilding('tent:red:0');
@@ -212,6 +213,7 @@ test('医师无攻击不占旗；征兵 AI 按配比买医师；营寨 AI 建设
     for (let i = 0; i < 9; i++) add(s, 'red', 'pikeman', 14, 88 + i);
     for (let i = 0; i < 5; i++) add(s, 'red', 'cavalry', 16, 88 + i);
     s.territory.econ.treasury.red = 1000;
+    s.territory.econ.wood.red = 1000;
     const ai = new TerritoryAI(s, 'red'); ai.update(0);
     assert.equal(s.territory.recruit.queues.red[0].type, 'medic');
     ai.update(1200);

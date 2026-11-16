@@ -16,7 +16,10 @@ function scene(options = {}) {
     const s = makeScene();
     s.deployUnits({}, {}, 'custom', 'custom', {}, { territory: true, terrain: 'flat', territoryAI: false, ...options });
     s.battleStarted = true;
-    for (const team of s.activeTeams) s.territory.econ.treasury[team] = 3000;
+    for (const team of s.activeTeams) {
+        s.territory.econ.treasury[team] = 3000;
+        if (!options.coop) s.territory.econ.wood[team] = 3000;
+    }
     return s;
 }
 function advance(s, seconds) {
@@ -50,14 +53,14 @@ test('民夫速度、斧兵部署/征募/营队及塔1200血规则', () => {
 
 test('自由塔不依赖旗/营寨，扣费一次，到场施工、取消暂停和免费续建', () => {
     const s = scene(), c = s.territory.camps, w = addUnit(s, 'red', 'worker', 35, 25);
-    const before = s.territory.econ.treasury.red;
+    const before = s.territory.econ.wood.red;
     const command = { k: 'build', side: 'red', kind: 'tower', worker: w.id, gx: 50.011, gy: 25.011 };
     assert.equal(applyCampCommand(s, command), true);
     const tower = c.buildings.at(-1);
     assert.equal(tower.siteId, null);
     assert.equal(tower.maxHp, 1200);
     assert.equal(tower.gx, 50);
-    assert.equal(s.territory.econ.treasury.red, before - 120);
+    assert.equal(s.territory.econ.wood.red, before - 60);
     advance(s, 1);
     assert.equal(tower.progress, 0, '民夫还在赶路，不能远程建设');
     assert.equal(c.orderWorkerMove('red', w.id, 40, 25), true);
@@ -65,7 +68,7 @@ test('自由塔不依赖旗/营寨，扣费一次，到场施工、取消暂停�
     assert.equal(tower.progress, 0);
     assert.equal(tower.workerId, null);
     assert.equal(applyCampCommand(s, { ...command, building: tower.id }), true);
-    assert.equal(s.territory.econ.spent.red, 120, '取消后续建不二次扣费');
+    assert.ok(Math.abs(s.territory.econ.wood.red - (before - 60 + 8)) < 1e-7, '取消后续建不二次扣费');
     advance(s, 23);
     assert.equal(tower.complete, true);
     const paid = s.territory.econ.spent.red;
@@ -87,7 +90,7 @@ test('禁建水/桥/浅滩/边缘/重叠/HQ保护圈，并限制8座含施工塔
     assert.equal(c.towerPlacement('red', 75, 25).ok, false);
     assert.equal(c.requestBuildAt('red', w.id, 'tower', 75, 25), false);
     assert.equal(c.buildings.filter(b => b.team === 'red' && b.type === 'tower' && b.siteId !== 'home').length, 8);
-    assert.equal(s.territory.econ.spent.red, 960);
+    assert.equal(s.territory.econ.wood.red, 3000 - 8 * CAMP_RULES.tower.woodCost);
     const newest = c.buildings.at(-1);
     c.orderWorkerMove('red', w.id, 35, 25);
     assert.equal(c.requestBuildAt('red', w.id, 'tower', null, null, newest.id), true, '满额仍允许续建');
@@ -174,7 +177,7 @@ test('坐标建塔锁步命令重放一致，未来建筑seq纳入投影，版�
     assert.equal(battleProjection(a), battleProjection(b));
     b.territory.camps.nextBuildingSeq++;
     assert.notEqual(battleProjection(a), battleProjection(b));
-    assert.equal(SIM_VERSION, '2026-11-15-deathmatch');
+    assert.equal(SIM_VERSION, '2026-11-15-wood');
 });
 
 test('回归：斧兵动摇后走真实后退入口，而非只设置后退时钟', () => {

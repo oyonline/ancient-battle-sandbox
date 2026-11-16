@@ -9,6 +9,7 @@
 import { UNIT_TYPES } from '../units.js';
 import { board } from '../board.js';
 import { territoryLayout } from '../territory-map.js';
+import { SITE_TRAITS } from './site-traits.js';
 import { TEAMS } from '../factions.js';
 
 export const TERRITORY = {
@@ -16,6 +17,8 @@ export const TERRITORY = {
     BASE_INCOME: 5,                   // 基础军费收入（军费/秒，无旗也有）
     FLAG_INCOME: 4,                   // 每点据点分量额外收入（军费/秒）
     START_TREASURY: 150,              // 开局军费
+    START_WOOD: 60,                   // 非合作领土开局木料
+    BASE_WOOD_INCOME: 1,              // 大本营保底木料/秒
     COST_MULT: 6,                     // 兵种造价系数（剑士30/枪36/弓48/骑72）
     TRAIN_MS: { infantry: 3000, axe: 4500, pikeman: 4000, archer: 5000, cavalry: 8000, worker: 3500, medic: 4500 },
     ALIVE_CAP: 220,                   // 单方在场兵力上限（性能与规模护栏；队列出兵到顶暂停）
@@ -35,6 +38,7 @@ export function makeTerritoryFlags(coop = false) {
 export class TerritoryEconomy {
     constructor() {
         this.treasury = { red: TERRITORY.START_TREASURY, blue: TERRITORY.START_TREASURY, black: TERRITORY.START_TREASURY };
+        this.wood = { red: TERRITORY.START_WOOD, blue: TERRITORY.START_WOOD, black: TERRITORY.START_WOOD };
         this.earned = { red: 0, blue: 0, black: 0 };
         this.spent = { red: 0, blue: 0, black: 0 };
     }
@@ -44,11 +48,16 @@ export class TerritoryEconomy {
         return TERRITORY.BASE_INCOME + flagScore * TERRITORY.FLAG_INCOME;
     }
 
-    tick(dt, flagScore) {
+    woodIncomeRate(forestCount) {
+        return TERRITORY.BASE_WOOD_INCOME + forestCount * SITE_TRAITS.forest.woodIncome;
+    }
+
+    tick(dt, flagScore, forestCounts = null) {
         for (const team of TEAMS) {
             const amount = this.incomeRate(flagScore?.[team] ?? 0) * dt;
             this.treasury[team] += amount;
             this.earned[team] += amount;
+            if (forestCounts) this.wood[team] += this.woodIncomeRate(forestCounts[team] ?? 0) * dt;
         }
     }
 

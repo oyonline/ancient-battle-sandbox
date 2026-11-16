@@ -63,6 +63,7 @@ test('民夫出手：贴身敌军按 12 攻击力、1.4 秒冷却真实掉血', 
 test('民夫不追击：远处敌人不引出工地，也不挨打', () => {
     const scene = workerScene();
     scene.territory.econ.treasury.red = 1000;
+    scene.territory.econ.wood.red = 1000;
     const site = 0;   // 西桥头（红方开局据点，无营建加速，纯测量）
     assert.equal(scene.flags[site].owner, 'red');
     const worker = addUnit(scene, 'red', 'worker', 40, 40);
@@ -82,6 +83,7 @@ test('民夫不追击：远处敌人不引出工地，也不挨打', () => {
 test('交战停工、脱战续工：进度不重置也不边打边涨', () => {
     const scene = workerScene();
     scene.territory.econ.treasury.red = 1000;
+    scene.territory.econ.wood.red = 1000;
     const site = 0;
     const worker = addUnit(scene, 'red', 'worker', 40, 40);
     assert.equal(scene.territory.camps.requestBuild('red', worker.id, 'camp', site), true);
@@ -123,6 +125,7 @@ test('交战停工、脱战续工：进度不重置也不边打边涨', () => {
 test('溃逃民夫不攻击也不施工，恢复后照旧', () => {
     const scene = workerScene();
     scene.territory.econ.treasury.red = 1000;
+    scene.territory.econ.wood.red = 1000;
     const site = 0;
     const worker = addUnit(scene, 'red', 'worker', 40, 40);
     scene.territory.camps.requestBuild('red', worker.id, 'camp', site);
@@ -393,6 +396,7 @@ test('边界阶梯：0.85/0.9/0.915/0.924999 真实出手，0.925/0.925001/0.95 
 test('脱战续工在量化边界上成立：0.915 交战停工、敌人撤离后从原进度继续', () => {
     const scene = workerScene();
     scene.territory.econ.treasury.red = 1000;
+    scene.territory.econ.wood.red = 1000;
     const site = 0;
     const worker = addUnit(scene, 'red', 'worker', 40, 40);
     assert.equal(scene.territory.camps.requestBuild('red', worker.id, 'camp', site), true);
